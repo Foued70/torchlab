@@ -1,0 +1,8 @@
+build_dir = $(realpath ../../build)
+install_root = $(build_dir)/usr/local
+
+default_cmake_args = \
+	-D CMAKE_INSTALL_PREFIX:PATH=$(install_root) \
+	-D CMAKE_C_COMPILER:PATH=$(install_root)/bin/gcc \
+	-D CMAKE_CXX_COMPILER:PATH=$(install_root)/bin/g++ \
+	-D CMAKE_BUILD_TYPE=Release

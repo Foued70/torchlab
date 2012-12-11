@@ -1,0 +1,28 @@
+include ../Makefile.common
+
+ver=1.7.1
+
+url=http://people.cs.ubc.ca/~mariusm/uploads/FLANN/flann-$(ver)-src.zip
+
+tar_file=$(build_dir)/vendor/flann-$(ver)-src.zip
+unpack=$(build_dir)/vendor/flann-$(ver)-src
+
+install=$(install_root)/lib/libflann.$(ver).dylib
+
+args = $(default_cmake_args)
+
+
+all:$(install)
+	
+	
+$(install): $(unpack)
+	cd $(unpack); mkdir -p build
+	cd $(unpack)/build; cmake $(args) ..
+	cd $(unpack)/build; make install
+
+$(unpack): $(tar_file)
+	cd $(build_dir)/vendor; unzip -o $(tar_file)
+	touch $(unpack)
+
+$(tar_file):
+	curl -L -o $(tar_file) $(url)
