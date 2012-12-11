@@ -7,7 +7,7 @@ url=http://downloads.sf.net/project/machomebrew/mirror/ImageMagick-$(ver).tar.bz
 tar_file=$(build_dir)/vendor/ImageMagick-$(ver).tar.bz2
 unpack=$(build_dir)/vendor/ImageMagick-$(ver)
 
-install=$(install_root)/lib/XXX
+install=$(install_root)/bin/convert
 
 args = \
 	--prefix=$(install_root) \
