@@ -11,7 +11,7 @@ all: $(install)
 
 $(install): $(tar_file)
 	cd $(build_dir); tar -xzf $(tar_file)
-	cd $(install_root); $(CURDIR)/fix_paths
+	cd $(install_root)/lib; $(CURDIR)/fix_paths
 
 $(tar_file):
 	mkdir -p $(build_dir)/vendor

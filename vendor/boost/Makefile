@@ -14,9 +14,9 @@ all: $(install)
 	
 	
 $(install): $(unpack)
-	cd $(unpack); bootstrap.sh --prefix=$(install_root)
+	cd $(unpack); ./bootstrap.sh --prefix=$(install_root)
 	sed -i .bak 's^using darwin ;^using darwin : : $(install_root)/bin/g++ ;^g' $(unpack)/project-config.jam
-	cd $(unpack); b2 install
+	cd $(unpack); ./b2 install
 
 $(unpack): $(tar_file)
 	cd $(build_dir)/vendor; tar -xjf $(tar_file)
