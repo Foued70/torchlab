@@ -1,4 +1,4 @@
-build_dir = $(realpath ../../build)
+build_dir = $(abspath ../../build)
 install_root = $(build_dir)/usr/local
 
 default_cmake_args = \

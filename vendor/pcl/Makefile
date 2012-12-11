@@ -7,7 +7,7 @@ url=http://www.pointclouds.org/assets/files/$(ver)/PCL-$(ver)-Source.tar.bz2
 tar_file=$(build_dir)/vendor/PCL-$(ver)-Source.tar.bz2
 unpack=$(build_dir)/vendor/PCL-$(ver)-Source
 
-install=$(install_root)/lib/vtk
+install=$(install_root)/lib/libpcl_common.dylib
 
 args = $(default_cmake_args) \
 	-D CMAKE_CXX_FLAGS:STRING=-Wno-invalid-offsetof \

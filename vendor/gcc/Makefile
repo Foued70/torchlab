@@ -17,5 +17,4 @@ $(tar_file):
 	mkdir -p $(build_dir)/vendor
 	curl -L -o $(tar_file) $(URL)
 
-test:
 	
