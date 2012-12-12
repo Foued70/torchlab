@@ -21,7 +21,6 @@ args = $(default_cmake_args) \
 all:$(pkgs)
 
 $(pkgs): $(install)
-	echo $(notdir $@)
 	$(install_root)/bin/torch-pkg install $(notdir $@)
 	
 
