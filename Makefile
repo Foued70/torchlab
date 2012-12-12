@@ -1,4 +1,4 @@
-deps:
+deps: build
 	cd vendor/gcc; make
 	cd vendor/boost; make
 	cd vendor/eigen; make
@@ -6,3 +6,6 @@ deps:
 	cd vendor/qt; make
 	cd vendor/vtk; make
 	cd vendor/pcl; make
+
+build: 
+	mkdir -p build

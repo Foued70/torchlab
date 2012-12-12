@@ -18,19 +18,20 @@ args= \
 	-fast \
 	-nomake demos \
 	-nomake examples 
-	
+
 #	-platform macx-g++-local
 
 
 
 all:$(install)
-	
-	
+
 $(install): $(unpack)
 	# cd $(unpack); sed -i .bak 's^echo "CARBON_CFLAGS =-fconstant-cfstrings"^#^g' configure
 	# cd $(unpack); cp -r mkspecs/macx-g++42 mkspecs/macx-g++-local
 	# cd $(unpack)/mkspecs/macx-g++-local; sed -i .bak 's^gcc-4.2^$(install_root)/bin/gcc^g' qmake.conf
 	# cd $(unpack)/mkspecs/macx-g++-local; sed -i .bak 's^g++-4.2^$(install_root)/bin/g++^g' qmake.conf
+	export PATH
+	echo $(PATH)
 	cd $(unpack); ./configure $(args)
 	cd $(unpack); make
 	cd $(unpack); make install

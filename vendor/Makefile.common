@@ -1,3 +1,9 @@
+# set a default path for the common system stuff
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
+# make sure a user's CC or CCX variable don't mess up config scripts
+CC=
+CXX=
+	
 build_dir = $(abspath ../../build)
 install_root = $(build_dir)/usr/local
 
