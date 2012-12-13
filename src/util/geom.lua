@@ -1,3 +1,6 @@
+require 'torch'
+require 'dok'
+
 local geom = {}
 
 local axes = torch.Tensor(3,3)

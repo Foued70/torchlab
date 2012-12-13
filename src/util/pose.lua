@@ -1,4 +1,5 @@
 require 'sys'
+require 'torch'
 require 'image'
 require 'paths'
 
