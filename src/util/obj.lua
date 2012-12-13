@@ -1,7 +1,9 @@
 require 'sys'
 
+obj = {}
+
 -- see: http://en.wikipedia.org/wiki/Wavefront_.obj_file
-function loadObj(file,maxvertsperface)
+function obj.load(file,maxvertsperface)
    if (not file) then
       file = "data/scan.obj"
    end
@@ -9,7 +11,7 @@ function loadObj(file,maxvertsperface)
       maxvertsperface = 10
    end
    sys.tic()
-   obj = {}
+   local obj = {}
    obj.nverts = tonumber(io.popen(string.format("grep -c '^v ' %s",file)):read())
    obj.nfaces = tonumber(io.popen(string.format("grep -c '^f ' %s",file)):read())
 
@@ -20,15 +22,15 @@ function loadObj(file,maxvertsperface)
    obj.verts = torch.Tensor(obj.nverts,4):fill(1)
    obj.faces = torch.IntTensor(obj.nfaces,maxvertsperface):fill(-1)
 
-   objFile = io.open(file)
-   fc = 1
-   vc = 1
+   local objFile = io.open(file)
+   local fc = 1
+   local vc = 1
    for line in objFile:lines() do
       if (line:match("^v ")) then
          -- vertices
          -- v -1.968321 0.137992 -1.227969
-         vs = line:gsub("^v ", "")
-         k = 1
+         local vs = line:gsub("^v ", "")
+         local k = 1
          for n in vs:gmatch("[-.%d]+") do
             obj.verts[vc][k] = tonumber(n)
             k = k + 1
@@ -42,10 +44,10 @@ function loadObj(file,maxvertsperface)
          -- f 44/12 51/13 1/14
          -- 3) position/texture/normal
          -- f 44/12/1 51/13/2 1/14/2
-         vs = line:gsub("^f ", "")
+         local vs = line:gsub("^f ", "")
          -- for now just look at position
          vs = vs:gsub("/%d*","")
-         k = 1
+         local k = 1
          for n in vs:gmatch("[-.%d]+") do
             if (k > maxvertsperface) then
                print(string.format("Warning face has more verts than max: %d", maxvertsperface))
@@ -73,13 +75,15 @@ function loadObj(file,maxvertsperface)
          obj.centers[i][j] = obj.face_verts[{i,{},j}]:mean()
       end
       -- assume right handed points
-      n = torch.cross(obj.face_verts[i][2] - obj.face_verts[i][1],
-                      obj.face_verts[i][3] - obj.face_verts[i][2])
+      local n = torch.cross(obj.face_verts[i][2] - obj.face_verts[i][1],
+                            obj.face_verts[i][3] - obj.face_verts[i][2])
       -- norm of 1
       n = n * 1 / n:norm()
       obj.normals[i]:copy(n)
    end
    print(string.format("Processed face_verts, centers and normals in %2.2fs", sys.toc()))
-
+   
    return obj
 end
+
+return obj

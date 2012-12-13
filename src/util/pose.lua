@@ -1,15 +1,17 @@
 require 'sys'
--- require 'image'
+require 'image'
 require 'paths'
 
-function loadPoses(posefile)
+pose = {}
+
+function pose.load(posefile)
    sys.tic()
    if (not posefile) then
       posefile = "data/texture_info.txt"
    end
    pasedir  = paths.dirname(posefile)
 
-   poses = {}
+   local poses = {}
    poses.images = {}
    poses.nposes = 
       tonumber(io.popen(string.format("grep -c '.' %s",posefile)):read())
@@ -17,14 +19,14 @@ function loadPoses(posefile)
    sys.tic()
    poses.data = torch.Tensor(poses.nposes,11)
 
-   pf = io.open(posefile)
-   pc = 1
+   local pf = io.open(posefile)
+   local pc = 1
    for pl in pf:lines() do 
-      n,pd = pl:match("^([%a%d_.]+) (.*)")
+      local n,pd = pl:match("^([%a%d_.]+) (.*)")
       poses[pc] = n
-      -- poses.images[pc] = 
-      --    image.load(string.format("%s/%s", paths.dirname(posefile), n))
-      k = 1
+      poses.images[pc] = 
+         image.load(string.format("%s/%s", paths.dirname(posefile), n))
+      local k = 1
       for n in pd:gmatch("[-.%d]+") do
          poses.data[pc][k] = tonumber(n)
          k = k + 1
@@ -38,3 +40,5 @@ function loadPoses(posefile)
    print(string.format("Loaded %d poses in %2.2fs", pc-1, sys.toc()))
    return poses
 end
+
+return pose

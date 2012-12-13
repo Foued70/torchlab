@@ -1,8 +1,4 @@
-require 'torch'
-require 'dok'
-
-utils = {}
-
+local geom = {}
 
 local axes = torch.Tensor(3,3)
 for i = 1,3 do
@@ -13,7 +9,7 @@ local x_axis = axes[1]
 local y_axis = axes[2]
 local z_axis = axes[3]
 
-function utils.normalize(...)
+function geom.normalize(...)
    local v,res
    local args = {...}
    local nargs = #args
@@ -24,11 +20,12 @@ function utils.normalize(...)
       v   = args[1]
       res = torch.Tensor(v:size())
    else
-      print(dok.usage('utils.normalize',
-                      'normalize a vector (L2)', nil,
+      print(dok.usage('normalize',
+                      'normalize a vector (L2)',
+                      '> returns: normalized vector',
                       {type='torch.Tensor', help='output'},
                       {type='torch.Tensor', help='input', req=true}))
-      dok.error('incorrect arguements', 'utils.normalize')
+      dok.error('incorrect arguements', 'normalize')
    end
 
    res:copy(v)
@@ -39,24 +36,24 @@ function utils.normalize(...)
    return res
 end
 
-function utils.axis_rotation(normal,d)
-   local n   = utils.normalize(normal:narrow(1,1,3))
-   return utils.quaternion_angle(n,d)
+function geom.axis_rotation(normal,d)
+   local n   = geom.normalize(normal:narrow(1,1,3))
+   return geom.quaternion_angle(n,d)
 end
 
-function utils.x_rotation(normal)
-   return utils.axis_rotation(normal,z_axis)
+function geom.x_rotation(normal)
+   return geom.axis_rotation(normal,z_axis)
 end
 
-function utils.y_rotation(normal)
-   return utils.axis_rotation(normal,z_axis)
+function geom.y_rotation(normal)
+   return geom.axis_rotation(normal,z_axis)
 end
 
-function utils.z_rotation(normal)
-   return utils.axis_rotation(normal,z_axis)
+function geom.z_rotation(normal)
+   return geom.axis_rotation(normal,z_axis)
 end
 
-function utils.largest_rotation (normal)
+function geom.largest_rotation (normal)
    local n   = normal:narrow(1,1,3)
    local p   = torch.Tensor(3):copy(n):abs()
    local v,i = p:sort()
@@ -65,10 +62,10 @@ function utils.largest_rotation (normal)
    if (n[d] < 0) then
       a = a * -1
    end
-   return utils.axis_rotation(n,a),d
+   return geom.axis_rotation(n,a),d
 end
 
-function utils.quat_conjugate(quat,res)
+function geom.quat_conjugate(quat,res)
    if (not res) then
       res = torch.Tensor(quat:size()):copy(quat)
    end
@@ -76,7 +73,7 @@ function utils.quat_conjugate(quat,res)
    return res
 end
 
-function utils.rotation_matrix(quaternion, res)
+function geom.rotation_matrix(quaternion, res)
    if (not res) then
       res   = torch.Tensor(4,4)
    end
@@ -104,10 +101,28 @@ end
 -- rotate vector by quaternion 
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
-function utils.rotate_by_quat(v,q,res)
-   if (not res) then
+function geom.rotate_by_quat(...)
+   local res,v,q
+   local args = {...}
+   local nargs = #args
+   if nargs == 3 then
+      res = args[1]
+      v   = args[2]
+      q   = args[3]
+   elseif nargs == 2 then
+      v   = args[1]
+      q   = args[2]
       res = torch.Tensor(4)
+   else
+      print(dok.usage('rotate_by_quat',
+                      'rotate a vector by quaternion', 
+                      '> returns: rotated vector',
+                      {type='torch.Tensor', help='result'},
+                      {type='torch.Tensor', help='vector', req=true},
+                      {type='torch.Tensor', help='quaternion',   req=true}))
+      dok.error('incorrect arguements', 'rotate_by_quat')
    end
+   -- FIXME make this lowlevel C and add possibility to rotate a set of vectors
    local x1 = q[2]*v[3] - q[3]*v[2]
    local y1 = q[3]*v[1] - q[1]*v[3]
    local z1 = q[1]*v[2] - q[2]*v[1]
@@ -120,21 +135,53 @@ function utils.rotate_by_quat(v,q,res)
 end
 
 -- rotate vector by rotation matrix
-function utils.rotate_by_mat(vector,mat,res)
-   if (not res) then
+function geom.rotate_by_mat(...)
+   local res,vec,mat
+   local args = {...}
+   local nargs = #args
+   if nargs == 3 then
+      res = args[1]
+      vec   = args[2]
+      mat   = args[3]
+   elseif nargs == 2 then
+      vec   = args[1]
+      mat   = args[2]
       res = torch.Tensor(4)
+   else
+      print(dok.usage('rotate_by_mat',
+                      'rotate a vector by rotation matrix', 
+                      '> returns: rotated vector',
+                      {type='torch.Tensor', help='result'},
+                      {type='torch.Tensor', help='vector', req=true},
+                      {type='torch.Tensor', help='matrix', req=true}))
+      dok.error('incorrect arguements', 'rotate_by_mat')
    end
-   res:addmv(0,1,mat,vector)
+   res:addmv(0,1,mat,vec)
    return res
 end
 
 -- returns quaternion represnting angle between two vectors
-function utils.quaternion_angle(from_vector, to_vector, quat)
-   from_vector = from_vector:narrow(1,1,3)
-   to_vector = to_vector:narrow(1,1,3)
-   if (not quat) then
+function geom.quaternion_angle(...)
+   local quat, from_vector, to_vector
+   local args = {...}
+   local nargs = #args
+   if nargs == 3 then
+      quat = args[1]
+      from_vector = args[2]:narrow(1,1,3)
+      to_vector   = args[3]:narrow(1,1,3)
+   elseif nargs == 2 then
+      from_vector = args[1]:narrow(1,1,3)
+      to_vector   = args[2]:narrow(1,1,3)
       quat = torch.Tensor(4):fill(0)
       quat[4] = 1
+   else
+      print(dok.usage('quaternion_angle',
+                      'compute rotation quaternion from <from_vector> to <to_vector>', 
+                      '> returns: quaternion',
+                      {type='torch.Tensor', help='quaternion'},
+                      {type='torch.Tensor', help='from_vector', req=true},
+                      {type='torch.Tensor', help='to_vector',   req=true}))
+      dok.error('incorrect arguements', 'quaternion_angle')
    end
    local rot_axis = torch.cross(from_vector, to_vector)
    local m        = torch.norm(rot_axis)
@@ -148,3 +195,4 @@ function utils.quaternion_angle(from_vector, to_vector, quat)
    return quat
 end
 
+return geom
