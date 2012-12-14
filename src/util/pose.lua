@@ -3,7 +3,8 @@ require 'torch'
 require 'image'
 require 'paths'
 
-pose = {}
+util.pose = {}
+local pose = util.pose
 
 function pose.load(posefile)
    sys.tic()
@@ -41,5 +42,3 @@ function pose.load(posefile)
    print(string.format("Loaded %d poses in %2.2fs", pc-1, sys.toc()))
    return poses
 end
-
-return pose

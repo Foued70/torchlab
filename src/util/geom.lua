@@ -1,7 +1,8 @@
 require 'torch'
 require 'dok'
 
-local geom = {}
+util.geom = {}
+local geom = util.geom
 
 local axes = torch.Tensor(3,3)
 for i = 1,3 do
@@ -197,5 +198,3 @@ function geom.quaternion_angle(...)
    end
    return quat
 end
-
-return geom

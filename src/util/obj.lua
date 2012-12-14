@@ -1,7 +1,8 @@
 require 'torch'
 require 'sys'
 
-obj = {}
+util.obj = {}
+local obj = util.obj
 
 -- see: http://en.wikipedia.org/wiki/Wavefront_.obj_file
 function obj.load(file,maxvertsperface)
@@ -86,5 +87,3 @@ function obj.load(file,maxvertsperface)
    
    return obj
 end
-
-return obj

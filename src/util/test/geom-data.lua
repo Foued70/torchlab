@@ -1,6 +1,8 @@
-local geomtestdata = {}
+util.test.geom.data = {}
 
-geomtestdata.vec =
+local data = util.test.geom.data
+
+data.vec =
    torch.Tensor({
                    { -0.4669, -1.2775, -0.2523, 0},
                    { -1.7535, 1.3654, -1.1479, 0},
@@ -29,7 +31,7 @@ geomtestdata.vec =
                    { -0.1812, -0.3539, 0.8489, 0}
                 })
 
-geomtestdata.result_vec_quat =
+data.result_vec_quat =
    torch.Tensor({
                    { 0.40961984, -0.02115954, -0.65089256,  0.63882911},
                    {-0.22288375,  0.11885128,  0.48184174,  0.83906239},
@@ -57,7 +59,7 @@ geomtestdata.result_vec_quat =
                    {-0.53842098,  0.7033636 ,  0.17829956,  0.42847607}
                 })
 
-geomtestdata.quat =
+data.quat =
    torch.Tensor({
                    { 0.8503, 0.0929, -0.2098, 0.4736 },
                    { -0.7380, 0.0855, -0.6672, -0.0546 },
@@ -86,7 +88,7 @@ geomtestdata.quat =
                    { -0.0465, -0.3066, -0.8678, -0.3883 }
                 })
 
-geomtestdata.result_rot_mat =
+data.result_rot_mat =
    torch.Tensor({{{ 0.89470708,  0.35670832, -0.26879102, 0},
                   {-0.04073682, -0.53405231, -0.84438503, 0},
                   {-0.44478077,  0.76642334, -0.46328104, 0},
@@ -213,7 +215,7 @@ geomtestdata.result_rot_mat =
                   {0,0,0,1}}
               })
 
-geomtestdata.result_rot_by_quat =
+data.result_rot_by_quat =
    torch.Tensor({
                    { -8.056333661079406738e-01, 9.144122004508972168e-01, -6.545705795288085938e-01, 0},
                    { -7.732286453247070312e-01, 3.114573955535888672e-01, 2.358360767364501953e+00, 0},
@@ -841,5 +843,3 @@ geomtestdata.result_rot_by_quat =
                    { 2.193140983581542969e-01, -9.761979579925537109e-01, -9.996767640113830566e-01, 0},
                    { 6.248188614845275879e-01, 4.744325876235961914e-01, 5.130546092987060547e-01, 0}
                 })
-
-return geomtestdata

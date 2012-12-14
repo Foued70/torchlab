@@ -1,15 +1,13 @@
 require 'torch'
 require 'sys'
 
--- get vars passed to utils.include function
-local utils = ...
-local geom  = utils.geom
+require 'util'
 
-local test = {}
+util.test.geom = {}
+local test = util.test.geom
+local geom = util.geom
 
--- FIXME this isn't super clean as it depends on the torchPackageName
--- which is hardcoded to 'utils'
-test.data  = utils.include('utils','geom-data.lua')
+torch.include('util','geom-data.lua')
 
 function test.quaternion_angle()
    print("Testing quaternion angle btw. 2 vectors")
@@ -186,5 +184,3 @@ function test.all()
    test.z_rotation()
    test.largest_rotation()
 end
-
-return test
