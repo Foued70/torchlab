@@ -2,16 +2,28 @@ require 'torch'
 require 'sys'
 
 util.obj = {}
-local obj = util.obj
+local objops = util.obj
 
 -- see: http://en.wikipedia.org/wiki/Wavefront_.obj_file
-function obj.load(file,maxvertsperface)
-   if (not file) then
-      file = "data/scan.obj"
+function objops.load(...)
+   local file,maxvertsperface
+   local args = {...}
+   local nargs = #args
+   if nargs == 2 then
+      file = args[1]
+      maxvertsperface = args[2]
+   elseif nargs == 1 then
+      file = args[1]
+      maxvertsperface = 3
+   else
+      print(dok.usage('obj.load',
+                      'load an obj file',
+                      '> returns: lua table with faces, verts etc.',
+                      {type='string', help='obj filepath', req=true},
+                      {type='number', help='max vertices per face', default=3}))
+      dok.error('incorrect arguments','obj.load')
    end
-   if (not maxvertsperface) then
-      maxvertsperface = 10
-   end
+   
    sys.tic()
    local obj = {}
    obj.nverts = tonumber(io.popen(string.format("grep -c '^v ' %s",file)):read())
@@ -47,14 +59,20 @@ function obj.load(file,maxvertsperface)
          -- 3) position/texture/normal
          -- f 44/12/1 51/13/2 1/14/2
          local vs = line:gsub("^f ", "")
-         -- for now just look at position
+         -- FIXME for now discard texture and normal
          vs = vs:gsub("/%d*","")
          local k = 1
-         for n in vs:gmatch("[-.%d]+") do
+         -- can have faces with different number of verts gmatch
+         -- returns an iterator so we can't get the length before hand
+         -- and have to check against maxverts in the loop
+         for n in vs:gmatch("[-.%d]+") do 
             if (k > maxvertsperface) then
-               print(string.format("Warning face has more verts than max: %d", maxvertsperface))
+               print(string.format("Warning face %d has more verts than max: %d", 
+                                   fc, maxvertsperface))
+               break
+            else
+               obj.faces[fc][k] = tonumber(n)
             end
-            obj.faces[fc][k] = tonumber(n)
             k = k + 1
          end
          fc = fc + 1

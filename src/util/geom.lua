@@ -29,7 +29,7 @@ function geom.normalize(...)
                       '> returns: normalized vector',
                       {type='torch.Tensor', help='output'},
                       {type='torch.Tensor', help='input', req=true}))
-      dok.error('incorrect arguements', 'normalize')
+      dok.error('incorrect arguments', 'normalize')
    end
 
    res:copy(v)

@@ -3,6 +3,6 @@ require 'libui'
 
 ui = {}
 
-function ui.display()
-   libui.display()
+function ui.display(obj)
+   libui.display(obj)
 end
