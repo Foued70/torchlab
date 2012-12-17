@@ -173,7 +173,51 @@ function test.largest_rotation()
    print(string.format(" - Found %d/%d errors (max: %f) in %2.4fs",
                        e,test.data.vec:size(1),maxerr,sys.toc()))
 end
-   
+
+function test.ray_plane_intersection()
+   print("Testing ray plane intersection")
+   local e = 0
+   local cnt = 0
+   local results = test.data.result_ray_plane
+   local plane_norm = test.data.quat:narrow(2,1,3)
+   local plane_d = test.data.quat:select(2,4)
+   local maxterr = 0
+   local maxierr = 0
+   sys.tic()
+   for i = 1,test.data.vec:size(1) do 
+      local tvec = test.data.vec[i]:narrow(1,1,3)
+      for j = 1,plane_norm:size(1) do
+         local n = geom.normalize(plane_norm[j])
+         local d = plane_d[j]
+         local intersection,t = 
+            geom.ray_plane_intersection(tvec,tvec,n,d,false)
+         cnt = cnt + 1
+         local gt = results[cnt]
+         local terr = torch.abs(t - gt[1])
+         if not intersection then
+            if  terr > 1 then
+               e = e + 1
+            end
+         else
+            ierr = torch.abs(torch.sum(torch.add(intersection,-gt:narrow(1,2,3))))/3
+            if terr > 1e-8 or ierr > 1e-8 then
+               if terr > maxterr then maxterr = terr end
+               if ierr > maxierr then maxierr = ierr end
+               e = e + 1
+               print(string.format("[v:%d][p:%d]", i, j))
+               print(string.format("T: %f <-> %f err: %f I: (%f,%f,%f) <-> (%f,%f,%f) err: %f",
+                                   t, gt[1], terr,
+                                   intersection[1],intersection[2],intersection[3],
+                                   gt[2],gt[3],gt[4], ierr))
+            end
+         end
+      end
+   end
+   print(string.format(" - Found %d/%d errors (maxT: %f, maxI: %f) in %2.4fs",
+                       e,test.data.vec:size(1)*test.data.quat:size(1),
+                       maxterr,maxierr,sys.toc()))
+end
+
 function test.all()
    test.quaternion_angle()
    test.quat2rot()
@@ -183,4 +227,5 @@ function test.all()
    test.y_rotation()
    test.z_rotation()
    test.largest_rotation()
+   test.ray_plane_intersection()
 end

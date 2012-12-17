@@ -198,3 +198,45 @@ function geom.quaternion_angle(...)
    end
    return quat
 end
+
+function geom.ray_plane_intersection(...)
+   local pt,dir,plane_norm,plane_d,debug
+   local args = {...}
+   local nargs = #args
+   if nargs == 5 then
+      debug      = args[5]
+   end
+   if nargs < 4 then
+      print(dok.usage('ray_plane_intersection',
+                      'does rat intersect the plane', 
+                      '> returns: quaternion',
+                      {type='torch.Tensor', help='point (start of ray)'},
+                      {type='torch.Tensor', help='direction (of ray)', req=true},
+                      {type='torch.Tensor', help='normal (of plane)', req=true},
+                      {type='torch.Tensor', help='offset (of plane)', req=true},
+                      {type='torch.Tensor', help='debug', default=False}))
+
+      dok.error('incorrect arguements', 'ray_plane_intersection')
+   else
+      pt         = args[1]
+      dir        = args[2]
+      plane_norm = args[3]
+      plane_d    = args[4]
+   end
+   local a = torch.dot(plane_norm,dir)
+   if torch.abs(a) < 1e-8 then
+      if debug then print(" - angle parallel") end
+      return nil,1
+   end
+   local t = -(torch.dot(plane_norm,pt) + plane_d)/a
+   if debug then print(string.format(" - t: %f", t)) end
+   if t < 0 then
+      if debug then print(" - plane behind") end
+      return nil,2
+   end
+   local i = pt + dir * t
+   if debug then print(string.format(" - int: [%f, %f, %f]", 
+                                     i[1],i[2],i[3])) end
+   return i,t
+end
+      
