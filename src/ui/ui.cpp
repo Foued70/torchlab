@@ -13,6 +13,9 @@ extern "C" {
 #include <GL/glut.h>
 #endif
 
+#include <QtOpenGL/QGLWidget>
+
+
 void display(void) 
 { 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
@@ -38,10 +41,10 @@ int libui_display(lua_State *L)
 
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH); 
   glutInitWindowSize(640, 480); 
-
   
   glutDisplayFunc(display); 
   int win = glutCreateWindow("Floored Viewer"); 
+  glutSetCursor(GLUT_CURSOR_FULL_CROSSHAIR);
   glutDisplayFunc(display); 
   //glutReshapeFunc(reshape); 
   //glutIdleFunc(idle); 

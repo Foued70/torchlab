@@ -11,6 +11,7 @@
 #include <GL/glut.h>
 #endif
 
+
 void display(void) 
 { 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
@@ -40,6 +41,7 @@ int libui_display(lua_State *L)
   
   glutDisplayFunc(display); 
   int win = glutCreateWindow("Floored Viewer"); 
+  glutSetCursor(GLUT_CURSOR_FULL_CROSSHAIR);
   glutDisplayFunc(display); 
   //glutReshapeFunc(reshape); 
   //glutIdleFunc(idle); 
