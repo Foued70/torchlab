@@ -40,6 +40,12 @@ function geom.normalize(...)
    return res
 end
 
+-- compute normal from first three vertices in a face
+function geom.compute_normal(v)
+   return geom.normalize(
+      torch.cross(v[3] - v[2], v[1] - v[2]))
+end
+
 function geom.axis_rotation(normal,d)
    local n   = geom.normalize(normal:narrow(1,1,3))
    return geom.quaternion_angle(n,d)
