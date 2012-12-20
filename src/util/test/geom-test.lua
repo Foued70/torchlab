@@ -263,7 +263,7 @@ function test.ray_face_intersection()
 end
 
 function test.compute_normals()
-   print("Testing ray face intersection")
+   print("Testing compute normals")
    local e          = 0
    local cnt        = 0
    local maxerr     = 0

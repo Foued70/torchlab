@@ -35,6 +35,7 @@ function objops.load(...)
    -- could be a table as we don't know max number of vertices per face
    obj.verts = torch.Tensor(obj.nverts,4):fill(1)
    obj.faces = torch.IntTensor(obj.nfaces,maxvertsperface):fill(-1)
+   obj.nverts_per_face = torch.IntTensor(obj.nfaces)
 
    local objFile = io.open(file)
    local fc = 1
@@ -75,18 +76,20 @@ function objops.load(...)
             end
             k = k + 1
          end
+         obj.nverts_per_face[fc] = k - 1
          fc = fc + 1
       end
    end
    print(string.format("Loaded %d verts %d faces in %2.2fs", vc-1, fc-1, sys.toc()))
 
    sys.tic()
-   obj.face_verts = torch.Tensor(obj.nfaces,3,3)
+   obj.face_verts = torch.Tensor(obj.nfaces,maxvertsperface,3)
    obj.normals    = torch.Tensor(obj.nfaces,3)
+   obj.d          = torch.Tensor(obj.nfaces) 
    obj.centers    = torch.Tensor(obj.nfaces,3)
 
    for i = 1,obj.nfaces do
-      for j = 1,3 do
+      for j = 1,obj.nverts_per_face[i] do
          for k = 1,3 do
             obj.face_verts[i][j][k] = obj.verts[obj.faces[i][j]][k]
          end
@@ -94,12 +97,8 @@ function objops.load(...)
       for j = 1,3 do
          obj.centers[i][j] = obj.face_verts[{i,{},j}]:mean()
       end
-      -- assume right handed points
-      local n = torch.cross(obj.face_verts[i][2] - obj.face_verts[i][1],
-                            obj.face_verts[i][3] - obj.face_verts[i][2])
-      -- norm of 1
-      n = n * 1 / n:norm()
-      obj.normals[i]:copy(n)
+      obj.normals[i]:copy(util.geom.compute_normal(obj.face_verts[i]))
+      obj.d[i] = - torch.dot(obj.normals[i],obj.centers[i])
    end
    print(string.format("Processed face_verts, centers and normals in %2.2fs", sys.toc()))
    
