@@ -66,8 +66,8 @@ function pose.loadtxtfile(posefile)
          poses.data[pc][k] = tonumber(n)
          k = k + 1
       end
-      poses.data[pc][16] = poses.data[pc][18] * poses.data[8]
-      poses.data[pc][17] = poses.data[pc][19] * (1-poses.data[9])
+      poses.data[pc][16] = poses.data[pc][18] *    poses.data[pc][8]
+      poses.data[pc][17] = poses.data[pc][19] * (1-poses.data[pc][9])
       pc = pc + 1
    end
    pose.process(poses)
@@ -115,6 +115,7 @@ function pose.globalxyz2uv(p,i,pt)
    local azimuth = - r2d * torch.atan2(v[2],v[1])
    local norm      = geom.normalize(v)
    local elevation = r2d * torch.asin(norm[3])
+   -- print(azimuth,elevation)
    local proj_x  = p.cntrx[i] + (  azimuth / p.px[i][1])
    local proj_y  = p.cntry[i] - (elevation / p.px[i][2])
    local proj_u  = proj_x / p.w[i]
@@ -125,14 +126,18 @@ end
 -- for pixel xy (0,0 in top left, w,h in bottom right) to point +
 -- direction ray for intersection work
 function pose.localxy2globalray(p,i,x,y)
-   local azimuth   = d2r * (x - p.uv[i][1]) * p.px[i][1]
-   local elevation = d2r * (y - p.uv[i][2]) * p.px[i][2]
+   local azimuth   = (x - p.cntrx[i]) * p.px[i][1]
+   local elevation = (p.cntry[i] - y) * p.px[i][2]
+   -- print(azimuth,elevation)
+   azimuth   = - d2r * azimuth
+   elevation = d2r * elevation
    local dir = torch.Tensor(3)
    -- local direction
-   local h =     torch.sin(elevation)
-   dir[3]  =     torch.cos(elevation) -- z'
-   dir[2]  = h * torch.cos(azimuth)   -- y'
-   dir[1]  = h * torch.sin(azimuth)   -- x'
+   local h =       torch.cos(elevation)
+   dir[3]  =       torch.sin(elevation) -- z'
+   dir[2]  =   h * torch.sin(azimuth)   -- y'
+   dir[1]  =   h * torch.cos(azimuth)   -- x'
+   dir = geom.normalize(dir)
    -- return point and direction rotated to global coordiante
    return p.xyz[i], geom.rotate_by_quat(dir,p.quat[i])
 end

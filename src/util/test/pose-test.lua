@@ -6,6 +6,7 @@ require 'util'
 util.test.pose = {}
 local test  = util.test.pose
 local pose  = util.pose
+local geom  = util.geom
 
 torch.include('util','pose-data.lua')
 
@@ -78,7 +79,43 @@ function test.globalxyz2uv ()
 end
 
 
+function test.localxy2globalray ()
+   print("Testing localxy2globalray") 
+   local e        = 0
+   local maxerr = 0
+   local cnt      = 0
+   local poses    = test.data.poses
+   local gxyz     = test.data.xyz
+   sys.tic()
+   for i = 1,poses.nposes do
+      for j = 1,gxyz:size(1) do
+         cnt = cnt + 1
+         local gtxyz = gxyz[j]      
+         local t     = torch.Tensor({pose.globalxyz2uv(poses,i,gtxyz)})
+         local pt,dir = pose.localxy2globalray(poses,i,t[3],t[4])
+         local gdir = geom.normalize(gtxyz - pt)
+         local er = torch.abs(dir:narrow(1,1,3) -gdir)
+         local err, argerr = torch.max(er,1)
+         err = err[1]
+         argerr = argerr[1]
+         if err > 1e-6 then
+            e = e + 1
+            print(string.format(" dir: %f, %f, %f",
+                                dir[1],dir[2],dir[3]))
+            print(string.format("gdir: %f, %f, %f",
+                                gdir[1],gdir[2],gdir[3]))
+            print(string.format("   %d: %f, %f, %f", 
+                                argerr, er[1],er[2],er[3]))
+         end
+         if err > maxerr then maxerr = err end
+      end 
+   end
+   print(string.format(" - Found %d/%d errors (max %e ) in %2.4fs",
+                       e,cnt, maxerr,sys.toc()))
+end
+
 function test.all()
    test.global2local()
    test.globalxyz2uv()
+   test.localxy2globalray()
 end

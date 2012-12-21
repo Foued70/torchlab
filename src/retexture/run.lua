@@ -5,6 +5,7 @@ require 'math'
 require 'util'
 
 
+local geom = util.geom
 -- top level filenames
 targetfile = "/Users/marco/lofty/test/invincible-violet/retexture-tworoom.obj"
 sourcedir  = "/Users/marco/lofty/models//invincible-violet-3396_a_00/"
@@ -34,7 +35,7 @@ function loadcache (objfile,cachefile,loader,args)
    return object
 end
 
-poses  = loadcache(posefile,posecache,util.pose.load)
+poses  = loadcache(posefile,posecache,util.pose.loadtxtfile)
 source = loadcache(sourcefile,sourcecache,util.obj.load,3)
 target = loadcache(targetfile,targetcache,util.obj.load,4)
 
@@ -65,42 +66,53 @@ fout_b  =  1 - fout_a * idealdist
 -- do we blend or take max
 doMax = True
 
--- pt (point) is the starting point of the ray
--- dir (direction) is the (normalized) direction it travels
--- plane is the a,b,c,d (normal(a,b,c),offset(d)) eq. for the plane
-function ray_plane_intersection(pt,dir,plane)
-   local plane_norm = plane:narrow(1,1,3)
-   local plane_d    = plane[4]
-   local angle = torch.dot(plane:narrow(1,1,3),ray)
-   if (math.abs(angle) < 1e-8) then
-      return nil
+function get_occlusions(pt,dir,obj)
+   local d = math.huge
+   dir = dir:narrow(1,1,3)
+   local tmp = torch.Tensor(obj.nfaces)
+   local found = false
+   local tested = {}
+   for fi = 1,obj.nfaces do
+      local verts  = obj.face_verts[fi]
+      local nverts = obj.nverts_per_face[fi]
+      intersection, tstd = 
+         util.geom.ray_face_intersection(pt,dir,
+                                         obj.normals[fi],obj.d[fi],
+                                         obj.face_verts[fi]:narrow(1,1,obj.nverts_per_face[fi]))
+      if intersection then
+         if (tstd < d) then 
+            d = tstd
+            found = true
+         end
+      end
    end
-   local t = - (torch.dot(plane_norm,pt) + plane_d)/angle
-   if (t < 0) then 
-      return nil
-   end
-   return pt + dir * t
+   return d
 end
 
-# is the intersection inside the face?
-# http://www.siggraph.org/education/materials/HyperGraph/raytrace/raypolygon_intersection.htm
 
-function ray_face_intersection(pt,dir,plane,face_verts)
-   local plane_norm = plane:narrow(1,1,3)
-   local plane_d    = plane[4]
-   local intersection = ray_plane_intersection(pt,dir,plane)
-   if intersection then
-      local v,i   = plane_norm:sort()
-      local ri    = torch.Tensor(2)
-      ri[1] = intersection[i[1]]
-      ri[2] = intersection[i[1]]
-      local verts = torch.Tensor(face_verts:size(1),2)
-      for j in 1,face_verts:size(1) do
-         verts[
-      
+posedir = paths.dirname(posefile)
+-- function compute_occlusions ()
+-- for each pose.  create a D layer in the source mesh
+scale    = 8
+invscale = 1/scale
+for pi = 1,#poses do
+   sys.tic()
+   outh = poses.h[pi]*invscale
+   outw = poses.w[pi]*invscale
+   ddata  = torch.zeros(outh,outw)
+   ddatafile = posedir .. poses[pi]:gsub(".jpg","-dist.t7")
+   dimagefile = posedir .. poses[pi]:gsub(".jpg","-dist.png")
+   for h = 1,outh do -- poses.h[pi] do
+      for w = 1,outw do -- poses.w[pi] do
+         local pt,dir = util.pose.localxy2globalray(poses,pi,w*scale,h*scale)
+         ddata[h][w]  = get_occlusions(pt,dir,target)
+      end
    end
-   return nil
+   print("Saving " .. ddatafile)
+   torch.save(ddatafile,ddata)
+   ddata:mul(1/ddata:max())
+   print("Saving " .. dimagefile)
+   image.save(dimagefile,ddata)
+   print("Processed pose "..pi.." in "..sys.toc().." secs")
+   image.display(ddata)
 end
--- compute occlusions
-
-function compute_occlusions
