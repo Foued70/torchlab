@@ -2,16 +2,28 @@ require 'torch'
 require 'sys'
 
 util.obj = {}
-local obj = util.obj
+local objops = util.obj
 
 -- see: http://en.wikipedia.org/wiki/Wavefront_.obj_file
-function obj.load(file,maxvertsperface)
-   if (not file) then
-      file = "data/scan.obj"
+function objops.load(...)
+   local file,maxvertsperface
+   local args = {...}
+   local nargs = #args
+   if nargs == 2 then
+      file = args[1]
+      maxvertsperface = args[2]
+   elseif nargs == 1 then
+      file = args[1]
+      maxvertsperface = 3
+   else
+      print(dok.usage('obj.load',
+                      'load an obj file',
+                      '> returns: lua table with faces, verts etc.',
+                      {type='string', help='obj filepath', req=true},
+                      {type='number', help='max vertices per face', default=3}))
+      dok.error('incorrect arguments','obj.load')
    end
-   if (not maxvertsperface) then
-      maxvertsperface = 10
-   end
+   
    sys.tic()
    local obj = {}
    obj.nverts = tonumber(io.popen(string.format("grep -c '^v ' %s",file)):read())
@@ -23,6 +35,7 @@ function obj.load(file,maxvertsperface)
    -- could be a table as we don't know max number of vertices per face
    obj.verts = torch.Tensor(obj.nverts,4):fill(1)
    obj.faces = torch.IntTensor(obj.nfaces,maxvertsperface):fill(-1)
+   obj.nverts_per_face = torch.IntTensor(obj.nfaces)
 
    local objFile = io.open(file)
    local fc = 1
@@ -47,28 +60,36 @@ function obj.load(file,maxvertsperface)
          -- 3) position/texture/normal
          -- f 44/12/1 51/13/2 1/14/2
          local vs = line:gsub("^f ", "")
-         -- for now just look at position
+         -- FIXME for now discard texture and normal
          vs = vs:gsub("/%d*","")
          local k = 1
-         for n in vs:gmatch("[-.%d]+") do
+         -- can have faces with different number of verts gmatch
+         -- returns an iterator so we can't get the length before hand
+         -- and have to check against maxverts in the loop
+         for n in vs:gmatch("[-.%d]+") do 
             if (k > maxvertsperface) then
-               print(string.format("Warning face has more verts than max: %d", maxvertsperface))
+               print(string.format("Warning face %d has more verts than max: %d", 
+                                   fc, maxvertsperface))
+               break
+            else
+               obj.faces[fc][k] = tonumber(n)
             end
-            obj.faces[fc][k] = tonumber(n)
             k = k + 1
          end
+         obj.nverts_per_face[fc] = k - 1
          fc = fc + 1
       end
    end
    print(string.format("Loaded %d verts %d faces in %2.2fs", vc-1, fc-1, sys.toc()))
 
    sys.tic()
-   obj.face_verts = torch.Tensor(obj.nfaces,3,3)
+   obj.face_verts = torch.Tensor(obj.nfaces,maxvertsperface,3)
    obj.normals    = torch.Tensor(obj.nfaces,3)
+   obj.d          = torch.Tensor(obj.nfaces) 
    obj.centers    = torch.Tensor(obj.nfaces,3)
 
    for i = 1,obj.nfaces do
-      for j = 1,3 do
+      for j = 1,obj.nverts_per_face[i] do
          for k = 1,3 do
             obj.face_verts[i][j][k] = obj.verts[obj.faces[i][j]][k]
          end
@@ -76,12 +97,8 @@ function obj.load(file,maxvertsperface)
       for j = 1,3 do
          obj.centers[i][j] = obj.face_verts[{i,{},j}]:mean()
       end
-      -- assume right handed points
-      local n = torch.cross(obj.face_verts[i][2] - obj.face_verts[i][1],
-                            obj.face_verts[i][3] - obj.face_verts[i][2])
-      -- norm of 1
-      n = n * 1 / n:norm()
-      obj.normals[i]:copy(n)
+      obj.normals[i]:copy(util.geom.compute_normal(obj.face_verts[i]))
+      obj.d[i] = - torch.dot(obj.normals[i],obj.centers[i])
    end
    print(string.format("Processed face_verts, centers and normals in %2.2fs", sys.toc()))
    

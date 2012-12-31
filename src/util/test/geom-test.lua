@@ -63,7 +63,7 @@ function test.rotation_by_quat()
          i = i + 1
       end
    end
-   print(string.format(" - Found %d/%d errors (max: %f) in %2.4fs",
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,res:size(1),maxerr,sys.toc()))
 end
 
@@ -90,7 +90,7 @@ function test.rotation_by_mat()
          i = i + 1
       end
    end
-   print(string.format(" - Found %d/%d errors (max: %f) in %2.4fs",
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,res:size(1),maxerr,sys.toc()))
 end
 
@@ -110,7 +110,7 @@ function test.z_rotation()
          e = e + 1
       end
    end
-   print(string.format(" - Found %d/%d errors (max: %f) in %2.4fs",
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,test.data.vec:size(1),maxerr,sys.toc()))
 end
 
@@ -130,7 +130,7 @@ function test.x_rotation()
          e = e + 1
       end
    end
-   print(string.format(" - Found %d/%d errors (max: %f) in %2.4fs",
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,test.data.vec:size(1),maxerr,sys.toc()))
 end
 
@@ -150,7 +150,7 @@ function test.y_rotation()
          e = e + 1
       end
    end
-   print(string.format(" - Found %d/%d errors (max: %f) in %2.4fs",
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,test.data.vec:size(1),maxerr,sys.toc()))
 end
 
@@ -170,10 +170,123 @@ function test.largest_rotation()
          e = e + 1
       end
    end
-   print(string.format(" - Found %d/%d errors (max: %f) in %2.4fs",
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,test.data.vec:size(1),maxerr,sys.toc()))
 end
-   
+
+function test.ray_plane_intersection()
+   print("Testing ray plane intersection")
+   local e = 0
+   local cnt = 0
+   local results = test.data.result_ray_plane
+   local plane_norm = test.data.quat:narrow(2,1,3)
+   local plane_d = test.data.quat:select(2,4)
+   local maxterr = 0
+   local maxierr = 0
+   sys.tic()
+   for i = 1,test.data.vec:size(1) do 
+      local tvec = test.data.vec[i]:narrow(1,1,3)
+      for j = 1,plane_norm:size(1) do
+         local n = geom.normalize(plane_norm[j])
+         local d = plane_d[j]
+         local intersection,t = 
+            geom.ray_plane_intersection(tvec,tvec,n,d,false)
+         cnt = cnt + 1
+         local gt = results[cnt]
+         local terr = torch.abs(t - gt[1])
+         if not intersection then
+            if  terr > 1 then
+               e = e + 1
+            end
+         else
+            ierr = torch.abs(torch.sum(torch.add(intersection,-gt:narrow(1,2,3))))/3
+            if terr > 1e-8 or ierr > 1e-8 then
+               if terr > maxterr then maxterr = terr end
+               if ierr > maxierr then maxierr = ierr end
+               e = e + 1
+               print(string.format("[v:%d][p:%d]", i, j))
+               print(string.format("T: %f <-> %f err: %e I: (%f,%f,%f) <-> (%f,%f,%f) err: %e",
+                                   t, gt[1], terr,
+                                   intersection[1],intersection[2],intersection[3],
+                                   gt[2],gt[3],gt[4], ierr))
+            end
+         end
+      end
+   end
+   print(string.format(" - Found %d/%d errors (maxT: %e, maxI: %e) in %2.4fs",
+                       e,cnt, maxterr,maxierr,sys.toc()))
+end
+
+function test.ray_face_intersection()
+   print("Testing ray face intersection")
+   local e          = 0
+   local cnt        = 0
+   local maxterr    = 0
+   local maxierr    = 0
+   local results    = test.data.result_ray_face
+   local pts        = test.data.pt_dir:narrow(2,1,3)
+   local dirs       = test.data.pt_dir:narrow(2,4,3)
+   local face_plane = test.data.face_plane
+   local face_verts = test.data.face_verts
+   local plane_d    = test.data.quat:select(2,4)
+   sys.tic()
+   for i = 1,pts:size(1) do
+      local pt  = pts[i]
+      local dir = dirs[i]
+      for j = 1,face_plane:size(1) do 
+         local n = face_plane[j]:narrow(1,1,3)
+         local d = face_plane[j][4]
+         local v = face_verts[j]
+         local intersection,t = 
+            geom.ray_face_intersection(pt,dir,n,d,v,false)
+         cnt = cnt + 1
+         local gt = results[i][j]
+         if intersection then
+            if (gt:sum() == 0) then
+               e = e + 1
+            else
+               local terr = torch.max(torch.abs(intersection - gt))
+               if terr > 1e-7    then 
+                  e = e + 1 
+               end
+               if terr > maxterr then maxterr = terr end
+            end
+         else
+            if torch.sum(torch.abs(gt)) > 0 then
+               e = e + 1
+            end
+         end
+      end
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,cnt, maxterr,sys.toc()))
+end
+
+function test.compute_normals()
+   print("Testing compute normals")
+   local e          = 0
+   local cnt        = 0
+   local maxerr     = 0
+   local normals    = test.data.face_plane:narrow(2,1,3)
+   local face_verts = test.data.face_verts
+   sys.tic()
+   for i = 1,normals:size(1) do
+      cnt = cnt + 1
+      local n = geom.compute_normal(face_verts[i])
+      local gtn = normals[i]
+      local err = torch.sum(torch.abs(n - gtn))
+      if err > maxerr then maxerr = err end
+      if err > 1e-7 then
+         e = e + 1
+         print(string.format("%e : (%e,%e,%e) <-> (%e,%e,%e)",
+                             err, n[1],n[2],n[3],
+                             gtn[1],gtn[2],gtn[3]))
+      end
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,cnt, maxerr,sys.toc()))
+end
+
 function test.all()
    test.quaternion_angle()
    test.quat2rot()
@@ -183,4 +296,7 @@ function test.all()
    test.y_rotation()
    test.z_rotation()
    test.largest_rotation()
+   test.ray_plane_intersection()
+   test.ray_face_intersection()
+   test.compute_normals()
 end

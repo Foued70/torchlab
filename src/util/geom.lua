@@ -29,7 +29,7 @@ function geom.normalize(...)
                       '> returns: normalized vector',
                       {type='torch.Tensor', help='output'},
                       {type='torch.Tensor', help='input', req=true}))
-      dok.error('incorrect arguements', 'normalize')
+      dok.error('incorrect arguments', 'normalize')
    end
 
    res:copy(v)
@@ -38,6 +38,12 @@ function geom.normalize(...)
       res:mul(1/n)
    end
    return res
+end
+
+-- compute normal from first three vertices in a face
+function geom.compute_normal(v)
+   return geom.normalize(
+      torch.cross(v[3] - v[2], v[1] - v[2]))
 end
 
 function geom.axis_rotation(normal,d)
@@ -198,3 +204,122 @@ function geom.quaternion_angle(...)
    end
    return quat
 end
+
+function geom.ray_plane_intersection(...)
+   local pt,dir,plane_norm,plane_d,debug
+   local args = {...}
+   local nargs = #args
+   if nargs == 5 then
+      debug      = args[5]
+   end
+   if nargs < 4 then
+      print(dok.usage('ray_plane_intersection',
+                      'does ray intersect the plane', 
+                      '> returns: intersection,distance or nil,errno',
+                      {type='torch.Tensor', help='point (start of ray)'},
+                      {type='torch.Tensor', help='direction (of ray)', req=true},
+                      {type='torch.Tensor', help='normal (of plane)', req=true},
+                      {type='torch.Tensor', help='offset (of plane)', req=true},
+                      {type='torch.Tensor', help='debug', default=False}))
+
+      dok.error('incorrect arguements', 'ray_plane_intersection')
+   else
+      pt         = args[1]
+      dir        = args[2]
+      plane_norm = args[3]
+      plane_d    = args[4]
+   end
+   local a = torch.dot(plane_norm,dir)
+   if torch.abs(a) < 1e-8 then
+      if debug then print(" - angle parallel") end
+      return nil,1
+   end
+   local t = -(torch.dot(plane_norm,pt) + plane_d)/a
+   if debug then print(string.format(" - t: %f", t)) end
+   if t < 0 then
+      if debug then print(" - plane behind") end
+      return nil,2
+   end
+   local i = pt + dir * t
+   if debug then print(string.format(" - int: [%f, %f, %f]", 
+                                     i[1],i[2],i[3])) end
+   return i,t
+end
+      
+
+function geom.ray_face_intersection(...)
+   local pt,dir,plane_norm,plane_d,face_verts,debug
+   local args = {...}
+   local nargs = #args
+   if nargs == 6 then
+      debug      = args[6]
+   end
+   if nargs < 4 then
+      print(dok.usage('ray_face_intersection',
+                      'does ray intersect the face', 
+                      '> returns: intersection point,distance, or nil,errno',
+                      {type='torch.Tensor', help='point (start of ray)'},
+                      {type='torch.Tensor', help='direction (of ray)', req=true},
+                      {type='torch.Tensor', help='normal (of plane)', req=true},
+                      {type='torch.Tensor', help='offset (of plane)', req=true},
+                      {type='torch.Tensor', help='face vertices', req=true},
+                      {type='torch.Tensor', help='debug', default=False}))
+
+      dok.error('incorrect arguements', 'ray_plane_intersection')
+   else
+      pt         = args[1]
+      dir        = args[2]
+      plane_norm = args[3]
+      plane_d    = args[4]
+      face_verts = args[5]
+   end
+   -- First find planar intersection
+   local intersection,t = 
+      geom.ray_plane_intersection(pt,dir,plane_norm,plane_d,debug)
+   if not intersection then
+      return nil,t
+   end
+   -- pick two most planar dimensions of the face throw away
+   -- coordinate with greatest magnitude (if normal is mostly z
+   -- then we want x and y) 
+   local nverts = face_verts:size(1)
+   local _,ds = torch.sort(torch.abs(plane_norm))
+   local ri = torch.Tensor(2)
+   local verts = torch.Tensor(nverts,2)
+   ri[1] = intersection[ds[1]]
+   ri[2] = intersection[ds[2]]
+   for i = 1,nverts do
+      verts[i][1] = face_verts[i][ds[1]] - ri[1]
+      verts[i][2] = face_verts[i][ds[2]] - ri[2]
+   end
+   -- count crossings along 'y' axis : b in slope intercept line equation
+   local pvert = verts[nverts]
+   local count = 0
+   for vi = 1,nverts do
+      local cvert = verts[vi]
+      --  compute y axis crossing (b = y - mx) 
+      local run  =  cvert[1] - pvert[1]
+      local b    = -math.huge
+      local cpos = 1
+      local ppos = 1
+      if math.abs(run) < 1e-8 then
+         if (math.abs(cvert[1]) < 1e-8) then
+            count = count + 1
+         end
+      else
+         b = cvert[2] - ((cvert[2] - pvert[2])/run) * cvert[1]
+         if (cvert[1] < 0) then cpos = -1 end
+         if (pvert[1] < 0) then ppos = -1 end
+         if (b >= 0) and ((cpos + ppos) == 0) then
+            count = count + 1 
+         end
+      end
+      pvert = cvert
+   end
+   if ((count > 0) and (count % 2)) then
+      return intersection,t
+   else
+      return nil,3
+   end
+end
+

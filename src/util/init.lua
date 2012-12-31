@@ -14,4 +14,6 @@ function util.run_tests()
    util.test = {}
    torch.include('util','geom-test.lua')
    util.test.geom.all()
+   torch.include('util','pose-test.lua')
+   util.test.pose.all()
 end
