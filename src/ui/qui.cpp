@@ -17,7 +17,13 @@ class gui_launcher : public QObject
     // printf("event %d\n", ev->type());
 
     if( ev->type() == QEvent::User ) {
-      window = new ScanWidget();
+      QGLFormat glFormat;
+      glFormat.setVersion( 3, 2 );
+      glFormat.setProfile( QGLFormat::CompatibilityProfile ); // Requires >=Qt-4.8.0
+      glFormat.setSampleBuffers( true );
+
+      // Create a GLWidget requesting our format
+      window = new ScanWidget(glFormat);
       window->resize(800,600);
       window->show();
       return true;

@@ -1,6 +1,14 @@
+#include "opengl.h"
+#include "Core3_2_context.h"
 #include <QtGui/QMouseEvent>
 #include "ScanWidget.h"
-#include "opengl.h"
+#include <QDebug>
+#include <QKeyEvent>
+#include <QFile>
+#include <QString>
+
+#include <iostream>
+#include <string>
 
 // vertex coords array
 static GLfloat s_cubeVertices[] =
@@ -14,20 +22,20 @@ static GLfloat s_cubeVertices[] =
 #define NUMBER_OF_CUBE_COMPONENTS_PER_VERTEX 3
 
 // color array
-GLubyte s_cubeColors[] = 
+GLubyte s_cubeColors[] =
 {
 	// Bleh. I hate unsigned bytes for colors. Normalized floats are much more elegant.
 	255,0,0,255, 255,0,0,255, 255,0,0,255, 255,0,0,255,
-	0,255,0,255, 0,255,0,255, 0,255,0,255, 0,255,0,255, 
+	0,255,0,255, 0,255,0,255, 0,255,0,255, 0,255,0,255,
 	0,0,255,255, 0,0,255,255, 0,0,255,255, 0,0,255,255,
-	0,255,255,255, 0,255,255,255, 0,255,255,255, 0,255,255,255,  
+	0,255,255,255, 0,255,255,255, 0,255,255,255, 0,255,255,255,
 
 };
 #define NUMBER_OF_CUBE_COLORS 16
 #define NUMBER_OF_CUBE_COMPONENTS_PER_COLOR 4
 
 // Describes a box, but without a top and bottom
-GLubyte s_cubeIndices[] = 
+GLubyte s_cubeIndices[] =
 {
 	0,1,2,3,
 	4,5,6,7,
@@ -36,57 +44,124 @@ GLubyte s_cubeIndices[] =
 };
 #define NUMBER_OF_CUBE_INDICES 16
 
-ScanWidget::ScanWidget(QWidget *parent) : QGLWidget(parent) {
+ScanWidget::ScanWidget(const QGLFormat& format, QWidget* parent ) : QGLWidget( new Core3_2_context(format), parent ),
+      vertexBuffer( QGLBuffer::VertexBuffer ),
+      polyBuffer(QGLBuffer::VertexBuffer)
+{
   setMouseTracking(false);
   camera_x = 4; camera_y = 4; camera_z = 4;
-  
+
 }
 
 ScanWidget::~ScanWidget() {
-  vertexBuffer->destroy();
-  polyBuffer->destroy();
+}
+
+
+
+GLuint ScanWidget::prepShaderProgram( const QString& vertexShaderPath,
+                                     const QString& fragmentShaderPath )
+{
+    struct Shader {
+        const QString&  filename;
+        GLenum       type;
+        GLchar*      source;
+    }  shaders[2] = {
+        { vertexShaderPath, GL_VERTEX_SHADER, NULL },
+        { fragmentShaderPath, GL_FRAGMENT_SHADER, NULL }
+    };
+
+    GLuint program = glCreateProgram();
+
+    for ( int i = 0; i < 2; ++i ) {
+        Shader& s = shaders[i];
+        QFile file( s.filename );
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)){
+            qWarning() << "Cannot open file " << s.filename;
+            exit( EXIT_FAILURE );
+        }
+        QByteArray data = file.readAll();
+        file.close();
+        s.source = data.data();
+
+        if ( shaders[i].source == NULL ) {
+            qWarning() << "Failed to read " << s.filename;
+            exit( EXIT_FAILURE );
+        }
+        GLuint shader = glCreateShader( s.type );
+        glShaderSource( shader, 1, (const GLchar**) &s.source, NULL );
+        glCompileShader( shader );
+
+        GLint  compiled;
+        glGetShaderiv( shader, GL_COMPILE_STATUS, &compiled );
+        if ( !compiled ) {
+            qWarning() << s.filename << " failed to compile:" ;
+            GLint  logSize;
+            glGetShaderiv( shader, GL_INFO_LOG_LENGTH, &logSize );
+            char* logMsg = new char[logSize];
+            glGetShaderInfoLog( shader, logSize, NULL, logMsg );
+            qWarning() << logMsg;
+            delete [] logMsg;
+
+            exit( EXIT_FAILURE );
+        }
+
+        glAttachShader( program, shader );
+    }
+
+    /* Link output */
+    glBindFragDataLocation(program, 0, "fragColor");
+
+    /* link  and error check */
+    glLinkProgram(program);
+
+    GLint  linked;
+    glGetProgramiv( program, GL_LINK_STATUS, &linked );
+    if ( !linked ) {
+        qWarning() << "Shader program failed to link";
+        GLint  logSize;
+        glGetProgramiv( program, GL_INFO_LOG_LENGTH, &logSize);
+        char* logMsg = new char[logSize];
+        glGetProgramInfoLog( program, logSize, NULL, logMsg );
+        qWarning() << logMsg ;
+        delete [] logMsg;
+
+        exit( EXIT_FAILURE );
+    }
+
+    /* use program object */
+    glUseProgram(program);
+
+    return program;
 }
 
 void ScanWidget::initializeGL() {
-    glDisable(GL_TEXTURE_2D);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_COLOR_MATERIAL);
-    glEnable(GL_BLEND);
-    glEnable(GL_POLYGON_SMOOTH);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glClearColor(0, 0, 0, 0);
+  printf("OpenGL %s GLSL %s\n", glGetString(GL_VERSION), glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-    vertexBuffer = new QGLBuffer(QGLBuffer::VertexBuffer);
-    vertexBuffer->create();
-    bool bound = vertexBuffer->bind();
-    printf("vbuf %d %d\n", bound, vertexBuffer->bufferId());
-    vertexBuffer->setUsagePattern(QGLBuffer::StaticDraw);
-
-    const GLsizeiptr vertex_size = NUMBER_OF_CUBE_VERTICES*NUMBER_OF_CUBE_COMPONENTS_PER_VERTEX*sizeof(GLfloat);
-    const GLsizeiptr color_size = NUMBER_OF_CUBE_COLORS*NUMBER_OF_CUBE_COMPONENTS_PER_COLOR*sizeof(GLubyte);
-
-    vertexBuffer->allocate(vertex_size + color_size);
-    GLvoid* buf = vertexBuffer->map(QGLBuffer::ReadWrite);
-    printf("buf %d %d %d\n", buf, vertex_size, color_size);
-    memcpy(buf, s_cubeVertices, vertex_size);
-    buf += vertex_size;
-    memcpy(buf, s_cubeColors, color_size);
-    vertexBuffer->unmap();
-
-    // Describe to OpenGL where the vertex data is in the buffer
-    glVertexPointer(3, GL_FLOAT, 0, (GLvoid*)((char*)NULL));
-
-    // Describe to OpenGL where the color data is in the buffer
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, (GLvoid*)((char*)NULL+vertex_size));
-
-    polyBuffer = new QGLBuffer(QGLBuffer::VertexBuffer);
-    polyBuffer->create();
-    bound = polyBuffer->bind();
-    printf("ibuf %d %d\n", bound, polyBuffer->bufferId());
-    polyBuffer->setUsagePattern(QGLBuffer::StaticDraw);
-    polyBuffer->allocate(s_cubeIndices, NUMBER_OF_CUBE_INDICES*sizeof(GLubyte));
-
-
+  // Set the clear color to black
+  glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+ 
+  // Prepare a complete shader program...
+  m_shader = prepShaderProgram( ":/simple.vert", ":/simple.frag" );
+ 
+  // We need us some vertex data. Start simple with a triangle ;-)
+  float points[] = { -0.5f, -0.5f, 0.0f, 1.0f,
+                      0.5f, -0.5f, 0.0f, 1.0f,
+                      0.0f,  0.5f, 0.0f, 1.0f };
+                      
+  
+  glGenVertexArrays(1, &m_vertexBuffer);
+  glBindVertexArray(m_vertexBuffer);
+  GLuint  vertexBuffer;
+  glGenBuffers(1, &vertexBuffer);
+  glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+  glBufferData(GL_ARRAY_BUFFER, 3 * 6 * sizeof(float), points, GL_STATIC_DRAW);
+  GLuint positionAttribute = glGetAttribLocation(m_shader, "vertex");
+  GLuint colorAttribute = glGetAttribLocation(m_shader, "color");
+  glEnableVertexAttribArray(positionAttribute);
+  glVertexAttribPointer(positionAttribute, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, (const GLvoid *)0);
+  glEnableVertexAttribArray(colorAttribute);
+  glVertexAttribPointer(colorAttribute, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, (const GLvoid *)(sizeof(float)*3));
+      
 }
 
 void ScanWidget::resizeGL(int w, int h) {
@@ -99,36 +174,13 @@ void ScanWidget::resizeGL(int w, int h) {
 }
 
 void ScanWidget::paintGL() {
-    glClear(GL_COLOR_BUFFER_BIT);
+    // Clear the buffer with the current clearing color
+    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+    // camera();
 
-    camera();
-    // glBegin(GL_LINE_LOOP);
-    // glColor3f(1,0,0); glVertex3f(-0.5, -0.5, -0.5);
-    // glColor3f(1,1,0); glVertex3f(-0.5, -0.5,  0.5);
-    // glColor3f(0,1,0); glVertex3f( 0.5, -0.5,  0.5);
-    // glColor3f(0,0,1); glVertex3f( 0.5, -0.5, -0.5);
-    // glColor3f(1,0,0); glVertex3f( 0.5,  0.5, -0.5);
-    // glColor3f(1,1,0); glVertex3f( 0.5,  0.5,  0.5);
-    // glColor3f(0,1,0); glVertex3f(-0.5,  0.5,  0.5);
-    // glColor3f(0,0,1); glVertex3f(-0.5,  0.5, -0.5);
-    // glEnd();
-    
-    // DO NOT use polyBuffer->bind().  It binds to the wrong place (GL_ARRAY_BUFFER).
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, polyBuffer->bufferId());
-    glEnableClientState(GL_COLOR_ARRAY);
-    // printf("%d\n", glGetError());
-
-    vertexBuffer->bind();
-    glEnableClientState(GL_VERTEX_ARRAY);
-    
-    GLint id;
-    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &id);
-    // printf("vbuf_id %d\n", id);
-    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &id);
-    // printf("ibuf_id %d %d\n", polyBuffer->bufferId(), id);
-    // This is the actual draw command
-    glDrawElements(GL_QUADS, NUMBER_OF_CUBE_INDICES, GL_UNSIGNED_BYTE, (GLvoid*)((char*)NULL));
-
+    // Draw stuff
+    glDrawArrays( GL_TRIANGLES, 0, 3 );
+    // glCheckError();
 }
 
 void ScanWidget::camera() {
@@ -174,7 +226,7 @@ void ScanWidget::keyPressEvent(QKeyEvent* event) {
       event->ignore();
       break;
   }
-  
+
   updateGL();
 }
 

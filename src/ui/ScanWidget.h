@@ -3,21 +3,13 @@
 
 #include <QtOpenGL/QGLWidget>
 #include <QtOpenGL/QGLBuffer>
+#include <QtOpenGL/QGLShaderProgram>
 
 class ScanWidget : public QGLWidget {
   Q_OBJECT // must include this if you use Qt signals/slots
 
-  float camera_x, camera_y, camera_z;
-  float camera_rot_h, camera_rot_v;
-  
-  QGLBuffer* vertexBuffer;
-  QGLBuffer* polyBuffer;
-  
-  
-  void camera();
-  
 public:
-  ScanWidget(QWidget *parent = NULL);
+  ScanWidget(const QGLFormat& format, QWidget *parent = NULL);
   ~ScanWidget();
 
 protected:
@@ -27,6 +19,22 @@ protected:
   void mousePressEvent(QMouseEvent *event);
   void mouseMoveEvent(QMouseEvent *event);
   void keyPressEvent(QKeyEvent *event);
+  
+private:
+  bool prepareShaderProgram( const QString& vertexShaderPath, const QString& fragmentShaderPath );
+  GLuint prepShaderProgram( const QString& vertexShaderPath, const QString& fragmentShaderPath );
+
+ 	void camera();
+
+  QGLShaderProgram shader;
+  QGLBuffer vertexBuffer;
+  QGLBuffer polyBuffer;
+
+  GLuint m_vertexBuffer;
+  GLuint m_shader;
+
+  float camera_x, camera_y, camera_z;
+  
 };
 
 #endif  /* _SCAN_WIDGET_H */
