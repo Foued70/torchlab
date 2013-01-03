@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/">
+        <file>simple.vert</file>
+        <file>simple.frag</file>
+        <file>shaders/identity.vert</file>
+        <file>shaders/identity.frag</file>
+        <file>shaders/normalmap.vert</file>
+        <file>shaders/normalmap.frag</file>
+        <file>shaders/shadow.vert</file>
+        <file>shaders/shadow.frag</file>
+        <file>shaders/textured.vert</file>
+        <file>shaders/textured.frag</file>
+    </qresource>
+</RCC>

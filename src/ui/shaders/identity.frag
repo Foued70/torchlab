@@ -1,0 +1,3 @@
+void main() {
+	sFragColor = sDefColor;
+}
