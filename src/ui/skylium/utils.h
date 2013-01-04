@@ -1,27 +1,3 @@
-/*
-          _   _ _      _    
-     _  _| |_(_) |___ | |_  
-    | || |  _| | (_-<_| ' \ 
-     \_,_|\__|_|_/__(_)_||_|
-                        
-
-    Copyright (C) 2011  Michał Garapich garrappachc@gmail.com
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -35,7 +11,6 @@
 
 #include "opengl.h"
 #include "config.h"
-#include "defines.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -71,17 +46,6 @@ inline std::string T2String(const T &_orig) {
 	ss >> output;
 	return output;
 }
-
-// template< typename T >
-// inline T getProcAddr(const std::string &_procName) {
-//   T temp = (T)glXGetProcAddress((GLubyte*)_procName.c_str());
-//   if (temp == (T)NULL) {
-//     if ((sGlobalConfig::DEBUGGING & D_WARNINGS) == D_WARNINGS)
-//       std::cout << LOG_WARN << "Error getting the \"" << _procName << "\" function pointer." <<
-//         LOG_WARN << "Segfault is expected.";
-//   }
-//   return temp;    
-// }
 
 void explode(const std::string&, char, std::vector< std::string >&);
 
