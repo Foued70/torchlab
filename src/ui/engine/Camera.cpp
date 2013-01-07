@@ -2,7 +2,6 @@
 #include <cmath>
 
 #include "Camera.h"
-#include "Skylium.h"
 #include "MatricesManager.h"
 
 #include "config.h"

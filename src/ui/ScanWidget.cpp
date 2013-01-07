@@ -1,8 +1,8 @@
-#include "opengl.h"
+// #include "opengl.h"
 #include "Core3_2_context.h"
 #include <QtGui/QMouseEvent>
 #include "ScanWidget.h"
-#include "skylium/Skylium.h"
+#include "engine/Engine.h"
 #include <QDebug>
 #include <QKeyEvent>
 #include <QFile>
@@ -17,7 +17,7 @@ ScanWidget::ScanWidget(const QGLFormat& format, QWidget* parent ) : QGLWidget( n
 {
   setMouseTracking(false);
   camera_x = 4; camera_y = 4; camera_z = 4;
-  skylium = Skylium::GetSingletonPtr();
+  engine = Engine::GetSingletonPtr();
 }
 
 ScanWidget::~ScanWidget() {
@@ -28,12 +28,12 @@ ScanWidget::~ScanWidget() {
 void ScanWidget::initializeGL() {
   printf("OpenGL %s GLSL %s\n", glGetString(GL_VERSION), glGetString(GL_SHADING_LANGUAGE_VERSION));
   
-  skylium->init();
+  engine->init();
 
   // Set the clear color to black
   // glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
   
-  scene = skylium->createScene("SampleScene");
+  scene = engine->createScene("SampleScene");
         
   /* create second object and load its data from file */
   Object* crate = scene -> createObject("crate");
@@ -69,7 +69,7 @@ void ScanWidget::resizeGL(int w, int h) {
 }
 
 void ScanWidget::paintGL() {
-  skylium -> execute(); 
+  engine -> render(scene);
 }
 
 void ScanWidget::mousePressEvent(QMouseEvent *event) {
@@ -131,110 +131,6 @@ void ScanWidget::keyPressEvent(QKeyEvent* event) {
   }
 
   updateGL();
-}
-
-
-// vertex coords array
-static GLfloat cubeVertices[] =
-{
-  // v0-v1-v2-v3
-	-1.0, +1.0, +1.0,  1.0, 0.0, 0.0,
-  -1.0, -1.0, +1.0,  1.0, 0.0, 0.0,
-  +1.0, +1.0, +1.0,  1.0, 0.0, 0.0,
-  +1.0, -1.0, +1.0,  1.0, 0.0, 0.0,
- 	// v2-v3-v4-v5
-  +1.0, +1.0, +1.0,  0.0, 1.0, 0.0,
-  +1.0, -1.0, +1.0,  0.0, 1.0, 0.0,
-  +1.0, +1.0, -1.0,  0.0, 1.0, 0.0,
-  +1.0, -1.0, -1.0,  0.0, 1.0, 0.0,
-	// v4-v5-v6-v7
-  +1.0, +1.0, -1.0,  0.0, 0.0, 1.0,
-  +1.0, -1.0, -1.0,  0.0, 0.0, 1.0,
-  -1.0, +1.0, -1.0,  0.0, 0.0, 1.0,
-  -1.0, -1.0, -1.0,  0.0, 0.0, 1.0,
-	// v6-v7-v0-v1
-  -1.0, +1.0, -1.0,  0.0, 1.0, 1.0,
-  -1.0, -1.0, -1.0,  0.0, 1.0, 1.0,
-  -1.0, +1.0, +1.0,  0.0, 1.0, 1.0,
-  -1.0, -1.0, +1.0,  0.0, 1.0, 1.0,
-};
-
-
-
-GLuint ScanWidget::prepShaderProgram( const QString& vertexShaderPath,
-                                     const QString& fragmentShaderPath )
-{
-    struct Shader {
-        const QString&  filename;
-        GLenum       type;
-        GLchar*      source;
-    }  shaders[2] = {
-        { vertexShaderPath, GL_VERTEX_SHADER, NULL },
-        { fragmentShaderPath, GL_FRAGMENT_SHADER, NULL }
-    };
-
-    GLuint program = glCreateProgram();
-
-    for ( int i = 0; i < 2; ++i ) {
-        Shader& s = shaders[i];
-        QFile file( s.filename );
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)){
-            qWarning() << "Cannot open file " << s.filename;
-            exit( EXIT_FAILURE );
-        }
-        QByteArray data = file.readAll();
-        file.close();
-        s.source = data.data();
-
-        if ( shaders[i].source == NULL ) {
-            qWarning() << "Failed to read " << s.filename;
-            exit( EXIT_FAILURE );
-        }
-        GLuint shader = glCreateShader( s.type );
-        glShaderSource( shader, 1, (const GLchar**) &s.source, NULL );
-        glCompileShader( shader );
-
-        GLint  compiled;
-        glGetShaderiv( shader, GL_COMPILE_STATUS, &compiled );
-        if ( !compiled ) {
-            qWarning() << s.filename << " failed to compile:" ;
-            GLint  logSize;
-            glGetShaderiv( shader, GL_INFO_LOG_LENGTH, &logSize );
-            char* logMsg = new char[logSize];
-            glGetShaderInfoLog( shader, logSize, NULL, logMsg );
-            qWarning() << logMsg;
-            delete [] logMsg;
-
-            exit( EXIT_FAILURE );
-        }
-
-        glAttachShader( program, shader );
-    }
-
-    /* Link output */
-    glBindFragDataLocation(program, 0, "fragColor");
-
-    /* link  and error check */
-    glLinkProgram(program);
-
-    GLint  linked;
-    glGetProgramiv( program, GL_LINK_STATUS, &linked );
-    if ( !linked ) {
-        qWarning() << "Shader program failed to link";
-        GLint  logSize;
-        glGetProgramiv( program, GL_INFO_LOG_LENGTH, &logSize);
-        char* logMsg = new char[logSize];
-        glGetProgramInfoLog( program, logSize, NULL, logMsg );
-        qWarning() << logMsg ;
-        delete [] logMsg;
-
-        exit( EXIT_FAILURE );
-    }
-
-    /* use program object */
-    glUseProgram(program);
-
-    return program;
 }
 
 

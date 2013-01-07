@@ -2,7 +2,6 @@
 
 #include "Light.h"
 
-#include "Skylium.h"
 #include "ShaderDataHandler.h"
 
 #include "config.h"

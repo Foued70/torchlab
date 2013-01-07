@@ -6,7 +6,7 @@ extern "C" {
 #include <QtGui/QApplication>
 #include <QtOpenGL/QGLWidget>
 #include "ScanWidget.h"
-#include "skylium/Skylium.h"
+#include "engine/Engine.h"
 
 // gui component holder which will be moved to main thread
 class gui_launcher : public QObject
@@ -18,8 +18,8 @@ class gui_launcher : public QObject
     // printf("event %d\n", ev->type());
 
     if( ev->type() == QEvent::User ) {
-      /* create the main Skylium class instance */
-      Skylium *s_main = new Skylium();
+      /* create the main Engine class instance */
+      Engine *s_main = new Engine();
         
       QGLFormat glFormat;
       glFormat.setVersion( 3, 2 );

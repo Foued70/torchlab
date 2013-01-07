@@ -5,8 +5,8 @@
 #include <QtOpenGL/QGLBuffer>
 #include <QtOpenGL/QGLShaderProgram>
 
-#include "skylium/Skylium.h"
-#include "skylium/Scene.h"
+#include "engine/Engine.h"
+#include "engine/Scene.h"
 
 class ScanWidget : public QGLWidget {
   Q_OBJECT // must include this if you use Qt signals/slots
@@ -36,7 +36,7 @@ private:
 
   float camera_x, camera_y, camera_z;
   
-  Skylium* skylium;
+  Engine* engine;
   Scene* scene;
 };
 

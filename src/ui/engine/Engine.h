@@ -1,8 +1,7 @@
-#ifndef SKYLIUM_H
-#define SKYLIUM_H
+#ifndef ENGINE_H
+#define ENGINE_H
 
 #include "Singleton.h"
-#include "SceneManager.h"
 #include "TextureManager.h"
 #include "Scene.h"
 #include "Shader.h"
@@ -10,7 +9,7 @@
 #include "ShaderDataHandler.h"
 #include "GPUMemory.h"
 
-class Skylium : public Singleton < Skylium > {
+class Engine : public Singleton < Engine > {
 
 public:
 	
@@ -18,9 +17,9 @@ public:
 	 * Creates the singleton's instances and reads
 	 * the config file.
 	 */
-	Skylium();
+	Engine();
 	
-	virtual ~Skylium();
+	virtual ~Engine();
 	
 	/**
 	 * Sets rendering context and does some standard jobs.
@@ -28,11 +27,6 @@ public:
 	 * @return False if something went wrong.
 	 */
 	bool init();
-	
-	/**
-	 * Catches events from the queue and renders activeScene.
-	 */
-	void execute();
 	
 	/**
 	 * Creates the new scene.
@@ -46,9 +40,10 @@ public:
 	 * @param sourceFiles Source file of both - vertex and fragment shaders (without extensions).
 	 */
 	Shader * createShader(const std::string&);
+   
+  void render(Scene* scene);
 	
 	/* Access to managers from outside the class */
-	SceneManager*& Scenes;
 	TextureManager*& Textures;
 	MatricesManager*& Matrices;
 	ShaderDataHandler*& Shaders;
@@ -60,20 +55,6 @@ public:
 	Shader* normalMapShader;
 	
 private:
-	
-	/**
-	 * Renders the scene.
-	 */
-	void __render();
-	
-	/**
-	 * @param fileName Name of the file.
-	 * @return False if file could not be found, otherwise true.
-	 */
-	bool __fileExists(const std::string&);
-	
-	/* SceneManager instance */
-	SceneManager * __sceneManagement;
 	
 	/* TextureManager instance */
 	TextureManager * __textureManagement;
@@ -89,9 +70,12 @@ private:
 	
 	std::vector< Shader* > __shaderList;
 	
+ 	/* All scenes */
+ 	std::vector< Scene* > __sceneList;
+	
 	/* Vector with available extensions */
 	std::vector< std::string* > __extensions;
 	
 };
 
-#endif // SKYLIUM_H
+#endif // ENGINE_H

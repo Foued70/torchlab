@@ -1,10 +1,6 @@
 #include <iostream>
 
-#include <OpenGL/gl.h>
-
 #include "Mesh.h"
-
-#include "Skylium.h"
 #include "Shader.h"
 
 #include "config.h"

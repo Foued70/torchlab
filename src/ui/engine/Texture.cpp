@@ -4,9 +4,7 @@
 #include <sys/stat.h>
 
 #include "Texture.h"
-
 #include "TextureManager.h"
-#include "Skylium.h"
 #include "ShaderDataHandler.h"
 
 #include "stb_image.h"
@@ -70,15 +68,6 @@ string
 Texture::getName(const string& _fileName) {
 	unsigned lastDot = _fileName.rfind('.');
 	return (lastDot != string::npos) ? _fileName.substr(0, lastDot) : _fileName;
-}
-
-bool
-Texture::__fileExists(const string &_fileName) {
-	struct stat buf;
-	if (stat(_fileName.c_str(), &buf) == 0)
-		return 1;
-	else
-		return 0;
 }
 
 GLuint

@@ -1,8 +1,6 @@
 #include "TextureManager.h"
 #include "Texture.h"
 
-#include "Skylium.h"
-
 #include "config.h"
 #include "utils.h"
 

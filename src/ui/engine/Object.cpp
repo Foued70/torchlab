@@ -8,7 +8,7 @@
 #include "Object.h"
 #include "Vertex.h"
 #include "Shader.h"
-#include "Skylium.h"
+#include "Engine.h"
 #include "Texture.h"
 #include "MatricesManager.h"
 #include "ShaderDataHandler.h"
@@ -579,7 +579,7 @@ Object::__fileExists(const string &_fileName) {
 
 void
 Object::__bindAppropriateShader() {
-	Skylium& global = Skylium::GetSingleton();
+	Engine& global = Engine::GetSingleton();
 	
 	if ((__content & (TEXTURE | NORMAL_MAP)) == (TEXTURE | NORMAL_MAP)) {
 		global.normalMapShader -> bind(this);

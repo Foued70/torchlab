@@ -7,7 +7,7 @@ set(CMAKE_CXX_COMPILER ../../../build/usr/local/bin/g++)
 set(CMAKE_CXX_FLAGS "-std=gnu++11")
 
 FILE(GLOB luasrc "*.lua")
-FILE(GLOB src "*.cpp" "skylium/*.cpp" "skylium/*.c")
+FILE(GLOB src "*.cpp" "engine/*.cpp" "engine/*.c")
 # SET(src qui.cpp ScanWidget.cpp)
 
 SET( QT_USE_QTOPENGL TRUE )

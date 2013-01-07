@@ -1,4 +1,4 @@
-ifndef TEXTURE_H
+#ifndef TEXTURE_H
 #define TEXTURE_H
 
 #include "opengl.h"
@@ -47,11 +47,6 @@ public:
 	std::string name;
 	
 private:
-	
-	/**
-	 * Checks if file exists.
-	 */
-	bool __fileExists(const std::string&);
 	
 	/**
 	 * Loads the texture.

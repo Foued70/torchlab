@@ -3,7 +3,6 @@
 #include "Material.h"
 
 #include "Texture.h"
-#include "Skylium.h"
 #include "Shader.h"
 #include "ShaderDataHandler.h"
 

@@ -5,9 +5,7 @@
 #include <sys/stat.h>
 
 #include "Shader.h"
-
 #include "Vectors.h"
-#include "Skylium.h"
 
 #include "config.h"
 #include "utils.h"
@@ -280,11 +278,3 @@ Shader::setMatrixFloat(const string& _name, const sMat9& _matrix) const {
 	checkGLErrors(AT);
 }
 
-bool
-Shader::__fileExists(const std::string &_fileName) {
-	struct stat buf;
-	if (stat(_fileName.c_str(), &buf) == 0)
-		return 1;
-	else
-		return 0;
-}

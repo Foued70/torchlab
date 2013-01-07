@@ -1,6 +1,5 @@
 #include "ShaderDataHandler.h"
 
-#include "Skylium.h"
 #include "MatricesManager.h"
 #include "Shader.h"
 

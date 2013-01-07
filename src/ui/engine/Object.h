@@ -10,7 +10,6 @@
 #include "Mesh.h"
 
 class Shader;
-class Skylium;
 class MatricesManager;
 class ShaderDataHandler;
 struct Position;
@@ -198,8 +197,7 @@ private:
 	/**
 	 * According to what object has in __content,
 	 * binds the appropriate shader. Default shaders'
-	 * instances can be found in global Skylium's
-	 * instance.
+	 * instances can be found in global instance.
 	 */
 	void __bindAppropriateShader();
 	

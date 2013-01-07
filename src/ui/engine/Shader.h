@@ -99,8 +99,6 @@ private:
 	GLboolean __isRunning;
 	
 	bool __isCompiled;
-
-	bool __fileExists(const std::string&);
 	
 };
 
