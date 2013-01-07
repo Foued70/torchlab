@@ -5,6 +5,9 @@
 #include <QtOpenGL/QGLBuffer>
 #include <QtOpenGL/QGLShaderProgram>
 
+#include "engine/Engine.h"
+#include "engine/Scene.h"
+
 class ScanWidget : public QGLWidget {
   Q_OBJECT // must include this if you use Qt signals/slots
 
@@ -24,8 +27,6 @@ private:
   bool prepareShaderProgram( const QString& vertexShaderPath, const QString& fragmentShaderPath );
   GLuint prepShaderProgram( const QString& vertexShaderPath, const QString& fragmentShaderPath );
 
- 	void camera();
-
   QGLShaderProgram shader;
   QGLBuffer vertexBuffer;
   QGLBuffer polyBuffer;
@@ -35,6 +36,8 @@ private:
 
   float camera_x, camera_y, camera_z;
   
+  Engine* engine;
+  Scene* scene;
 };
 
 #endif  /* _SCAN_WIDGET_H */

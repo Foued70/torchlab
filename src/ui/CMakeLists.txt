@@ -4,16 +4,18 @@ find_package(Torch REQUIRED)
 find_library(COCOA_LIBRARY Cocoa)
 
 set(CMAKE_CXX_COMPILER ../../../build/usr/local/bin/g++)
+set(CMAKE_CXX_FLAGS "-std=gnu++11")
 
-FILE(GLOB luasrc *.lua)
-SET(src qui.cpp ScanWidget.cpp)
+FILE(GLOB luasrc "*.lua")
+FILE(GLOB src "*.cpp" "engine/*.cpp" "engine/*.c")
+# SET(src qui.cpp ScanWidget.cpp)
 
 SET( QT_USE_QTOPENGL TRUE )
 find_package(Qt4 REQUIRED)
 INCLUDE( ${QT_USE_FILE} )
 
 SET( moc_headers ScanWidget.h )
-SET(qt_rcs core-profile.qrc)
+SET(qt_rcs resources.qrc)
 QT4_ADD_RESOURCES(qt_rc_srcs ${qt_rcs})
 QT4_WRAP_CPP( moc_srcs ${moc_headers} )
 SET(src ${src} ${moc_srcs} ${qt_rc_srcs} )

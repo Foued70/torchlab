@@ -9,7 +9,9 @@ unpack=$(build_dir)/vendor/flann-$(ver)-src
 
 install=$(install_root)/lib/libflann.$(ver).dylib
 
-args = $(default_cmake_args)
+args = $(default_cmake_args) \
+  -D BUILD_MATLAB_BINDINGS:BOOL=OFF \
+  -D BUILD_PYTHON_BINDINGS:BOOL=OFF \
 
 
 all:$(install)

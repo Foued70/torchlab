@@ -6,6 +6,7 @@ extern "C" {
 #include <QtGui/QApplication>
 #include <QtOpenGL/QGLWidget>
 #include "ScanWidget.h"
+#include "engine/Engine.h"
 
 // gui component holder which will be moved to main thread
 class gui_launcher : public QObject
@@ -17,6 +18,9 @@ class gui_launcher : public QObject
     // printf("event %d\n", ev->type());
 
     if( ev->type() == QEvent::User ) {
+      /* create the main Engine class instance */
+      Engine *s_main = new Engine();
+        
       QGLFormat glFormat;
       glFormat.setVersion( 3, 2 );
       glFormat.setProfile( QGLFormat::CompatibilityProfile ); // Requires >=Qt-4.8.0
