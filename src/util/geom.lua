@@ -207,10 +207,10 @@ end
 
 function geom.ray_plane_intersection(...)
    local pt,dir,plane_norm,plane_d,debug
-   local args = {...}
+   local args  = {...}
    local nargs = #args
    if nargs == 5 then
-      debug      = args[5]
+      debug    = args[5]
    end
    if nargs < 4 then
       print(dok.usage('ray_plane_intersection',
@@ -249,10 +249,10 @@ end
 
 function geom.ray_face_intersection(...)
    local pt,dir,plane_norm,plane_d,face_verts,debug
-   local args = {...}
+   local args  = {...}
    local nargs = #args
    if nargs == 6 then
-      debug      = args[6]
+      debug    = args[6]
    end
    if nargs < 4 then
       print(dok.usage('ray_face_intersection',

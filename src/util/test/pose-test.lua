@@ -90,11 +90,12 @@ function test.localxy2globalray ()
    for i = 1,poses.nposes do
       for j = 1,gxyz:size(1) do
          cnt = cnt + 1
-         local gtxyz = gxyz[j]      
-         local t     = torch.Tensor({pose.globalxyz2uv(poses,i,gtxyz)})
+         local gtxyz  = gxyz[j]      
+         local t      = torch.Tensor({pose.globalxyz2uv(poses,i,gtxyz)})
          local pt,dir = pose.localxy2globalray(poses,i,t[3],t[4])
-         local gdir = geom.normalize(gtxyz - pt)
-         local er = torch.abs(dir:narrow(1,1,3) -gdir)
+         -- print(string.format("%2.2f %2.2f", t[3],t[4]))
+         local gdir   = geom.normalize(gtxyz - pt)
+         local er     = torch.abs(dir:narrow(1,1,3) -gdir)
          local err, argerr = torch.max(er,1)
          err = err[1]
          argerr = argerr[1]

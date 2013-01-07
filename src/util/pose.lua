@@ -58,8 +58,8 @@ function pose.loadtxtfile(posefile)
       poses[pc] = n
       poses.images[pc] =
          image.load(string.format("%s/%s", paths.dirname(posefile), n))
-      poses.data[pc][18] = poses.images[pc]:size(3)
-      poses.data[pc][19] = poses.images[pc]:size(2)
+      poses.data[pc][18] = poses.images[pc]:size(3) -- width
+      poses.data[pc][19] = poses.images[pc]:size(2) -- height
 
       local k = 1
       for n in pd:gmatch("[-.%d]+") do
