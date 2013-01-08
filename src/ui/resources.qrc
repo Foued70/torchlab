@@ -1,7 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <file>simple.vert</file>
-        <file>simple.frag</file>
         <file>shaders/identity.vert</file>
         <file>shaders/identity.frag</file>
         <file>shaders/normalmap.vert</file>

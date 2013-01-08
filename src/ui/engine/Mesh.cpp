@@ -19,7 +19,6 @@ Mesh::Mesh(const string &_name) :
 		__smooth(false),
 		__usage(STATIC_DRAW),
 		__mode(GL_TRIANGLES),
-		__gpu(GPUMemory::GetSingleton()),
 		__isShown(true) {
 	
 	__materials[0].begin = 0;

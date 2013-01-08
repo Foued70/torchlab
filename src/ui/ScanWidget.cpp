@@ -1,4 +1,3 @@
-// #include "opengl.h"
 #include "Core3_2_context.h"
 #include <QtGui/QMouseEvent>
 #include "ScanWidget.h"
@@ -30,10 +29,7 @@ void ScanWidget::initializeGL() {
   
   engine->init();
 
-  // Set the clear color to black
-  // glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
-  
-  scene = engine->createScene("SampleScene");
+  scene = engine->createScene("SceneName");
         
   /* create second object and load its data from file */
   Object* crate = scene -> createObject("crate");
