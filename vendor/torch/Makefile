@@ -14,7 +14,8 @@ pkgs = $(addprefix $(install_root)/share/torch/lua/,$(packages))
 
 	
 args = $(default_cmake_args) \
-	-D WITH_LUA_JIT=1
+	-D WITH_LUA_JIT=1 \
+	-D QT_QMAKE_EXECUTABLE=$(install_root)/bin/qmake
 
 
 
