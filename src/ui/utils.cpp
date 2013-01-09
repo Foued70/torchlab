@@ -1,11 +1,15 @@
 #include "utils.h"
-#include "config.h"
+#include "opengl.h"
 
 #define LOG_INFO "\e[36m(II)\e[0m "
 #define LOG_ERROR "\e[31m(EE)\e[0m "
 #define LOG_WARN "\e[33m(WW)\e[0m "
 
 using namespace std;
+
+unsigned	sGlobalConfig::DEBUGGING = D_ERRORS | D_WARNINGS | D_EVERYTHING;
+bool sGlobalConfig::CREATE_MIPMAPS = true;
+
 
 void explode(const std::string &_text, char _delim, std::vector< std::string > &_dest) {
 	_dest.clear();
@@ -23,18 +27,6 @@ void explode(const std::string &_text, char _delim, std::vector< std::string > &
 		_dest.push_back(temp);
 }
 
-void checkGLErrors(const string &_at) {
-	GLenum err = glGetError(); // fetch errors
-	while (err != GL_NO_ERROR) {
-		if ((sGlobalConfig::DEBUGGING & D_WARNINGS) == D_WARNINGS) {
-			cout << LOG_ERROR << "OpenGL error (" << err << "): " << getErrorString(err)
-				<< "\n\tAt: " << _at << "\n";
-			cout.flush();
-		}
-		err = glGetError();
-	}
-}
-
 string getErrorString(GLenum _err) {
 	switch (_err) {
 		case 0x0500:
@@ -49,6 +41,18 @@ string getErrorString(GLenum _err) {
 			return "GL_INVALID_FRAMEBUFFER_OPERATION​";
 		default:
 			return "unknown error code";
+	}
+}
+
+void checkGLErrors(const string &_at) {
+	GLenum err = glGetError(); // fetch errors
+	while (err != GL_NO_ERROR) {
+		if ((sGlobalConfig::DEBUGGING & D_WARNINGS) == D_WARNINGS) {
+			cout << LOG_ERROR << "OpenGL error (" << err << "): " << getErrorString(err)
+				<< "\n\tAt: " << _at << "\n";
+			cout.flush();
+		}
+		err = glGetError();
 	}
 }
 

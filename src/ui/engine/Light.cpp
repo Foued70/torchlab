@@ -1,10 +1,7 @@
 #include <iostream>
 
 #include "Light.h"
-
 #include "ShaderDataHandler.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;

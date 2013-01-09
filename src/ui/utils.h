@@ -8,10 +8,6 @@
 
 #include <cstdarg>
 
-
-#include "opengl.h"
-#include "config.h"
-
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #define AT __FILE__ " : " TOSTRING(__LINE__)
@@ -27,8 +23,27 @@ enum LogType {
 	ERROR
 };
 
-/* Some helpful functions */
+enum {
+	D_NOTHING			= 0,
+	D_CONSTRUCTORS		= 1,
+	D_ALL_CONSTRUCTORS	= 2,
+	D_DESTRUCTORS		= 4,
+	D_PARAMS			= 8,
+	D_ALL_PARAMS		= 16,
+	D_SHADERS			= 32,
+	D_BUFFER			= 64,
+	D_WARNINGS		= 128,
+	D_ERRORS			= 256,
+	D_EVERYTHING		= 511
+};
 
+/* For more info, see ConfigFile wiki page. */
+struct sGlobalConfig {
+	
+	/* Configures the output verbosity. */
+	static unsigned	DEBUGGING;
+  static bool CREATE_MIPMAPS;
+};
 
 template < typename T >
 inline T string2T(const std::string &_s) {
@@ -50,8 +65,6 @@ inline std::string T2String(const T &_orig) {
 void explode(const std::string&, char, std::vector< std::string >&);
 
 void checkGLErrors(const std::string&);
-
-std::string getErrorString(GLenum);
 
 void log(LogType, const std::string&, ...);
 

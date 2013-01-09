@@ -13,8 +13,6 @@
 #include "MatricesManager.h"
 #include "ShaderDataHandler.h"
 #include "TextureManager.h"
-
-#include "config.h"
 #include "utils.h"
 
 #define get16bits(d) (*((const uint16_t *) (d)))

@@ -1,16 +1,12 @@
 #include <iostream>
 #include <cstring>
-
 #include <sys/stat.h>
 
 #include "Texture.h"
 #include "TextureManager.h"
 #include "ShaderDataHandler.h"
-
 #include "stb_image.h"
 #include "imgUtils.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;

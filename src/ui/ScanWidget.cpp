@@ -1,7 +1,9 @@
 #include "Core3_2_context.h"
-#include <QtGui/QMouseEvent>
 #include "ScanWidget.h"
+#include "utils.h"
 #include "engine/Engine.h"
+
+#include <QtGui/QMouseEvent>
 #include <QDebug>
 #include <QKeyEvent>
 #include <QFile>
@@ -15,7 +17,6 @@ ScanWidget::ScanWidget(const QGLFormat& format, QWidget* parent ) : QGLWidget( n
       polyBuffer(QGLBuffer::VertexBuffer)
 {
   setMouseTracking(false);
-  camera_x = 4; camera_y = 4; camera_z = 4;
   engine = Engine::GetSingletonPtr();
 }
 
@@ -58,7 +59,7 @@ void ScanWidget::initializeGL() {
 }
 
 void ScanWidget::resizeGL(int w, int h) {
-  printf("glViewport(%d, %d)\n", w, h);
+  // printf("glViewport(%d, %d)\n", w, h);
   glViewport(0, 0, w, h);
   
   scene -> getActiveCamera() -> setProjection();
@@ -68,13 +69,22 @@ void ScanWidget::paintGL() {
   engine -> render(scene);
 }
 
-void ScanWidget::mousePressEvent(QMouseEvent *event) {
-
+void ScanWidget::mousePressEvent(QMouseEvent* event) {
+  // log(PARAM, "mousePressEvent %d %d (%d, %d)", event->button(), (int)event->buttons(), event->globalX(), event->globalY());
+  dragStartX = event->globalX();
+  dragStartY = event->globalY();
 }
-void ScanWidget::mouseMoveEvent(QMouseEvent *event) {
-    // printf("%d, %d\n", event->x(), event->y());
+void ScanWidget::mouseMoveEvent(QMouseEvent* event) {
+  // log(PARAM, "mouseMoveEvent %d %d (%d, %d)", event->button(), (int)event->buttons(), event->globalX(), event->globalY());
+  scene->getActiveCamera()->rotateCamera(event->globalX() - dragStartX, -(event->globalY() - dragStartY), 0);
+  QCursor::setPos(dragStartX, dragStartY);
+  updateGL();
 }
 
+void QWidget::wheelEvent ( QWheelEvent * event ) {
+  
+}
+  
 void ScanWidget::keyPressEvent(QKeyEvent* event) {
   // printf("%d\n", event->key());
   switch(event->key()) {
@@ -83,16 +93,12 @@ void ScanWidget::keyPressEvent(QKeyEvent* event) {
       break;
       
     case Qt::Key_Left:
-      scene -> getActiveCamera() -> rotateCamera(20.0, 0.0, 0.0);
       break;
     case Qt::Key_Right:
-      scene -> getActiveCamera() -> rotateCamera(-20.0, 0.0, 0.0);
       break;
     case Qt::Key_Up:
-      scene -> getActiveCamera() -> rotateCamera(0.0, 20.0, 0.0);
       break;
     case Qt::Key_Down:
-      scene -> getActiveCamera() -> rotateCamera(0.0, -20.0, 0.0);
       break;
       
     case Qt::Key_S:

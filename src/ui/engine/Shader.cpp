@@ -6,10 +6,8 @@
 
 #include "Shader.h"
 #include "Vectors.h"
-
-#include "config.h"
 #include "utils.h"
-#include "../qutil.h"
+#include "qutil.h"
 
 using namespace std;
 

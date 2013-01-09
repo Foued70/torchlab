@@ -3,8 +3,6 @@
 
 #include "Camera.h"
 #include "MatricesManager.h"
-
-#include "config.h"
 #include "utils.h"
 
 static const double PI = 3.1415265359;
@@ -20,7 +18,7 @@ Camera::Camera(const cType &_type) :
 		__zFar(1000.0),
 		__eye({0, 0, 0}),
 		__center({0, 0, 0}),
-		__up({0, 1, 0}),
+		__up({0, 0, 1}),
 		__range(20),
 		__matrices(MatricesManager::GetSingleton()) {
 	log(CONSTRUCTOR, "Camera constructed.");
@@ -33,7 +31,7 @@ Camera::Camera(GLfloat _x, GLfloat _y, GLfloat _z, const cType &_type) :
 		__zFar(1000.0),
 		__eye({_x, _y, _z}),
 		__center({0, 0, 0}),
-		__up({0, 1, 0}),
+		__up({0, 0, 1}),
 		__range(20),
 		__matrices(MatricesManager::GetSingleton()) {
 
@@ -57,8 +55,6 @@ Camera::setProjection() {
 	__windowHeight = viewport[3];
 	
 	GLfloat aspect = (GLfloat) __windowWidth / __windowHeight;
-  // glViewport(0, 0, __windowWidth, __windowHeight);
-  // checkGLErrors(AT);
 	
 	__matrices.sPerspective(__fovy, aspect, __zNear, __zFar);
 }
@@ -91,6 +87,7 @@ Camera::moveCamera(GLfloat movX, GLfloat movY, GLfloat movZ) {
 	}
   // log(PARAM, "Camera::moveCamera: (%f, %f, %f)", __center.x, __center.y, __center.z);
 }
+
 
 void
 Camera::rotateCamera(GLfloat _x, GLfloat _y, GLfloat) {
@@ -134,19 +131,11 @@ Camera::lookAt(GLfloat x, GLfloat y, GLfloat z) {
   // log(PARAM, "Camera::LookAt: (%f, %f, %f)", __center.x, __center.y, __center.z);
 }
 
-sVector3D
-Camera::getEye() {
-	if (__type == FPP)
+sVector3D Camera::getEye() {
 		return __eye;
-	else 
-		return __eye + __center;
 }
 
-sVector3D
-Camera::getCenter() {
-	if (__type == FPP)
-		return __center + __eye;
-	else
+sVector3D Camera::getCenter() {
 		return __center;
 }
 

@@ -2,8 +2,6 @@
 
 #include "Mesh.h"
 #include "Shader.h"
-
-#include "config.h"
 #include "utils.h"
 
 // makro to count the position

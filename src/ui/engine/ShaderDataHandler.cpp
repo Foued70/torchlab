@@ -1,9 +1,6 @@
 #include "ShaderDataHandler.h"
-
 #include "MatricesManager.h"
 #include "Shader.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;

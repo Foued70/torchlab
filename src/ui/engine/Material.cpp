@@ -1,12 +1,9 @@
 #include <iostream>
 
 #include "Material.h"
-
 #include "Texture.h"
 #include "Shader.h"
 #include "ShaderDataHandler.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;

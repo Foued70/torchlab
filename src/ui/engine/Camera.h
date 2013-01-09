@@ -129,7 +129,7 @@ private:
 	/* LookAt position/vector */
 	sVector3D __center;
 
-	/* Up vector, (0, 1, 0) by  default */
+	/* Up vector, (0, 0, 1) */
 	sVector3D __up;
 	
 	/* Angle of the camera */

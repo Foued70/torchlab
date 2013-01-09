@@ -2,9 +2,7 @@
 #include <iostream>
 
 #include "MatricesManager.h"
-
 #include "utils.h"
-#include "config.h"
 
 using namespace std;
 
@@ -21,21 +19,18 @@ MatricesManager::MatricesManager() {
 
 void
 MatricesManager::sLookAt(const sVector3D& _eye, const sVector3D& _center, const sVector3D& _up) {
-	/* http://pyopengl.sourceforge.net/documentation/manual/gluLookAt.3G.html */
-	sVector3D f = _center - _eye;
-	f.normalize();
-	sVector3D s = normalOfPlane(f, _up);
-	s.normalize();
-	sVector3D u = normalOfPlane(s, f);
-	f *= -1;
+	sVector3D dir = _center - _eye;
+	dir.normalize();
+	sVector3D perpUpDir = cross(dir, _up);
+	perpUpDir.normalize();
+	sVector3D up = cross(perpUpDir, dir);
+	dir *= -1;
 	
 	__modelViewMatrix.loadIdentity();
 	
-	__modelViewMatrix.setRow(0, s);
-	__modelViewMatrix.setRow(1, u);
-	__modelViewMatrix.setRow(2, f);
-	
-	__modelViewMatrix[15] = 1;
+	__modelViewMatrix.setRow(0, perpUpDir);
+	__modelViewMatrix.setRow(1, up);
+	__modelViewMatrix.setRow(2, dir);
 	
 	sMat16 translation;
 	translation.loadIdentity();
@@ -48,9 +43,7 @@ MatricesManager::sLookAt(const sVector3D& _eye, const sVector3D& _center, const 
 
 void
 MatricesManager::sPerspective(GLfloat _fovy, GLfloat _aspect, GLfloat _zNear, GLfloat _zFar) {
-	/* http://www.opengl.org/sdk/docs/man/xhtml/gluPerspective.xml */
-	if (_zNear == 0)
-		return;
+	if (_zNear == 0) return;
 	
 	__projectionMatrix.loadIdentity();
 	
