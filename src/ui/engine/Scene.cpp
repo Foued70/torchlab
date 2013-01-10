@@ -98,7 +98,7 @@ Scene::setActiveCamera(Camera *_camera, bool _checking) {
 
 Light *
 Scene::createLight(GLfloat _x, GLfloat _y, GLfloat _z) {
-	Light* newLight = new Light(sVector3D({_x, _y, _z}));
+	Light* newLight = new Light(Vector3({_x, _y, _z}));
 	__lightList.push_back(newLight);
 	return newLight;
 }

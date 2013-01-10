@@ -21,7 +21,7 @@ public:
 	 * Ctor that gets the light's source in sVector format.
 	 * @param pos Position of the light's source.
 	 */
-	Light(const sVector3D&);
+	Light(const Vector3&);
 
 	/**
 	 * Ctor that gets light source in (x, y, z) format.
@@ -48,13 +48,13 @@ public:
 	 * Sets light source's position.
 	 * @param pos Position in (x, y, z).
 	 */
-	void setSrcPos(const sVector3D&);
+	void setSrcPos(const Vector3&);
 	
 	/**
 	 * Adds the movement vector to the source vector.
 	 * @param mov Movement vector.
 	 */
-	void move(const sVector3D&);
+	void move(const Vector3&);
 	
 	/**
 	 * Light on/off
@@ -82,7 +82,7 @@ private:
 	sColor __specularLight;
 
 	/* Light source's position */
-	sVector3D __lightSrc;
+	Vector3 __lightSrc;
 	
 	ShaderDataHandler& __shaders;
 

@@ -39,9 +39,9 @@ void ScanWidget::initializeGL() {
         
   Object* monkey = scene -> createObject("monkey"); // monkey
   if (!monkey -> loadFromObj("objects/monkey.obj")) exit(1);
-  monkey -> move(0, 7, 0);
+  monkey -> move(0, 0, 7);
   monkey -> scale(3, 3, 3);
-  monkey -> rotate(0, -45, 35);
+  monkey -> rotate(90, 0, 0);
   monkey -> setColor(80, 24, 25);
         
   /* Camera of (0, 4, -20) position, looking at (0, 7, 20) */
@@ -49,8 +49,8 @@ void ScanWidget::initializeGL() {
   // fppCamera -> lookAt(-0.1, 9.7, -19);
   // fppCamera -> lookAt(0.0, 7.0, 20.0);
         
-  Camera *sphereCamera = scene -> createCamera(0, 7, -20, SPHERICAL);
-  sphereCamera -> lookAt(0, 7, 0);
+  Camera *sphereCamera = scene -> createCamera(-20, 0, 7, SPHERICAL);
+  sphereCamera -> lookAt(0, 0, 7);
         
   /* Light on (7, 3, 0) position */
   Light* light = scene -> createLight(5, 15, -10);
@@ -76,9 +76,11 @@ void ScanWidget::mousePressEvent(QMouseEvent* event) {
 }
 void ScanWidget::mouseMoveEvent(QMouseEvent* event) {
   // log(PARAM, "mouseMoveEvent %d %d (%d, %d)", event->button(), (int)event->buttons(), event->globalX(), event->globalY());
-  scene->getActiveCamera()->rotateCamera(event->globalX() - dragStartX, -(event->globalY() - dragStartY), 0);
-  QCursor::setPos(dragStartX, dragStartY);
-  updateGL();
+  if (event->buttons() & Qt::RightButton) {
+    scene->getActiveCamera()->rotateAroundCenter(-(event->globalX() - dragStartX), event->globalY() - dragStartY);
+    QCursor::setPos(dragStartX, dragStartY);
+    updateGL();
+  }
 }
 
 void QWidget::wheelEvent ( QWheelEvent * event ) {
@@ -120,13 +122,6 @@ void ScanWidget::keyPressEvent(QKeyEvent* event) {
       scene -> getActiveCamera() -> moveCamera(0.0, 0.7, 0.0);
       break;
                 
-    case Qt::Key_Q:
-      scene -> getActiveCamera() -> setRange((scene -> getActiveCamera() -> getRange()) + 0.5);
-      break;
-    case Qt::Key_E:
-      scene -> getActiveCamera() -> setRange((scene -> getActiveCamera() -> getRange()) - 0.5);
-      break;
-
     default:
       event->ignore();
       break;

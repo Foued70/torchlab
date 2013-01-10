@@ -49,21 +49,17 @@ public:
 	
 	/**
 	 * GL_PROJECTION;
-	 * gluPerspective.
 	 * Called only when parameters change.
-	 * http://www.opengl.org/sdk/docs/man/xhtml/gluPerspective.xml
-	 * http://www.felixgers.de/teaching/jogl/gluPerspective.gif
 	 */
 	void setProjection();
 
 	/**
 	 * GL_MODELVIEW;
-	 * gluLookAt.
 	 * Called only when parameters change.
-	 * http://pyopengl.sourceforge.net/documentation/manual/gluLookAt.3G.html
-	 * http://www.toldo.info/roberto/LaboratorioGrafica/Slides/images/glulookat.gif
 	 */
-	void setView();
+  void setView();
+
+  void calcUp();
 
 	/**
 	 * Moves camera, 2-dimensional movement.
@@ -80,8 +76,9 @@ public:
 	 * @param z Z rotation.
 	 */
 	void rotateCamera(GLfloat, GLfloat, GLfloat);
-
-	/**
+  void rotateAroundCenter(GLfloat _x, GLfloat _y);
+	
+  /**
 	 * Sets the "lookAt" point.
 	 * @param x X coord.
 	 * @param y Y coord.
@@ -90,27 +87,15 @@ public:
 	void lookAt(GLfloat, GLfloat, GLfloat);
 	
 	/**
-	 * Sets camera range in SPHERICAL mode.
-	 * @param range Range.
-	 */
-	void setRange(GLfloat _range) { __range = _range; }
-	
-	/**
 	 * @return The __eye's coords.
 	 */
-	sVector3D getEye();
+	Vector3 getEye();
 	
 	/**
 	 * @return The __center's coords.
 	 */
-	sVector3D getCenter();
+	Vector3 getCenter();
 	
-	/**
-	 * @return Range.
-	 */
-	GLfloat getRange() { return __range; }
-
-
 private:
 	
 	/* Camera type */
@@ -124,19 +109,16 @@ private:
 	/*** setView ***/
 	
 	/* Camera's position */
-	sVector3D __eye;
+	Vector3 __eye;
 
 	/* LookAt position/vector */
-	sVector3D __center;
+	Vector3 __center;
 
 	/* Up vector, (0, 0, 1) */
-	sVector3D __up;
+	Vector3 __up;
 	
 	/* Angle of the camera */
-	sVector3D __angle;
-	
-	/* Range of the SPHERICAL camera type */
-	GLfloat __range;
+	Vector3 __angle;
 	
 	/* Window dimensions */
 	GLsizei __windowHeight;

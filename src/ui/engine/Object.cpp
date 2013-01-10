@@ -154,17 +154,17 @@ Object::show() {
 
 void
 Object::move(GLfloat _x, GLfloat _y, GLfloat _z) {
-	__mov += sVector3D( {_x, _y, _z} );
+	__mov += Vector3( {_x, _y, _z} );
 }
 
 void
 Object::scale(GLfloat _x, GLfloat _y, GLfloat _z) {
-	__scale += sVector3D( {_x, _y, _z} );
+	__scale += Vector3( {_x, _y, _z} );
 }
 
 void
 Object::rotate(GLfloat _x, GLfloat _y, GLfloat _z) {
-	__rot += sVector3D( {_x, _y, _z} );
+	__rot += Vector3( {_x, _y, _z} );
 }
 
 bool

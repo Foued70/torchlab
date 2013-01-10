@@ -12,7 +12,7 @@ ShaderDataHandler::ShaderDataHandler() :
 }
 
 void
-ShaderDataHandler::updateData(const string& _uniformName, const sVector2D& _value) {
+ShaderDataHandler::updateData(const string& _uniformName, const Vector2& _value) {
 	if (__isStreamOpen) {
 		__activeShader->setUniformFloat(_uniformName, _value);
 	} else {
@@ -25,7 +25,7 @@ ShaderDataHandler::updateData(const string& _uniformName, const sVector2D& _valu
 }
 
 void
-ShaderDataHandler::updateData(const string& _uniformName, const sVector3D& _value) {
+ShaderDataHandler::updateData(const string& _uniformName, const Vector3& _value) {
 	if (__isStreamOpen) {
 		__activeShader->setUniformFloat(_uniformName, _value);
 	} else {
@@ -38,7 +38,7 @@ ShaderDataHandler::updateData(const string& _uniformName, const sVector3D& _valu
 }
 
 void
-ShaderDataHandler::updateData(const string& _uniformName, const sVector4D& _value) {
+ShaderDataHandler::updateData(const string& _uniformName, const Vector4& _value) {
 	if (__isStreamOpen) {
 		__activeShader->setUniformFloat(_uniformName, _value);
 	} else {

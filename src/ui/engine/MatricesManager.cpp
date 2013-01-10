@@ -18,12 +18,12 @@ MatricesManager::MatricesManager() {
 }
 
 void
-MatricesManager::sLookAt(const sVector3D& _eye, const sVector3D& _center, const sVector3D& _up) {
-	sVector3D dir = _center - _eye;
+MatricesManager::sLookAt(const Vector3& _eye, const Vector3& _center, const Vector3& _up) {
+	Vector3 dir = _center - _eye;
 	dir.normalize();
-	sVector3D perpUpDir = cross(dir, _up);
+	Vector3 perpUpDir = cross(dir, _up);
 	perpUpDir.normalize();
-	sVector3D up = cross(perpUpDir, dir);
+	Vector3 up = cross(perpUpDir, dir);
 	dir *= -1;
 	
 	__modelViewMatrix.loadIdentity();
@@ -73,7 +73,7 @@ MatricesManager::sOrtho(GLfloat _left, GLfloat _right,
 }
 
 void
-MatricesManager::translate(const sVector3D& _trans) {
+MatricesManager::translate(const Vector3& _trans) {
 	sMat16 temp;
 	temp.loadIdentity();
 	temp.setColumn(3, _trans);
@@ -82,7 +82,7 @@ MatricesManager::translate(const sVector3D& _trans) {
 }
 
 void
-MatricesManager::scale(const sVector3D& _scale) {
+MatricesManager::scale(const Vector3& _scale) {
 	sMat16 temp;
 	temp[0] = _scale.x;
 	temp[5] = _scale.y;
@@ -104,16 +104,16 @@ MatricesManager::rotate(GLfloat _angle, Axis _axis) {
 	
 	double anti_c = 1 - c;
 	
-	sVector3D rot;
+	Vector3 rot;
 	switch (_axis) {
 		case X:
-			rot = sVector3D({1.0, 0.0, 0.0});
+			rot = Vector3({1.0, 0.0, 0.0});
 			break;
 		case Y:
-			rot = sVector3D({0.0, 1.0, 0.0});
+			rot = Vector3({0.0, 1.0, 0.0});
 			break;
 		case Z:
-			rot = sVector3D({0.0, 0.0, 1.0});
+			rot = Vector3({0.0, 0.0, 1.0});
 			break;
 	}
 	

@@ -163,22 +163,35 @@ public:
 		return result;
 	}
 	
+	inline friend sVector< T, N > operator -(const sVector< T, N >& _a) {
+		sVector< T, N > result;
+		for (short i = 0; i < N; ++i)
+			result[i] = -_a[i];
+		
+		return result;
+	}
+	
+  
 			/*     FUNCTIONS     */
 	
-	inline void normalize() {
-		float len = 0;
+	inline sVector<T,N>& normalize() {
+		T len = magnitude() ;
+		if (len == 0) return *this;
+		for (T& t: __data) t /= len;
+    
+    return *this;
+	}
+  
+  inline T magnitude() {
+		T len = 0;
 		
 		for (T& t: __data)
 			len += (t * t);
 		
 		len = sqrt(len);
-		
-		if (len == 0)
-			return;
-		
-		for (T& t: __data)
-			t /= len;
-	}
+    
+    return len;
+  }
 };
 
 template < typename T >
@@ -191,16 +204,46 @@ inline sVector< T, 3 > cross(const sVector< T, 3 >& _a, const sVector< T, 3 >& _
 }
 
 template < typename T >
-inline T dotProduct(const sVectorBase< T >& _a, const sVectorBase< T >& _b) {
+inline T dot(const sVectorBase< T >& _a, const sVectorBase< T >& _b) {
 	T result = 0;
 	for (short i = 0; i < _a.size(); ++i)
 		result += (_a[i] * _b[i]);
 	return result;
 }
 
-typedef sVector< float, 2 > sVector2D;
-typedef sVector< float, 3 > sVector3D;
-typedef sVector< float, 4 > sVector4D;
+/*
+rotate a vector by _angle radians around _axis.
+_axis must be length 1.
+*/
+template < typename T >
+inline sVector< T, 3 > rotateAxisAngle(const sVector< T, 3 >& _v, const sVector< T, 3 >& _axis, T _angle) {
+  T angleSin = sin(_angle / 2);
+  sVector<T,4> quat;
+  quat[0] = _axis[0] * angleSin;
+  quat[1] = _axis[1] * angleSin;
+  quat[2] = _axis[2] * angleSin;
+  quat[3] = cos(_angle / 2);
+  
+  T x1 = quat[1]*_v[2] - quat[2]*_v[1];
+  T y1 = quat[2]*_v[0] - quat[0]*_v[2];
+  T z1 = quat[0]*_v[1] - quat[1]*_v[0];
+
+  sVector<T,3> res;
+  res[0] = _v[0] + 2 * (quat[3]*x1 + quat[1]*z1 - quat[2]*y1);
+  res[1] = _v[1] + 2 * (quat[3]*y1 + quat[2]*x1 - quat[0]*z1);
+  res[2] = _v[2] + 2 * (quat[3]*z1 + quat[0]*y1 - quat[1]*x1);
+
+  return res;
+  
+}
+
+
+typedef sVector< float, 2 > Vector2;
+typedef sVector< float, 3 > Vector3;
+typedef sVector< float, 4 > Vector4;
 typedef sVector< float, 4 > sColor;
 
+
+const Vector3 Z_AXIS = Vector3({0,0,1});
+  
 #endif /* VECTORS_H */

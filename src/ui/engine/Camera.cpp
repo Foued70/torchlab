@@ -19,7 +19,6 @@ Camera::Camera(const cType &_type) :
 		__eye({0, 0, 0}),
 		__center({0, 0, 0}),
 		__up({0, 0, 1}),
-		__range(20),
 		__matrices(MatricesManager::GetSingleton()) {
 	log(CONSTRUCTOR, "Camera constructed.");
 }
@@ -32,13 +31,9 @@ Camera::Camera(GLfloat _x, GLfloat _y, GLfloat _z, const cType &_type) :
 		__eye({_x, _y, _z}),
 		__center({0, 0, 0}),
 		__up({0, 0, 1}),
-		__range(20),
 		__matrices(MatricesManager::GetSingleton()) {
 
-  if (__type == SPHERICAL)
-      __eye.normalize();
-	
-	log(CONSTRUCTOR, "Camera (%f, %f, %f) constructed.", __eye.x, __eye.y, __eye.z);
+      log(CONSTRUCTOR, "Camera (%f, %f, %f) constructed.", __eye.x, __eye.y, __eye.z);
 }
 
 Camera::~Camera() {
@@ -61,14 +56,30 @@ Camera::setProjection() {
 
 void
 Camera::setView() {
-	if (__type == FPP)
-		__matrices.sLookAt(__eye, __center + __eye, __up);
-	else if (__type == SPHERICAL)
-		__matrices.sLookAt((__eye * __range) + __center, __center, __up);
-	
-	// we have modelViewMatrix set, we can count the normal matrix now.
-	__matrices.produceNormalMatrix();
+  __matrices.sLookAt(__eye, __center, __up);
+  
+  // we have modelViewMatrix set, we can count the normal matrix now.
+  __matrices.produceNormalMatrix();
 }
+
+
+void
+Camera::calcUp() {
+  Vector3 dir = __center - __eye;
+  dir.normalize();
+  if (dir == Z_AXIS || dir == -Z_AXIS) {
+    // use our last up value
+    __up[2] = 0;
+    __up.normalize();
+  }
+  else {
+    Vector3 perpUpDir = cross(dir, Z_AXIS);
+    perpUpDir.normalize();
+    __up = cross(perpUpDir, dir);
+  }
+}
+
+
 
 void
 Camera::moveCamera(GLfloat movX, GLfloat movY, GLfloat movZ) {
@@ -86,6 +97,42 @@ Camera::moveCamera(GLfloat movX, GLfloat movY, GLfloat movZ) {
 		__center.y += movY / 10;
 	}
   // log(PARAM, "Camera::moveCamera: (%f, %f, %f)", __center.x, __center.y, __center.z);
+}
+
+
+void
+Camera::rotateAroundCenter(GLfloat _x, GLfloat _y) {
+  const float RADS = 0.02;
+  float xAngle = _x * RADS;
+  float yAngle = _y * RADS;
+  // move eye as if center is at origin
+  __eye -= __center;
+  
+  // rotate around a horizontal axis (y rotation)
+  Vector3 unitEye = __eye;
+  unitEye.normalize();
+  float zAxisAngle = acos(dot(unitEye, Z_AXIS));
+  
+  if (zAxisAngle - yAngle < 0) {
+    __eye = Z_AXIS * __eye.magnitude();
+    // rotate up for x instead of eye
+    __up = rotateAxisAngle(__up, Z_AXIS, xAngle);
+  }
+  else if (zAxisAngle - yAngle > PI) {
+    __eye = Z_AXIS * -__eye.magnitude();
+    // rotate up for x instead of eye
+    __up = rotateAxisAngle(__up, Z_AXIS, xAngle);
+  }
+  else {
+    Vector3 axis = cross(unitEye, __up).normalize();
+    __eye = rotateAxisAngle(__eye, axis, yAngle);
+    // rotate around Z-up (x rotation)
+    __eye = rotateAxisAngle(__eye, Z_AXIS, xAngle);
+  }
+
+  // move eye back into position
+  __eye += __center;
+  calcUp();
 }
 
 
@@ -124,18 +171,14 @@ Camera::rotateCamera(GLfloat _x, GLfloat _y, GLfloat) {
 
 void
 Camera::lookAt(GLfloat x, GLfloat y, GLfloat z) {
-	__center = sVector3D({x, y, z});
-	if (__type == FPP)
-		__center.normalize();
-
-  // log(PARAM, "Camera::LookAt: (%f, %f, %f)", __center.x, __center.y, __center.z);
+	__center = Vector3({x, y, z});
 }
 
-sVector3D Camera::getEye() {
+Vector3 Camera::getEye() {
 		return __eye;
 }
 
-sVector3D Camera::getCenter() {
+Vector3 Camera::getCenter() {
 		return __center;
 }
 
