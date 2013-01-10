@@ -4,18 +4,43 @@ require 'paths'
 require 'math'
 require 'util'
 
-ffi = require("ffi")
-ffi.cdef[[ int printf(const char *fmt, ...); ]]
-printf = ffi.C.printf
+-- ffi = require("ffi")
+-- ffi.cdef[[ int printf(const char *fmt, ...); ]]
+-- printf = ffi.C.printf
+
+function printf(...)
+   print(string.format(...))
+end
 
 local geom = util.geom
 -- top level filenames
-targetfile = "/Users/marco/lofty/test/invincible-violet/retexture-tworoom.obj"
-sourcedir  = "/Users/marco/lofty/models//invincible-violet-3396_a_00/"
-sourcefile = sourcedir .. "scanner371_job129001.obj"
-posefile   = sourcedir .. "scanner371_job129001_texture_info.txt"
 
--- FIXME make a cache class
+cmd = torch.CmdLine()
+cmd:text()
+cmd:text()
+cmd:text('Compute depth maps')
+cmd:text()
+cmd:text('Options')
+cmd:option('-targetfile',
+           "/Users/marco/lofty/test/invincible-violet/retexture-tworoom.obj",
+           'target obj with new geometry')
+cmd:option('-sourcefile',
+           "/Users/marco/lofty/models//invincible-violet-3396_a_00/scanner371_job129001.obj",
+           'source obj')
+cmd:option('-posefile',
+           "/Users/marco/lofty/models//invincible-violet-3396_a_00/scanner371_job129001_texture_info.txt",
+           'pose info file in same directory as the texture images')
+cmd:option('-scale',4,'scale at which to process 4 = 1/4 resolution')
+cmd:text()
+ 
+-- parse input params
+params = cmd:parse(arg)
+
+targetfile = params.targetfile
+sourcefile = params.sourcefile
+posefile   = params.posefile
+scale      = params.scale
+
 cachedir = "cache/"
 
 sys.execute("mkdir -p " .. cachedir)
@@ -24,16 +49,18 @@ posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
 sourcecache = cachedir .. sourcefile:gsub("/","_") .. ".t7"
 targetcache = cachedir .. targetfile:gsub("/","_") .. ".t7"
 
+posedir = paths.dirname(posefile)
+
 function loadcache (objfile,cachefile,loader,args)
    -- Process or load the poses
    if (paths.filep(cachefile)) then
       sys.tic()
       object = torch.load(cachefile)
-      print(string.format("Loaded object from %s in %2.2fs", posecache, sys.toc()))
+      printf("Loaded object from %s in %2.2fs", posecache, sys.toc())
    else
       object = loader(objfile,args)
       torch.save(cachefile,object)
-      print(string.format("Saving object to %s", posecache))
+      printf("Saving object to %s", posecache)
    end
    return object
 end
@@ -114,31 +141,33 @@ function fast_ray_face_intersection(pt,dirs,
       end
    end
 
+   local debug = false
+
    local timer = torch.Timer.new()
 
    -- output depth map (could pass in if we want to fill and avoid the copy)
-   local dmap  = torch.Tensor(dirs:size(1)):fill(-1)
+   local dmap  = torch.Tensor(dirs:size(1)):fill(0)
 
    -- nfaces x ndirections
    distances = fast_ray_plane_intersection(pt,dirs,norms,d)
    local time0 = timer:time()
-   print(string.format("Compute distances: %2.4fs",time0.real))
+   printf("Compute distances: %2.4fs",time0.real)
 
    -- angle between plane_norms and direction
    -- angles < 0 and at inf can be skipped
    local dists,index = torch.sort(distances,1)
 
-   -- dists < 0.5 and > 1000m are not to be processed
-   local valid = torch.gt(dists,0.5):cmul(torch.lt(dists,1e3))
+   -- dists < 0 are behind camera and are not to be processed
+   local valid = torch.gt(dists,0) 
    local vsum  = valid:sum(1)[1]
    local time1 = timer:time()
-   print(string.format("Multiply and sort: %2.4fs",time1.real-time0.real))
+   printf("Multiply and sort: %2.4fs",time1.real-time0.real)
 
    local nfaces = face_verts:size(1)
    local temp_verts = torch.Tensor(face_verts:size(2),face_verts:size(3))
    
    local time2 = timer:time()
-   print(string.format("Compute planar norms: %2.4fs",time2.real-time1.real))
+   printf("Compute planar norms: %2.4fs",time2.real-time1.real)
 
 
    local time_3_1 = timer:time()
@@ -149,6 +178,7 @@ function fast_ray_face_intersection(pt,dirs,
    local acc3_5 = 0
 
    local visits = 0
+
    -- loop over directions in the distances. 
    -- Each direction has a set of distances to each face
    for i = 1,distances:size(2) do
@@ -174,79 +204,52 @@ function fast_ray_face_intersection(pt,dirs,
             local fidx = index[j][i]
             local    t = dists[j][i]
             
-            local intersection = -(pt + dir * t)
+            -- FIXME do a batch of directions at a time
+            local intersection = pt + dir * t
             local nverts       = nverts_per_face[fidx]
-
-            temp_verts:copy(face_verts[fidx])
-
-            local ds           = most_planar_normals[fidx]
-            -- move intersection to 0,0,0
-            for vi = 1,nverts do
-               temp_verts[vi]:add(intersection)
-            end
             
+            local ds           = most_planar_normals[fidx]
+
             local time3_3 = timer:time()
             acc3_3 = acc3_3 + time3_3.real - time3_2_1.real
-            
-            -- count crossings along 'y' axis : b in slope intercept line equation
-            local pvert = temp_verts[nverts]
-            local count = 0
-            for vi = 1,nverts do
-               local cvert = temp_verts[vi]
-               --  compute y axis crossing (b = y - mx)
-               local s    = slopes[fidx][vi]
-               local b    = -math.huge
-               local cpos = 1
-               local ppos = 1
-               if (s == math.huge) then
-                  if (math.abs(cvert[ds[1]]) < 1e-8) then
-                     count = count + 1
-                  end
-               else
-                  b = cvert[ds[2]] -  s * cvert[ds[1]]
-                  if (cvert[ds[1]] < 0) then cpos = -1 end
-                  if (pvert[ds[1]] < 0) then ppos = -1 end
-                  if (b >= 0) and ((cpos + ppos) == 0) then
-                     count = count + 1
-                  end
-               end
-               pvert = cvert
-            end
 
+            -- faster no copies less substraction
+            found = 
+               point_in_polygon(intersection,
+                                face_verts[fidx]:narrow(1,1,nverts),
+                                ds)
             local time3_4 = timer:time()
             acc3_4 = acc3_4 + time3_4.real - time3_3.real
-
-            if ((count > 0) and (count % 2)) then
-               found = true
-               dmap[i] = t -- this is the distance
+            if found then 
+               dmap[i] = t
             else
-               j = j + 1
+               j = j + 1 
             end
-         end
-         visits = visits + visited
+         end -- while
          local time3_5 = timer:time()
          acc3_5 = acc3_5 + time3_5.real - time3_2.real
-      end
+      end -- if valid
+      visits = visits + visited
+            
       if groundt and (torch.abs(dmap[i] - groundt[i]) > 1e-4) then
          print(valid:select(2,i))
          print(index:select(2,i))
          print(dists:select(2,i))
          print(distances:select(2,i))
-         print(string.format("dir: %d face: %d <-> %d %2.4f <-> %2.4f = %2.4f visited: %d", 
+         printf("dir: %d face: %d <-> %d %2.4f <-> %2.4f = %2.4f visited: %d", 
                              i,index[j][i], fid[i], 
                              dmap[i], groundt[i], dmap[i] - groundt[i], 
-                             visited))
+                             visited)
       end
-   end
+   end -- for each direction 
    local time4 = timer:time()
-   print(string.format(" - %2.4fs",acc3_1))
-   print(string.format(" - scanning              : %2.4fs",acc3_2))
-   print(string.format(" - centering face        : %2.4fs",acc3_3))
-   print(string.format(" - count crossings       : %2.4fs",acc3_4))
-   print(string.format(" - scan + intersect outer: %2.4fs",acc3_5))
-   print(string.format("total face intersections : %2.4fs",time4.real-time2.real))
-   print(string.format("    ***   TOTAL  ***     : %2.4fs",time4.real))
-   print(string.format("visits per ray: %2.2f",visits/distances:size(2)))
+   printf(" - scanning              : %2.4fs",acc3_2)
+   printf(" - setup                 : %2.4fs",acc3_3)
+   printf(" - point in polygon(new) : %2.4fs",acc3_4)
+   printf(" - scan + intersect outer: %2.4fs",acc3_5)
+   printf("total face intersections : %2.4fs",time4.real-time2.real)
+   printf("    ***   TOTAL  ***     : %2.4fs",time4.real)
+   printf("visits per ray: %2.2f",visits/distances:size(2))
    return dmap
 
 end
@@ -281,6 +284,77 @@ function build_BVH_tree ()
    -- 3) intersect faces with 
 end
 
+-- pt (point) is the intersection between the ray and the plane of the polygon
+-- verts are the vertices of the polygon
+-- dims are the precomputed dominant dimensions in which we flatten the polygon to compute
+function point_in_polygon(pt,verts,dims)
+   -- dims 1 == X axis
+   -- dims 2 == Y axis
+   local x         = dims[1]
+   local y         = dims[2]
+   local nverts    = verts:size(1)
+   local inside    = false
+   local p1        = verts[nverts] 
+   local yflag1    = (p1[y] >= pt[y])
+   for vi = 1,nverts do
+      local p2     = verts[vi]
+      local yflag2 = (p2[y] >= pt[y])
+      -- do we have a crossing ?
+      if (yflag1 ~= yflag2) then
+         -- no division test of positive intersection with xaxis
+         if (yflag2 == 
+             ((p2[y] - pt[y])*(p1[x] - p2[x]) >= (p2[x] - pt[x])*(p1[y] - p2[y]))) then
+            inside = not inside
+         end
+      end
+      yflag1 = yflag2
+      p1 = p2
+   end
+   return inside
+end
+
+-- old version of code takes precomputed slopes to speed things up
+function my_point_in_poly(pt,verts,slopes,dims)
+   local nverts = verts:size(1)
+   local x = dims[1]
+   local y = dims[2]
+   
+   -- move intersection to 0,0,0
+   for vi = 1,nverts do
+      verts[vi]:add(-1,pt)
+   end
+      
+   -- count crossings along 'y' axis : 
+   --   b in slope intercept line equation
+   local pvert = verts[nverts]
+   local count = false
+   for vi = 1,nverts do
+      local cvert = verts[vi]
+      --  compute y axis crossing (b = y - mx)
+      local s    = slopes[vi]
+      local b    = -math.huge
+      local cpos = 1
+      local ppos = 1
+      
+      -- vertical line only intersects if both points are zero
+      if (s == math.huge) then
+         if (math.abs(cvert[x]) < 1e-8) then
+            count = not count
+         end
+      else
+         b = cvert[y] -  s * cvert[x]
+         if (cvert[x] < 0) then cpos = -1 end
+         if (pvert[x] < 0) then ppos = -1 end
+         if (b >= 0) and ((cpos + ppos) == 0) then
+            count = not count
+         end
+      end
+      pvert = cvert
+   end
+   
+   return count 
+end
+
 -- takes a bunch of rays (pt, dirs) and a bunch of planes (normals,d)
 -- and computes the distance to all planes for each direction using
 -- matrix operations.
@@ -311,12 +385,12 @@ function fast_get_occlusions(p,pi,obj,scale)
    -- 1) set up local variables
    local dirs  = compute_dirs(p,pi,scale)
    local time0 = timer:time()
-   print(string.format("Compute dirs: %2.4fs",time0.real))
+   printf("Compute dirs: %2.4fs",time0.real)
 
    local pt    = p.xyz[pi] -- select pose xyz
 
    -- output depth map
-   local dmap  = torch.Tensor(dirs:size(1)):fill(-1)
+   local dmap  = torch.Tensor(dirs:size(1)):fill(0)
 
    local norms           = obj.normals
    local d               = obj.d
@@ -335,30 +409,30 @@ function fast_get_occlusions(p,pi,obj,scale)
       local _,ds = torch.sort(torch.abs(norms[i]))
       most_planar_normals[i]:copy(ds:narrow(1,1,2))
    end
-   -- precompute the slopes for each edge in the dominant dimensions
-   -- for that face
-   local slopes = torch.Tensor(face_verts:size(1),face_verts:size(2))
+--    -- precompute the slopes for each edge in the dominant dimensions
+--    -- for that face
+--    local slopes = torch.Tensor(face_verts:size(1),face_verts:size(2))
 
-   for si = 1,slopes:size(1) do
-      local fv = face_verts[si]
-      local ds = most_planar_normals[si] 
-      local pvert = fv[face_verts:size(2)]
-      for vi = 1,slopes:size(2) do 
-         local cvert = fv[vi]
-         local run = cvert[ds[1]] - pvert[ds[1]]
-         if math.abs(run) < 1e-8 then 
-            slopes[si][vi] = math.huge
-         else
-            slopes[si][vi] = (cvert[ds[2]] - pvert[ds[2]])/run
-         end
-         pvert = cvert
-      end
-   end
+--    for si = 1,slopes:size(1) do
+--       local fv = face_verts[si]
+--       local ds = most_planar_normals[si] 
+--       local pvert = fv[face_verts:size(2)]
+--       for vi = 1,slopes:size(2) do 
+--          local cvert = fv[vi]
+--          local run = cvert[ds[1]] - pvert[ds[1]]
+--          if math.abs(run) < 1e-8 then 
+--             slopes[si][vi] = math.huge
+--          else
+--             slopes[si][vi] = (cvert[ds[2]] - pvert[ds[2]])/run
+--          end
+--          pvert = cvert
+--       end
+--    end
 
    -- 3) compute face intersections
-   maxdirs = 32 * 1024 
-   di = 1
-   while (di < dirs:size(1)-maxdirs) do
+   maxdirs = 128 * 512
+   di = 1 -- 32000-128
+   while (di < dirs:size(1)-maxdirs) do --32001-128) do -- 
       
       dmap:narrow(1,di,maxdirs):copy( 
          fast_ray_face_intersection(pt,dirs:narrow(1,di,maxdirs),
@@ -367,7 +441,7 @@ function fast_get_occlusions(p,pi,obj,scale)
                                     slopes, nverts_per_face))
       di = di + maxdirs
    end
-   local left = dirs:size(1) - di
+   local left = dirs:size(1) - di + 1
    if left > 0 then
       dmap:narrow(1,di,left):copy( 
          fast_ray_face_intersection(pt,dirs:narrow(1,di,left),
@@ -376,7 +450,8 @@ function fast_get_occlusions(p,pi,obj,scale)
                                     slopes,nverts_per_face))
    end         
    
-   return dmap:resize(p.h[pi],p.w[pi])
+   -- FIXME: make dirs rectangular
+   return dmap:resize(math.ceil(p.h[pi]/scale),math.ceil(p.w[pi]/scale))
 end
 
 
@@ -386,14 +461,14 @@ function test_compute_dirs()
    local dirs = compute_dirs(poses,pi,scale)
    local err  = 0
    sys.tic()
-   local outh = poses.h[pi]*invscale
-   local outw = poses.w[pi]*invscale
+   local outh = poses.h[pi]/scale
+   local outw = poses.w[pi]/scale
    for h = 1,outh do
       for w = 1,outw do
          local pt,dir = util.pose.localxy2globalray(poses,pi,(w-1)*scale,(h-1)*scale)
          err = err + torch.sum(torch.abs(dir:narrow(1,1,3) - dirs[(h-1)*outw + w]))
       end
-      print(string.format("-- Errors %2.2f in %2.2fs", err, sys.toc())) 
+      printf("-- Errors %2.2f in %2.2fs", err, sys.toc())
    end
 end
 
@@ -448,14 +523,14 @@ function test_ray_plane_intersection()
             local err = torch.abs(t - distances[fi][di])
             if err > 1e-8 then
                nerr = nerr + 1
-               print(string.format("[%d][%d] %2.2f <-> %2.2f err: %2.2f", 
+               printf("[%d][%d] %2.2f <-> %2.2f err: %2.2f", 
                                    fi,di,
-                                   t,distances[fi][di],err))
+                                   t,distances[fi][di],err)
             end
          end
       end
    end
-   print(string.format("-- Errors: %d in %2.2fs", nerr, sys.toc()))
+   printf("-- Errors: %d in %2.2fs", nerr, sys.toc())
 end
 -- test_ray_plane_intersection()
 
@@ -485,35 +560,17 @@ function test_ray_face_intersection ()
                                         slow_ds,slow_fids)   
    local errs = torch.abs(fast_ds - slow_ds)
    local err  = torch.max(errs)
-   print(string.format("-- %d/%d Errors: ",torch.sum(torch.gt(errs,1e-8)),
-                       errs:size(1)))
+   printf("-- %d/%d Errors",torch.sum(torch.gt(errs,1e-8)),
+                       errs:size(1))
 end
 
 -- test_ray_face_intersection()
 
-posedir = paths.dirname(posefile)
-scale    = 1
-invscale = 1/scale
 
-for pi = 1,1 do -- #poses do
+for pi = 3,3 do -- #poses do
    sys.tic()
    dmap = fast_get_occlusions(poses,pi,target,scale)
-   print(string.format("Computed fast occlusions in %2.4fs", sys.toc()))
+   printf("Computed fast occlusions in %2.4fs", sys.toc())
 
    image.display(dmap)
---    sys.tic()
---    outh       = poses.h[pi]*invscale
---    outw       = poses.w[pi]*invscale
---    ddata      = torch.zeros(outh,outw)
---    ddatafile  = posedir .. poses[pi]:gsub(".jpg","-dist.t7")
---    dimagefile = posedir .. poses[pi]:gsub(".jpg","-dist.png")
---    for h = 1,outh do
---       for w = 1,outw do
---          local pt,dir = util.pose.localxy2globalray(poses,pi,(w-1)*scale,(h-1)*scale)
---          ddata[h][w]  = get_occlusions(pt,dir,target)
---       end
---    end
---    print("Processed pose "..pi.." in "..sys.toc().." secs")
---    dmap:resize(ddata:size())
---    image.display{image={ddata,dmap,torch.abs(ddata-dmap)}, nrow=1}
 end
