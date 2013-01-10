@@ -70,8 +70,8 @@ Scene::getObjectByName(const string &_name) {
 }
 
 Camera *
-Scene::createCamera(GLfloat _x, GLfloat _y, GLfloat _z, const cType &_cType) {
-	Camera *newCamera = new Camera(_x, _y, _z, _cType);
+Scene::createCamera(GLfloat _x, GLfloat _y, GLfloat _z) {
+	Camera *newCamera = new Camera(_x, _y, _z);
 	if (!__activeCamera) {
 		__activeCamera = newCamera;
 		__activeCamera -> setProjection(); // sets "seeing" parameters

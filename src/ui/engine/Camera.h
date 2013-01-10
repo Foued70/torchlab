@@ -9,14 +9,6 @@
 
 class MatricesManager;
 
-/* Cameras types */
-typedef enum {
-	FPP		= 1,	// First Person Perspective, moves the "lookAt" point
-	TPP,			// up
-	SPHERICAL		// First Person Perspective, moves the "eye" point
-} cType;
-
-
 /**
  * WARNING
  * In the FPP camera __center is a vector, not the "lookAt" point.
@@ -31,7 +23,7 @@ public:
 	/**
 	 * Default ctor, camera in (0,0,0) position.
 	 */
-	Camera(const cType& = FPP);
+	Camera();
 	
 	/**
 	 * Ctor that gets camera's location coords.
@@ -40,7 +32,7 @@ public:
 	 * @param z Z coord.
 	 * @param type Camera type. FPP, TPP, SPHERICAL
 	 */
-	Camera(GLfloat, GLfloat, GLfloat, const cType& = FPP);
+	Camera(GLfloat, GLfloat, GLfloat);
 	
 	/**
 	 * Destructor just sends some output.
@@ -70,12 +62,11 @@ public:
 	void moveCamera(GLfloat, GLfloat, GLfloat);
 
 	/**
-	 * Rotates the camera - mouse support.
+	 * Rotates the camera around center by relative x and y values.
 	 * @param x X rotation.
 	 * @param y Y rotation.
 	 * @param z Z rotation.
 	 */
-	void rotateCamera(GLfloat, GLfloat, GLfloat);
   void rotateAroundCenter(GLfloat _x, GLfloat _y);
 	
   /**
@@ -97,9 +88,6 @@ public:
 	Vector3 getCenter();
 	
 private:
-	
-	/* Camera type */
-	cType __type;
 	
 	/*** setProjection ***/
 	GLfloat __fovy;

@@ -44,12 +44,7 @@ void ScanWidget::initializeGL() {
   monkey -> rotate(90, 0, 0);
   monkey -> setColor(80, 24, 25);
         
-  /* Camera of (0, 4, -20) position, looking at (0, 7, 20) */
-  // Camera* fppCamera = scene -> createCamera(0, 4, -20, FPP);
-  // fppCamera -> lookAt(-0.1, 9.7, -19);
-  // fppCamera -> lookAt(0.0, 7.0, 20.0);
-        
-  Camera *sphereCamera = scene -> createCamera(-20, 0, 7, SPHERICAL);
+  Camera *sphereCamera = scene -> createCamera(-20, 0, 7);
   sphereCamera -> lookAt(0, 0, 7);
         
   /* Light on (7, 3, 0) position */

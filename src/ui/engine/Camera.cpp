@@ -11,8 +11,7 @@ static const double PIdiv2 = PI/2;
 
 using namespace std;
 
-Camera::Camera(const cType &_type) :
-		__type(_type),
+Camera::Camera() :
 		__fovy(45.0),
 		__zNear(0.0001),
 		__zFar(1000.0),
@@ -23,8 +22,7 @@ Camera::Camera(const cType &_type) :
 	log(CONSTRUCTOR, "Camera constructed.");
 }
 
-Camera::Camera(GLfloat _x, GLfloat _y, GLfloat _z, const cType &_type) :
-		__type(_type),
+Camera::Camera(GLfloat _x, GLfloat _y, GLfloat _z) :
 		__fovy(45.0),
 		__zNear(0.0001),
 		__zFar(1000.0),
@@ -83,19 +81,6 @@ Camera::calcUp() {
 
 void
 Camera::moveCamera(GLfloat movX, GLfloat movY, GLfloat movZ) {
-	if (__type == FPP) {
-		__eye.x += (__center.x * movZ);
-		__eye.z += (__center.z * movZ);
-		__eye.x += (__center.z * movX * -1);
-		__eye.z += (__center.x * movX);
-		__eye.y += movY / 10;
-	} else if (__type == SPHERICAL) {
-		__center.x += (__eye.x * movZ * -0.1);
-		__center.z += (__eye.z * movZ * -0.1);
-		__center.x += (__eye.z * movX * 0.1);
-		__center.z += (__eye.x * movX * -0.1);
-		__center.y += movY / 10;
-	}
   // log(PARAM, "Camera::moveCamera: (%f, %f, %f)", __center.x, __center.y, __center.z);
 }
 
@@ -135,39 +120,6 @@ Camera::rotateAroundCenter(GLfloat _x, GLfloat _y) {
   calcUp();
 }
 
-
-void
-Camera::rotateCamera(GLfloat _x, GLfloat _y, GLfloat) {
-	if (__type == FPP) {
-		/* Update the angle */
-		__angle.x -= (GLfloat)(_x / 100);
-		__angle.y += (GLfloat)(_y / 200);
-	
-		if (__angle.y > 90 * PIdiv180) __angle.y = 90 * PIdiv180;
-		else if (__angle.y < -90 * PIdiv180) __angle.y = -90 * PIdiv180;
-	
-		// vector up
-		__center.y = sin(__angle.y);
-	
-		// count new position on x-z
-		__center.x = cos(__angle.x - 90);
-		__center.z = sin(__angle.x - 90);
-	
-		__center.normalize();
-	} else if (__type == SPHERICAL) {
-		__angle.x += (GLfloat)(_x / 200);
-		__angle.y -= (GLfloat)(_y / 200);
-		
-		__eye.x = -1 * cos(__angle.y) * sin(__angle.x - 90);
-		__eye.y = sin(__angle.y);
-		__eye.z = cos(__angle.y) * cos(__angle.x - 90);
-		
-		__eye.normalize();
-	}
-	
-  // log(PARAM, "Camera::rotateCamera: center(%f, %f, %f)  eye(%f, %f, %f)", __center.x, __center.y, __center.z, __eye.x, __eye.y, __eye.z);
-  
-}
 
 void
 Camera::lookAt(GLfloat x, GLfloat y, GLfloat z) {
