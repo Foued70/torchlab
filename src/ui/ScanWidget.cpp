@@ -70,16 +70,28 @@ void ScanWidget::mousePressEvent(QMouseEvent* event) {
   dragStartY = event->globalY();
 }
 void ScanWidget::mouseMoveEvent(QMouseEvent* event) {
-  // log(PARAM, "mouseMoveEvent %d %d (%d, %d)", event->button(), (int)event->buttons(), event->globalX(), event->globalY());
+  // log(PARAM, "mouseMoveEvent %d", (int)event->buttons());
+  float dX = event->globalX() - dragStartX;
+  float dY = event->globalY() - dragStartY;
+  
   if (event->buttons() & Qt::RightButton) {
-    scene->getActiveCamera()->rotateAroundCenter(-(event->globalX() - dragStartX), event->globalY() - dragStartY);
+    scene->getActiveCamera()->rotateAroundCenter(-dX, dY);
     QCursor::setPos(dragStartX, dragStartY);
     updateGL();
   }
+  else if (event->buttons() & Qt::MiddleButton) {
+    scene->getActiveCamera()->moveEye(-dX/10.0, dY/10.0, 0);
+    QCursor::setPos(dragStartX, dragStartY);
+    updateGL();
+  }
+  
 }
 
-void QWidget::wheelEvent ( QWheelEvent * event ) {
-  
+void ScanWidget::wheelEvent(QWheelEvent* event) {
+  // log(PARAM, "wheelEvent %d %d", event->delta());
+  float moveUnits = (float)event->delta() / 120.0f;
+  scene->getActiveCamera()->moveEye(0, 0, moveUnits);
+  updateGL();
 }
   
 void ScanWidget::keyPressEvent(QKeyEvent* event) {
@@ -98,25 +110,6 @@ void ScanWidget::keyPressEvent(QKeyEvent* event) {
     case Qt::Key_Down:
       break;
       
-    case Qt::Key_S:
-      scene -> getActiveCamera() -> moveCamera(0.0, 0.0, -0.1);
-      break;
-    case Qt::Key_W:
-      scene -> getActiveCamera() -> moveCamera(0.0, 0.0, 0.1);
-      break;
-    case Qt::Key_D:
-      scene -> getActiveCamera() -> moveCamera(0.1, 0.0, 0.0);
-      break;
-    case Qt::Key_A:
-      scene -> getActiveCamera() -> moveCamera(-0.1, 0.0, 0.0);
-      break;
-    case Qt::Key_Z:
-      scene -> getActiveCamera() -> moveCamera(0.0, -0.7, 0.0);
-      break;
-    case Qt::Key_X:
-      scene -> getActiveCamera() -> moveCamera(0.0, 0.7, 0.0);
-      break;
-                
     default:
       event->ignore();
       break;

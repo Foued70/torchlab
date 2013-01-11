@@ -54,12 +54,12 @@ public:
   void calcUp();
 
 	/**
-	 * Moves camera, 2-dimensional movement.
-	 * @param movX X axis.
-	 * @param movY Y axis.
-	 * @param movZ Z axis.
+	 * Moves the eye relative to the view/screen.
+	 * @param x horizontal.
+	 * @param y vertical.
+	 * @param z forward/back.
 	 */
-	void moveCamera(GLfloat, GLfloat, GLfloat);
+	void moveEye(GLfloat, GLfloat, GLfloat);
 
 	/**
 	 * Rotates the camera around center by relative x and y values.
@@ -113,6 +113,9 @@ private:
 	GLsizei __windowWidth;
 	
 	MatricesManager& __matrices;
+  
+  Vector3 rightDirection();
+  Vector3 lookDirection();
 };
 
 #endif // CAMERA_H

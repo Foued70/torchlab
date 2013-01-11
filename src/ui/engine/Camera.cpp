@@ -31,7 +31,7 @@ Camera::Camera(GLfloat _x, GLfloat _y, GLfloat _z) :
 		__up({0, 0, 1}),
 		__matrices(MatricesManager::GetSingleton()) {
 
-      log(CONSTRUCTOR, "Camera (%f, %f, %f) constructed.", __eye.x, __eye.y, __eye.z);
+    log(CONSTRUCTOR, "Camera (%f, %f, %f) constructed.", __eye.x, __eye.y, __eye.z);
 }
 
 Camera::~Camera() {
@@ -63,8 +63,7 @@ Camera::setView() {
 
 void
 Camera::calcUp() {
-  Vector3 dir = __center - __eye;
-  dir.normalize();
+  Vector3 dir = lookDirection();
   if (dir == Z_AXIS || dir == -Z_AXIS) {
     // use our last up value
     __up[2] = 0;
@@ -80,8 +79,18 @@ Camera::calcUp() {
 
 
 void
-Camera::moveCamera(GLfloat movX, GLfloat movY, GLfloat movZ) {
-  // log(PARAM, "Camera::moveCamera: (%f, %f, %f)", __center.x, __center.y, __center.z);
+Camera::moveEye(GLfloat _x, GLfloat _y, GLfloat _z) {
+  Vector3 forwardDir = lookDirection();
+  Vector3 rightDir = rightDirection();
+  __eye += forwardDir * _z;
+  __eye += rightDir * _x;
+  __eye += __up * _y;
+  
+  // move the center, but not along the line of sight, for now
+  // the z direction changes the range
+  // __center += forwardDir * _z;
+  __center += rightDir * _x;
+  __center += __up * _y;
 }
 
 
@@ -90,6 +99,7 @@ Camera::rotateAroundCenter(GLfloat _x, GLfloat _y) {
   const float RADS = 0.02;
   float xAngle = _x * RADS;
   float yAngle = _y * RADS;
+  
   // move eye as if center is at origin
   __eye -= __center;
   
@@ -132,6 +142,16 @@ Vector3 Camera::getEye() {
 
 Vector3 Camera::getCenter() {
 		return __center;
+}
+
+Vector3 Camera::rightDirection() {
+  Vector3 dir = lookDirection();
+  return cross(dir, __up).normalize();
+}
+
+
+Vector3 Camera::lookDirection() {
+  return (__center - __eye).normalize();
 }
 
 

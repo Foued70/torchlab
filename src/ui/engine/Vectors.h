@@ -234,7 +234,18 @@ inline sVector< T, 3 > rotateAxisAngle(const sVector< T, 3 >& _v, const sVector<
   res[2] = _v[2] + 2 * (quat[3]*z1 + quat[0]*y1 - quat[1]*x1);
 
   return res;
-  
+}
+
+
+/*
+rotate a vector by _angle radians around _axis.
+_axis must be length 1.
+*/
+template < typename T >
+inline sVector<T,3> rotateFromTo(const sVector<T,3>& _v, const sVector<T,3>& _from, const sVector<T,3>& _to) {
+  sVector<T,3> axis = cross(_from, _to).normalize();
+  float angle = acos(dot(_from, _to));
+  return rotateAxisAngle(_v, axis, angle);
 }
 
 
@@ -245,5 +256,6 @@ typedef sVector< float, 4 > sColor;
 
 
 const Vector3 Z_AXIS = Vector3({0,0,1});
+const Vector3 X_AXIS = Vector3({1,0,0});
   
 #endif /* VECTORS_H */
