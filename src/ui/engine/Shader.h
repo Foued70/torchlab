@@ -99,7 +99,7 @@ private:
 	GLboolean __isRunning;
 	
 	bool __isCompiled;
-	
+
 };
 
 #endif // SHADER_H
