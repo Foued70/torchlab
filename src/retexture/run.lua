@@ -31,6 +31,7 @@ cmd:option('-posefile',
            "/Users/marco/lofty/models//invincible-violet-3396_a_00/scanner371_job129001_texture_info.txt",
            'pose info file in same directory as the texture images')
 cmd:option('-scale',4,'scale at which to process 4 = 1/4 resolution')
+cmd:option('-packetsize',32,'window size for ray packets (32x32)')
 cmd:text()
  
 -- parse input params
@@ -40,6 +41,7 @@ targetfile = params.targetfile
 sourcefile = params.sourcefile
 posefile   = params.posefile
 scale      = params.scale
+packetsize = params.packetsize
 
 cachedir = "cache/"
 
@@ -48,19 +50,19 @@ sys.execute("mkdir -p " .. cachedir)
 posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
 sourcecache = cachedir .. sourcefile:gsub("/","_") .. ".t7"
 targetcache = cachedir .. targetfile:gsub("/","_") .. ".t7"
-
 posedir = paths.dirname(posefile)
 
 function loadcache (objfile,cachefile,loader,args)
+   local object = nil
    -- Process or load the poses
    if (paths.filep(cachefile)) then
       sys.tic()
       object = torch.load(cachefile)
-      printf("Loaded object from %s in %2.2fs", posecache, sys.toc())
+      printf("Loaded %s from %s in %2.2fs", objfile, cachefile, sys.toc())
    else
       object = loader(objfile,args)
       torch.save(cachefile,object)
-      printf("Saving object to %s", posecache)
+      printf("Saving %s to %s", objfile, cachefile)
    end
    return object
 end
@@ -128,7 +130,7 @@ end
 function fast_ray_face_intersection(pt,dirs,
                                     norms,d,
                                     face_verts,most_planar_normals,
-                                    slopes,nverts_per_face,
+                                    nverts_per_face,
                                     ...)
    -- optional debugging arguments
    local args = {...}
@@ -145,7 +147,7 @@ function fast_ray_face_intersection(pt,dirs,
 
    local timer = torch.Timer.new()
 
-   -- output depth map (could pass in if we want to fill and avoid the copy)
+   -- output depth map (FIXME should pass in if we want to fill and avoid the copy)
    local dmap  = torch.Tensor(dirs:size(1)):fill(0)
 
    -- nfaces x ndirections
@@ -254,35 +256,86 @@ function fast_ray_face_intersection(pt,dirs,
 
 end
 
+-- FIXME part of pose object
+-- 
 -- FIXME Cache : not dependant on pose position. Can reuse between
 -- multiple poses, by computing once for an image size and scale and
 -- xdeg, ydeg and center.
 --
--- FIXME Parallelize: ray packets, or simple increment if possible.  
+-- FIXME Parallelization: 
+-- 
+-- + use ray packets 
+-- 
+-- + produce and cache contiguous packets on a grid. (Contiguous
+-- unfold useful for bilateral filtering also).
+-- 
+-- + speed : creation with a simple increment if possible. (SLERP)
+
 function compute_dirs(p,i,scale)
+
    local imgw = p.w[i]
    local imgh = p.h[i]
-   local dirs = torch.Tensor(math.ceil((imgw/scale))*math.ceil(imgh/scale),3)
+
+   local outw = math.ceil(imgw/scale)
+   local outh = math.ceil(imgh/scale)
+
+   -- dirs are 2D x 3
+   local dirs = torch.Tensor(outh,outw,3)
    local cnt = 1
-   for h = 1,imgh,scale do
-      for w = 1,imgw,scale do
-         local _,dir = util.pose.localxy2globalray(p,i,w-1,h-1)
-         dirs[cnt]:copy(dir:narrow(1,1,3))
+   local inh = 0
+   local inw = 0
+   for h = 1,outh do
+      for w = 1,outw do
+         local _,dir = util.pose.localxy2globalray(p,i,inw,inh)
+         dirs[h][w]:copy(dir:narrow(1,1,3))
          cnt = cnt + 1
+         inw = inw + scale
       end
+      inh = inh + scale
+      inw = 0
    end
    return dirs
 end
 
-function compute_bbox()
+function load_dirs(p,i,scale,ps)
 
+   local imgw = p.w[i]
+   local imgh = p.h[i]
+
+   local outw = math.ceil(imgw/scale)
+   local outh = math.ceil(imgh/scale)
+
+   local cntrx = p.cntrx[i]
+   local cntry = p.cntry[i]
+
+   local dirscache   = cachedir .. 
+      imgw.."x"..imgh.."_-_"..
+      outw.."x"..outh.."_-_"..
+      cntrx.."x"..cntry
+
+   if ps then 
+      dirscache = dirscache .."_-_".. ps
+   end
+   dirscache = dirscache ..".t7"
+
+   local dirs = nil
+   if paths.filep(dirscache) then
+      sys.tic()
+      dirs = torch.load(dirscache)
+      printf("Loaded dirs from %s in %2.2fs", objfile, posecache, sys.toc())
+   else
+      if ps then 
+         dirs = grid_contiguous(compute_dirs(p,i,scale),ps,ps)
+      else
+         dirs = compute_dirs(p,i,scale)
+      end
+      torch.save(dirscache,dirs)
+      printf("Saving dirs to %s", dirscache)
+   end
+   return dirs
 end
 
-function build_BVH_tree ()
-   -- 1) all faces part of root node
-   -- 2) pick dimension to split
-   -- 3) intersect faces with 
-end
+      
 
 -- pt (point) is the intersection between the ray and the plane of the polygon
 -- verts are the vertices of the polygon
@@ -313,48 +366,6 @@ function point_in_polygon(pt,verts,dims)
    return inside
 end
 
--- old version of code takes precomputed slopes to speed things up
-function my_point_in_poly(pt,verts,slopes,dims)
-   local nverts = verts:size(1)
-   local x = dims[1]
-   local y = dims[2]
-   
-   -- move intersection to 0,0,0
-   for vi = 1,nverts do
-      verts[vi]:add(-1,pt)
-   end
-      
-   -- count crossings along 'y' axis : 
-   --   b in slope intercept line equation
-   local pvert = verts[nverts]
-   local count = false
-   for vi = 1,nverts do
-      local cvert = verts[vi]
-      --  compute y axis crossing (b = y - mx)
-      local s    = slopes[vi]
-      local b    = -math.huge
-      local cpos = 1
-      local ppos = 1
-      
-      -- vertical line only intersects if both points are zero
-      if (s == math.huge) then
-         if (math.abs(cvert[x]) < 1e-8) then
-            count = not count
-         end
-      else
-         b = cvert[y] -  s * cvert[x]
-         if (cvert[x] < 0) then cpos = -1 end
-         if (pvert[x] < 0) then ppos = -1 end
-         if (b >= 0) and ((cpos + ppos) == 0) then
-            count = not count
-         end
-      end
-      pvert = cvert
-   end
-   
-   return count 
-end
-
 -- takes a bunch of rays (pt, dirs) and a bunch of planes (normals,d)
 -- and computes the distance to all planes for each direction using
 -- matrix operations.
@@ -379,28 +390,30 @@ function fast_ray_plane_intersection(pt,dirs,normals,d)
    return distances
 end
 
-function fast_get_occlusions(p,pi,obj,scale)
+function fast_get_occlusions(p,pi,obj,scale,ps)
    local timer = torch.Timer.new()
 
    -- 1) set up local variables
-   local dirs  = compute_dirs(p,pi,scale)
+   local dirs = load_dirs(p,pi,scale,ps)
    local time0 = timer:time()
+
    printf("Compute dirs: %2.4fs",time0.real)
 
    local pt    = p.xyz[pi] -- select pose xyz
 
    -- output depth map
-   local dmap  = torch.Tensor(dirs:size(1)):fill(0)
+   local dmap  = torch.Tensor(dirs:size(1)*ps,dirs:size(2)*ps):fill(0)
 
+   -- FIXME pass obj to face intersection
    local norms           = obj.normals
    local d               = obj.d
    local face_verts      = obj.face_verts
    local nverts_per_face = obj.nverts_per_face
 
-   -- 2) precompute dominant dimensions and slopes for all edges of
+   -- 2) precompute dominant dimensions for all edges of
    -- all faces precompute the differences between consecutive face
    -- verts used for the line eq. when testing for intersection. FIXME
-   -- move this to a face object.
+   -- move this to a face object. FIXME move to obj.
 
    -- precompute the indexes of the dominant dimensions for each face 
    local nfaces = face_verts:size(1)
@@ -409,75 +422,93 @@ function fast_get_occlusions(p,pi,obj,scale)
       local _,ds = torch.sort(torch.abs(norms[i]))
       most_planar_normals[i]:copy(ds:narrow(1,1,2))
    end
---    -- precompute the slopes for each edge in the dominant dimensions
---    -- for that face
---    local slopes = torch.Tensor(face_verts:size(1),face_verts:size(2))
 
---    for si = 1,slopes:size(1) do
---       local fv = face_verts[si]
---       local ds = most_planar_normals[si] 
---       local pvert = fv[face_verts:size(2)]
---       for vi = 1,slopes:size(2) do 
---          local cvert = fv[vi]
---          local run = cvert[ds[1]] - pvert[ds[1]]
---          if math.abs(run) < 1e-8 then 
---             slopes[si][vi] = math.huge
---          else
---             slopes[si][vi] = (cvert[ds[2]] - pvert[ds[2]])/run
---          end
---          pvert = cvert
---       end
---    end
-
-   -- 3) compute face intersections
-   maxdirs = 128 * 512
-   di = 1 -- 32000-128
-   while (di < dirs:size(1)-maxdirs) do --32001-128) do -- 
-      
-      dmap:narrow(1,di,maxdirs):copy( 
-         fast_ray_face_intersection(pt,dirs:narrow(1,di,maxdirs),
-                                    norms,d,
-                                    face_verts,most_planar_normals,
-                                    slopes, nverts_per_face))
-      di = di + maxdirs
+   local orow = 1
+   local ocol = 1
+   local ray_packet = nil
+   for r = 1,dirs:size(1) do 
+      for c = 1,dirs:size(2) do 
+         printf("[%d][%d] of [%d][%d]",orow,ocol,dmap:size(1),dmap:size(2))
+         ray_packet = dmap:narrow(1,orow,ps):narrow(2,ocol,ps)
+         ray_packet:copy( 
+            fast_ray_face_intersection(pt,dirs[r][c],
+                                       norms,d,
+                                       face_verts,most_planar_normals,
+                                       nverts_per_face))
+         ocol = ocol + ps
+      end
+      orow = orow + ps
+      ocol = 1
    end
-   local left = dirs:size(1) - di + 1
-   if left > 0 then
-      dmap:narrow(1,di,left):copy( 
-         fast_ray_face_intersection(pt,dirs:narrow(1,di,left),
-                                    norms,d,
-                                    face_verts,most_planar_normals,
-                                    slopes,nverts_per_face))
-   end         
    
-   -- FIXME: make dirs rectangular
-   return dmap:resize(math.ceil(p.h[pi]/scale),math.ceil(p.w[pi]/scale))
+   return dmap
+end
+
+
+-- like unfold but produces contiguous chunks.
+-- start with a less general version which takes h,w,dims matrix as input and outputs
+-- r,c,s1*s2,dims as output
+function grid_contiguous (m,s1,s2)
+   local uf = m:unfold(1,s1,s1):unfold(2,s2,s2)
+   local out = torch.Tensor(uf:size(1),uf:size(2),uf:size(4)*uf:size(5),uf:size(3))
+   for r = 1,uf:size(1) do
+      for c = 1,uf:size(2) do
+         out[r][c]:copy(uf[r][c])
+      end
+   end
+   return out
+end
+
+function test_grid_contiguous()
+   print("Testing unfold contiguous")
+   local ww  = 4
+   local m   = torch.randn(32,32,3)
+   local ufm = grid_contiguous(m,ww,ww)
+   local err = 0
+   local errc = 0
+   for r = 1,ufm:size(1) do 
+      for c = 1,ufm:size(2) do 
+         local ow = m:narrow(1,1+(r-1)*ww,ww):narrow(2,1+(c-1)*ww,ww)            
+         if 1e-8 < torch.sum(ufm[r][c] - ow) then 
+            err = err + 1
+         end
+         if not ufm[r][c]:isContiguous() then
+            errc = errc + 1
+         end
+      end
+   end
+   local ntests = ufm:size(1)*ufm:size(2)
+   printf("-- %d/%d Errors/ %d/%d not contiguous ",err,ntests,errc,ntests)
 end
 
 
 function test_compute_dirs()
    print("Testing compute directions")
-   local pi = 1
-   local dirs = compute_dirs(poses,pi,scale)
-   local err  = 0
+   local pi    = 1
+   local scale = 4
+   local dirs  = compute_dirs(poses,pi,scale)
+   local err   = 0
    sys.tic()
-   local outh = poses.h[pi]/scale
-   local outw = poses.w[pi]/scale
+   local outh  = poses.h[pi]/scale
+   local outw  = poses.w[pi]/scale
    for h = 1,outh do
       for w = 1,outw do
          local pt,dir = util.pose.localxy2globalray(poses,pi,(w-1)*scale,(h-1)*scale)
-         err = err + torch.sum(torch.abs(dir:narrow(1,1,3) - dirs[(h-1)*outw + w]))
+         if torch.max(torch.abs(dir:narrow(1,1,3) - dirs[h][w])) > 1e-8 then
+            err = err + 1
+         end
       end
-      printf("-- Errors %2.2f in %2.2fs", err, sys.toc())
    end
+   printf("-- %d/%d Errors in %2.2fs", err, outh*outw, sys.toc())
 end
 
--- test_compute_dirs()
 
 function test_ray_plane_intersection()
    print("Testing ray plane intersections")
    local pi      = 1
    local dirs    = compute_dirs(poses,pi,scale)
+   dirs:resize(dirs:size(1)*dirs:size(2),3)
+
    local obj     = target
    local err     = 0
    local norms   = obj.normals
@@ -532,12 +563,12 @@ function test_ray_plane_intersection()
    end
    printf("-- Errors: %d in %2.2fs", nerr, sys.toc())
 end
--- test_ray_plane_intersection()
 
 function test_ray_face_intersection ()
    print("Testing ray face intersections")
    local pi    = 1
    local dirs  = compute_dirs(poses,pi,scale)
+   dirs = dirs:resize(dirs:size(1)*dirs:size(2),3)
    local obj   = target
    local err   = 0
    local norms = obj.normals
@@ -545,8 +576,17 @@ function test_ray_face_intersection ()
    local pt    = poses.xyz[pi] 
    local face_verts = obj.face_verts
    local nverts_per_face  = obj.nverts_per_face
-   -- dirs = dirs:narrow(1,57570,1)
-   slow_ds = torch.Tensor(dirs:size(1))
+
+   -- precompute the indexes of the dominant dimensions for each face 
+   local nfaces = face_verts:size(1)
+   local most_planar_normals = torch.IntTensor(nfaces,2)
+   for i = 1,nfaces do
+      local _,ds = torch.sort(torch.abs(norms[i]))
+      most_planar_normals[i]:copy(ds:narrow(1,1,2))
+   end
+
+   dirs      = dirs:narrow(1,57570,10)
+   slow_ds   = torch.Tensor(dirs:size(1))
    slow_fids = torch.IntTensor(dirs:size(1))
    sys.tic()
  
@@ -556,7 +596,9 @@ function test_ray_face_intersection ()
 
    fast_ds = fast_ray_face_intersection(pt,dirs,
                                         norms,d,
-                                        face_verts,nverts_per_face,
+                                        face_verts,
+                                        most_planar_normals,
+                                        nverts_per_face,
                                         slow_ds,slow_fids)   
    local errs = torch.abs(fast_ds - slow_ds)
    local err  = torch.max(errs)
@@ -564,13 +606,18 @@ function test_ray_face_intersection ()
                        errs:size(1))
 end
 
--- test_ray_face_intersection()
-
-
-for pi = 3,3 do -- #poses do
-   sys.tic()
-   dmap = fast_get_occlusions(poses,pi,target,scale)
-   printf("Computed fast occlusions in %2.4fs", sys.toc())
-
-   image.display(dmap)
+function run_all_tests()
+   test_grid_contiguous()
+   test_compute_dirs()
+   -- test_ray_plane_intersection()
+   test_ray_face_intersection()
 end
+run_all_tests()
+
+-- for pi = 4,4 do -- #poses do
+--    sys.tic()
+--    dmap = fast_get_occlusions(poses,pi,target,scale,packetsize)
+--    printf("Computed fast occlusions in %2.4fs", sys.toc())
+
+--    image.display(dmap)
+-- end
