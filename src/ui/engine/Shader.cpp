@@ -6,16 +6,14 @@
 
 #include "Shader.h"
 #include "Vectors.h"
-
-#include "config.h"
 #include "utils.h"
-#include "../qutil.h"
+#include "qutil.h"
 
 using namespace std;
 
 static const unsigned int MAX_LOG_SIZE = 4096;
 
-
+  
 Shader::Shader(const string& _fileName) : 
     __name(_fileName),
 		__vertFile(":/shaders/" + _fileName + ".vert"),
@@ -66,52 +64,10 @@ Shader::make(GLuint _var1, const string& _param1,
 	const char *vert;
 	const char *frag;
 	
-	static const string HEADER = 
-		"#version 150\n"
-		"struct sMaterialParams {"
-		" vec4 emission;"
-		" vec4 ambient;"
-		" vec4 diffuse;"
-		" vec4 specular;"
-		" float shininess;"
-		"};"
-		
-		"struct sLightParams {"
-		" vec4 ambient;"
-		" vec4 diffuse;"
-		" vec4 specular;"
-		" vec4 position;"
-		" float constantAttenuation;"
-		" float linearAttenuation;"
-		" float quadraticAttenuation;"
-		"};"
-		
-		"struct sLightModelParameters {"
-		" vec4 ambient;"
-		"};"
-		
-		"uniform vec4 sDefColor;"
-		"uniform mat4 sModelViewMatrix;"
-		"uniform mat4 sProjectionMatrix;"
-		"uniform mat4 sModelViewProjectionMatrix;"
-		"uniform mat3 sNormalMatrix;"
-		"uniform sMaterialParams sFrontMaterial;"
-		"uniform sLightParams sLightSource[7];"
-		"uniform sLightModelParameters sLightModel;\n";
-	
-	static const string VERTEX_HEADER =
-		"in vec4 sVertex;"
-		"in vec3 sNormal;"
-		"in vec2 sTexCoords;"
-		"smooth out vec2 sVaryingTexCoords;\n";
-	
-	static const string FRAGMENT_HEADER =
-		"out vec4 sFragColor;"
-		"smooth in vec2 sVaryingTexCoords;"
-		"uniform sampler2D textureUnit;"
-		"uniform sampler2D normalMap;"
-		"uniform sampler2D specularMap;";
-	
+  static const string HEADER = readResourceText(":/shaders/_header_common.shader");
+  static const string VERTEX_HEADER = readResourceText(":/shaders/_header_vert.shader");
+  static const string FRAGMENT_HEADER = readResourceText(":/shaders/_header_frag.shader");
+
 	if (!__vertFile.empty() && !__fragFile.empty()) {
     __vertCode = HEADER + VERTEX_HEADER + readResourceText(__vertFile.c_str());
     __fragCode = HEADER + FRAGMENT_HEADER + readResourceText(__fragFile.c_str());

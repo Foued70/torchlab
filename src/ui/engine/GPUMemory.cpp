@@ -1,10 +1,7 @@
 #include <iostream>
 
 #include "GPUMemory.h"
-
 #include "BufferObject.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;

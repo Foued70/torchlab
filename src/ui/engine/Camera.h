@@ -9,14 +9,6 @@
 
 class MatricesManager;
 
-/* Cameras types */
-typedef enum {
-	FPP		= 1,	// First Person Perspective, moves the "lookAt" point
-	TPP,			// up
-	SPHERICAL		// First Person Perspective, moves the "eye" point
-} cType;
-
-
 /**
  * WARNING
  * In the FPP camera __center is a vector, not the "lookAt" point.
@@ -31,7 +23,7 @@ public:
 	/**
 	 * Default ctor, camera in (0,0,0) position.
 	 */
-	Camera(const cType& = FPP);
+	Camera();
 	
 	/**
 	 * Ctor that gets camera's location coords.
@@ -40,7 +32,7 @@ public:
 	 * @param z Z coord.
 	 * @param type Camera type. FPP, TPP, SPHERICAL
 	 */
-	Camera(GLfloat, GLfloat, GLfloat, const cType& = FPP);
+	Camera(GLfloat, GLfloat, GLfloat);
 	
 	/**
 	 * Destructor just sends some output.
@@ -49,39 +41,35 @@ public:
 	
 	/**
 	 * GL_PROJECTION;
-	 * gluPerspective.
 	 * Called only when parameters change.
-	 * http://www.opengl.org/sdk/docs/man/xhtml/gluPerspective.xml
-	 * http://www.felixgers.de/teaching/jogl/gluPerspective.gif
 	 */
 	void setProjection();
 
 	/**
 	 * GL_MODELVIEW;
-	 * gluLookAt.
 	 * Called only when parameters change.
-	 * http://pyopengl.sourceforge.net/documentation/manual/gluLookAt.3G.html
-	 * http://www.toldo.info/roberto/LaboratorioGrafica/Slides/images/glulookat.gif
 	 */
-	void setView();
+  void setView();
+
+  void calcUp();
 
 	/**
-	 * Moves camera, 2-dimensional movement.
-	 * @param movX X axis.
-	 * @param movY Y axis.
-	 * @param movZ Z axis.
+	 * Moves the eye relative to the view/screen.
+	 * @param x horizontal.
+	 * @param y vertical.
+	 * @param z forward/back.
 	 */
-	void moveCamera(GLfloat, GLfloat, GLfloat);
+	void moveEye(GLfloat, GLfloat, GLfloat);
 
 	/**
-	 * Rotates the camera - mouse support.
+	 * Rotates the camera around center by relative x and y values.
 	 * @param x X rotation.
 	 * @param y Y rotation.
 	 * @param z Z rotation.
 	 */
-	void rotateCamera(GLfloat, GLfloat, GLfloat);
-
-	/**
+  void rotateAroundCenter(GLfloat _x, GLfloat _y);
+	
+  /**
 	 * Sets the "lookAt" point.
 	 * @param x X coord.
 	 * @param y Y coord.
@@ -90,31 +78,16 @@ public:
 	void lookAt(GLfloat, GLfloat, GLfloat);
 	
 	/**
-	 * Sets camera range in SPHERICAL mode.
-	 * @param range Range.
-	 */
-	void setRange(GLfloat _range) { __range = _range; }
-	
-	/**
 	 * @return The __eye's coords.
 	 */
-	sVector3D getEye();
+	Vector3 getEye();
 	
 	/**
 	 * @return The __center's coords.
 	 */
-	sVector3D getCenter();
+	Vector3 getCenter();
 	
-	/**
-	 * @return Range.
-	 */
-	GLfloat getRange() { return __range; }
-
-
 private:
-	
-	/* Camera type */
-	cType __type;
 	
 	/*** setProjection ***/
 	GLfloat __fovy;
@@ -124,25 +97,25 @@ private:
 	/*** setView ***/
 	
 	/* Camera's position */
-	sVector3D __eye;
+	Vector3 __eye;
 
 	/* LookAt position/vector */
-	sVector3D __center;
+	Vector3 __center;
 
-	/* Up vector, (0, 1, 0) by  default */
-	sVector3D __up;
+	/* Up vector, (0, 0, 1) */
+	Vector3 __up;
 	
 	/* Angle of the camera */
-	sVector3D __angle;
-	
-	/* Range of the SPHERICAL camera type */
-	GLfloat __range;
+	Vector3 __angle;
 	
 	/* Window dimensions */
 	GLsizei __windowHeight;
 	GLsizei __windowWidth;
 	
 	MatricesManager& __matrices;
+  
+  Vector3 rightDirection();
+  Vector3 lookDirection();
 };
 
 #endif // CAMERA_H

@@ -21,6 +21,9 @@ args = \
 	--with-modules \
 	--without-gslib \
 	--without-x \
+	--without-fontconfig \
+	--without-lzma \
+	--without-rsvg \
 	CC=$(install_root)/bin/gcc \
 	CXX=$(install_root)/bin/g++
 

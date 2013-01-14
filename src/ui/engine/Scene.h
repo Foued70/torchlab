@@ -57,7 +57,7 @@ public:
 	 * @param z Z coord.
 	 * @return Pointer to the newly created camera.
 	 */
-	Camera * createCamera(GLfloat, GLfloat, GLfloat, const cType& = FPP);
+	Camera * createCamera(GLfloat, GLfloat, GLfloat);
 	
 	/**
 	 * Sets the active camera pointer to the camera given as an argument.

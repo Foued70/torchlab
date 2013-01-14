@@ -25,9 +25,9 @@ public:
 	 * 				in ShaderDataHandler class.
 	 * @param value Value of the uniform variable.
 	 */
-	void updateData(const std::string&, const sVector2D&);
-	void updateData(const std::string&, const sVector3D&);
-	void updateData(const std::string&, const sVector4D&);
+	void updateData(const std::string&, const Vector2&);
+	void updateData(const std::string&, const Vector3&);
+	void updateData(const std::string&, const Vector4&);
 	void updateData(const std::string&, GLfloat);
 	void updateSampler2D(const std::string&, GLint);
 	
@@ -51,11 +51,11 @@ public:
 	 */
 	void __sendDataToShader(const Shader*);
 	
-	std::map< std::string, sVector2D > __2Dvectors;
+	std::map< std::string, Vector2 > __2Dvectors;
 	
- 	std::map< std::string, sVector3D > __3Dvectors;
+ 	std::map< std::string, Vector3 > __3Dvectors;
 	
-	std::map< std::string, sVector4D > __4Dvectors;
+	std::map< std::string, Vector4 > __4Dvectors;
 	
 	std::map< std::string, GLfloat > __values;
 	

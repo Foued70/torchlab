@@ -1,10 +1,7 @@
 #include <vector>
 
 #include "Scene.h"
-
 #include "ShaderDataHandler.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;
@@ -73,8 +70,8 @@ Scene::getObjectByName(const string &_name) {
 }
 
 Camera *
-Scene::createCamera(GLfloat _x, GLfloat _y, GLfloat _z, const cType &_cType) {
-	Camera *newCamera = new Camera(_x, _y, _z, _cType);
+Scene::createCamera(GLfloat _x, GLfloat _y, GLfloat _z) {
+	Camera *newCamera = new Camera(_x, _y, _z);
 	if (!__activeCamera) {
 		__activeCamera = newCamera;
 		__activeCamera -> setProjection(); // sets "seeing" parameters
@@ -101,7 +98,7 @@ Scene::setActiveCamera(Camera *_camera, bool _checking) {
 
 Light *
 Scene::createLight(GLfloat _x, GLfloat _y, GLfloat _z) {
-	Light* newLight = new Light(sVector3D({_x, _y, _z}));
+	Light* newLight = new Light(Vector3({_x, _y, _z}));
 	__lightList.push_back(newLight);
 	return newLight;
 }

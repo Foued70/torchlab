@@ -7,8 +7,6 @@
 #include <unistd.h>
 
 #include "Engine.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;
@@ -98,7 +96,7 @@ void Engine::render(Scene* scene) {
   //   glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
   //   checkGLErrors(AT);
   
-  glEnable(GL_MULTISAMPLE_ARB);
+  glEnable(GL_MULTISAMPLE);
   checkGLErrors(AT);
 	
   scene -> show();

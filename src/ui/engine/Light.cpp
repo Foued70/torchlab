@@ -1,10 +1,7 @@
 #include <iostream>
 
 #include "Light.h"
-
 #include "ShaderDataHandler.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;
@@ -19,7 +16,7 @@ Light::Light() :
 	log(CONSTRUCTOR, "Light (0, 0, 0) constructed.");
 }
 
-Light::Light(const sVector3D &_position) :
+Light::Light(const Vector3 &_position) :
 		__working(true),
 		__ambientLight({1.0, 1.0, 1.0, 0.0}),
 		__diffuseLight({1.0, 1.0, 1.0, 0.0}),
@@ -65,13 +62,13 @@ Light::setSpecular(const sColor& _col) {
 }
 
 void
-Light::setSrcPos(const sVector3D& _pos) {
+Light::setSrcPos(const Vector3& _pos) {
 	__lightSrc = _pos;
 	log(PARAM, "Light source set (%f, %f, %f).", _pos.x, _pos.y, _pos.z);
 }
 
 void
-Light::move(const sVector3D& _mov) {
+Light::move(const Vector3& _mov) {
 	__lightSrc += _mov;
 }
 
@@ -88,7 +85,7 @@ Light::makeLight(unsigned _count) const {
 	__shaders.updateData("sLightSource[" + c + "].ambient", __ambientLight);
 	__shaders.updateData("sLightSource[" + c + "].diffuse", __diffuseLight);
 	__shaders.updateData("sLightSource[" + c + "].specular", __specularLight);
-	__shaders.updateData("sLightSource[" + c + "].position", sVector4D( {
+	__shaders.updateData("sLightSource[" + c + "].position", Vector4( {
 			__lightSrc[0],
 			__lightSrc[1],
 			__lightSrc[2],

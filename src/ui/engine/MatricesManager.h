@@ -31,7 +31,7 @@ public:
 	 * @param center The reference point position.
 	 * @param up The UP Vector.
 	 */
-	void sLookAt(const sVector3D&, const sVector3D&, const sVector3D&);
+	void sLookAt(const Vector3&, const Vector3&, const Vector3&);
 	
 	/**
 	 * Sets a perspective projection matrix.
@@ -65,7 +65,7 @@ public:
 	 * http://www.opengl.org/sdk/docs/man/xhtml/glTranslate.xml
 	 * @param trans Translation vector.
 	 */
-	void translate(const sVector3D&);
+	void translate(const Vector3&);
 	
 	/**
 	 * Scale along the x, y and z axes. The current ModelView Matrix is being
@@ -73,7 +73,7 @@ public:
 	 * http://www.opengl.org/sdk/docs/man/xhtml/glScale.xml
 	 * @param scale Scale vector.
 	 */
-	void scale(const sVector3D&);
+	void scale(const Vector3&);
 	
 	/**
 	 * Procudes a rotation of {x,y,z}-angle along {x,y,z}-axis. The current

@@ -18,6 +18,9 @@ deps: build
 	cd vendor/qt; make
 	cd vendor/vtk; make
 	cd vendor/pcl; make
+	cd vendor/imagemagick; make
+	cd vendor/jpeg; make
+	cd vendor/torch; make
 
 build: 
 	mkdir -p build

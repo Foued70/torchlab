@@ -21,6 +21,7 @@ protected:
   void paintGL();
   void mousePressEvent(QMouseEvent *event);
   void mouseMoveEvent(QMouseEvent *event);
+  void wheelEvent(QWheelEvent* event);
   void keyPressEvent(QKeyEvent *event);
   
 private:
@@ -34,10 +35,11 @@ private:
   GLuint m_vertexBuffer;
   GLuint m_shader;
 
-  float camera_x, camera_y, camera_z;
-  
   Engine* engine;
   Scene* scene;
+  
+  int dragStartX;
+  int dragStartY;
 };
 
 #endif  /* _SCAN_WIDGET_H */

@@ -1,7 +1,5 @@
 #include "TextureManager.h"
 #include "Texture.h"
-
-#include "config.h"
 #include "utils.h"
 
 using namespace std;

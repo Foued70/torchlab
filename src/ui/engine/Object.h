@@ -154,9 +154,9 @@ protected:
 	/* Vectors that the ModelView Matrix will be
 	 * multiplied by in MatricesManager::translate, ::rotate
 	 * and ::scale. */
-	sVector3D __mov;
-	sVector3D __rot;
-	sVector3D __scale;
+	Vector3 __mov;
+	Vector3 __rot;
+	Vector3 __scale;
 	
 	/* A pointer to object's shader */
 	Shader * __shader;

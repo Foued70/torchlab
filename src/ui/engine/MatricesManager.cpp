@@ -2,9 +2,7 @@
 #include <iostream>
 
 #include "MatricesManager.h"
-
 #include "utils.h"
-#include "config.h"
 
 using namespace std;
 
@@ -20,22 +18,19 @@ MatricesManager::MatricesManager() {
 }
 
 void
-MatricesManager::sLookAt(const sVector3D& _eye, const sVector3D& _center, const sVector3D& _up) {
-	/* http://pyopengl.sourceforge.net/documentation/manual/gluLookAt.3G.html */
-	sVector3D f = _center - _eye;
-	f.normalize();
-	sVector3D s = normalOfPlane(f, _up);
-	s.normalize();
-	sVector3D u = normalOfPlane(s, f);
-	f *= -1;
+MatricesManager::sLookAt(const Vector3& _eye, const Vector3& _center, const Vector3& _up) {
+	Vector3 dir = _center - _eye;
+	dir.normalize();
+	Vector3 perpUpDir = cross(dir, _up);
+	perpUpDir.normalize();
+	Vector3 up = cross(perpUpDir, dir);
+	dir *= -1;
 	
 	__modelViewMatrix.loadIdentity();
 	
-	__modelViewMatrix.setRow(0, s);
-	__modelViewMatrix.setRow(1, u);
-	__modelViewMatrix.setRow(2, f);
-	
-	__modelViewMatrix[15] = 1;
+	__modelViewMatrix.setRow(0, perpUpDir);
+	__modelViewMatrix.setRow(1, up);
+	__modelViewMatrix.setRow(2, dir);
 	
 	sMat16 translation;
 	translation.loadIdentity();
@@ -48,9 +43,7 @@ MatricesManager::sLookAt(const sVector3D& _eye, const sVector3D& _center, const 
 
 void
 MatricesManager::sPerspective(GLfloat _fovy, GLfloat _aspect, GLfloat _zNear, GLfloat _zFar) {
-	/* http://www.opengl.org/sdk/docs/man/xhtml/gluPerspective.xml */
-	if (_zNear == 0)
-		return;
+	if (_zNear == 0) return;
 	
 	__projectionMatrix.loadIdentity();
 	
@@ -80,7 +73,7 @@ MatricesManager::sOrtho(GLfloat _left, GLfloat _right,
 }
 
 void
-MatricesManager::translate(const sVector3D& _trans) {
+MatricesManager::translate(const Vector3& _trans) {
 	sMat16 temp;
 	temp.loadIdentity();
 	temp.setColumn(3, _trans);
@@ -89,7 +82,7 @@ MatricesManager::translate(const sVector3D& _trans) {
 }
 
 void
-MatricesManager::scale(const sVector3D& _scale) {
+MatricesManager::scale(const Vector3& _scale) {
 	sMat16 temp;
 	temp[0] = _scale.x;
 	temp[5] = _scale.y;
@@ -111,16 +104,16 @@ MatricesManager::rotate(GLfloat _angle, Axis _axis) {
 	
 	double anti_c = 1 - c;
 	
-	sVector3D rot;
+	Vector3 rot;
 	switch (_axis) {
 		case X:
-			rot = sVector3D({1.0, 0.0, 0.0});
+			rot = Vector3({1.0, 0.0, 0.0});
 			break;
 		case Y:
-			rot = sVector3D({0.0, 1.0, 0.0});
+			rot = Vector3({0.0, 1.0, 0.0});
 			break;
 		case Z:
-			rot = sVector3D({0.0, 0.0, 1.0});
+			rot = Vector3({0.0, 0.0, 1.0});
 			break;
 	}
 	

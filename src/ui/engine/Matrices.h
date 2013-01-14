@@ -10,7 +10,7 @@
 
 /*
  * This matrix is a column-order matrix, as OpenGL prefers.
- * It is continuous in the memory.
+ * It is continuous in memory.
  */
 template < typename T, int N >
 class sMatrix {
@@ -68,28 +68,46 @@ public:
 	}
 	
 	inline T determinant() {
-		if (N == 1)
+		if (N == 1) {
 			return __data[0];
-		if (N == 2)
+    }
+		if (N == 2) {
 			return (__data[0] * __data[3]) - (__data[2] * __data[1]);
-		if (N == 3)
-			return ((__data[0] * __data[4] * __data[8]) + (__data[3] * __data[7] * __data[2]) + (__data[6] * __data[1] * __data[5]))
-				- ((__data[6] * __data[4] * __data[2]) + (__data[3] * __data[1] * __data[8]) + (__data[0] * __data[7] * __data[5]));
-		
+    }
+		if (N == 3) {
+			return determinant3x3();
+    }
+		if (N == 4) {
+  		int det = 0;
+  		for (int j = 0; j < 4; ++j) {
+  			if (j % 2 == 0) 
+  				det += at(0, j) * getMinor(0, j).determinant3x3();
+  			else
+  				det -= at(0, j) * getMinor(0, j).determinant3x3();
+  		}
+  		return det;
+		}
 	}
+  
+  /* This exists to prevent determinant from being recursive, which requires getMinor<N-1> to decrement
+     forever in the compiler and fail to compile */
+  inline T determinant3x3() {
+		return ((__data[0] * __data[4] * __data[8]) + (__data[3] * __data[7] * __data[2]) + (__data[6] * __data[1] * __data[5]))
+			- ((__data[6] * __data[4] * __data[2]) + (__data[3] * __data[1] * __data[8]) + (__data[0] * __data[7] * __data[5]));
+  }
 	
 	/* Counting form 0 - not like in minors in general */
 	inline sMatrix< T, N - 1 > getMinor(int _i, int _j) {
 		sMatrix< T, N - 1 > result;
 		int idx = 0;
 		
-		for (int i = 0; i < N; ++i) {
-			if (i == _j)
+		for (int j = 0; j < N; ++j) {
+			if (j == _j)
 				continue;
-			for (int j = 0; j < N; ++j) {
-				if (j == _i)
+			for (int i = 0; i < N; ++i) {
+				if (i == _i)
 					continue;
-				result[idx++] = at(j, i);
+				result[idx++] = at(i, j);
 			}
 		}
 		
@@ -99,8 +117,7 @@ public:
 	friend std::ostream& operator <<(std::ostream& _result, const sMatrix< T, N >& _orig) {
 		for (int i = 0; i < N; ++i) {
 			for (int j = 0; j < N; ++j) {
-				if (_orig.at(i, j) >= 0)
-					_result << " ";
+				if (_orig.at(i, j) >= 0) _result << " ";
 				_result << _orig.at(i, j) << "\t";
 			}
 			_result << "\n";
@@ -183,161 +200,6 @@ public:
 };
 
 typedef	sMatrix< float, 3 >	sMat9;
-
-template< typename T >
-class sMatrix< T, 4 > {
-
-private:
-	T	__data[16];
-	
-public:
-	sMatrix() {
-		memset(__data, 0, 4 * 4 * sizeof(T));
-	}
-	
-	// Let the GCC make the copy ctor
-	sMatrix(const sMatrix< T, 4 >& _orig) = default;
-	
-	sMatrix< T, 4 > & operator =(const sMatrix< T, 4 >&) = default;
-	
-	inline operator T*() {
-		return __data;
-	}
-	
-	inline operator const T*() const {
-		return __data;
-	}
-	
-	inline T& operator [](int _pos) {
-		assert(_pos < 16);
-		return __data[_pos];
-	}
-	
-	inline const T& operator [](int _pos) const {
-		assert(_pos < 16);
-		return __data[_pos];
-	}
-	
-	inline T& at(int _i, int _j) {
-		assert((_j < 4) && (_i < 4));
-		return __data[_j * 4 + _i];
-	}
-	
-	inline const T& at(int _i, int _j) const {
-		assert((_j < 4) && (_i < 4));
-		return __data[_j * 4 + _i];
-	}
-	
-	void loadIdentity() {
-		memset(__data, 0, 16 * sizeof(T));
-		for (int i = 0; i < 4; ++i)
-			__data[i * 4 + i] = 1;
-	}
-	
-	inline T determinant() {
-		int det = 0, i = 0;
-		for (int j = 0; j < 4; ++j) {
-			if ((i + j) % 2 == 0) 
-				det += at(i, j) * getMinor(i, j).determinant();
-			else
-				det -= at(i, j) * getMinor(i, j).determinant();
-		}
-		return det;
-		
-	}
-	
-	/* Counting form 0 - not like in minors in general */
-	inline sMatrix< T, 3 > getMinor(int _i, int _j) {
-		sMatrix< T, 3 > result;
-		int idx = 0;
-		
-		for (int i = 0; i < 4; ++i) {
-			if (i == _j)
-				continue;
-			for (int j = 0; j < 4; ++j) {
-				if (j == _i)
-					continue;
-				result[idx++] = at(j, i);
-			}
-		}
-		
-		return result;
-	}
-	
-	friend std::ostream& operator <<(std::ostream& _result, const sMatrix< T, 4 >& _orig) {
-		for (int i = 0; i < 4; ++i) {
-			for (int j = 0; j < 4; ++j)
-				_result << _orig.at(i, j) << "\t";
-			_result << "\n";
-		}
-		return _result;
-	}
-	
-	inline friend sMatrix< T, 4 > operator *(const sMatrix< T, 4 >& _a, const sMatrix< T, 4 >& _b) {
-		sMatrix< T, 4 > result;
-		for (int i = 0; i < 4; ++i)
-			for (int j = 0; j < 4; ++j) 
-				for (int idx = 0; idx < 4; ++idx)
-					result.at(i, j) += _a.at(i, idx) * _b.at(idx, j);
-		
-		
-		return result;	
-	}
-	
-	inline sMatrix< T, 4 >& operator *=(const sMatrix< T, 4 >& _b) {
-		*this = *this * _b;
-		return *this;
-	}
-	
-	/**
-	 * Sets the whole column in the matrix.
-	 * @param c Column to be replaced, counting from 0.
-	 * @param vector Vector with data.
-	 * @param offset Which row to start from. Default 0.
-	 */
-	template < typename D >
-	void setColumn(int _c, const sVectorBase< D >& _vector, unsigned _offset = 0) {
-		assert(_c < 4);
-		int v = 0;
-		for (unsigned i = _offset; i < _vector.size(); ++i, ++v)
-			at(i, _c) = _vector[v];
-	}
-	
-	/**
-	 * Sets the while row in the matrix.
-	 * @param r Row to be replaced, counting from 0.
-	 * @param vector Vector with data.
-	 * @param offset Which column to start from. Default 0.
-	 */
-	template < typename D >
-	void setRow(int _r, const sVectorBase< D >& _vector, unsigned _offset = 0) {
-		assert(_r < 4);
-		int v = 0;
-		for (unsigned i = _offset; i < _vector.size(); ++i, ++v)
-			at(_r, i) = _vector[v];
-	}
-	
-	/**
-	 * Calculates the matrix inversion.
-	 * @return Inverted matrix.
-	 */
-	inline sMatrix< T, 4 > inversion() {
-		sMatrix< T, 4 > result;
-		double det = (T)1.0 / determinant();
-		for (int j = 0; j < 4; ++j) {
-			for (int i = 0; i < 4; ++i) {
-				sMatrix< T, 3 > mMinor = getMinor(j, i);
- 				result.at(i, j) = det * mMinor.determinant();
-				if ((i + j) % 2 == 1)
-					result.at(i, j) = -result.at(i, j);
-			}
-		}
-		
-		return result;
-	}
-};
-	
-
 typedef	sMatrix< float, 4 >	sMat16;
 
 

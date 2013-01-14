@@ -119,8 +119,6 @@ private:
 	/* http://www.opengl.org/sdk/docs/man/xhtml/glDrawElements.xml */
 	GLenum __mode;
 	
-	GPUMemory& __gpu;
-	
 	bool __isShown;
 
 };
