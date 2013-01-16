@@ -129,7 +129,11 @@ Shader::make(GLuint _var1, const string& _param1,
 		glBindAttribLocation(__shaderProgram, _var2, _param2.c_str());
 	if (!_param3.empty())
 		glBindAttribLocation(__shaderProgram, _var3, _param3.c_str());
-
+	
+	// Hacky... TO DO: find all fragment shader outputs, and bind locations logically.
+	glBindFragDataLocation(__shaderProgram, 0, "sFragColor");
+	glBindFragDataLocation(__shaderProgram, 1, "triangleID");
+	
 	glLinkProgram(__shaderProgram);
 	checkGLErrors(AT);
 
@@ -149,6 +153,9 @@ Shader::make(GLuint _var1, const string& _param1,
 	log(SHADER, "Shader compiled. No errors reported.");
 	
 	__isCompiled = true;
+	
+	log(SHADER, "sFragColor bound to location: %d", (int)glGetFragDataLocation(__shaderProgram, "sFragColor"));
+	log(SHADER, "triangleID bound to location: %d", (int)glGetFragDataLocation(__shaderProgram, "triangleID"));
 	
 	return true;
 
@@ -233,4 +240,10 @@ Shader::setMatrixFloat(const string& _name, const sMat9& _matrix) const {
 	glUniformMatrix3fv(glGetUniformLocation(__shaderProgram, _name.c_str()), 1, GL_FALSE, _matrix);
 	checkGLErrors(AT);
 }
+
+GLint 
+Shader::getAttribLocation(const std::string& _name) const {
+	return glGetAttribLocation(__shaderProgram, _name.c_str());
+}
+
 

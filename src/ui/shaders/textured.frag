@@ -28,5 +28,6 @@ void main () {
 	}
 
 	sFragColor *= texture(textureUnit, sVaryingTexCoords.st);
+	triangleID = vec4(1.0, 0.0, 0.0, 0.0);
 	//sFragColor *= sDefColor;
 }

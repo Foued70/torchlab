@@ -38,4 +38,6 @@ void main () {
 	sFragColor = (vAmbient * base + 
 			vDiffuse * base + 
 			vSpecular) * att;
+			
+	triangleID = vec4(0.0, 1.0, 0.0, 0.0);
 }

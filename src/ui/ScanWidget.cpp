@@ -2,6 +2,7 @@
 #include "ScanWidget.h"
 #include "utils.h"
 #include "engine/Engine.h"
+#include "engine/FrameBuffer.h"
 
 #include <QtGui/QMouseEvent>
 #include <QDebug>
@@ -14,13 +15,15 @@
 
 ScanWidget::ScanWidget(const QGLFormat& format, QWidget* parent ) : QGLWidget( new Core3_2_context(format), parent ),
       vertexBuffer( QGLBuffer::VertexBuffer ),
-      polyBuffer(QGLBuffer::VertexBuffer)
+      polyBuffer(QGLBuffer::VertexBuffer),
+	  takeScreenShot(false)
 {
   setMouseTracking(false);
   engine = Engine::GetSingletonPtr();
 }
 
 ScanWidget::~ScanWidget() {
+	delete framebuffer;
 }
 
 
@@ -58,16 +61,36 @@ void ScanWidget::resizeGL(int w, int h) {
   glViewport(0, 0, w, h);
   
   scene -> getActiveCamera() -> setProjection();
+  
+  framebuffer = new FrameBuffer();
 }
 
 void ScanWidget::paintGL() {
-  engine -> render(scene);
+	framebuffer -> renderToTexture();
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+  	engine -> render(scene);
+  	framebuffer -> unbind();
+	
+	if( takeScreenShot ) {
+		takeScreenShot = false;
+		framebuffer -> saveToFile("frameBufferImage");
+	}
+
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+  	engine -> render(scene);
+	
+	//TO DO: take the baked texture and render it on a polygon for debugging
+	//framebuffer -> renderDebugTexture();
 }
 
 void ScanWidget::mousePressEvent(QMouseEvent* event) {
   // log(PARAM, "mousePressEvent %d %d (%d, %d)", event->button(), (int)event->buttons(), event->globalX(), event->globalY());
   dragStartX = event->globalX();
   dragStartY = event->globalY();
+  
+  log(WARN, "Framebuffer Pixel Value at %d, %d is: %d" , (int)dragStartX, (int)dragStartY, (int)framebuffer -> readPixel((GLint)dragStartX, (GLint)dragStartY));
 }
 void ScanWidget::mouseMoveEvent(QMouseEvent* event) {
   // log(PARAM, "mouseMoveEvent %d", (int)event->buttons());
@@ -100,7 +123,9 @@ void ScanWidget::keyPressEvent(QKeyEvent* event) {
     case Qt::Key_Escape:
       // close();
       break;
-      
+    case Qt::Key_Tab:
+		takeScreenShot = true;
+		break;
     case Qt::Key_Left:
       break;
     case Qt::Key_Right:
