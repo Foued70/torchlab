@@ -174,7 +174,7 @@ void FrameBuffer::renderToTexture()
 	bind();
 
 	GLenum attachments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
-	glDrawBuffers(3, attachments);
+  glDrawBuffers(3, attachments);
 }
 
 void FrameBuffer::renderDebugMesh()
@@ -218,7 +218,7 @@ void FrameBuffer::printInfo()
 
 GLint FrameBuffer::readPixel(GLint x, GLint y)
 {
-	GLuint* redValue = new GLuint[1];
+	GLuint redValue;
 	
 	glReadPixels(	x,
 				 	y,
@@ -226,11 +226,9 @@ GLint FrameBuffer::readPixel(GLint x, GLint y)
 					(GLsizei)1,
 					GL_RED,
 					GL_UNSIGNED_BYTE,
-					redValue );
+					&redValue );
 	
-	GLint output = (GLint)redValue[0];
-	delete redValue;
-	return output;
+	return redValue;
 }
 
 void FrameBuffer::saveToFile(const string& _filename)

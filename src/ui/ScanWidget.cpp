@@ -66,20 +66,20 @@ void ScanWidget::resizeGL(int w, int h) {
 }
 
 void ScanWidget::paintGL() {
-	framebuffer -> renderToTexture();
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 	glClearColor(1.0, 1.0, 1.0, 1.0);
-  	engine -> render(scene);
-  	framebuffer -> unbind();
+	engine -> render(scene);
 	
+  framebuffer -> renderToTexture();
+	framebuffer -> unbind();
 	if( takeScreenShot ) {
 		takeScreenShot = false;
 		framebuffer -> saveToFile("frameBufferImage");
 	}
 
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-	glClearColor(1.0, 1.0, 1.0, 1.0);
-  	engine -> render(scene);
+  // glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+  // glClearColor(1.0, 1.0, 1.0, 1.0);
+  //     engine -> render(scene);
 	
 	//TO DO: take the baked texture and render it on a polygon for debugging
 	//framebuffer -> renderDebugTexture();

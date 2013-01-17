@@ -11,7 +11,5 @@
         <file>shaders/shadow.frag</file>
         <file>shaders/textured.vert</file>
         <file>shaders/textured.frag</file>
-		<file>shaders/debugFBO.vert</file>
-		<file>shaders/debugFBO.frag</file>
     </qresource>
 </RCC>
