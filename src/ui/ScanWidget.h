@@ -8,6 +8,9 @@
 #include "engine/Engine.h"
 #include "engine/Scene.h"
 
+
+class FrameBuffer;
+
 class ScanWidget : public QGLWidget {
   Q_OBJECT // must include this if you use Qt signals/slots
 
@@ -37,6 +40,8 @@ private:
 
   Engine* engine;
   Scene* scene;
+  FrameBuffer* framebuffer;
+  bool takeScreenShot;
   
   int dragStartX;
   int dragStartY;

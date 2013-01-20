@@ -82,6 +82,12 @@ public:
 	 */
 	void setMatrixFloat(const std::string&, const sMat16&) const;
 	void setMatrixFloat(const std::string&, const sMat9&) const;
+	
+	/**
+	* Used to lookup the location of a specifed attribute in the shader.
+	* @param name Name of attribute in shader
+	*/
+	GLint getAttribLocation(const std::string&) const;
 
 private:
   std::string __name;
