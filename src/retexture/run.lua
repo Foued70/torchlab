@@ -4,7 +4,6 @@ require 'paths'
 require 'math'
 require 'util'
 
-
 local geom = util.geom
 -- top level filenames
 
@@ -51,11 +50,11 @@ function loadcache (objfile,cachefile,loader,args)
    if (paths.filep(cachefile)) then
       sys.tic()
       object = torch.load(cachefile)
-      printf("Loaded %s from %s in %2.2fs\n", objfile, cachefile, sys.toc())
+      printf("Loaded %s from %s in %2.2fs", objfile, cachefile, sys.toc())
    else
       object = loader(objfile,args)
       torch.save(cachefile,object)
-      printf("Saving %s to %s\n", objfile, cachefile)
+      printf("Saving %s to %s", objfile, cachefile)
    end
    return object
 end
@@ -120,8 +119,6 @@ function get_occlusions(pt,dir,obj)
    return d,fid
 end
 
-
-
 function fast_ray_face_intersection(pt,dirs,
                                     norms,d,
                                     face_verts,most_planar_normals,
@@ -148,7 +145,7 @@ function fast_ray_face_intersection(pt,dirs,
    -- nfaces x ndirections
    local distances = fast_ray_plane_intersection(pt,dirs,norms,d)
    local time0 = timer:time()
-   printf("Compute distances: %2.4fs\n",time0.real)
+   printf("Compute distances: %2.4fs",time0.real)
 
    -- angle between plane_norms and direction
    -- angles < 0 and at inf can be skipped
@@ -160,13 +157,13 @@ function fast_ray_face_intersection(pt,dirs,
    valid = torch.gt(dists,0):cmul(torch.lt(dists,1000))
    vsum  = valid:sum(1):squeeze()
    local time1 = timer:time()
-   printf("Multiply and sort: %2.4fs\n",time1.real-time0.real)
+   printf("Multiply and sort: %2.4fs",time1.real-time0.real)
 
    local nfaces = face_verts:size(1)
    local temp_verts = torch.Tensor(face_verts:size(2),face_verts:size(3))
    
    local time2 = timer:time()
-   printf("Compute planar norms: %2.4fs\n",time2.real-time1.real)
+   printf("Compute planar norms: %2.4fs",time2.real-time1.real)
 
 
    local time_3_1 = timer:time()
@@ -232,27 +229,27 @@ function fast_ray_face_intersection(pt,dirs,
          print(index:select(2,i))
          -- print(dists:select(2,i))
          --print(distances:select(2,i))
-         printf("[%d][%d]\n",i,j)
+         printf("[%d][%d]",i,j)
          local idx = j
          if not found then
-            printf("Intersection for direction %d NOT FOUND\n",i)
+            printf("Intersection for direction %d NOT FOUND",i)
          else
             idx = index[j][i] 
          end
-         printf("dir: %d face: %d <-> %d %2.4f <-> %2.4f = %2.4f visited: %d\n", 
+         printf("dir: %d face: %d <-> %d %2.4f <-> %2.4f = %2.4f visited: %d", 
                 i, idx, fid[idx], 
                 dmap[i], groundt[i], dmap[i] - groundt[i], 
                 visited)
       end
    end -- for each direction 
    local time4 = timer:time()
-   printf(" - scanning              : %2.4fs\n",acc3_2)
-   printf(" - setup                 : %2.4fs\n",acc3_3)
-   printf(" - point in polygon(new) : %2.4fs\n",acc3_4)
-   printf(" - scan + intersect outer: %2.4fs\n",acc3_5)
-   printf("total face intersections : %2.4fs\n",time4.real-time2.real)
-   printf("    ***   TOTAL  ***     : %2.4fs\n",time4.real)
-   printf("visits per ray: %2.2f\n",visits/distances:size(2))
+   printf(" - scanning              : %2.4fs",acc3_2)
+   printf(" - setup                 : %2.4fs",acc3_3)
+   printf(" - point in polygon(new) : %2.4fs",acc3_4)
+   printf(" - scan + intersect outer: %2.4fs",acc3_5)
+   printf("total face intersections : %2.4fs",time4.real-time2.real)
+   printf("    ***   TOTAL  ***     : %2.4fs",time4.real)
+   printf("visits per ray: %2.2f",visits/distances:size(2))
    return dmap
 
 end
@@ -323,7 +320,7 @@ function load_dirs(p,i,scale,ps)
    if paths.filep(dirscache) then
       sys.tic()
       dirs = torch.load(dirscache)
-      printf("Loaded dirs from %s in %2.2fs\n", objfile, posecache, sys.toc())
+      printf("Loaded dirs from %s in %2.2fs", objfile, posecache, sys.toc())
    else
       if ps then 
          dirs = grid_contiguous(compute_dirs(p,i,scale),ps,ps)
@@ -331,7 +328,7 @@ function load_dirs(p,i,scale,ps)
          dirs = compute_dirs(p,i,scale)
       end
       torch.save(dirscache,dirs)
-      printf("Saving dirs to %s\n", dirscache)
+      printf("Saving dirs to %s", dirscache)
    end
    return dirs
 end
@@ -437,7 +434,7 @@ function test_point_in_polygon()
          err = err + 1
       end
    end
-   printf("-- %d/%d Errors\n", err,npts*3)
+   printf("-- %d/%d Errors", err,npts*3)
 end
 
 -- takes a bunch of rays (pt, dirs) and a bunch of planes (normals,d)
@@ -471,7 +468,7 @@ function fast_get_occlusions(p,pi,obj,scale,ps)
    local dirs = load_dirs(p,pi,scale,ps)
    local time0 = timer:time()
 
-   printf("Compute dirs: %2.4fs\n",time0.real)
+   printf("Compute dirs: %2.4fs",time0.real)
 
    local pt    = p.xyz[pi] -- select pose xyz
 
@@ -502,7 +499,7 @@ function fast_get_occlusions(p,pi,obj,scale,ps)
    local ray_packet = nil
    for r = 1,dirs:size(1) do 
       for c = 1,dirs:size(2) do 
-         printf("[%d][%d] of [%d][%d]\n",orow,ocol,dmap:size(1),dmap:size(2))
+         printf("[%d][%d] of [%d][%d]",orow,ocol,dmap:size(1),dmap:size(2))
          ray_packet = dmap:narrow(1,orow,ps):narrow(2,ocol,ps)
          ray_packet:copy( 
             fast_ray_face_intersection(pt,dirs[r][c],
@@ -552,7 +549,7 @@ function test_grid_contiguous()
       end
    end
    local ntests = ufm:size(1)*ufm:size(2)
-   printf("-- %d/%d Errors/ %d/%d not contiguous \n",err,ntests,errc,ntests)
+   printf("-- %d/%d Errors/ %d/%d not contiguous ",err,ntests,errc,ntests)
 end
 
 
@@ -573,7 +570,7 @@ function test_compute_dirs()
          end
       end
    end
-   printf("-- %d/%d Errors in %2.2fs\n", err, outh*outw, sys.toc())
+   printf("-- %d/%d Errors in %2.2fs", err, outh*outw, sys.toc())
 end
 
 
@@ -665,12 +662,12 @@ function test_ray_plane_intersection()
       end
    end
    local ntests = norms:size(1) * dirs:size(1)
-   printf("-- Errors ( in %2.2fs) \n", sys.toc())
-   printf("-- Dot            : %d/%d\n", dperr, ntests)
-   printf("-- Inv Dot        : %d/%d\n", idoterr, ntests)
-   printf("-- Initial t      : %d/%d\n", initerr, ntests)
-   printf("-- by hand dists  : %d/%d\n", finerr, ntests)
-   printf("-- geom.ray_plane : %d/%d\n", nerr, ntests)
+   printf("-- Errors ( in %2.2fs) ", sys.toc())
+   printf("-- Dot            : %d/%d", dperr, ntests)
+   printf("-- Inv Dot        : %d/%d", idoterr, ntests)
+   printf("-- Initial t      : %d/%d", initerr, ntests)
+   printf("-- by hand dists  : %d/%d", finerr, ntests)
+   printf("-- geom.ray_plane : %d/%d", nerr, ntests)
 end
 
 function test_ray_face_intersection ()
@@ -710,7 +707,7 @@ function test_ray_face_intersection ()
                                         slow_ds,slow_fids)   
    local errs = torch.abs(fast_ds - slow_ds)
    local err  = torch.max(errs)
-   printf("-- %d/%d Errors\n",torch.sum(torch.gt(errs,1e-8)),
+   printf("-- %d/%d Errors",torch.sum(torch.gt(errs,1e-8)),
                        errs:size(1))
 end
 
@@ -744,7 +741,7 @@ end
 -- for pi = 4,4 do -- #poses do
 --    sys.tic()
 --    dmap = fast_get_occlusions(poses,pi,target,scale,packetsize)
---    printf("Computed fast occlusions in %2.4fs\n", sys.toc())
+--    printf("Computed fast occlusions in %2.4fs", sys.toc())
 
 --    image.display(dmap)
 -- end
