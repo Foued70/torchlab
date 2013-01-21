@@ -4,10 +4,7 @@ require 'dok'
 util.geom = {}
 local geom = util.geom
 
-local axes = torch.Tensor(3,3)
-for i = 1,3 do
-   axes[i][i] = 1
-end
+local axes   = torch.eye(3)
 
 local x_axis = axes[1]
 local y_axis = axes[2]
@@ -65,22 +62,14 @@ end
 
 function geom.largest_rotation (normal)
    local n   = normal:narrow(1,1,3)
-   local p   = torch.Tensor(3):copy(n):abs()
+   local p   = n:clone():abs()
    local v,i = p:sort()
-   local d   = i[#i]
+   local d   = i[-1]
    local a   = axes[d]
    if (n[d] < 0) then
       a = a * -1
    end
    return geom.axis_rotation(n,a),d
-end
-
-function geom.quat_conjugate(quat,res)
-   if (not res) then
-      res = torch.Tensor(quat:size()):copy(quat)
-   end
-   res:narrow(1,1,3):mul(-1)
-   return res
 end
 
 function geom.rotation_matrix(quaternion, res)
@@ -108,42 +97,6 @@ function geom.rotation_matrix(quaternion, res)
    return res
 end
 
--- rotate vector by quaternion 
--- this is an optimized version of 30 ops which we will move C
--- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
-function geom.rotate_by_quat(...)
-   local res,v,q
-   local args = {...}
-   local nargs = #args
-   if nargs == 3 then
-      res = args[1]
-      v   = args[2]
-      q   = args[3]
-   elseif nargs == 2 then
-      v   = args[1]
-      q   = args[2]
-      res = torch.Tensor(4)
-   else
-      print(dok.usage('rotate_by_quat',
-                      'rotate a vector by quaternion', 
-                      '> returns: rotated vector',
-                      {type='torch.Tensor', help='result'},
-                      {type='torch.Tensor', help='vector', req=true},
-                      {type='torch.Tensor', help='quaternion',   req=true}))
-      dok.error('incorrect arguements', 'rotate_by_quat')
-   end
-   -- FIXME make this lowlevel C and add possibility to rotate a set of vectors
-   local x1 = q[2]*v[3] - q[3]*v[2]
-   local y1 = q[3]*v[1] - q[1]*v[3]
-   local z1 = q[1]*v[2] - q[2]*v[1]
-
-   res[1] = v[1] + 2 * (q[4]*x1 + q[2]*z1 - q[3]*y1)
-   res[2] = v[2] + 2 * (q[4]*y1 + q[3]*x1 - q[1]*z1)
-   res[3] = v[3] + 2 * (q[4]*z1 + q[1]*y1 - q[2]*x1)
-   res[4] = 0
-   return res
-end
-
 -- rotate vector by rotation matrix
 function geom.rotate_by_mat(...)
    local res,vec,mat
@@ -167,6 +120,63 @@ function geom.rotate_by_mat(...)
       dok.error('incorrect arguements', 'rotate_by_mat')
    end
    res:addmv(0,1,mat,vec)
+   return res:narrow(1,1,3)
+end
+
+-- rotate vector by quaternion 
+-- this is an optimized version of 30 ops which we will move C
+-- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+function geom.rotate_by_quat(...)
+   local res,v,q
+   local args = {...}
+   local nargs = #args
+   if nargs == 3 then
+      res = args[1]
+      v   = args[2]
+      q   = args[3]
+   elseif nargs == 2 then
+      v   = args[1]
+      q   = args[2]
+      res = torch.Tensor(3)
+   else
+      print(dok.usage('rotate_by_quat',
+                      'rotate a vector by quaternion', 
+                      '> returns: rotated vector',
+                      {type='torch.Tensor', help='result'},
+                      {type='torch.Tensor', help='vector', req=true},
+                      {type='torch.Tensor', help='quaternion',   req=true}))
+      dok.error('incorrect arguements', 'rotate_by_quat')
+   end
+   -- FIXME make this lowlevel C and add possibility to rotate a set of vectors
+   local x1 = q[2]*v[3] - q[3]*v[2]
+   local y1 = q[3]*v[1] - q[1]*v[3]
+   local z1 = q[1]*v[2] - q[2]*v[1]
+
+   res[1] = v[1] + 2 * (q[4]*x1 + q[2]*z1 - q[3]*y1)
+   res[2] = v[2] + 2 * (q[4]*y1 + q[3]*x1 - q[1]*z1)
+   res[3] = v[3] + 2 * (q[4]*z1 + q[1]*y1 - q[2]*x1)
+   return res
+end
+
+function geom.quat_conjugate(quat,res)
+   if (not res) then
+      res = quat:clone()
+   end
+   res:narrow(1,1,3):mul(-1)
+   return res
+end
+
+-- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
+-- FIXME test cases
+function geom.quat_product(quat1,quat2,res)
+   if (not res) then
+      res = torch.Tensor(4)
+   end
+   local v1 = quat1:narrow(1,1,3)
+   local v2 = quat2:narrow(1,1,3)
+   local vres = res:narrow(1,1,3)
+   vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
+   res[4] = quat1[4]*quat2[4] - v1:dot(v2)
    return res
 end
 
