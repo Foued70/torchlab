@@ -308,8 +308,8 @@ end
 -- + ----------------
 -- create_uvs()
 function create_uvs (fid,obj,rot,trans,dims,xrange,yrange)
-   local face_verts = obj.face_verts
-   local uv = torch.Tensor(face_verts:size(1),2)
+   local face_verts = obj.face_verts[fid]
+   local uv         = obj.uv[fid]
 
    for vi = 1,face_verts:size(1) do 
       local vtrans = face_verts[vi] - trans
@@ -321,7 +321,7 @@ function create_uvs (fid,obj,rot,trans,dims,xrange,yrange)
 end
 
 
-function retexture (fid,obj)
+function retexture (fid,obj,debug)
    
    -- Retexture Algo:
    
@@ -347,8 +347,15 @@ function retexture (fid,obj)
    local alpha  = torch.zeros(nposes)
    local color  = torch.zeros(nposes,3)
    local v      = torch.zeros(3)
-
-   fimg = torch.zeros(3,heightpx,widthpx)
+   if not obj.uv then
+      obj.uv = torch.Tensor(obj.face_verts:size(1),obj.face_verts:size(2),2)
+   end
+   local uv = obj.uv
+   if not obj.textures then 
+      obj.textures = {}
+   end
+   -- texture image
+   local fimg = torch.zeros(3,heightpx,widthpx)
 
    -- 4) loop through the 2D texture. FIXME optimize using ray packets.
    local y = yrange[1]
@@ -376,7 +383,7 @@ function retexture (fid,obj)
             -- and bottom 0px for matterport textures)
             if (((px < 0) or (px >= timg:size(3))) or 
              (py < vertbuffer) or (py >= (timg:size(2) - vertbuffer))) then
-               printf("[%d] out of range skipping",pid)
+               if debug then printf("[%d] out of range skipping",pid) end
             else
                -- check occlusion (look up in ray traced pose mask)
                -- FIXME 
@@ -408,12 +415,27 @@ function retexture (fid,obj)
       y = y + dy
    end -- end h
 
-   -- 6) save out new texture file
+   -- 6) store new texture file
+   obj.textures[fid] = fimg
    image.display{image=fimg,min=0,max=1}
    local fname = string.format("out-%05d.png",fid)
-   printf("Saving: %s", fname)
+   printf("Saving: texture %s", fname)
    image.save(fname,fimg)
 
    -- 7) Remap UVs: rotate each vertex into the coordinates of the new texture
-   --    (See. func remap_uvs)
+   create_uvs(fid,obj,rot,trans,dims,xrange,yrange)
+   
 end
+
+function retexture_all()
+   for fid = 1,target.nfaces do
+      sys.tic() 
+      retexture(fid,target)
+      printf("%d textured in %2.2fs",fid,sys.toc())
+   end
+   local objfile = paths.basename(targetfile)
+   local mtlfile = objfile:gsub(".obj",".mtl")
+   local textfile = objfile:gsub(".obj","")
+   util.obj.save(target,objfile,mtlfile,textfile)
+end
+

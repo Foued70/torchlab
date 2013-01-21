@@ -104,3 +104,69 @@ function objops.load(...)
    
    return obj
 end
+
+-- save a retextured object to obj
+function objops.save(obj,objfname,mtlfname,imgbasename)
+   if not objfname then 
+      objfname = "retexture.obj" 
+   end
+   local objf = assert(io.open(objfname, "w"))
+
+   if not mtlfname then
+      mtlfname = "retexture.mtl"
+   end
+   local mtlf = assert(io.open(mtlfname, "w"))
+   objf:write(string.format("mtllib %s\n\n", mtlfname))
+
+   if not imgbasename then 
+      imgbasename = "texture"
+   end
+   local nvpf = obj.nverts_per_face
+
+   -- print vertices
+   local verts = obj.verts
+   for vid = 1,verts:size(1) do 
+      local v = verts[vid]
+      objf:write(string.format("v %f %f %f %f\n",v[1],v[2],v[3],v[4]))
+   end
+
+   -- uvs
+   local uv = obj.uv
+   objf:write("\n")
+   for uid = 1,uv:size(1) do 
+      for vid = 1,nvpf[uid] do 
+         objf:write(string.format("vt %f %f\n",
+                                  uv[uid][vid][1],uv[uid][vid][2]))
+      end
+   end
+
+   -- faces
+   local faces = obj.faces
+   local vti = 1
+   for fid = 1,obj.nfaces do
+
+      -- save texture to an image file
+      local iname = string.format("%s_face%05d.png",imgbasename,fid)
+      image.save(iname,obj.textures[fid])
+
+      -- store path to image in mtlfile
+      mtlf:write(string.format("newmtl %s\n", iname))
+      mtlf:write(string.format("map_Ka %s\n", iname))
+      mtlf:write(string.format("map_Kd %s\n", iname))
+      mtlf:write("\n")
+
+      -- store face and mtl info to obj
+      objf:write("\n")
+      objf:write(string.format("o face%05d\n",fid))
+      objf:write(string.format("usemtl %s\n",iname))
+      str = "f "
+      for vid = 1,nvpf[fid] do 
+         str = str .. string.format("%d/%d ",faces[fid][vid],vti)
+         vti = vti + 1
+      end
+      objf:write(str .. "\n")
+   end
+   
+   mtlf:close()
+   objf:close()
+end
