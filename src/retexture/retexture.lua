@@ -67,7 +67,7 @@ if not source then
    source = loadcache(sourcefile,sourcecache,util.obj.load,3)
 end
 if not target then
-   target = loadcache(targetfile,targetcache,util.obj.load,4)
+   target = loadcache(targetfile,targetcache,util.obj.load,10)
 end
 
 -- more args FIXME become arguments
@@ -150,12 +150,6 @@ function save_all_wireframes()
    end
 end
 
--- TODO 
--- 1) redo retexture (no optimisations just straight up) and write obj file.
---   a) debug: find UV in pose for a texture (test pose globalxyz2uv function)
---   b) draw wireframe on pose. [DONE]
-
-
 -- Main Functions:
 
 -- + ----------------
@@ -174,6 +168,16 @@ function get_closest_poses(p,fid,obj,debug)
    local wrong_side = torch.lt(dist_to_plane,0):double()
    local invalid    = torch.sum(wrong_side)
    if debug then printf("[%d] wrong side: %d", fid,invalid) end
+   if (invalid == p.nposes) then 
+      -- flip normal
+      normal:mul(-1)
+      dist_to_plane = torch.mv(p.xyz,normal) + d
+
+      wrong_side = torch.lt(dist_to_plane,0):double()
+      invalid    = torch.sum(wrong_side)
+      printf("[%d] flipped normal wrong side now: %d", fid,invalid)
+   end
+   
    wrong_side:mul(1e6):add(1) 
    
    -- b) who are closest (to the face center)
@@ -202,12 +206,15 @@ function get_closest_poses(p,fid,obj,debug)
    
    --  d) make sure that at least one vertex of face falls within the
    --     poses view. (not sure we need this)
-
+   if (p.nposes == invalid) then 
+      return sidx:narrow(1,1,1)
+   else
       return sidx:narrow(1,1,p.nposes-invalid)
+   end
 end
 
 function test_get_closest_poses() 
-   for fid = 1,target.face_verts:size(1) do 
+   for fid = 1,target.nfaces do 
       get_closest_poses(poses,fid,target,true)
    end
 end
@@ -324,7 +331,7 @@ end
 function retexture (fid,obj,debug)
    
    -- Retexture Algo:
-   
+   print(fid)   
    -- 1) get closest poses: 
    local pose_idx = get_closest_poses(poses,fid,obj)
    pose_idx = pose_idx:narrow(1,1,nposes)
@@ -418,7 +425,8 @@ function retexture (fid,obj,debug)
    -- 6) store new texture file
    obj.textures[fid] = fimg
    image.display{image=fimg,min=0,max=1}
-   local fname = string.format("out-%05d.png",fid)
+   
+   local fname  = paths.basename(targetfile):gsub(".obj",string.format("_face%05d.png",fid))
    printf("Saving: texture %s", fname)
    image.save(fname,fimg)
 
@@ -433,8 +441,8 @@ function retexture_all()
       retexture(fid,target)
       printf("%d textured in %2.2fs",fid,sys.toc())
    end
-   local objfile = paths.basename(targetfile)
-   local mtlfile = objfile:gsub(".obj",".mtl")
+   local objfile  = paths.basename(targetfile)
+   local mtlfile  = objfile:gsub(".obj",".mtl")
    local textfile = objfile:gsub(".obj","")
    util.obj.save(target,objfile,mtlfile,textfile)
 end
