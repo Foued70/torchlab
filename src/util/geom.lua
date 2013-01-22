@@ -215,6 +215,9 @@ function geom.quaternion_angle(...)
    return quat
 end
 
+-- FIXME make tests as this function seems to invert results for
+-- simple axis-aligned plane intersections
+
 function geom.ray_plane_intersection(...)
    local pt,dir,plane_norm,plane_d,debug
    local args  = {...}

@@ -88,7 +88,7 @@ function objops.load(...)
    local normals    = torch.Tensor(nfaces,3)
    local d          = torch.Tensor(nfaces) 
    local centers    = torch.Tensor(nfaces,3)
-   local bbox       = torch.Tensor(nfaces,2,3)
+   local bbox       = torch.Tensor(nfaces,6) -- xmin,ymin,zmin,xmax,ymax,zmax
 
    for fid = 1,nfaces do
 
@@ -109,10 +109,10 @@ function objops.load(...)
       d[fid]       = - torch.dot(normals[fid],centers[fid])
 
       -- d) compute bbox
-      local bbox   = bbox[fid]
-      bbox[1] = fverts:min(1):squeeze()
-      bbox[2] = fverts:max(1):squeeze()
-
+      local thisbb   = bbox[fid]
+      thisbb:narrow(1,1,3):copy(fverts:min(1):squeeze())
+      thisbb:narrow(1,4,3):copy(fverts:max(1):squeeze())
+      
    end
 
    print(string.format("Processed face_verts, centers and normals in %2.2fs", sys.toc()))

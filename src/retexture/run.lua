@@ -36,7 +36,6 @@ scale      = params.scale
 packetsize = params.packetsize
 
 cachedir = "cache/"
-
 sys.execute("mkdir -p " .. cachedir)
 
 posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
