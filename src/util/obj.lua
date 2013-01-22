@@ -25,17 +25,17 @@ function objops.load(...)
    end
    
    sys.tic()
-   local obj = {}
-   obj.nverts = tonumber(io.popen(string.format("grep -c '^v ' %s",file)):read())
-   obj.nfaces = tonumber(io.popen(string.format("grep -c '^f ' %s",file)):read())
+   local nverts = tonumber(io.popen(string.format("grep -c '^v ' %s",file)):read())
+   local nfaces = tonumber(io.popen(string.format("grep -c '^f ' %s",file)):read())
 
-   print(string.format("Found nverts: %d nfaces: %d in %2.2f", obj.nverts, obj.nfaces, sys.toc()))
+   print(string.format("Found nverts: %d nfaces: %d in %2.2f", nverts, nfaces, sys.toc()))
 
    sys.tic()
+
    -- could be a table as we don't know max number of vertices per face
-   obj.verts = torch.Tensor(obj.nverts,4):fill(1)
-   obj.faces = torch.IntTensor(obj.nfaces,maxvertsperface):fill(-1)
-   obj.nverts_per_face = torch.IntTensor(obj.nfaces)
+   local verts = torch.Tensor(nverts,4):fill(1)
+   local faces = torch.IntTensor(nfaces,maxvertsperface):fill(-1)
+   local nverts_per_face = torch.IntTensor(nfaces)
 
    local objFile = io.open(file)
    local fc = 1
@@ -47,7 +47,7 @@ function objops.load(...)
          local vs = line:gsub("^v ", "")
          local k = 1
          for n in vs:gmatch("[-.%d]+") do
-            obj.verts[vc][k] = tonumber(n)
+            verts[vc][k] = tonumber(n)
             k = k + 1
          end
          vc = vc + 1
@@ -72,35 +72,62 @@ function objops.load(...)
                                    fc, maxvertsperface))
                break
             else
-               obj.faces[fc][k] = tonumber(n)
+               faces[fc][k] = tonumber(n)
             end
             k = k + 1
          end
-         obj.nverts_per_face[fc] = k - 1
+         nverts_per_face[fc] = k - 1
          fc = fc + 1
       end
    end
    print(string.format("Loaded %d verts %d faces in %2.2fs", vc-1, fc-1, sys.toc()))
 
-   sys.tic()
-   obj.face_verts = torch.Tensor(obj.nfaces,maxvertsperface,3)
-   obj.normals    = torch.Tensor(obj.nfaces,3)
-   obj.d          = torch.Tensor(obj.nfaces) 
-   obj.centers    = torch.Tensor(obj.nfaces,3)
 
-   for i = 1,obj.nfaces do
-      for j = 1,obj.nverts_per_face[i] do
-         for k = 1,3 do
-            obj.face_verts[i][j][k] = obj.verts[obj.faces[i][j]][k]
-         end
+   sys.tic()
+   local face_verts = torch.Tensor(nfaces,maxvertsperface,3)
+   local normals    = torch.Tensor(nfaces,3)
+   local d          = torch.Tensor(nfaces) 
+   local centers    = torch.Tensor(nfaces,3)
+   local bbox       = torch.Tensor(nfaces,2,3)
+
+   for fid = 1,nfaces do
+
+      local nverts = nverts_per_face[fid]
+      local fverts = face_verts[fid]:narrow(1,1,nverts)
+      local face   = faces[fid]
+
+      -- a) build face_verts (copy all the data)
+      for j = 1,nverts do
+         fverts[j] = verts[ {face[j],{1,3}} ]
       end
-      for j = 1,3 do
-         obj.centers[i][j] = obj.face_verts[{i,{},j}]:mean()
-      end
-      obj.normals[i]:copy(util.geom.compute_normal(obj.face_verts[i]))
-      obj.d[i] = - torch.dot(obj.normals[i],obj.centers[i])
+
+      -- b) compute object centers
+      centers[fid] = fverts:mean(1):squeeze()
+
+      -- c) compute plane normal and d distance from origin for plane eq.
+      normals[fid] = util.geom.compute_normal(fverts)
+      d[fid]       = - torch.dot(normals[fid],centers[fid])
+
+      -- d) compute bbox
+      local bbox   = bbox[fid]
+      bbox[1] = fverts:min(1):squeeze()
+      bbox[2] = fverts:max(1):squeeze()
+
    end
+
    print(string.format("Processed face_verts, centers and normals in %2.2fs", sys.toc()))
+
+   local obj = {}
+   obj.nverts          = nverts
+   obj.nfaces          = nfaces
+   obj.verts           = verts
+   obj.faces           = faces
+   obj.nverts_per_face = nverts_per_face
+   obj.face_verts      = face_verts
+   obj.normals         = normals
+   obj.d               = d
+   obj.centers         = centers
+   obj.bbox            = bbox
    
    return obj
 end
