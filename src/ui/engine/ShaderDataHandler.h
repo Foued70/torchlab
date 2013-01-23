@@ -29,7 +29,9 @@ public:
 	void updateData(const std::string&, const Vector3&);
 	void updateData(const std::string&, const Vector4&);
 	void updateData(const std::string&, GLfloat);
+  void updateData(const std::string&, GLuint);
 	void updateSampler2D(const std::string&, GLint);
+  
 	
 	/**
 	 * Opens the stream.
@@ -58,6 +60,8 @@ public:
 	std::map< std::string, Vector4 > __4Dvectors;
 	
 	std::map< std::string, GLfloat > __values;
+  
+  std::map< std::string, GLuint > __uIntValues;
 	
 	std::map< std::string, GLuint > __textures;
 	

@@ -200,7 +200,15 @@ private:
 	 * instances can be found in global instance.
 	 */
 	void __bindAppropriateShader();
+  
+  /* A simple method to hand out unique ids to objects on creation */
+  unsigned int getNewID();
 	
+  static unsigned int nextAvailableID;
+  
+  /* Object's unique id */
+  unsigned int __id;
+  
 	/* Vector of children's pointers. */
 	std::vector< Object* > __children;
 	

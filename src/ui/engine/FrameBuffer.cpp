@@ -204,7 +204,7 @@ void FrameBuffer::printInfo()
 
 }
 
-GLint FrameBuffer::readPixel(GLint x, GLint y)
+GLuint FrameBuffer::readPixel(const GLuint& x, const GLuint& y, const GLuint& channel)
 {
 	//OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
 	GLuint flippedY = (__height -1) - y;
@@ -228,7 +228,7 @@ GLint FrameBuffer::readPixel(GLint x, GLint y)
   
   glReadBuffer(GL_NONE);
 	unbind();
-	return (GLint)pixel[0];
+	return pixel[channel];
 }
 
 void FrameBuffer::saveToFile(const string& _filename)

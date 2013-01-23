@@ -18,7 +18,7 @@ public:
 	void renderDebugMesh();
 	
 	void printInfo();
-	GLint readPixel(GLint x, GLint y);
+	GLuint readPixel(const GLuint& x, const GLuint& y, const GLuint& channel);
 	void saveToFile(const std::string& _filename);
 
 private:

@@ -229,6 +229,12 @@ Shader::setUniformInt(const string& _name, GLint _value) const {
 }
 
 void
+Shader::setUniformUInt(const string& _name, GLuint _value) const {
+  glUniform1ui(glGetUniformLocation(__shaderProgram, _name.c_str()), _value);
+  checkGLErrors(AT);
+}
+
+void
 Shader::setMatrixFloat(const string& _name, const sMat16& _matrix) const {
   // log(PARAM, "setMatrix %s", _name.c_str());
   // cout << _matrix;

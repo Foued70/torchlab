@@ -24,7 +24,8 @@ struct sLightParams {
 struct sLightModelParameters {
  vec4 ambient;
 };
-		
+
+uniform uint objectID;
 uniform vec4 sDefColor;
 uniform mat4 sModelViewMatrix;
 uniform mat4 sProjectionMatrix;
@@ -33,5 +34,3 @@ uniform mat3 sNormalMatrix;
 uniform sMaterialParams sFrontMaterial;
 uniform sLightParams sLightSource[7];
 uniform sLightModelParameters sLightModel;
-
-uniform float sFaceIndex;

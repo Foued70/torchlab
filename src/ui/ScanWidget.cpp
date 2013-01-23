@@ -102,7 +102,8 @@ void ScanWidget::mouseReleaseEvent(QMouseEvent* event) {
   float mouseY = event->y();
   
   if (event->button() == Qt::LeftButton) {
-    log(PARAM, "Face ID at %d, %d is: %d" , (int)mouseX, (int)mouseY, (int)framebuffer -> readPixel((GLint)mouseX, (GLint)mouseY) - 1);
+    log(PARAM, "Face ID at %d, %d is: %d" , (int)mouseX, (int)mouseY, (int)framebuffer -> readPixel((GLuint)mouseX, (GLuint)mouseY, (GLuint)0) - 1);
+    log(PARAM, "Object ID at %d, %d is: %d" , (int)mouseX, (int)mouseY, (int)framebuffer -> readPixel((GLuint)mouseX, (GLuint)mouseY, (GLuint)1));
   }
 }
 

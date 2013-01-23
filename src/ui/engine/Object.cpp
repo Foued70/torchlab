@@ -91,9 +91,11 @@ struct HashMyIndex {
 	
 };
 
+unsigned int Object::nextAvailableID = 0;
 
 Object::Object(const string &_name) :
 		name(_name),
+    __id(getNewID()),
 		__defColor({1, 1, 1, 1}),
 		__mov({0, 0, 0}),
 		__rot({0, 0, 0}),
@@ -105,7 +107,7 @@ Object::Object(const string &_name) :
 		__content(0),
 		__matrices(MatricesManager::GetSingleton()),
 		__shaders(ShaderDataHandler::GetSingleton()) {
-	log(CONSTRUCTOR, "Object (\"%s\") constructed.", name.c_str());
+	log(CONSTRUCTOR, "Object (\"%s\") with ID %d constructed.", name.c_str(), (int)__id);
 }
 
 Object::~Object() {
@@ -121,6 +123,11 @@ Object::~Object() {
 	log(DESTRUCTOR, "Object (\"%s\") destructed.", name.c_str());
 }
 
+unsigned int
+Object::getNewID() {
+  return ++nextAvailableID;
+}
+
 void
 Object::show() {
   // log(PARAM, "Object::show");
@@ -131,10 +138,14 @@ Object::show() {
 	__matrices.rotate(__rot.y, Y);
 	__matrices.rotate(__rot.z, Z);
 		
+  
 	__shaders.updateData("sDefColor", __defColor);
 		
 	__shader -> toggle();
 	__shaders.openStream(__shader);
+  
+  // TO DO: Find out why updating the objectID uniform only works after the stream has been opened
+  __shaders.updateData("objectID", (GLuint)__id);
 		
 	for (auto it = __meshes.begin(); it != __meshes.end(); ++it) {			
 			

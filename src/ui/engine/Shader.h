@@ -75,7 +75,8 @@ public:
 	 */
 	void setUniformFloat(const std::string&, const sVectorBase< GLfloat >&) const;
 	void setUniformFloat(const std::string&, GLfloat) const;
-	void setUniformInt(const std::string&, GLint) const;	
+	void setUniformInt(const std::string&, GLint) const;
+  void setUniformUInt(const std::string&, GLuint) const;	
 	/**
 	 * Sends a matrix to the shader.
 	 * @param name Name of variable in the shader.
