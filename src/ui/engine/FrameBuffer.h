@@ -20,6 +20,9 @@ public:
 	void printInfo();
 	GLuint readPixel(const GLuint& x, const GLuint& y, const GLuint& channel);
 	void saveToFile(const std::string& _filename);
+  
+  /* Method to send color pass data to the default framebuffer */
+  void displayToWindow();
 
 private:
 	void __generateFrameBuffer();

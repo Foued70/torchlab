@@ -80,15 +80,13 @@ void ScanWidget::paintGL() {
 	engine -> render(scene);
   framebuffer -> unbind();
   
+  //display rendered color data to screen
+  framebuffer -> displayToWindow();
+  
 	if( takeScreenShot ) {
 		takeScreenShot = false;
      framebuffer -> saveToFile("frameBufferImage");
 	}
-  
-  //Render scene to default framebuffer (render to window)
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-	glClearColor(1.0, 1.0, 1.0, 1.0);
-	engine -> render(scene);
 }
 
 void ScanWidget::mousePressEvent(QMouseEvent* event) {
@@ -102,8 +100,22 @@ void ScanWidget::mouseReleaseEvent(QMouseEvent* event) {
   float mouseY = event->y();
   
   if (event->button() == Qt::LeftButton) {
+    unsigned int selectedObjectID;
+    Object* selectedObject = NULL;
+    
     log(PARAM, "Face ID at %d, %d is: %d" , (int)mouseX, (int)mouseY, (int)framebuffer -> readPixel((GLuint)mouseX, (GLuint)mouseY, (GLuint)0) - 1);
-    log(PARAM, "Object ID at %d, %d is: %d" , (int)mouseX, (int)mouseY, (int)framebuffer -> readPixel((GLuint)mouseX, (GLuint)mouseY, (GLuint)1));
+    
+    selectedObjectID = framebuffer -> readPixel((GLuint)mouseX, (GLuint)mouseY, (GLuint)1);
+    log(PARAM, "Object ID at %d, %d is: %d" , (int)mouseX, (int)mouseY, (int)selectedObjectID);
+    
+    if (selectedObjectID) {
+      selectedObject = scene->getObjectByID(selectedObjectID);
+      selectedObject -> select();
+      
+      Vector3 pushDirection = scene->getActiveCamera() -> lookDirection();
+      selectedObject -> move(pushDirection.x, pushDirection.y, pushDirection.z);
+      updateGL();
+    }
   }
 }
 

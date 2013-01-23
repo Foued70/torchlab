@@ -50,7 +50,17 @@ Object *
 Scene::createObject(const string &_name, Object *_parent) {
 	Object *newObject;
 	newObject = new Object(_name);
-	
+  
+  unsigned int objectID = newObject -> getID();
+  if( __objectsByID.find(objectID) == __objectsByID.end()) {
+	  __objectsByID.insert(make_pair(objectID, newObject));
+  }
+  else {
+    log(WARN, "Object with id %d already exists! Object %s is requesting to own the same id", (int)objectID, _name.c_str() );
+    delete newObject;
+    return NULL;
+  }
+  
 	if (_parent != NULL)
 		_parent -> addChild(newObject);
 	
@@ -67,6 +77,12 @@ Scene::getObjectByName(const string &_name) {
 			return __objectList[i];
 	}
 	return NULL;
+}
+
+Object * 
+Scene::getObjectByID(const unsigned int& _id) {
+	auto result = __objectsByID.find(_id);	
+  return (result != __objectsByID.end()) ? result -> second : NULL;
 }
 
 Camera *

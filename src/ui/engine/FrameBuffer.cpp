@@ -204,6 +204,18 @@ void FrameBuffer::printInfo()
 
 }
 
+void FrameBuffer::displayToWindow() {
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, __frameBufferID);
+  glReadBuffer(GL_COLOR_ATTACHMENT0);
+  glBlitFramebuffer(0, 0, __width, __height, 
+                    0, 0, __width, __height, 
+                    GL_COLOR_BUFFER_BIT, 
+                    GL_LINEAR);
+  unbind();
+}
+
 GLuint FrameBuffer::readPixel(const GLuint& x, const GLuint& y, const GLuint& channel)
 {
 	//OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.

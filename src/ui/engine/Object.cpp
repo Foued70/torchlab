@@ -95,7 +95,7 @@ unsigned int Object::nextAvailableID = 0;
 
 Object::Object(const string &_name) :
 		name(_name),
-    __id(getNewID()),
+    __id(__getNewID()),
 		__defColor({1, 1, 1, 1}),
 		__mov({0, 0, 0}),
 		__rot({0, 0, 0}),
@@ -124,8 +124,18 @@ Object::~Object() {
 }
 
 unsigned int
-Object::getNewID() {
+Object::__getNewID() {
   return ++nextAvailableID;
+}
+
+unsigned int
+Object::getID() {
+  return __id;
+}
+
+void
+Object::select() {
+  log(PARAM, "Object Selected!");
 }
 
 void
