@@ -58,9 +58,10 @@ Shader::~Shader() {
 }
 
 bool
-Shader::make(GLuint _var1, const string& _param1,
-		   GLuint _var2, const string& _param2,
-		   GLuint _var3, const string& _param3) {
+Shader::make(   GLuint _var1, const string& _param1,
+                GLuint _var2, const string& _param2,
+                GLuint _var3, const string& _param3,
+                GLuint _var4, const string& _param4 ) {
 	const char *vert;
 	const char *frag;
 	
@@ -129,6 +130,8 @@ Shader::make(GLuint _var1, const string& _param1,
 		glBindAttribLocation(__shaderProgram, _var2, _param2.c_str());
 	if (!_param3.empty())
 		glBindAttribLocation(__shaderProgram, _var3, _param3.c_str());
+  if (!_param4.empty())
+    glBindAttribLocation(__shaderProgram, _var4, _param4.c_str());
 	
 	// Hacky... TO DO: find all fragment shader outputs, and bind locations logically.
 	glBindFragDataLocation(__shaderProgram, 0, "sFragColor");

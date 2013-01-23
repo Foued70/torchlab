@@ -41,9 +41,10 @@ public:
 	 * Compiles and links the shader program.
 	 * @return False if something went wrong.
 	 */
-	bool make(GLuint = 0, const std::string& = "sVertex",
-			GLuint = 1, const std::string& = "sTexCoord",
-			GLuint = 2, const std::string& = "sNormal"
+	bool make(  GLuint = 0, const std::string& = "sVertex",
+			        GLuint = 1, const std::string& = "sTexCoord",
+			        GLuint = 2, const std::string& = "sNormal",
+              GLuint = 3, const std::string& = "sFaceIndex"
     		);
 
 	/**
