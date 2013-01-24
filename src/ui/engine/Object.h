@@ -30,10 +30,11 @@ enum {
 	INVERT_Y = 2
 };
 
+class Object;
+
 typedef std::unordered_map< Index, long, HashMyIndex > indicesMap;
 typedef std::unordered_map< std::string, Mesh* > meshesMap;
 typedef std::unordered_map< std::string, Material* > materialsMap;
-
 typedef std::vector< GLfloat > s3DVector;
 
 class Object {
@@ -144,6 +145,11 @@ public:
 	bool isTextured() { return (__content & TEXTURE); }
 	
 	std::string name;
+  
+  void select();
+  
+  /* A method that returns the object's id */
+  unsigned int getID();
 	
 protected:
 	
@@ -200,7 +206,16 @@ private:
 	 * instances can be found in global instance.
 	 */
 	void __bindAppropriateShader();
-	
+  
+  /* A simple method to hand out unique ids to objects on creation */
+  unsigned int __getNewID();
+
+  /* Object's unique id */
+  unsigned int __id;
+  
+  static unsigned int nextAvailableID;
+  
+  
 	/* Vector of children's pointers. */
 	std::vector< Object* > __children;
 	

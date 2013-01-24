@@ -41,9 +41,10 @@ public:
 	 * Compiles and links the shader program.
 	 * @return False if something went wrong.
 	 */
-	bool make(GLuint = 0, const std::string& = "sVertex",
-			GLuint = 1, const std::string& = "sTexCoord",
-			GLuint = 2, const std::string& = "sNormal"
+	bool make(  GLuint = 0, const std::string& = "sVertex",
+			        GLuint = 1, const std::string& = "sTexCoord",
+			        GLuint = 2, const std::string& = "sNormal",
+              GLuint = 3, const std::string& = "sFaceIndex"
     		);
 
 	/**
@@ -74,7 +75,8 @@ public:
 	 */
 	void setUniformFloat(const std::string&, const sVectorBase< GLfloat >&) const;
 	void setUniformFloat(const std::string&, GLfloat) const;
-	void setUniformInt(const std::string&, GLint) const;	
+	void setUniformInt(const std::string&, GLint) const;
+  void setUniformUInt(const std::string&, GLuint) const;	
 	/**
 	 * Sends a matrix to the shader.
 	 * @param name Name of variable in the shader.

@@ -86,6 +86,9 @@ public:
 	 * @return The __center's coords.
 	 */
 	Vector3 getCenter();
+   
+  Vector3 rightDirection();
+  Vector3 lookDirection();
 	
 private:
 	
@@ -114,8 +117,7 @@ private:
 	
 	MatricesManager& __matrices;
   
-  Vector3 rightDirection();
-  Vector3 lookDirection();
+  
 };
 
 #endif // CAMERA_H

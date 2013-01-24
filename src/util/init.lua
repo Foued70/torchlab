@@ -6,6 +6,7 @@ util = {}
 
 -- add files to the local utils table
 
+torch.include('util','util.lua')
 torch.include('util','geom.lua')
 torch.include('util','pose.lua')
 torch.include('util','obj.lua')

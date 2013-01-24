@@ -14,9 +14,10 @@
 #include <string>
 
 ScanWidget::ScanWidget(const QGLFormat& format, QWidget* parent ) : QGLWidget( new Core3_2_context(format), parent ),
-      vertexBuffer( QGLBuffer::VertexBuffer ),
-      polyBuffer(QGLBuffer::VertexBuffer),
-	  takeScreenShot(false)
+    vertexBuffer( QGLBuffer::VertexBuffer ),
+    polyBuffer(QGLBuffer::VertexBuffer),
+    framebuffer(NULL),
+    takeScreenShot(false)
 {
   setMouseTracking(false);
   engine = Engine::GetSingletonPtr();
@@ -40,12 +41,14 @@ void ScanWidget::initializeGL() {
   if (!crate -> loadFromObj("objects/crate.obj")) exit(1);
   crate -> scale(4, 4, 4);
         
+     
   Object* monkey = scene -> createObject("monkey"); // monkey
   if (!monkey -> loadFromObj("objects/monkey.obj")) exit(1);
   monkey -> move(0, 0, 7);
   monkey -> scale(3, 3, 3);
   monkey -> rotate(90, 0, 0);
   monkey -> setColor(80, 24, 25);
+  
         
   Camera *sphereCamera = scene -> createCamera(-20, 0, 7);
   sphereCamera -> lookAt(0, 0, 7);
@@ -62,36 +65,60 @@ void ScanWidget::resizeGL(int w, int h) {
   
   scene -> getActiveCamera() -> setProjection();
   
+  if( framebuffer != NULL ) {
+    delete framebuffer;
+  }
   framebuffer = new FrameBuffer();
 }
 
 void ScanWidget::paintGL() {
+  
+  //Render scene to our framebuffer
+  framebuffer -> renderToTexture();  
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClearColor(0.0, 0.0, 0.0, 0.0);
 	engine -> render(scene);
-	
-  framebuffer -> renderToTexture();
-	framebuffer -> unbind();
+  framebuffer -> unbind();
+  
+  //display rendered color data to screen
+  framebuffer -> displayToWindow();
+  
 	if( takeScreenShot ) {
 		takeScreenShot = false;
-		framebuffer -> saveToFile("frameBufferImage");
+     framebuffer -> saveToFile("frameBufferImage");
 	}
-
-  // glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-  // glClearColor(1.0, 1.0, 1.0, 1.0);
-  //     engine -> render(scene);
-	
-	//TO DO: take the baked texture and render it on a polygon for debugging
-	//framebuffer -> renderDebugTexture();
 }
 
 void ScanWidget::mousePressEvent(QMouseEvent* event) {
   // log(PARAM, "mousePressEvent %d %d (%d, %d)", event->button(), (int)event->buttons(), event->globalX(), event->globalY());
   dragStartX = event->globalX();
-  dragStartY = event->globalY();
-  
-  log(WARN, "Framebuffer Pixel Value at %d, %d is: %d" , (int)dragStartX, (int)dragStartY, (int)framebuffer -> readPixel((GLint)dragStartX, (GLint)dragStartY));
+  dragStartY = event->globalY();  
 }
+
+void ScanWidget::mouseReleaseEvent(QMouseEvent* event) {
+  float mouseX = event->x();
+  float mouseY = event->y();
+  
+  if (event->button() == Qt::LeftButton) {
+    unsigned int selectedObjectID;
+    Object* selectedObject = NULL;
+    
+    log(PARAM, "Face ID at %d, %d is: %d" , (int)mouseX, (int)mouseY, (int)framebuffer -> readPixel((GLuint)mouseX, (GLuint)mouseY, (GLuint)0) - 1);
+    
+    selectedObjectID = framebuffer -> readPixel((GLuint)mouseX, (GLuint)mouseY, (GLuint)1);
+    log(PARAM, "Object ID at %d, %d is: %d" , (int)mouseX, (int)mouseY, (int)selectedObjectID);
+    
+    if (selectedObjectID) {
+      selectedObject = scene->getObjectByID(selectedObjectID);
+      selectedObject -> select();
+      
+      Vector3 pushDirection = scene->getActiveCamera() -> lookDirection();
+      selectedObject -> move(pushDirection.x, pushDirection.y, pushDirection.z);
+      updateGL();
+    }
+  }
+}
+
 void ScanWidget::mouseMoveEvent(QMouseEvent* event) {
   // log(PARAM, "mouseMoveEvent %d", (int)event->buttons());
   float dX = event->globalX() - dragStartX;

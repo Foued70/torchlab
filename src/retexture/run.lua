@@ -4,14 +4,6 @@ require 'paths'
 require 'math'
 require 'util'
 
--- ffi = require("ffi")
--- ffi.cdef[[ int printf(const char *fmt, ...); ]]
--- printf = ffi.C.printf
-
-function printf(...)
-   print(string.format(...))
-end
-
 local geom = util.geom
 -- top level filenames
 
@@ -44,7 +36,6 @@ scale      = params.scale
 packetsize = params.packetsize
 
 cachedir = "cache/"
-
 sys.execute("mkdir -p " .. cachedir)
 
 posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
@@ -103,18 +94,20 @@ fout_b  =  1 - fout_a * idealdist
 -- do we blend or take max
 doMax = True
 
+-- Very slow.  Checks all the faces. Returns closest intersection.
 function get_occlusions(pt,dir,obj)
    local d = math.huge
    dir = dir:narrow(1,1,3)
    fid = 0
    for fi = 1,obj.nfaces do
-      local verts  = obj.face_verts[fi]
       local nverts = obj.nverts_per_face[fi]
+      local verts  = obj.face_verts[fi]:narrow(1,1,nverts)      
+      local normal = obj.normals[fi]
+      local d      = obj.d[fi]
+
       local intersection, tstd =
-         util.geom.ray_face_intersection(
-         pt,dir,
-         obj.normals[fi],obj.d[fi],
-         obj.face_verts[fi]:narrow(1,1,obj.nverts_per_face[fi]))
+         util.geom.ray_face_intersection(pt,dir,normal,d,verts)
+         
       if intersection then
          if (tstd < d) then
             d = tstd
@@ -124,8 +117,6 @@ function get_occlusions(pt,dir,obj)
    end
    return d,fid
 end
-
-
 
 function fast_ray_face_intersection(pt,dirs,
                                     norms,d,
@@ -151,17 +142,19 @@ function fast_ray_face_intersection(pt,dirs,
    local dmap  = torch.Tensor(dirs:size(1)):fill(0)
 
    -- nfaces x ndirections
-   distances = fast_ray_plane_intersection(pt,dirs,norms,d)
+   local distances = fast_ray_plane_intersection(pt,dirs,norms,d)
    local time0 = timer:time()
    printf("Compute distances: %2.4fs",time0.real)
 
    -- angle between plane_norms and direction
    -- angles < 0 and at inf can be skipped
-   local dists,index = torch.sort(distances,1)
+   dists,index = torch.sort(distances,1)
 
-   -- dists < 0 are behind camera and are not to be processed
-   local valid = torch.gt(dists,0) 
-   local vsum  = valid:sum(1)[1]
+   -- dists < 0 are behind camera and are not to be processed to avoid
+   -- numerical issues distances less than 1000m are avoided (don't
+   -- know of a model with 1km walls)
+   valid = torch.gt(dists,0):cmul(torch.lt(dists,1000))
+   vsum  = valid:sum(1):squeeze()
    local time1 = timer:time()
    printf("Multiply and sort: %2.4fs",time1.real-time0.real)
 
@@ -191,7 +184,7 @@ function fast_ray_face_intersection(pt,dirs,
          time3_1 = timer:time()
          local v   = valid[j][i]
          local dir = dirs[i]
-         -- FIXME speed up with bsearch
+         -- FIXME speed up with bsearch (ERRORs in this logic)
          while (v == 0) and (j < (nfaces + 1)) do
             j = j + 1
             v = valid[j][i]
@@ -215,11 +208,9 @@ function fast_ray_face_intersection(pt,dirs,
             local time3_3 = timer:time()
             acc3_3 = acc3_3 + time3_3.real - time3_2_1.real
 
-            -- faster no copies less substraction
-            found = 
-               point_in_polygon(intersection,
-                                face_verts[fidx]:narrow(1,1,nverts),
-                                ds)
+            -- faster intersection (no copies less substraction)
+            local verts = face_verts[fidx]:narrow(1,1,nverts)
+            found       = point_in_polygon(intersection,verts,ds)
             local time3_4 = timer:time()
             acc3_4 = acc3_4 + time3_4.real - time3_3.real
             if found then 
@@ -232,16 +223,22 @@ function fast_ray_face_intersection(pt,dirs,
          acc3_5 = acc3_5 + time3_5.real - time3_2.real
       end -- if valid
       visits = visits + visited
-            
       if groundt and (torch.abs(dmap[i] - groundt[i]) > 1e-4) then
-         print(valid:select(2,i))
+         --print(valid:select(2,i))
          print(index:select(2,i))
-         print(dists:select(2,i))
-         print(distances:select(2,i))
+         -- print(dists:select(2,i))
+         --print(distances:select(2,i))
+         printf("[%d][%d]",i,j)
+         local idx = j
+         if not found then
+            printf("Intersection for direction %d NOT FOUND",i)
+         else
+            idx = index[j][i] 
+         end
          printf("dir: %d face: %d <-> %d %2.4f <-> %2.4f = %2.4f visited: %d", 
-                             i,index[j][i], fid[i], 
-                             dmap[i], groundt[i], dmap[i] - groundt[i], 
-                             visited)
+                i, idx, fid[idx], 
+                dmap[i], groundt[i], dmap[i] - groundt[i], 
+                visited)
       end
    end -- for each direction 
    local time4 = timer:time()
@@ -309,12 +306,12 @@ function load_dirs(p,i,scale,ps)
    local cntry = p.cntry[i]
 
    local dirscache   = cachedir .. 
-      imgw.."x"..imgh.."_-_"..
-      outw.."x"..outh.."_-_"..
-      cntrx.."x"..cntry
+      "orig_"..imgw.."x"..imgh.."_-_"..
+      "scaled_"..outw.."x"..outh.."_-_"..
+      "center_"..cntrx.."x"..cntry
 
    if ps then 
-      dirscache = dirscache .."_-_".. ps
+      dirscache = dirscache .."_-_grid_".. ps
    end
    dirscache = dirscache ..".t7"
 
@@ -336,6 +333,48 @@ function load_dirs(p,i,scale,ps)
 end
 
       
+-- old version of code takes precomputed slopes to speed things up
+function my_point_in_poly(pt,verts,slopes,dims)
+   local nverts = verts:size(1)
+   local x = dims[1]
+   local y = dims[2]
+   
+   -- move intersection to 0,0,0
+   for vi = 1,nverts do
+      verts[vi]:add(-1,pt)
+   end
+   
+   -- count crossings along 'y' axis : 
+   --   b in slope intercept line equation
+   local pvert = verts[nverts]
+   local count = false
+   for vi = 1,nverts do
+      local cvert = verts[vi]
+      --  compute y axis crossing (b = y - mx)
+      local s    = slopes[vi]
+      local b    = -math.huge
+      local cpos = 1
+      local ppos = 1
+      
+      -- vertical line only intersects if both points are zero
+      if (s == math.huge) then
+         if (math.abs(cvert[x]) < 1e-8) then
+            count = not count
+         end
+      else
+         b = cvert[y] -  s * cvert[x]
+         if (cvert[x] < 0) then cpos = -1 end
+         if (pvert[x] < 0) then ppos = -1 end
+         if (b >= 0) and ((cpos + ppos) == 0) then
+            count = not count
+         end
+      end
+      pvert = cvert
+   end
+   
+   return count 
+end
+
 
 -- pt (point) is the intersection between the ray and the plane of the polygon
 -- verts are the vertices of the polygon
@@ -364,6 +403,37 @@ function point_in_polygon(pt,verts,dims)
       p1 = p2
    end
    return inside
+end
+
+-- also tests normals and major dimensions
+function test_point_in_polygon()
+   print("Testing point in polygon")
+   local err = 0
+   -- all positive
+   local npts = 1000
+   local vs  = torch.randn(npts+3,3)
+   local vsmin = vs:min(1)
+   vsmin = vsmin:squeeze()
+   local vsmax = vs:max(1)
+   vsmax = vsmax:squeeze()
+
+   for i = 1,npts do 
+      local face_verts = vs:narrow(1,i,3)
+      local pt         = face_verts:mean(1):squeeze()
+      local normal     = util.geom.compute_normal(face_verts)
+      local _,ds = torch.sort(torch.abs(normal))
+      ds = ds:narrow(1,1,2)
+      if not point_in_polygon(pt,face_verts,ds) then
+         err = err + 1
+      end
+      if point_in_polygon(vsmin,face_verts,ds) then
+         err = err + 1
+      end
+      if point_in_polygon(vsmax,face_verts,ds) then
+         err = err + 1
+      end
+   end
+   printf("-- %d/%d Errors", err,npts*3)
 end
 
 -- takes a bunch of rays (pt, dirs) and a bunch of planes (normals,d)
@@ -460,7 +530,7 @@ function grid_contiguous (m,s1,s2)
 end
 
 function test_grid_contiguous()
-   print("Testing unfold contiguous")
+   print("Testing grid contiguous")
    local ww  = 4
    local m   = torch.randn(32,32,3)
    local ufm = grid_contiguous(m,ww,ww)
@@ -506,13 +576,13 @@ end
 function test_ray_plane_intersection()
    print("Testing ray plane intersections")
    local pi      = 1
-   local dirs    = compute_dirs(poses,pi,scale)
-   dirs:resize(dirs:size(1)*dirs:size(2),3)
+   local dirs    = grid_contiguous(compute_dirs(poses,pi,scale),32,32)
+
+   dirs = dirs[3][4]
 
    local obj     = target
-   local err     = 0
    local norms   = obj.normals
-   local d       = obj.d
+   local ds       = obj.d
 
    sys.tic()
 
@@ -520,7 +590,7 @@ function test_ray_plane_intersection()
 
    local dots    = torch.mm(norms,dirs:t())
    local invdots = torch.pow(dots,-1)
-   local ts      = - ( torch.mv(norms,pt) + d)
+   local ts      = - ( torch.mv(norms,pt) + ds)
    
    local dists   = torch.Tensor(dots:size()):copy(invdots)
 
@@ -530,45 +600,79 @@ function test_ray_plane_intersection()
    end
 
    -- nfaces x ndirections
-   local distances = fast_ray_plane_intersection(pt,dirs,norms,d)
+   local distances = fast_ray_plane_intersection(pt,dirs,norms,ds)
    local nerr      = 0
-
+   local dperr     = 0
+   local idoterr   = 0
+   local initerr   = 0
+   local finerr    = 0
+   
    for fi = 1,norms:size(1) do
+      local norm = norms[fi]
+      local d = ds[fi]
       for di = 1,dirs:size(1) do
-         local dot = torch.dot(norms[fi],dirs[di])
+         local errp = false
+         local dir = dirs[di]
+         local errstr = string.format(
+            "[%d][%d] dir: (%2.2f,%2.2f,%2.2f) norm: (%2.2f,%2.2f,%2.2f)",
+            fi,di,
+            dir[1], dir[2],dir[3], 
+            norm[1],norm[2],norm[3])
+         local dot = torch.dot(norm,dir)
          if torch.abs(dot - dots[fi][di]) > 1e-8 then
-            print("dot product error")
+            errstr = errstr .. "\n-- dot product error"
+            dperr = dperr + 1
+            errp = true
          end
          if torch.abs(1/dot - invdots[fi][di]) > 1e-8 then
-            print("inv dot error")
+            errstr = errstr .. "\n-- inv dot error"
+            idoterr = idoterr + 1
          end
-         local t = -( torch.dot(norms[fi],pt) + d[fi])
+         local t = -( torch.dot(norm,pt) + d)
          if torch.abs(t - ts[fi]) > 1e-8 then
-            print("initial t error")
+            errstr = errstr .. "\n-- initial t error"
+            initerr = initerr + 1
+            errp = true
          end
-         if torch.abs(t/dot - dists[fi][di]) > 1e-8 then
-            print("final error")
+         local tdot = t/dot
+         local dst = dists[fi][di]
+         local derr = torch.abs(tdot - dst)
+         -- error relative to magnitude 
+         if derr/tdot > 1e-8 then
+            errstr = errstr .. 
+               string.format("\n-- distance error %f <-> %f",tdot,dst)
+            finerr = finerr + 1
+            errp = true
          end
-         i,t = util.geom.ray_plane_intersection(pt,dirs[di],norms[fi],d[fi])
+         local dist = distances[fi][di]
+         local i,rpt = 
+            util.geom.ray_plane_intersection(pt,dir,norm,d)
          if i then
-            local err = torch.abs(t - distances[fi][di])
-            if err > 1e-8 then
+            -- relative error
+            local err = torch.abs(rpt - dist)
+            if err/rpt > 1e-8 then
                nerr = nerr + 1
-               printf("[%d][%d] %2.2f <-> %2.2f err: %2.2f", 
-                                   fi,di,
-                                   t,distances[fi][di],err)
+               errstr = errstr .. 
+                  string.format("-- %2.2f <-> %2.2f err: %2.2f", rpt,dist,err)
+               errp = true
             end
          end
+         if errp then print(errstr) end
       end
    end
-   printf("-- Errors: %d in %2.2fs", nerr, sys.toc())
+   local ntests = norms:size(1) * dirs:size(1)
+   printf("-- Errors ( in %2.2fs) ", sys.toc())
+   printf("-- Dot            : %d/%d", dperr, ntests)
+   printf("-- Inv Dot        : %d/%d", idoterr, ntests)
+   printf("-- Initial t      : %d/%d", initerr, ntests)
+   printf("-- by hand dists  : %d/%d", finerr, ntests)
+   printf("-- geom.ray_plane : %d/%d", nerr, ntests)
 end
 
 function test_ray_face_intersection ()
    print("Testing ray face intersections")
    local pi    = 1
-   local dirs  = compute_dirs(poses,pi,scale)
-   dirs = dirs:resize(dirs:size(1)*dirs:size(2),3)
+   dirs  = grid_contiguous(compute_dirs(poses,pi,scale),32,32)
    local obj   = target
    local err   = 0
    local norms = obj.normals
@@ -585,7 +689,7 @@ function test_ray_face_intersection ()
       most_planar_normals[i]:copy(ds:narrow(1,1,2))
    end
 
-   dirs      = dirs:narrow(1,57570,10)
+   dirs      = dirs[3][4]
    slow_ds   = torch.Tensor(dirs:size(1))
    slow_fids = torch.IntTensor(dirs:size(1))
    sys.tic()
@@ -606,13 +710,32 @@ function test_ray_face_intersection ()
                        errs:size(1))
 end
 
+function test_get_occlustions ()
+   local pi    = 40
+   local scale = 16
+   local dirs  = compute_dirs(poses,pi,scale)
+   local obj   = target
+   local pt    = poses.xyz[pi] 
+
+   slow_ds   = torch.Tensor(dirs:size(1),dirs:size(2)):fill(-1)
+   slow_fids = torch.IntTensor(dirs:size(1),dirs:size(2)):fill(-1)
+   
+   for i = 1,dirs:size(1) do
+      for j = 1,dirs:size(2) do
+         slow_ds[i][j],slow_fids[i][j] = get_occlusions(pt,dirs[i][j],obj)
+      end
+   end
+   return slow_ds,slow_fids
+   end
+   
 function run_all_tests()
    test_grid_contiguous()
    test_compute_dirs()
-   -- test_ray_plane_intersection()
-   test_ray_face_intersection()
+   test_point_in_polygon()
+   test_ray_plane_intersection()
+   -- test_ray_face_intersection()
 end
-run_all_tests()
+-- run_all_tests()
 
 -- for pi = 4,4 do -- #poses do
 --    sys.tic()

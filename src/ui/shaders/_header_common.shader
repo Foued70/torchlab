@@ -1,4 +1,8 @@
 #version 150
+
+//extension enabled to make gl_PrimitiveID availible for use in picking
+#extension GL_EXT_gpu_shader4 : enable
+
 struct sMaterialParams {
  vec4 emission;
  vec4 ambient;
@@ -20,7 +24,8 @@ struct sLightParams {
 struct sLightModelParameters {
  vec4 ambient;
 };
-		
+
+uniform uint objectID;
 uniform vec4 sDefColor;
 uniform mat4 sModelViewMatrix;
 uniform mat4 sProjectionMatrix;

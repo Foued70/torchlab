@@ -4,7 +4,6 @@
 #include <QtOpenGL/QGLWidget>
 #include <QtOpenGL/QGLBuffer>
 #include <QtOpenGL/QGLShaderProgram>
-
 #include "engine/Engine.h"
 #include "engine/Scene.h"
 
@@ -23,6 +22,7 @@ protected:
   void resizeGL(int w, int h);
   void paintGL();
   void mousePressEvent(QMouseEvent *event);
+  void mouseReleaseEvent(QMouseEvent* event);
   void mouseMoveEvent(QMouseEvent *event);
   void wheelEvent(QWheelEvent* event);
   void keyPressEvent(QKeyEvent *event);
@@ -42,7 +42,7 @@ private:
   Scene* scene;
   FrameBuffer* framebuffer;
   bool takeScreenShot;
-  
+
   int dragStartX;
   int dragStartY;
 };

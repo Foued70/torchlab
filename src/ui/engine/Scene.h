@@ -10,6 +10,8 @@
 
 class ShaderDataHandler;
 
+typedef std::unordered_map< unsigned int, Object* > objectMap;
+
 class Scene {
 public:
 	
@@ -47,6 +49,13 @@ public:
 	 * @return Pointer to the found object, or NULL if nothing was found.
 	 */
 	Object * getObjectByName(const std::string&);
+   
+	/**
+	 * Look for the object.
+	 * @param id ID of the object that is looked for.
+	 * @return Pointer to the found object, or NULL if nothing was found.
+	 */ 
+  Object * getObjectByID(const unsigned int&);
 	
 //============ CAMERAS ============//
 	
@@ -111,6 +120,9 @@ private:
 	
 	/* Vector of objects */
 	std::vector< Object* > __objectList;
+  
+  /* unique ids and object pointers */
+  objectMap __objectsByID;
 	
 	/* Objects' iterator */
 	std::vector< Object* >::const_iterator __objectIterator;
