@@ -1,5 +1,5 @@
 out vec4 sFragColor;
-out vec4 triangleID;
+out uvec3 triangleID;
 
 smooth in vec2 sVaryingTexCoords;
 uniform sampler2D textureUnit;

@@ -16,19 +16,16 @@ FrameBuffer::FrameBuffer() :
 	__height(600),
 	__frameBufferID(0),
 	__depthBufferID(0),
-	__textureID(0),
-	__textureID2(0)
+	__textureID0(0),
+	__textureID1(0)
 {
 	log(CONSTRUCTOR, "Frame Buffer Constructed");
-	//log(WARN, "sFragColor attribute location = %d", (int)__shader -> getAttribLocation("sFragColor"));
 	
 	if ( !__initialize() ) {
 		//TO DO: exit routine or place framebuffer in some sort of "disabled" state
 	}
 	
 	unbind();
-	
-	printInfo();
 }
 
 bool FrameBuffer::__initialize()
@@ -85,8 +82,8 @@ void FrameBuffer::__generateDepthBuffer()
 
 void FrameBuffer::__generateTexture()
 {
-	glGenTextures(1, &__textureID);
-	glBindTexture(GL_TEXTURE_2D, __textureID);
+	glGenTextures(1, &__textureID0);
+	glBindTexture(GL_TEXTURE_2D, __textureID0);
 	
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -99,33 +96,30 @@ void FrameBuffer::__generateTexture()
 	glFramebufferTexture2D(	GL_FRAMEBUFFER, 
 							GL_COLOR_ATTACHMENT0,
 							GL_TEXTURE_2D, 
-							__textureID, 
+							__textureID0, 
 							0);
 	
-	glGenTextures(1, &__textureID2);
-	glBindTexture(GL_TEXTURE_2D, __textureID2);
+	glGenTextures(1, &__textureID1);
+	glBindTexture(GL_TEXTURE_2D, __textureID1);
 	
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, __width, __height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32UI, __width, __height, 0, GL_RGB_INTEGER, GL_UNSIGNED_INT, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 	glFramebufferTexture2D(	GL_FRAMEBUFFER, 
 							GL_COLOR_ATTACHMENT1,
 							GL_TEXTURE_2D,  
-							__textureID2, 
+							__textureID1, 
 							0);
 
 }
 
 bool FrameBuffer::__evaluateConfiguration()
-{
-	//GLenum DrawBuffers[1] = {GL_COLOR_ATTACHMENT0};
-	//glDrawBuffers(1, DrawBuffers);
-	
+{	
 	switch ( glCheckFramebufferStatus(GL_FRAMEBUFFER) ) {
 		case GL_FRAMEBUFFER_COMPLETE:
 			return true;
@@ -174,16 +168,7 @@ void FrameBuffer::renderToTexture()
 	bind();
 
 	GLenum attachments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
-  glDrawBuffers(3, attachments);
-}
-
-void FrameBuffer::renderDebugMesh()
-{
-	//__shader -> toggle();
-	
-	//__mesh -> show();
-	
-	//__shader -> toggle();
+  glDrawBuffers(3, attachments);  
 }
 
 void FrameBuffer::printInfo()
@@ -193,6 +178,9 @@ void FrameBuffer::printInfo()
 	int res;
 	
 	int maxColorAttachments;
+	
+    glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &res);
+    log(WARN, "Max Frame Buffer Color Attachments: %d", res);
 
 	GLint buffer;
 	int i = 0;
@@ -216,116 +204,107 @@ void FrameBuffer::printInfo()
 
 }
 
-GLint FrameBuffer::readPixel(GLint x, GLint y)
+void FrameBuffer::displayToWindow() {
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, __frameBufferID);
+  glReadBuffer(GL_COLOR_ATTACHMENT0);
+  glBlitFramebuffer(0, 0, __width, __height, 
+                    0, 0, __width, __height, 
+                    GL_COLOR_BUFFER_BIT, 
+                    GL_LINEAR);
+  unbind();
+}
+
+GLuint FrameBuffer::readPixel(const GLuint& x, const GLuint& y, const GLuint& channel)
 {
-	GLuint redValue;
+	//OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
+	GLuint flippedY = (__height -1) - y;
+  
+  //R, G, B channels
+  GLuint pixel[3];
 	
-	glReadPixels(	x,
-				 	y,
+	//Currently reads the Red component of the Pixel.
+	//glReadBuffer chooses which output to read from.
+	
+	bind();
+	glReadBuffer(GL_COLOR_ATTACHMENT1);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glReadPixels(	(GLsizei)x,
+				 	(GLsizei)flippedY,
 					(GLsizei)1,
 					(GLsizei)1,
-					GL_RED,
-					GL_UNSIGNED_BYTE,
-					&redValue );
-	
-	return redValue;
+					GL_RGB_INTEGER,
+					GL_UNSIGNED_INT,
+					&pixel );
+  
+  glReadBuffer(GL_NONE);
+	unbind();
+	return pixel[channel];
 }
 
 void FrameBuffer::saveToFile(const string& _filename)
 {
-	const unsigned int width = 800, height = 600, channels = 4;
-	unsigned int fileSize = width*height*channels;
-	char* pixels = new char[fileSize];
+	const unsigned int channels = 3;
+  const unsigned int bytesPerChannel = 4;
+	unsigned int fileSizeIn = __width*__height*channels;
+  unsigned int fileSizeOut = fileSizeIn*bytesPerChannel;
+  
+  GLuint* pixelsIn = new GLuint[fileSizeIn];
+	char* pixelsOut = new char[fileSizeOut];
+  
 	string __filename = _filename; __filename.append(".raw");
 	
 	bind();
-	
-	//glReadBuffer(GL_COLOR_ATTACHMENT0+(GLuint)1);
-	//glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 	glReadBuffer(GL_COLOR_ATTACHMENT1);
-	//(GL_UNPACK_ALIGNMENT, 1);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	
-	glBindTexture(GL_TEXTURE_2D, __textureID2);
-	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+  /*
+	glReadPixels(   0,
+				 	        0,
+					        (GLsizei)__width,
+                  (GLsizei)__height,
+					        GL_RGB_INTEGER,
+					        GL_UNSIGNED_INT,
+					        pixelsIn );
+                  */
+  
+	glBindTexture(GL_TEXTURE_2D, __textureID1);
+	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB_INTEGER, GL_UNSIGNED_INT, pixelsIn);
 	glBindTexture(GL_TEXTURE_2D, 0);
-	/*
-	glReadPixels(	0,
-					0,
-					(GLsizei)width,
-					(GLsizei)height,
-					GL_RGBA,
-					GL_UNSIGNED_BYTE,
-					pixels);
-	*/
+  
+  glReadBuffer(GL_NONE);
+  unbind();
+
+  //Convert Data to a viewable format
+  unsigned int rowOffset;
+  unsigned int columnOffset; 
+  for(unsigned int row = 0; row < __height; row++) {
+    rowOffset = (row * __width * channels);
+    for(unsigned int column = 0; column < __width; column++) {
+      columnOffset = (column * channels);
+      for(unsigned int channel = 0; channel < channels; channel++) {
+          pixelsOut[(rowOffset*bytesPerChannel) + (columnOffset*bytesPerChannel) + (channel*bytesPerChannel) + 0] = char(pixelsIn[rowOffset + columnOffset + channel] >> 24);
+          pixelsOut[(rowOffset*bytesPerChannel) + (columnOffset*bytesPerChannel) + (channel*bytesPerChannel) + 1] = char(pixelsIn[rowOffset + columnOffset + channel] >> 16);
+          pixelsOut[(rowOffset*bytesPerChannel) + (columnOffset*bytesPerChannel) + (channel*bytesPerChannel) + 2] = char(pixelsIn[rowOffset + columnOffset + channel] >> 8);
+          pixelsOut[(rowOffset*bytesPerChannel) + (columnOffset*bytesPerChannel) + (channel*bytesPerChannel) + 3] = char(pixelsIn[rowOffset + columnOffset + channel]);
+      }
+    }
+  }
 	
+  /*
 	//OpenGL populates the pixel data bottom to top.
 	//Flipping data vertically for correct orientation in external applications.
-	for(unsigned int row = 0; row < (height/2); row++) {
-		unsigned int oppositeRow = height - 1 - row;
-		unsigned int rowSize = width*channels;
+	for(unsigned int row = 0; row < (__height/2); row++) {
+		unsigned int oppositeRow = __height - 1 - row;
+		unsigned int rowSize = __width*channels;
 		for(unsigned int pixelChannel = 0; pixelChannel < rowSize; pixelChannel++) {
-			swap(pixels[pixelChannel+(row*rowSize)], pixels[pixelChannel+(oppositeRow*rowSize)]);
+			swap(pixelsOut[pixelChannel+(row*rowSize)], pixelsOut[pixelChannel+(oppositeRow*rowSize)]);
 		}
 	}
-	
+  */
+
 	ofstream imageFile(__filename.c_str(), ios::out | ios::binary);
-	imageFile.write(pixels, fileSize);
-	delete[] pixels;
-	
-	unbind();
+	imageFile.write(pixelsOut, fileSizeOut);
+	delete[] pixelsIn;
+  delete[] pixelsOut;
 }
-
-/*
-void FrameBuffer::__loadFullscreenBillboard()
-{
-	static const GLfloat billboardMesh[] = { 
-		-1.0f, -1.0f, 0.0f,
-		 1.0f, -1.0f, 0.0f,
-	    -1.0f,  1.0f, 0.0f,
-	    -1.0f,  1.0f, 0.0f,
-	     1.0f, -1.0f, 0.0f,
-	     1.0f,  1.0f, 0.0f,
-	};
-	
-	__billboardVBO = 0;
-	glGenBuffers(1, &__billboardVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, billboardMesh);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(billboardMesh), billboardMesh, GL_STATIC_DRAW);
-	
-	__billboardProgram = LoadShaders("shaders/debugFBO.vert", "shaders/debugFBO.frag");
-	__texID = glGetUniformLocation(billboardProgram, "fboData");
-	//GLuint __vertexID = glGetUniformLocation(billboardProgram, "vertexID");
-}
-
-void FrameBuffer::renderDebugTexture()
-{
-	unbind();
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	
-	glUseProgram(__billboardProgram);
-	
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, __debugTexture);
-	glUniform1i(__texID, 0);
-	//glUniform1i(__vertexID, lookupmeshdata and get vertex index and add 1 to it so that there is a difference between nothing and index 0);
-	
-	glEnableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, __billboardVBO);
-	glVertexAttribPointer(
-		0,			
-		3,
-		GL_FLOAT,
-		GL_FALSE,
-		0,
-		(void*)0
-	);
-	
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-	glDisableVertexAttribArray(0);
-	
-	//swap buffers
-	
-	//draw()
-}
-*/

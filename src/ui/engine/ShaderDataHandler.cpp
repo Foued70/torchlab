@@ -64,6 +64,19 @@ ShaderDataHandler::updateData(const string& _uniformName, GLfloat _value) {
 }
 
 void
+ShaderDataHandler::updateData(const std::string& _uniformName, GLuint _value) {
+	if (__isStreamOpen) {
+		__activeShader->setUniformUInt(_uniformName, _value);
+	} else {
+		auto result = __uIntValues.find(_uniformName);
+		if (result == __uIntValues.end()) 
+			__uIntValues.insert(make_pair(_uniformName, _value));
+		else 
+		  result -> second = _value;	
+	}
+}
+
+void
 ShaderDataHandler::updateSampler2D(const string& _uniformName, GLint _sampler) {
 	if (__isStreamOpen) {
 		__activeShader->setUniformInt(_uniformName, _sampler);
