@@ -50,6 +50,8 @@ if not target then
 end
 
 
+-- FIXME add next funcs to utils
+
 -- need C code for this
 
 function select_by_index(ind,mat)
@@ -65,6 +67,136 @@ function select_by_index(ind,mat)
    return s
 end
 
+-- <vals> sorted list of values
+-- 
+-- <val> value for which we want pointer into list where everything
+--       before pointer is < val and after >= val
+
+function get_index_lt_val(vals,val)
+   local idx = vals:size(1)*0.5
+   local cval = vals[idx]
+   local nval = vals[idx+1]
+   local step = idx*0.5
+   local count = 0
+   while true do 
+      count = count + 1
+      if (cval >= val) then
+         idx = idx - step
+      elseif (nval < val) then
+         idx = idx + step
+      else
+         break
+      end
+      step = math.floor(0.5 + (step * 0.5))
+      if (idx <= 0) or (idx >= vals:size(1)) or (step < 1) then
+         break
+      end
+      cval = vals[idx]
+      nval = vals[idx+1]
+   end
+   if (idx < 1) or (idx >= vals:size(1)) then
+      return -1,count
+   end
+
+   return math.floor(idx),count
+end
+
+function test_get_index_lt_val()
+   local r = torch.sort(torch.randn(1000))
+   local nr = r:size(1)
+   
+   function eval_test(r,val,verbose)
+      local idx,count = get_index_lt_val(r,val)
+      local err = 0
+      if (idx > 0) then
+         local cval = r[idx]
+         local nval = r[idx+1]
+         if (cval < val) and (nval >= val) then
+            if verbose then
+               printf("  OK idx: %d val: %f count: %d", idx, val, count)
+            end
+         else
+            if verbose then
+               printf("  ERROR idx: %d val: %f cval: %f nval: %f", idx, val, cval, nval)
+            end
+            errs = 1
+         end
+      else
+         if (val <= r[1]) or (val > r[-1]) then
+            if verbose then
+               printf("  OK val: %f out of bounds",val)
+            end
+         else
+            if verbose then
+               printf("  ERROR idx: %d val: %f minr: %f maxr: %f", idx, val, r[1],r[nval])
+            end
+            errs = 1
+         end
+      end
+      return err,count
+   end
+
+   print("Test 1 values in set")
+   local steps = 0
+   local errs  = 0
+   
+   for i = 1,nr do 
+      local val = r[i]
+      local err,count = eval_test(r,val)
+      steps = steps + count
+      errs = errs + err
+   end
+   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
+
+   print("Test 2 jittered values")
+   steps = 0
+   errs  = 0
+   
+   for i = 1,nr do 
+      local val = r[i] + torch.randn(1)[1]*1e-5
+      local err,count = eval_test(r,val)
+      steps = steps + count
+      errs = errs + err
+   end
+   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
+
+   print("Test 3 bounds")
+   steps = 0
+   errs  = 0
+   local rmin = r[1]
+   local rmax = r[-1]
+   for i = 1,nr*0.5 do 
+      local val = rmin - torch.rand(1)[1]*1e-5
+      local err,count = eval_test(r,val)
+      steps = steps + count
+      errs = errs + err
+   end
+   for i = 1,nr*0.5 do 
+      local val = rmax + torch.rand(1)[1]*1e-5
+      local err,count = eval_test(r,val)
+      steps = steps + count
+      errs = errs + err
+   end
+   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
+
+   print("Test 4 duplicate + jittered values")
+   steps = 0
+   errs  = 0
+   local uf = r:unfold(1,3,3)
+   for i = 1,uf:size(1) do 
+      uf[i]:fill(torch.randn(1)[1])
+   end
+   r = torch.sort(r)
+   for i = 1,nr do 
+      local val = r[i] + torch.randn(1)[1]*1e-5
+      local err,count = eval_test(r,val)
+      steps = steps + count
+      errs = errs + err
+   end
+   printf("-- %d/%d Errors average steps: %2.2f",errs,nr,steps/nr,nr)
+
+   
+end
 
 -- sv : split_verts.    Used to split the faces (obj.centers)
 -- bb : bounding_boxes. Around the object centered in each bbox
@@ -87,7 +219,8 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
       tree.leaf_fid[{{tree.leafindex,newindex}}] = absindex
       
       node[1]   = 0 -- no dim for leaf node
-      
+      node[2]   = 
+      node[3]   
       cindex[1] = tree.leafindex
       cindex[2] = newindex
       
@@ -114,24 +247,45 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
       absindex = indexes:clone()
    end
    
-   -- b) split: simple median split (replace with SAH)
-   local split     = math.floor(nverts/2)
-   local absindex1 = absindex[{{1,split}}]
-   local absindex2 = absindex[{{split+1,nverts}}]
-   local elems1    = indexes[{{1,split}}]
-   local elems2    = indexes[{{split+1,nverts}}]
+   -- b) split: on grid as in BIH paper. 
+   -- 
+   -- Carsten Wächter & Alexander Keller (2006)
+   -- Instant Ray Tracing: The Bounding Interval Hierarchy 
+   -- 
+   -- We want to create empty space between intervals and not use the
+   -- faces themselves to pick the split plane.  Intervals will fit
+   -- the objects and objects with equal values will go to the same
+   -- child.
+
+   -- b1) choose split plane in the middle of the range
+   local splitval  = rmin[dim] + range[dim]*0.5 
+
+   -- b2) get index into sorted vals s.t. 
+   --      - all vals from index and below are < splitval
+   --      - all vals above index are >= splitval
+   local splitidx  = get_index_lt_val(vals,splitval)
+
+   -- book keeping
+   --  - keep track of absolute indices in to face array
+   local absindex1 = absindex[{{1,splitidx}}]
+   local absindex2 = absindex[{{splitidx+1,nverts}}]
+   --  - keep track of relative indices
+   local elems1    = indexes[{{1,splitidx}}]
+   local elems2    = indexes[{{splitidx+1,nverts}}]
+
+   -- b3) find new points lists
    local sv1       = select_by_index(elems1,sv)
    local sv2       = select_by_index(elems2,sv)
    local bb1       = select_by_index(elems1,bb)
    local bb2       = select_by_index(elems2,bb)
 
-   -- c) record: this node is a split 
+   -- c) record: this node is a split node
    local node      = tree.nodes[noffset]
    local cindex    = tree.child_index[noffset]
 
    node[1] = dim          -- dimension on which we split
-   node[2] = bb:min(1):squeeze()[dim]
-   node[3] = bb:max(1):squeeze()[dim]
+   node[2] = bb:min(1):squeeze()[dim] -- min 
+   node[3] = bb:max(1):squeeze()[dim] -- max
    noffset = noffset + 1
    
    -- d) recurse
@@ -163,7 +317,7 @@ function build_tree(obj)
    -- [2] stop index in leaf_fid matrix
    tree.child_index = torch.LongTensor(obj.nfaces,2):fill(0)
    
-   -- tree is the indices to the faces 
+   -- leaves are indices to the faces 
    tree.leaf_fid = torch.LongTensor(obj.nfaces):fill(0)
    
 
@@ -179,7 +333,48 @@ function build_tree(obj)
 
 end
 
-tree = build_tree(target)
+-- write a simple obj file to visualize the tree partitioning: each
+-- leaf as separate objects.
+
+function dump_tree(tree,obj)
+   local objfilename = "tree_dump.obj"
+   local objf = assert(io.open(objfilename, "w"))
+
+   -- print vertices
+   local verts = obj.verts
+   for vid = 1,verts:size(1) do 
+      local v = verts[vid]
+      objf:write(string.format("v %f %f %f %f\n",v[1],v[2],v[3],v[4]))
+   end
+   objf:write("\n")
+
+   local nodes       = tree.nodes
+   local leaf_offset = tree.child_index
+   local leaf_fid    = tree.leaf_fid
+
+   local nvpf  = obj.nverts_per_face
+   local faces = obj.faces
+
+   for i = 1,nodes:size(1) do 
+      if (nodes[i][1] == 0) then
+         local loff = leaf_offset[i]
+         local fids = leaf_fid[{{loff[1],loff[2]},{}}]
+         objf:write("\n") 
+         objf:write(string.format("o node_%05d\n",i))
+         for j = 1,fids:size(1) do 
+            local fid = fids[j]
+            str = "f "
+            for vid = 1,nvpf[fid] do 
+               str = str .. string.format("%d ",faces[fid][vid])
+            end
+            objf:write(str .. "\n") 
+         end
+            
+      end
+   end
+   objf:close()
+   printf("Wrote %s",objfilename)
+end
 
 -- update mint,maxt based on the ray segment intersecting with the
 -- bounding interval
@@ -217,5 +412,8 @@ end
 
 pt = torch.Tensor(3):fill(1)
 dir = util.geom.normalize(torch.Tensor(3):fill(1))
+
+tree = build_tree(target)
+-- dump_tree(tree,target)
 
 traverse_tree(tree,pt,dir)
