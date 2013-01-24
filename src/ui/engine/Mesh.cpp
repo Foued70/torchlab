@@ -136,28 +136,3 @@ Mesh::closeMesh(Material* _mat) {
 	loadIntoVbo();
 }
 
-void
-Mesh::flush() {
-	__indices.clear();
-	__vertices.clear();
-}
-
-void
-Mesh::raise() {
-	__indices.resize(__buffer.vboID[ELEMENTS_ARRAY].dataCount);
-	memcpy(
-			&__indices[0],
-			__buffer.mapBuffer(ELEMENTS_ARRAY, READ),
-			__buffer.vboID[ELEMENTS_ARRAY].dataSize
-		);
-	__buffer.unmapBuffer(ELEMENTS_ARRAY);
-	
-	__vertices.resize(__buffer.vboID[DATA_ARRAY].dataCount);
-	memcpy(
-		&__vertices[0],
-	   __buffer.mapBuffer(DATA_ARRAY, READ),
-		  __buffer.vboID[DATA_ARRAY].dataSize
-	);
-	__buffer.unmapBuffer(DATA_ARRAY);
-}
-

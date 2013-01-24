@@ -37,6 +37,11 @@ class gui_launcher : public QObject
 };
 
 int libui_display(lua_State *L) {
+  THDoubleTensor* objData = NULL;
+  printf("%d\n", lua_gettop(L));
+  if(lua_gettop(L) == 1) {
+    objData = (THDoubleTensor*)luaT_toudata(L, 1, "torch.DoubleTensor");
+  }
   // create holder
   gui_launcher* gl = new gui_launcher;
   // move it to main thread
