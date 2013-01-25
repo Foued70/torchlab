@@ -1,14 +1,13 @@
 require 'torch'
 require 'sys'
 
-require 'util'
-
-util.test.pose = {}
-local test  = util.test.pose
+local util = require 'util'
 local pose  = util.pose
 local geom  = util.geom
 
-torch.include('util','pose-data.lua')
+local test  = {}
+
+test.data = require 'util/pose-data'
 
 -- FIXME check serious numerical issues which are hopefully due to the
 -- precision at which the groundtruth is copied from blender
@@ -120,3 +119,6 @@ function test.all()
    test.globalxyz2uv()
    test.localxy2globalray()
 end
+
+
+return test

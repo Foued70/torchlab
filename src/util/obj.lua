@@ -1,8 +1,7 @@
 require 'torch'
 require 'sys'
 
-util.obj = {}
-local objops = util.obj
+local objops = {}
 
 -- see: http://en.wikipedia.org/wiki/Wavefront_.obj_file
 function objops.load(...)
@@ -197,3 +196,6 @@ function objops.save(obj,objfname,mtlfname,imgbasename)
    mtlf:close()
    objf:close()
 end
+
+
+return objops

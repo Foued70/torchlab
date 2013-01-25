@@ -1,6 +1,4 @@
-util.test.geom.data = {}
-
-local data = util.test.geom.data
+local data = {}
 
 data.vec =
    torch.Tensor({
@@ -5824,3 +5822,6 @@ data.pt_dir =
                    {0.24199, 1.17222, 1.45165, 0.40142876, -0.48203871, -0.77877701},
                    {0.710012, 1.78208, 1.4517, 0.13242044, -0.71431925, -0.68717744}
                 })
+
+return data
+

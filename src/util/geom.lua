@@ -1,8 +1,7 @@
 require 'torch'
 require 'dok'
 
-util.geom = {}
-local geom = util.geom
+local geom = {}
 
 local axes   = torch.eye(3)
 
@@ -335,4 +334,7 @@ function geom.ray_face_intersection(...)
       return nil,3
    end
 end
+
+
+return geom
 

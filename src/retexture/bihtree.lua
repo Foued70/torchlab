@@ -2,7 +2,7 @@ require 'torch'
 require 'sys'
 require 'paths'
 require 'math'
-require 'util'
+local util = require 'util'
 
 -- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
 

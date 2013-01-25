@@ -1,13 +1,11 @@
 require 'torch'
 require 'sys'
 
-require 'util'
-
-util.test.geom = {}
-local test = util.test.geom
+local util = require 'util'
 local geom = util.geom
 
-torch.include('util','geom-data.lua')
+local test = {}
+test.data = require "util/geom-data"
 
 function test.quaternion_angle()
    print("Testing quaternion angle btw. 2 vectors")
@@ -300,3 +298,6 @@ function test.all()
    test.ray_face_intersection()
    test.compute_normals()
 end
+
+return test
+

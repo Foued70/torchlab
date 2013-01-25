@@ -3,11 +3,9 @@ require 'torch'
 require 'math'
 require 'image'
 require 'paths'
+local geom = require "util/geom"
 
-util.pose = {}
-
-local pose = util.pose
-local geom = util.geom
+local pose = {}
 
 local r2d = 180 / math.pi
 local d2r = math.pi / 180
@@ -141,3 +139,6 @@ function pose.localxy2globalray(p,i,x,y)
    -- return point and direction rotated to global coordiante
    return p.xyz[i], geom.rotate_by_quat(dir,p.quat[i])
 end
+
+
+return pose

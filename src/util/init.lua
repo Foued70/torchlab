@@ -2,19 +2,21 @@ require 'torch'
 require 'dok'
 require 'paths'
 
-util = {}
+local exports = {}
 
--- add files to the local utils table
+exports.pbx = require "util/pbx"
+exports.geom = require "util/geom"
+exports.obj = require "util/obj"
+exports.pose = require "util/pose"
 
-torch.include('util','util.lua')
-torch.include('util','geom.lua')
-torch.include('util','pose.lua')
-torch.include('util','obj.lua')
+require "util/global"
 
-function util.run_tests()
-   util.test = {}
-   torch.include('util','geom-test.lua')
-   util.test.geom.all()
-   torch.include('util','pose-test.lua')
-   util.test.pose.all()
+function exports.run_tests()
+   local geom_test = require "util/geom-test"
+   geom_test.all()
+
+   local pose_test = require "util/pose-test"
+   pose_test.all()
 end
+
+return exports

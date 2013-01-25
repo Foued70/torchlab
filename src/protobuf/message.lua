@@ -285,7 +285,7 @@ local function _AttachFieldHelpers(message_meta, field_descriptor)
 
     local AddDecoder = function(wiretype, is_packed)
         local tag_bytes = encoder.TagBytes(field_descriptor.number, wiretype)
-        print(tag_bytes:byte(), "=", field_descriptor.full_name, field_descriptor.number, wiretype)
+        -- print(tag_bytes:byte(), "=", field_descriptor.full_name, field_descriptor.number, wiretype)
         message_meta._decoders_by_tag[tag_bytes] = TYPE_TO_DECODER[field_descriptor.type](field_descriptor.number, is_repeated, is_packed, field_descriptor, field_descriptor._default_constructor)
     end
   
