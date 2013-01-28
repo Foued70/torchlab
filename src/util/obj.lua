@@ -1,5 +1,6 @@
 require 'torch'
 require 'sys'
+local geom = require "util/geom"
 
 local objops = {}
 
@@ -104,7 +105,7 @@ function objops.load(...)
       centers[fid] = fverts:mean(1):squeeze()
 
       -- c) compute plane normal and d distance from origin for plane eq.
-      normals[fid] = util.geom.compute_normal(fverts)
+      normals[fid] = geom.compute_normal(fverts)
       d[fid]       = - torch.dot(normals[fid],centers[fid])
 
       -- d) compute bbox
