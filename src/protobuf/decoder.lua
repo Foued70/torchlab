@@ -18,7 +18,6 @@
 local string = string
 local table = table
 local assert = assert
-local ipairs = ipairs
 local error = error
 local print = print
 

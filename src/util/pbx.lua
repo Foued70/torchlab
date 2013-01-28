@@ -1,49 +1,135 @@
 local torch = require "torch"
 local pb = require "protobuf"
+local geom = require "util/geom"
 
-local function load(filename)
 
-	local model_data = pb.ModelData()
-	io.input(filename); 
-	model_data:ParseFromString(io.read("*all"));
+local function parse(pbx_data)
+  local model_data = pb.ModelData()
+	model_data:ParseFromString(pbx_data)
 
-  local n_verts = 0
-  for mesh in model_data.meshes do
-    n_verts = n_verts + #mesh.vertices
+
+  local materials = model_data.materials
+  local material_map = {}
+  for mat_i, mat in ipairs(materials) do
+    material_map[mat.name] = mat_i
   end
 
-  local verts = torch.Tensor(n_verts,4):fill(1)
-  local i = 1
-  for mesh in model_data.meshes do
-    for vert in mesh.vertices do
-      verts[i][1] = vert.x
-      verts[i][2] = vert.y
-      verts[i][3] = vert.z
-      i = i + 1
+  local n_verts = 0
+  local n_faces = 0
+  local n_submeshes = 0
+  for j, mesh in ipairs(model_data.meshes) do
+    n_verts = n_verts + #mesh.vertices
+    n_submeshes = n_submeshes + #mesh.submeshes
+
+    for k, submesh in ipairs(mesh.submeshes) do
+      n_faces = n_faces + (#submesh.triangles / 3)
     end
   end
 
+  local verts = torch.Tensor(n_verts,4):fill(1)
+  local uvs = torch.Tensor(n_verts,2)
+  local faces = torch.IntTensor(n_faces * 3)
+  local submesh_ranges = torch.IntTensor(n_submeshes,2)
+  local submesh_materials = torch.IntTensor(n_submeshes)
 
+  local vert_i = 1
+  local face_i = 1
+  local submesh_i = 1
+
+  for j, mesh in ipairs(model_data.meshes) do
+    for k, submesh in ipairs(mesh.submeshes) do
+      local triangles = submesh.triangles
+
+      -- all vert arrays will be merged, so adjust the indexes
+      -- this also takes care of the 0/1 index issue
+      tri_vert_indexes = torch.Tensor(triangles)
+      tri_vert_indexes:add(vert_i)
+
+      face_end_i = face_i + #triangles - 1
+      faces[{{ face_i, face_end_i }}] = tri_vert_indexes
+
+      submesh_ranges[{submesh_i, 1}] = (face_i - 1) / 3 + 1
+      submesh_ranges[{submesh_i, 2}] = face_end_i / 3
+      submesh_materials[submesh_i] = material_map[submesh.materialName]
+
+      face_i = face_end_i + 1
+      submesh_i = submesh_i + 1
+    end
+
+    local mesh_uvs = mesh.uvs
+    for k, vert in ipairs(mesh.vertices) do
+      verts[vert_i][1] = vert.x
+      verts[vert_i][2] = vert.y
+      verts[vert_i][3] = vert.z
+
+      uvs[vert_i][1] = mesh_uvs[k].x
+      uvs[vert_i][2] = mesh_uvs[k].y
+
+      vert_i = vert_i + 1
+    end
+
+  end
+
+
+  faces:resize(n_faces, 3)
+
+  local face_verts    = torch.Tensor(n_faces, 3, 3)
+  local face_normals  = torch.Tensor(n_faces,3)
+  local d             = torch.Tensor(n_faces) 
+  local centers       = torch.Tensor(n_faces,3)
+  local bbox          = torch.Tensor(n_faces,6) -- xmin,ymin,zmin,xmax,ymax,zmax
+
+  for fid = 1,n_faces do
+    local nverts = 3
+    local fverts = face_verts[fid]:narrow(1,1,nverts)
+    local face   = faces[fid]
+
+    -- a) build face_verts (copy all the data)
+    for j = 1,nverts do
+      fverts[j] = verts[ {face[j],{1,3}} ]
+    end
+
+    -- b) compute object centers
+    centers[fid] = fverts:mean(1):squeeze()
+
+    -- c) compute plane normal and d distance from origin for plane eq.
+    face_normals[fid] = geom.compute_normal(fverts)
+    d[fid]       = - torch.dot(face_normals[fid],centers[fid])
+
+    -- d) compute bbox
+    local thisbb   = bbox[fid]
+    thisbb:narrow(1,1,3):copy(fverts:min(1):squeeze())
+    thisbb:narrow(1,4,3):copy(fverts:max(1):squeeze())
+    
+  end
 
   local obj = {}
-  obj.nverts          = nverts
-  obj.nfaces          = nfaces
-  obj.verts           = verts
-  obj.faces           = faces
-  obj.nverts_per_face = nverts_per_face
-  obj.face_verts      = face_verts
-  obj.normals         = normals
-  obj.d               = d
-  obj.centers         = centers
-  obj.bbox            = bbox
+  obj.materials          = materials
+  obj.verts              = verts
+  obj.faces              = faces
+  obj.nverts_per_face    = 3
+  obj.face_verts         = face_verts
+  obj.face_normals       = face_normals
+  obj.face_center_dists  = d
+  obj.face_centers       = centers
+  obj.bbox               = bbox
+  obj.submesh_ranges     = submesh_ranges
+  obj.submesh_materials  = submesh_materials
+
 
   return obj
-
 end
+
+local function load(filename)
+  io.input(filename)
+  return parse(io.read("*all"))
+end
+
 
 
 local exports = {}
 
 exports.load = load
+exports.parse = parse
 
 return exports
