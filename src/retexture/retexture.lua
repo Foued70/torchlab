@@ -433,7 +433,6 @@ function retexture (fid,obj,debug)
    -- 7) Remap UVs: rotate each vertex into the coordinates of the new texture
    create_uvs(fid,obj,rot,trans,dims,xrange,yrange)
 end
-end
 
 function retexture_all()
    for fid = 1,target.nfaces do
