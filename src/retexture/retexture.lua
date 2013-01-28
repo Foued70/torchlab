@@ -26,7 +26,7 @@ cmd:option('-posefile',
 cmd:option('-scale',4,'scale at which to process 4 = 1/4 resolution')
 cmd:option('-packetsize',32,'window size for ray packets (32x32)')
 cmd:text()
- 
+
 -- parse input params
 params = cmd:parse(arg)
 
@@ -43,7 +43,7 @@ sys.execute("mkdir -p " .. cachedir)
 posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
 sourcecache = cachedir .. sourcefile:gsub("/","_") .. ".t7"
 targetcache = cachedir .. targetfile:gsub("/","_") .. ".t7"
-posedir = paths.dirname(posefile)
+posedir     = paths.dirname(posefile)
 
 function loadcache (objfile,cachefile,loader,args)
    local object = nil
@@ -70,7 +70,7 @@ if not target then
    target = loadcache(targetfile,targetcache,util.obj.load,10)
 end
 
--- more args FIXME become arguments
+-- more args FIXME become arguments and make local
 ppm        = 100 -- pixels per meter
 mpp        = 1/ppm -- meters per pixel
 nposes     = 5   -- max number of poses to consider per texture
@@ -122,7 +122,7 @@ function draw_wireframe (p,i,obj)
             dir = dir/len
             step = dir * mpp
             -- printf("step: %f,%f,%f",step[1],step[2],step[3])
-            for s = 0,len,mpp do 
+            for s = 0,len,mpp do
                -- draw verts first
                local u,v,x,y = util.pose.globalxyz2uv(p,i,pvert)
                -- printf("u: %f v: %f x: %f y %f", u, v, x, y)
@@ -131,7 +131,7 @@ function draw_wireframe (p,i,obj)
                   wimage[{4,y,x}] = 1  -- Alpha Channel
                end
                pvert = pvert + step
-               
+
             end
          end
       end
@@ -140,7 +140,7 @@ function draw_wireframe (p,i,obj)
 end
 
 function save_all_wireframes()
-   for pi = 1,poses.nposes do 
+   for pi = 1,poses.nposes do
       local wimage = draw_wireframe(poses,pi,target)
       image.display(wimage)
       -- save
@@ -153,7 +153,7 @@ end
 -- Main Functions:
 
 -- + ----------------
--- get_closest_poses() 
+-- get_closest_poses()
 -- for a given face select the best poses we will use to color it.
 -- input: poses <p> , face ids <fid>, object <obj>
 function get_closest_poses(p,fid,obj,debug)
@@ -168,7 +168,7 @@ function get_closest_poses(p,fid,obj,debug)
    local wrong_side = torch.lt(dist_to_plane,0):double()
    local invalid    = torch.sum(wrong_side)
    if debug then printf("[%d] wrong side: %d", fid,invalid) end
-   if (invalid == p.nposes) then 
+   if (invalid == p.nposes) then
       -- flip normal
       normal:mul(-1)
       dist_to_plane = torch.mv(p.xyz,normal) + d
@@ -177,22 +177,22 @@ function get_closest_poses(p,fid,obj,debug)
       invalid    = torch.sum(wrong_side)
       printf("[%d] flipped normal wrong side now: %d", fid,invalid)
    end
-   
-   wrong_side:mul(1e6):add(1) 
-   
+
+   wrong_side:mul(1e6):add(1)
+
    -- b) who are closest (to the face center)
    local center = obj.centers[fid]
    local dirs   = p.xyz:clone()
 
-   for pi = 1,p.nposes do 
+   for pi = 1,p.nposes do
       dirs[pi]:add(-1,center)
    end
-    
+
    local len = dirs:norm(2,2):squeeze():cmul(wrong_side)
    local slen,sidx = torch.sort(len)
-   if debug then 
+   if debug then
       printf("[%d] top5 : %d: %2.2f %d: %2.2f %d: %2.2f %d: %2.2f %d: %2.2f",
-             fid, 
+             fid,
              sidx[1],slen[1],
              sidx[2],slen[2],
              sidx[3],slen[3],
@@ -203,24 +203,24 @@ function get_closest_poses(p,fid,obj,debug)
    --  c) reject poses where the camera is too close.  Can reject just on
    --     the face center as we prefer whole face to be colored by a
    --     single pose.
-   
+
    --  d) make sure that at least one vertex of face falls within the
    --     poses view. (not sure we need this)
-   if (p.nposes == invalid) then 
+   if (p.nposes == invalid) then
       return sidx:narrow(1,1,1)
    else
       return sidx:narrow(1,1,p.nposes-invalid)
    end
 end
 
-function test_get_closest_poses() 
-   for fid = 1,target.nfaces do 
+function test_get_closest_poses()
+   for fid = 1,target.nfaces do
       get_closest_poses(poses,fid,target,true)
    end
 end
 
 -- + ----------------
--- face_to_texture_transform_and_dimensions() 
+-- face_to_texture_transform_and_dimensions()
 
 -- find rotatation and translation for a virutal camera centered on
 -- the face and the dimensions of a texture map
@@ -231,9 +231,9 @@ function face_to_texture_transform_and_dimension(fid,obj,debug)
    --  a) find translation (point closest to origin of longest edge)
    local eid = 1
    local maxedge = torch.norm(face_verts[1] - face_verts[-1])
-   for vi = 2,face_verts:size(1) do 
+   for vi = 2,face_verts:size(1) do
       local elen = torch.norm(face_verts[vi] - face_verts[vi-1])
-      if maxedge < elen then 
+      if maxedge < elen then
          maxedge = elen
          eid = vi
       end
@@ -264,15 +264,15 @@ function face_to_texture_transform_and_dimension(fid,obj,debug)
    -- range is min,max,range
    local xrange = torch.Tensor(3):fill(v[xdim])
    local yrange = torch.Tensor(3):fill(v[ydim])
-   for vi = 2,face_verts:size(1) do 
+   for vi = 2,face_verts:size(1) do
       v = geom.rotate_by_quat(face_verts[vi] - trans,rot)
       if (yrange[1] > v[ydim]) then yrange[1] = v[ydim] end
       if (yrange[2] < v[ydim]) then yrange[2] = v[ydim] end
       if (xrange[1] > v[xdim]) then xrange[1] = v[xdim] end
       if (xrange[2] < v[xdim]) then xrange[2] = v[xdim] end
    end
-   xrange[3] = xrange[2] - xrange[1] 
-   yrange[3] = yrange[2] - yrange[1] 
+   xrange[3] = xrange[2] - xrange[1]
+   yrange[3] = yrange[2] - yrange[1]
 
    return rot,trans,dims,xrange,yrange
 end
@@ -289,12 +289,12 @@ function test_face_to_texture()
       printf(" -- dim: %d %d %d",d[1],d[2],d[3])
       printf(" -- xrg: %2.4f - %2.4f",x[1],x[2])
       printf(" -- yrg: %2.4f - %2.4f",y[1],y[2])
-      
+
    end
 end
 
 -- + ----------------
--- compute_alpha(dir,d,norm)        
+-- compute_alpha(dir,d,norm)
 --  prefer smaller angle w/ respect to norm
 -- (normalize with pi/2 as that is the biggest angle)
 function compute_alpha(dir,d,norm,debug)
@@ -307,7 +307,7 @@ function compute_alpha(dir,d,norm,debug)
    -- do ramp to ideal dist
    if (d < idealdist) then
       return a*(d*fin_a + fin_b)
-   else 
+   else
       return a*(d*fout_a + fout_b)
    end
 end
@@ -318,7 +318,7 @@ function create_uvs (fid,obj,rot,trans,dims,xrange,yrange)
    local face_verts = obj.face_verts[fid]
    local uv         = obj.uv[fid]
 
-   for vi = 1,face_verts:size(1) do 
+   for vi = 1,face_verts:size(1) do
       local vtrans = face_verts[vi] - trans
       vtrans = geom.rotate_by_quat(vtrans,rot)
       uv[vi][1] =      (vtrans[dims[2]] - xrange[1])/xrange[3]
@@ -329,13 +329,13 @@ end
 
 
 function retexture (fid,obj,debug)
-   
-   -- Retexture Algo:
-   print(fid)   
-   -- 1) get closest poses: 
-   local pose_idx = get_closest_poses(poses,fid,obj)
-   pose_idx = pose_idx:narrow(1,1,nposes)
 
+   -- Retexture Algo:
+   -- 1) get closest poses:
+   local pose_idx = get_closest_poses(poses,fid,obj)
+   if (pose_idx:size(1) > nposes) then
+      pose_idx = pose_idx:narrow(1,1,nposes)
+   end
    -- 2) find rotation and translation to texture coords and dimensions of texture
    local rot,trans,dims,xrange,yrange = face_to_texture_transform_and_dimension(fid,obj)
    --  a) need rotation from texture to global
@@ -347,10 +347,10 @@ function retexture (fid,obj,debug)
    local dx = xrange[3]/widthpx
    local dy = yrange[3]/heightpx
 
-   printf("w: %f h: %f dx: %f dy: %f",widthpx,heightpx,dx,dy)
+   printf("face: %d texture w: %d h: %d dx: %f dy: %f",fid,widthpx,heightpx,dx,dy)
 
    -- make the temporary per pose mixing alpha and color channels
-   local normal = obj.normals[fid] 
+   local normal = obj.normals[fid]
    local alpha  = torch.zeros(nposes)
    local color  = torch.zeros(nposes,3)
    local v      = torch.zeros(3)
@@ -358,7 +358,7 @@ function retexture (fid,obj,debug)
       obj.uv = torch.Tensor(obj.face_verts:size(1),obj.face_verts:size(2),2)
    end
    local uv = obj.uv
-   if not obj.textures then 
+   if not obj.textures then
       obj.textures = {}
    end
    -- texture image
@@ -366,7 +366,7 @@ function retexture (fid,obj,debug)
 
    -- 4) loop through the 2D texture. FIXME optimize using ray packets.
    local y = yrange[1]
-   for h = 1,heightpx do 
+   for h = 1,heightpx do
       local x = xrange[1]
       for w = 1,widthpx do
          -- place point in texture coordinate
@@ -378,9 +378,9 @@ function retexture (fid,obj,debug)
          v = geom.rotate_by_quat(v,rotT) + trans
          local found = 0
          -- loop through closest poses
-         for pi = 1,pose_idx:size(1) do 
-            local pid  = pose_idx[pi] 
-            local timg = poses.images[pid] 
+         for pi = 1,pose_idx:size(1) do
+            local pid  = pose_idx[pi]
+            local timg = poses.images[pid]
             local pt   = poses.xyz[pid]
 
             --  get uv of global coordinate in the pose
@@ -388,12 +388,12 @@ function retexture (fid,obj,debug)
 
             -- check obvious out of bounds (including a buffer at top
             -- and bottom 0px for matterport textures)
-            if (((px < 0) or (px >= timg:size(3))) or 
+            if (((px < 0) or (px >= timg:size(3))) or
              (py < vertbuffer) or (py >= (timg:size(2) - vertbuffer))) then
                if debug then printf("[%d] out of range skipping",pid) end
             else
                -- check occlusion (look up in ray traced pose mask)
-               -- FIXME 
+               -- FIXME
                --  compute alpha (mixing) for this pose. (see. func. compute_alpha())
                local dir  = v - pt -- from pose to surface
                local dist = dir:norm()
@@ -409,7 +409,7 @@ function retexture (fid,obj,debug)
          -- 5) blend colors from different poses using alpha (use max per
          --    pixel as we go for now)
          local s = alpha:sum()
-         if (s > 0) then 
+         if (s > 0) then
             local pmax,pid = alpha:max(1)
             pid = pid[1]
             fimg[{{},h,w}] = color[pid]
@@ -425,19 +425,18 @@ function retexture (fid,obj,debug)
    -- 6) store new texture file
    obj.textures[fid] = fimg
    image.display{image=fimg,min=0,max=1}
-   
+
    local fname  = paths.basename(targetfile):gsub(".obj",string.format("_face%05d.png",fid))
    printf("Saving: texture %s", fname)
    image.save(fname,fimg)
 
    -- 7) Remap UVs: rotate each vertex into the coordinates of the new texture
    create_uvs(fid,obj,rot,trans,dims,xrange,yrange)
-   
 end
 
 function retexture_all()
    for fid = 1,target.nfaces do
-      sys.tic() 
+      sys.tic()
       retexture(fid,target)
       printf("%d textured in %2.2fs",fid,sys.toc())
    end
@@ -447,3 +446,4 @@ function retexture_all()
    util.obj.save(target,objfile,mtlfile,textfile)
 end
 
+retexture_all()
