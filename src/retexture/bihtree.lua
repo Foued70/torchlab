@@ -4,51 +4,10 @@ require 'paths'
 require 'math'
 local util = require 'util'
 
+require('intersection')
+require('ray')
+
 -- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
-
-cmd = torch.CmdLine()
-cmd:text()
-cmd:text()
-cmd:text('Compute depth maps')
-cmd:text()
-cmd:text('Options')
-cmd:option('-targetfile',
-           "rivercourt_3307_scan/rivercourt_3307.obj",
-           'target obj with new geometry')
-
-cmd:text()
- 
--- parse input params
-params = cmd:parse(arg)
-
-local axes = torch.eye(3)
-
-targetfile = params.targetfile
-
-cachedir = "cache/"
-sys.execute("mkdir -p " .. cachedir)
-
-targetcache = cachedir .. targetfile:gsub("/","_") .. ".t7"
-
-function loadcache (objfile,cachefile,loader,args)
-   local object = nil
-   -- Process or load the poses
-   if (paths.filep(cachefile)) then
-      sys.tic()
-      object = torch.load(cachefile)
-      printf("Loaded %s from %s in %2.2fs", objfile, cachefile, sys.toc())
-   else
-      object = loader(objfile,args)
-      torch.save(cachefile,object)
-      printf("Saving %s to %s", objfile, cachefile)
-   end
-   return object
-end
-
-if not target then
-   target = loadcache(targetfile,targetcache,util.obj.load,8)
-end
-
 
 -- FIXME add next funcs to utils
 
@@ -194,7 +153,6 @@ function test_get_index_lt_val()
       errs = errs + err
    end
    printf("-- %d/%d Errors average steps: %2.2f",errs,nr,steps/nr,nr)
-
    
 end
 
@@ -209,7 +167,7 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    if not noffset then
       noffset = 1
    end
-   
+
    -- 1) stop recursion make a leaf
    if sv:size(1) <= tree.min_for_leaf then
       local node      = tree.nodes[noffset]
@@ -219,8 +177,6 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
       tree.leaf_fid[{{tree.leafindex,newindex}}] = absindex
       
       node[1]   = 0 -- no dim for leaf node
-      node[2]   = 
-      node[3]   
       cindex[1] = tree.leafindex
       cindex[2] = newindex
       
@@ -234,7 +190,8 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    local _,dim = range:max(1)
    dim   = dim:squeeze()
    
-   --  b) sort the faces in this dimension (FIXME should do at the start)
+   --  b) sort the faces in this dimension 
+   --     FIXME could do a single sort at the start
    local vals,indexes = sv:select(2,dim):sort()
    
    -- bookeeping : keep track of the absolute indices
@@ -284,17 +241,19 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    local cindex    = tree.child_index[noffset]
 
    node[1] = dim          -- dimension on which we split
-   node[2] = bb:min(1):squeeze()[dim] -- min 
-   node[3] = bb:max(1):squeeze()[dim] -- max
+   node[2] = bb1:select(2,dim):max() -- max of left child 
+   node[3] = bb2:select(2,dim):min() -- min of right child
+
    noffset = noffset + 1
    
    -- d) recurse
-   noffset = recurse_tree(tree,sv1,bb1,noffset,absindex1)
-   cindex[1] = noffset -- left child
-   
-   noffset = recurse_tree(tree,sv2,bb2,noffset,absindex2)
-   cindex[2] = noffset -- right child
 
+   cindex[1] = noffset -- left child
+   noffset = recurse_tree(tree,sv1,bb1,noffset,absindex1)
+   
+   cindex[2] = noffset -- right child
+   noffset = recurse_tree(tree,sv2,bb2,noffset,absindex2)
+   
    return noffset
 end
 
@@ -324,11 +283,12 @@ function build_tree(obj)
    tree.leafindex = 1 -- Global offset at which to write the next leaf
    tree.min_for_leaf = 4 
 
-   local noffset = recurse_tree(tree,obj.centers,obj.bbox)
+   local noffset = recurse_tree(tree,obj.centers,obj.face_bboxes)
 
-   tree.child_index = tree.child_index:narrow(1,1,noffset-1)
-   tree.nodes       = tree.nodes:narrow(1,1,noffset-1)
-
+   -- clean up 
+   tree.child_index = tree.child_index:narrow(1,1,noffset)
+   tree.nodes       = tree.nodes:narrow(1,1,noffset)
+   tree.bbox        = obj.bbox
    return tree
 
 end
@@ -378,42 +338,183 @@ end
 
 -- update mint,maxt based on the ray segment intersecting with the
 -- bounding interval
-function recurse_traverse (tree,node_id,ray_origin,ray_invdir,ray_mint,ray_maxt)
+function recurse_traverse (tree,node_id)
+   printf("Traversing: %d",node_id)
+   local node    = tree.nodes[node_id]
+   local nidx    = tree.child_index[node_id]
+   local dim     = node[1]
+   -- not leaf
+   if (dim == 0) then
+      printf(" - leaf node: range: %d,%d",  nidx[1],nidx[2])
+   else
+      printf(" - inner node: children: %d,%d",  nidx[1],nidx[2])
+   
+      recurse_traverse(tree,c1)
 
-   -- keep splitting ray
-   local node = tree.nodes[node_id]
-   local dim  = node[1]
-   if (dim > 0) then
-      local minv = node[2]
-      local maxv = node[3]
-      -- not leaf
-      printf("node: dim: %f min: %f max: %f",dim,minv,maxv)
-      
-      -- intersection with Axis-aligned bbox (see pbrt book p.194)
-      local tmin = (minv - ray_origin[dim]) * ray_invdir[dim]
-      local tmax = (maxv - ray_origin[dim]) * ray_invdir[dim]
-
-      printf("tmin: %f tmax: %f", tmin, tmax)
-      
+      recurse_traverse(tree,c2)
    end
 end
 
-function traverse_tree(tree,ray_origin,ray_dir)
-   local ray_invdir = ray_dir:pow(-1)
-   local ray_mint   = 0
-   local ray_maxt   = math.huge
+
+-- recursive traversal of tree useful for debugging or perhaps to flatten the tree.
+function walk_tree(tree)
    local node_id    = 1
-   local todo       = torch.LongTensor(64)
-   local todopos    = 1
-   for node_id = 1,tree.nodes:size(1) do 
-      recurse_traverse(tree,node_id,ray_origin,ray_invdir,ray_mint,ray_maxt)
-   end
+   -- start at parent
+   recurse_traverse(tree,node_id)
 end
 
-pt = torch.Tensor(3):fill(1)
-dir = util.geom.normalize(torch.Tensor(3):fill(1))
+-- return depth of closest intersection.
+function traverse_tree(tree,obj,ray,debug)
+   -- stack used to keep track of nodes left to visit
+   local todolist  = torch.LongTensor(64)
+   local todoindex = 0
+   local node_id   = 1 -- start at parent 
+   local nodes     = tree.nodes
+   local children  = tree.child_index
+   local fids      = tree.leaf_fid
+   local rsign     = ray.sign
 
-tree = build_tree(target)
+   -- In this BIH tree the node holds the max and min for the
+   -- children. The initial test whether the ray intersects the whole
+   -- tree needs to be run first. This is an uglier loop than I would like...
+
+   -- intersect w/ bbox of whole object
+   local process_tree, ray_mint, ray_maxt = ray_bbox_intersect(ray,obj.bbox)
+   
+   local mindepth = math.huge
+
+   while (process_tree) do 
+      -- CHECK intersect first
+      local node  = nodes[node_id]
+      local cids  = children[node_id]
+      local dim   = node[1]
+      local c1max = node[2]
+      local c2min = node[3]
+      local process_stack = true
+      if (dim == 0) then
+         -- 1) leaf node process primitives
+         if debug then
+            printf("Leaf node: %d", node_id)
+         end
+         local start_id = cids[1]
+         local   end_id = cids[2]
+         local      ids = fids[{{start_id,end_id}}]
+         if debug then
+            printf("start: %d end: %d", start_id, end_id)
+            print(ids)
+         end 
+         for i = 1,ids:size(1) do 
+            -- local d = ray_polygon_intersection(ray,obj,ids[i])
+            local intersectp,d,dmax = ray_bbox_intersect(ray,obj.face_bboxes[ids[i]])
+            -- if there is an intersection 
+            if intersectp and d < mindepth then
+               if debug then
+                  printf("new d: %f", d)
+               end
+               mindepth = d
+               ray_maxt = d
+            end
+         end
+         
+      else
+         if debug then
+            printf("node: %d dim: %d c1max: %f c2min: %f ray: mint: %f maxt: %f",
+                   node_id, dim, c1max, c2min, ray_mint, ray_maxt)
+         end
+         -- 2) inner node evaluate children
+         local dsign = (rsign[dim] == 1)
+         if (dsign) then
+            local intersectp, new_min, new_max = 
+               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c2min)
+            if debug then
+               printf("> intersect: %s dim: %d max: %f",
+                      intersectp, dim, c2min) 
+            end
+            -- if intersection, add child2 to the todo list
+            if intersectp then
+               if debug then 
+                  print("   - add to todo")
+               end
+               todoindex = todoindex + 1
+               todolist[todoindex] = cids[2]
+            end
+            -- process child 1
+            local intersectp, new_min, new_max = 
+               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c1max,true)
+            if debug then 
+               printf("< intersect: %s new_min: %f new_max: %f dim: %d max: %f",
+                      intersectp, new_min, new_max, dim, c1max)
+            end
+            if intersectp then
+               if debug then 
+                  print("  - processing")
+               end
+               -- process child 
+               ray_mint = new_min
+               ray_maxt = new_max
+               node_id  = cids[1]
+               process_stack = false
+            end 
+         else
+            -- check child1 
+            local intersectp, new_min, new_max = 
+               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c1max,true) 
+            if debug then 
+               printf("> intersect: %s dim: %d max: %f",
+                      intersectp, dim, c1max) 
+            end
+            if intersectp then
+               if debug then 
+                  print("   - add to todo")
+               end
+               -- add child1 to the todo list               
+               todoindex = todoindex + 1
+               todolist[todoindex] = cids[1]
+            end
+            -- process child 2
+            local intersectp, new_min, new_max = 
+               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c2min)
+            if debug then 
+               printf("> intersect: %s new_min: %f new_max: %f dim: %d max: %f",
+                      intersectp, new_min, new_max, dim, c2min)
+            end
+            if intersectp then
+               if debug then
+                  print("  - processing")
+               end
+               -- process child 
+               ray_mint = new_min
+               ray_maxt = new_max
+               node_id  = cids[2]
+               process_stack = false
+            end 
+         end
+      end
+      -- process stack
+      if process_stack then 
+         if (todoindex > 0) then
+            node_id = todolist[todoindex] 
+            todoindex = todoindex - 1
+         else
+            break -- we're done.
+         end
+      end
+   end
+   return mindepth
+end
+
+-- tree = build_tree(target)
 -- dump_tree(tree,target)
 
-traverse_tree(tree,pt,dir)
+
+-- compare aggregate to and exhaustive search through all polygons.
+function test_traverse()
+   local tree = build_tree(target)
+   local obj  = target
+   local ray  = Ray(torch.Tensor({0,0,0}),torch.Tensor({1,1,1}))
+   
+   local d    = traverse_tree(tree,obj,ray)
+   
+   local slow_d,slow_fid = get_occlusions(ray.origin,ray.dir,obj)
+   printf("tree: %f exhaustive: %f, %d",d,slow_d,slow_fid)
+end
