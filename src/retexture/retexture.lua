@@ -43,7 +43,7 @@ sys.execute("mkdir -p " .. cachedir)
 posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
 sourcecache = cachedir .. sourcefile:gsub("/","_") .. ".t7"
 targetcache = cachedir .. targetfile:gsub("/","_") .. ".t7"
-posedir = paths.dirname(posefile)
+posedir     = paths.dirname(posefile)
 
 function loadcache (objfile,cachefile,loader,args)
    local object = nil
@@ -70,7 +70,7 @@ if not target then
    target = loadcache(targetfile,targetcache,util.obj.load,10)
 end
 
--- more args FIXME become arguments
+-- more args FIXME become arguments and make local
 ppm        = 100 -- pixels per meter
 mpp        = 1/ppm -- meters per pixel
 nposes     = 5   -- max number of poses to consider per texture
@@ -331,7 +331,6 @@ end
 function retexture (fid,obj,debug)
    
    -- Retexture Algo:
-   print(fid)   
    -- 1) get closest poses: 
    local pose_idx = get_closest_poses(poses,fid,obj)
    pose_idx = pose_idx:narrow(1,1,nposes)
@@ -347,7 +346,7 @@ function retexture (fid,obj,debug)
    local dx = xrange[3]/widthpx
    local dy = yrange[3]/heightpx
 
-   printf("w: %f h: %f dx: %f dy: %f",widthpx,heightpx,dx,dy)
+   printf("face: %d texture w: %d h: %d dx: %f dy: %f",fid,widthpx,heightpx,dx,dy)
 
    -- make the temporary per pose mixing alpha and color channels
    local normal = obj.normals[fid] 
@@ -447,3 +446,4 @@ function retexture_all()
    util.obj.save(target,objfile,mtlfile,textfile)
 end
 
+retexture_all()
