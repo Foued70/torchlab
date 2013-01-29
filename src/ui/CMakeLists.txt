@@ -6,7 +6,8 @@ find_library(COCOA_LIBRARY Cocoa)
 set(CMAKE_CXX_COMPILER ../../../build/usr/local/bin/g++)
 set(CMAKE_CXX_FLAGS "-std=gnu++11")
 
-FILE(GLOB luasrc "*.lua")
+# FILE(GLOB luasrc "*.lua")
+set(luasrc "")
 FILE(GLOB src "*.cpp" "engine/*.cpp" "engine/*.c")
 # SET(src qui.cpp ScanWidget.cpp)
 
