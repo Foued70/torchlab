@@ -178,18 +178,23 @@ function objops.save(obj,objfname,mtlfname,imgbasename)
 
       -- save texture to an image file
       local iname = string.format("%s_face%05d.png",imgbasename,fid)
-      image.save(iname,obj.textures[fid])
-
-      -- store path to image in mtlfile
-      mtlf:write(string.format("newmtl %s\n", iname))
-      mtlf:write(string.format("map_Ka %s\n", iname))
-      mtlf:write(string.format("map_Kd %s\n", iname))
-      mtlf:write("\n")
-
+      if obj.textures[fid] and not paths.filep(iname) then
+         image.save(iname,obj.textures[fid])
+      end
+      local filep = paths.filep(iname)
+      if filep then
+         -- store path to image in mtlfile
+         mtlf:write(string.format("newmtl %s\n", iname))
+         mtlf:write(string.format("map_Ka %s\n", iname))
+         mtlf:write(string.format("map_Kd %s\n", iname))
+         mtlf:write("\n")
+      end
       -- store face and mtl info to obj
       objf:write("\n")
       objf:write(string.format("o face%05d\n",fid))
-      objf:write(string.format("usemtl %s\n",iname))
+      if filep  then
+         objf:write(string.format("usemtl %s\n",iname))
+      end
       str = "f "
       for vid = 1,nvpf[fid] do 
          str = str .. string.format("%d/%d ",faces[fid][vid],vti)

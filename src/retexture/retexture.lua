@@ -99,57 +99,6 @@ fout_b  =  1 - fout_a * idealdist
 doMax = True
 
 
---   -- idea: projecting whole wireframe onto pose would help with
---      alignment of all faces at once (Reduce human alignment
---      tweaks).
---
--- thought to help debug the image stitching: overlay the wireframe of
--- the regeom on the texture.
-function draw_wireframe (p,i,obj)
-   local pimage = p.images[i]
-   local psize = pimage:size()
-   psize[1] = 4
-   local wimage = torch.Tensor(psize):fill(0)
-   local face_verts = obj.face_verts
-   for fi = 1,face_verts:size(1) do
-      local f = face_verts[fi]
-      local pvert = f[f:size(1)]
-      for vi = 1,f:size(1) do
-         local cvert = f[vi]
-         local dir = cvert - pvert
-         local len = torch.norm(dir)
-         if (len > 1e-8) then
-            dir = dir/len
-            step = dir * mpp
-            -- printf("step: %f,%f,%f",step[1],step[2],step[3])
-            for s = 0,len,mpp do
-               -- draw verts first
-               local u,v,x,y = util.pose.globalxyz2uv(p,i,pvert)
-               -- printf("u: %f v: %f x: %f y %f", u, v, x, y)
-               if (u > 0) and (u < 1) and (v > 0) and (v < 1) then
-                  wimage[{1,y,x}] = 1  -- RED
-                  wimage[{4,y,x}] = 1  -- Alpha Channel
-               end
-               pvert = pvert + step
-
-            end
-         end
-      end
-   end
-   return wimage
-end
-
-function save_all_wireframes()
-   for pi = 1,poses.nposes do
-      local wimage = draw_wireframe(poses,pi,target)
-      image.display(wimage)
-      -- save
-      local wimagename = poses[pi]:gsub(".jpg","_wireframe.png")
-      printf("Saving: %s", wimagename)
-      image.save(wimagename,wimage)
-   end
-end
-
 -- Main Functions:
 
 -- + ----------------
@@ -167,17 +116,11 @@ function get_closest_poses(p,fid,obj,debug)
 
    local wrong_side = torch.lt(dist_to_plane,0):double()
    local invalid    = torch.sum(wrong_side)
-   if debug then printf("[%d] wrong side: %d", fid,invalid) end
-   if (invalid == p.nposes) then
-      -- flip normal
-      normal:mul(-1)
-      dist_to_plane = torch.mv(p.xyz,normal) + d
-
-      wrong_side = torch.lt(dist_to_plane,0):double()
-      invalid    = torch.sum(wrong_side)
-      printf("[%d] flipped normal wrong side now: %d", fid,invalid)
+   
+   if (p.nposes == invalid) then
+      return nil
    end
-
+   
    wrong_side:mul(1e6):add(1)
 
    -- b) who are closest (to the face center)
@@ -206,11 +149,7 @@ function get_closest_poses(p,fid,obj,debug)
 
    --  d) make sure that at least one vertex of face falls within the
    --     poses view. (not sure we need this)
-   if (p.nposes == invalid) then
-      return sidx:narrow(1,1,1)
-   else
-      return sidx:narrow(1,1,p.nposes-invalid)
-   end
+   return sidx:narrow(1,1,p.nposes-invalid)
 end
 
 function test_get_closest_poses()
@@ -226,50 +165,89 @@ end
 -- the face and the dimensions of a texture map
 function face_to_texture_transform_and_dimension(fid,obj,debug)
    local face_verts = obj.face_verts[fid]
+   local nverts     = obj.nverts_per_face[fid]
    local normal     = obj.normals[fid]
 
    --  a) find translation (point closest to origin of longest edge)
    local eid = 1
-   local maxedge = torch.norm(face_verts[1] - face_verts[-1])
-   for vi = 2,face_verts:size(1) do
-      local elen = torch.norm(face_verts[vi] - face_verts[vi-1])
+   local maxedge = torch.norm(face_verts[1] - face_verts[nverts])
+   local e2 = nil
+   for vi = 2,nverts do
+      local v1 = face_verts[vi]
+      local v2 = face_verts[vi-1]
+      local e1 = v1 - v2
+      local elen = torch.norm(e1)
+      if debug and e2 then 
+         local en = torch.cross(v1,v2)
+         printf("vertex normal: %f %f %f",en[1],en[2],en[3])
+      end
       if maxedge < elen then
          maxedge = elen
          eid = vi
       end
+      e2 = e1
    end
    local pid = eid - 1
-   if pid == 0 then pid = face_verts:size(1) end
+   if pid == 0 then pid = nverts end
    local trans = face_verts[pid]:clone()
    local longedge = face_verts[eid] - trans
-   longedge = geom.normalize(longedge)
+
+   -- make sure we translate by the edge closest to origin
+   if (trans:norm() > face_verts[eid]:norm()) then
+      if debug then print("Swapping translation") end
+      longedge = trans - face_verts[eid] 
+      trans:copy(face_verts[eid])
+   end
+   
+   if debug then 
+      printf("longedge: %d -> %d", pid, eid)
+   end
 
    -- align largest dimension of the plane normal
-   local nrot,zdim = geom.largest_rotation(normal)
-
+   local nrot,ndim = geom.largest_rotation(normal)
+   
    -- align longest edge which is in a plane orthogonal to the new
-   --zaxis, and needs to be rotated to the xaxis around the zaxis
-   local rnlongedge = geom.normalize(geom.rotate_by_quat(longedge,nrot))
-   local erot,xdim  = geom.largest_rotation(rnlongedge)
-   if debug then
-      printf(" -- nrot: %2.4f %2.4f %2.4f %2.4f",nrot[1],nrot[2],nrot[3],nrot[4])
-      printf(" -- erot: %2.4f %2.4f %2.4f %2.4f",erot[1],erot[2],erot[3],erot[4])
-   end
-   local rot = geom.quat_product(erot,nrot)
+   -- zaxis, and needs to be rotated to the xaxis around the zaxis
+   local nrot_longedge = geom.rotate_by_quat(longedge,nrot)
 
-   local ydim = 6 - (xdim+zdim)
-   local dims = torch.Tensor({zdim,xdim,ydim})
+   local erot,edim  = geom.largest_rotation(nrot_longedge)
+
+   -- combine the rotations into a single rotation
+   local rot = geom.quat_product(erot,nrot)
+   
+   local ydim = 6 - (edim+ndim)
+   local dims = torch.Tensor({ndim,edim,ydim})
+
+   if debug then
+      printf("   Orig normal: %f %f %f",normal[1],normal[2],normal[3])
+      local n = geom.rotate_by_quat(normal,nrot)
+      printf("Rotated normal: %f %f %f",n[1],n[2],n[3])
+      printf(" --  long edge: %f %f %f",longedge[1],longedge[2],longedge[3])
+      printf(" --  nrot edge: %f %f %f",nrot_longedge[1],nrot_longedge[2],nrot_longedge[3])
+      local enrot_longedge  = geom.rotate_by_quat(nrot_longedge,erot)
+      printf(" -- enrot edge: %f %f %f",enrot_longedge[1],enrot_longedge[2],enrot_longedge[3])
+      enrot_longedge  = geom.rotate_by_quat(longedge,rot)
+      printf(" -- enrot edge: %f %f %f",enrot_longedge[1],enrot_longedge[2],enrot_longedge[3])
+      
+      printf(" -- [%d]  nrot: %f %f %f %f",ndim,nrot[1],nrot[2],nrot[3],nrot[4])
+      printf(" -- [%d]  erot: %f %f %f %f",edim,erot[1],erot[2],erot[3],erot[4])
+      printf(" -- [%d]   rot: %f %f %f %f",ydim,rot[1],rot[2],rot[3],rot[4])
+   end
+
+   
+
+
    --  b) find dimensions of the texture to be created
    local v = geom.rotate_by_quat(face_verts[1] - trans,rot)
    -- range is min,max,range
-   local xrange = torch.Tensor(3):fill(v[xdim])
+   local xrange = torch.Tensor(3):fill(v[edim])
    local yrange = torch.Tensor(3):fill(v[ydim])
-   for vi = 2,face_verts:size(1) do
+   for vi = 2,nverts do
       v = geom.rotate_by_quat(face_verts[vi] - trans,rot)
       if (yrange[1] > v[ydim]) then yrange[1] = v[ydim] end
       if (yrange[2] < v[ydim]) then yrange[2] = v[ydim] end
-      if (xrange[1] > v[xdim]) then xrange[1] = v[xdim] end
-      if (xrange[2] < v[xdim]) then xrange[2] = v[xdim] end
+      if (xrange[1] > v[edim]) then xrange[1] = v[edim] end
+      if (xrange[2] < v[edim]) then xrange[2] = v[edim] end
    end
    xrange[3] = xrange[2] - xrange[1]
    yrange[3] = yrange[2] - yrange[1]
@@ -316,9 +294,10 @@ end
 -- create_uvs()
 function create_uvs (fid,obj,rot,trans,dims,xrange,yrange)
    local face_verts = obj.face_verts[fid]
+   local nverts     = obj.nverts_per_face[fid]
    local uv         = obj.uv[fid]
 
-   for vi = 1,face_verts:size(1) do
+   for vi = 1,nverts do
       local vtrans = face_verts[vi] - trans
       vtrans = geom.rotate_by_quat(vtrans,rot)
       uv[vi][1] =      (vtrans[dims[2]] - xrange[1])/xrange[3]
@@ -333,11 +312,17 @@ function retexture (fid,obj,debug)
    -- Retexture Algo:
    -- 1) get closest poses:
    local pose_idx = get_closest_poses(poses,fid,obj)
+   if not pose_idx then
+      printf("face: %d -- No valid poses found",fid)
+      return 
+   end
+   -- just look at nposes (5) poses per face
    if (pose_idx:size(1) > nposes) then
       pose_idx = pose_idx:narrow(1,1,nposes)
    end
    -- 2) find rotation and translation to texture coords and dimensions of texture
-   local rot,trans,dims,xrange,yrange = face_to_texture_transform_and_dimension(fid,obj)
+   local rot,trans,dims,xrange,yrange = 
+      face_to_texture_transform_and_dimension(fid,obj)
    --  a) need rotation from texture to global
    local rotT = geom.quat_conjugate(rot)
 
@@ -427,7 +412,7 @@ function retexture (fid,obj,debug)
    image.display{image=fimg,min=0,max=1}
 
    local fname  = paths.basename(targetfile):gsub(".obj",string.format("_face%05d.png",fid))
-   printf("Saving: texture %s", fname)
+   printf(" - Saving: texture %s", fname)
    image.save(fname,fimg)
 
    -- 7) Remap UVs: rotate each vertex into the coordinates of the new texture
@@ -435,14 +420,16 @@ function retexture (fid,obj,debug)
 end
 
 function retexture_all()
-   for fid = 1,target.nfaces do
+   for fid = target.nfaces-1,target.nfaces do
       sys.tic()
       retexture(fid,target)
-      printf("%d textured in %2.2fs",fid,sys.toc())
+      printf(" - textured in %2.2fs",sys.toc())
    end
    local objfile  = paths.basename(targetfile)
    local mtlfile  = objfile:gsub(".obj",".mtl")
    local textfile = objfile:gsub(".obj","")
+   printf("Writing: %s", objfile)
+   printf("Writing: %s", mtlfile)
    util.obj.save(target,objfile,mtlfile,textfile)
 end
 
