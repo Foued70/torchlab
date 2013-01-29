@@ -420,7 +420,7 @@ function retexture (fid,obj,debug)
 end
 
 function retexture_all()
-   for fid = 1,target.nfaces do
+   for fid = target.nfaces-1,target.nfaces do
       sys.tic()
       retexture(fid,target)
       printf(" - textured in %2.2fs",sys.toc())
@@ -428,6 +428,8 @@ function retexture_all()
    local objfile  = paths.basename(targetfile)
    local mtlfile  = objfile:gsub(".obj",".mtl")
    local textfile = objfile:gsub(".obj","")
+   printf("Writing: %s", objfile)
+   printf("Writing: %s", mtlfile)
    util.obj.save(target,objfile,mtlfile,textfile)
 end
 
