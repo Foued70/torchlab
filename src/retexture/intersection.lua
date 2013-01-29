@@ -4,11 +4,15 @@ function get_occlusions(pt,dir,obj)
    local d = math.huge
    dir = dir:narrow(1,1,3)
    fid = 0
+   local nverts_per_face = obj.nverts_per_face
+   local face_verts      = obj.face_verts
+   local normals         = obj.normals
+   local ds              = obj.d
    for fi = 1,obj.nfaces do
-      local nverts = obj.nverts_per_face[fi]
-      local verts  = obj.face_verts[fi]:narrow(1,1,nverts)      
-      local normal = obj.normals[fi]
-      local d      = obj.d[fi]
+      local nverts = nverts_per_face[fi]
+      local verts  = face_verts[fi]:narrow(1,1,nverts)      
+      local normal = normals[fi]
+      local d      = ds[fi]
 
       local intersection, tstd =
          util.geom.ray_face_intersection(pt,dir,normal,d,verts)
