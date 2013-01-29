@@ -24,7 +24,7 @@ Qt options:
 lua = 'torch-qlua'
 
 -- preload torch environment
-env = ' -e "require \'exe/cloudlab-env\'"'
+env = ' -e "require \'exe/cloudlab-env\'" '
 
 local pwd = paths.cwd()
 local end_i = 1
