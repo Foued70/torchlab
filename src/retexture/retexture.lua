@@ -23,6 +23,7 @@ cmd:option('-sourcefile',
 cmd:option('-posefile',
            "/Users/marco/lofty/models//invincible-violet-3396_a_00/scanner371_job129001_texture_info.txt",
            'pose info file in same directory as the texture images')
+cmd:option('-outdir','output/')
 cmd:option('-scale',4,'scale at which to process 4 = 1/4 resolution')
 cmd:option('-packetsize',32,'window size for ray packets (32x32)')
 cmd:text()
@@ -35,10 +36,12 @@ sourcefile = params.sourcefile
 posefile   = params.posefile
 scale      = params.scale
 packetsize = params.packetsize
+outdir     = params.outdir .. "/"
 
 cachedir = "cache/"
 
 sys.execute("mkdir -p " .. cachedir)
+sys.execute("mkdir -p " .. outdir)
 
 posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
 sourcecache = cachedir .. sourcefile:gsub("/","_") .. ".t7"
@@ -95,10 +98,6 @@ fin_b   =  1 - fin_a * idealdist
 fout_a  = -1/(maxdist - idealdist)
 fout_b  =  1 - fout_a * idealdist
 
--- do we blend or take max
-doMax = True
-
-
 -- Main Functions:
 
 -- + ----------------
@@ -142,13 +141,13 @@ function get_closest_poses(p,fid,obj,debug)
              sidx[4],slen[4],
              sidx[5],slen[5])
    end
-   --  Reconsider: decisions c and d happen when coloring
+   --  Reconsider: decisions c and d happen when coloring.
    --  c) reject poses where the camera is too close.  Can reject just on
    --     the face center as we prefer whole face to be colored by a
    --     single pose.
 
    --  d) make sure that at least one vertex of face falls within the
-   --     poses view. (not sure we need this)
+   --     poses view. (not sure we need this) reject some fully occluded poses.
    return sidx:narrow(1,1,p.nposes-invalid)
 end
 
@@ -233,9 +232,6 @@ function face_to_texture_transform_and_dimension(fid,obj,debug)
       printf(" -- [%d]  erot: %f %f %f %f",edim,erot[1],erot[2],erot[3],erot[4])
       printf(" -- [%d]   rot: %f %f %f %f",ydim,rot[1],rot[2],rot[3],rot[4])
    end
-
-   
-
 
    --  b) find dimensions of the texture to be created
    local v = geom.rotate_by_quat(face_verts[1] - trans,rot)
@@ -408,24 +404,30 @@ function retexture (fid,obj,debug)
    end -- end h
 
    -- 6) store new texture file
+   -- not sure about saving to disk, or saving in object.
    obj.textures[fid] = fimg
-   image.display{image=fimg,min=0,max=1}
-
-   local fname  = paths.basename(targetfile):gsub(".obj",string.format("_face%05d.png",fid))
-   printf(" - Saving: texture %s", fname)
-   image.save(fname,fimg)
 
    -- 7) Remap UVs: rotate each vertex into the coordinates of the new texture
    create_uvs(fid,obj,rot,trans,dims,xrange,yrange)
+   return fimg
 end
 
 function retexture_all()
-   for fid = target.nfaces-1,target.nfaces do
-      sys.tic()
-      retexture(fid,target)
-      printf(" - textured in %2.2fs",sys.toc())
+   for fid = 1,target.nfaces do 
+      local fname  = outdir .. 
+         paths.basename(targetfile):gsub(".obj",string.format("_face%05d.png",fid))
+      if not paths.filep(fname) then 
+         sys.tic()
+         local textureimg = retexture(fid,target)
+         if textureimg then
+            printf(" - Saving: texture %s", fname)
+            printf(" - textured in %2.2fs",sys.toc())
+            image.display{image=textureimg,min=0,max=1}
+            image.save(fname,textureimg) 
+         end
+      end
    end
-   local objfile  = paths.basename(targetfile)
+   local objfile  = outdir .. paths.basename(targetfile)
    local mtlfile  = objfile:gsub(".obj",".mtl")
    local textfile = objfile:gsub(".obj","")
    printf("Writing: %s", objfile)
