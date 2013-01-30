@@ -79,8 +79,15 @@ if paths.dirp(occdir) then
    poses.occlusions = {}
    for pi = 1,poses.nposes do 
       local occfname = occdir .. poses[pi]:gsub("jpg","t7")
+      printf(" - loading %s", occfname)
       if paths.filep(occfname) then
          poses.occlusions[pi] = torch.load(occfname)
+      else
+         occfname = occdir .. poses[pi]:gsub("png","t7")
+         printf(" - loading %s", occfname)
+         if paths.filep(occfname) then
+            poses.occlusions[pi] = torch.load(occfname)
+         end
       end
    end
 end
