@@ -7,7 +7,7 @@ local geom  = util.geom
 
 local test  = {}
 
-test.data = require 'util/pose-data'
+test.data = require 'util/test/pose-data'
 
 -- FIXME check serious numerical issues which are hopefully due to the
 -- precision at which the groundtruth is copied from blender

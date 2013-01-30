@@ -5,7 +5,7 @@ local util = require 'util'
 local geom = util.geom
 
 local test = {}
-test.data = require "util/geom-data"
+test.data = require "util/test/geom-data"
 
 function test.quaternion_angle()
    print("Testing quaternion angle btw. 2 vectors")

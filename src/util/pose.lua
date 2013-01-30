@@ -111,7 +111,7 @@ function pose.globalxyz2uv(p,i,pt)
    -- xyz in pose coordinates
    local v = pose.global2local(p,i,pt)
    local azimuth = - r2d * torch.atan2(v[2],v[1])
-   local norm      = geom.normalize(v)
+   local norm    = geom.normalize(v)
    local elevation = r2d * torch.asin(norm[3])
    -- print(azimuth,elevation)
    local proj_x  = p.cntrx[i] + (  azimuth / p.px[i][1])
@@ -135,7 +135,7 @@ function pose.localxy2globalray(p,i,x,y)
    dir[3]  =       torch.sin(elevation) -- z'
    dir[2]  =   h * torch.sin(azimuth)   -- y'
    dir[1]  =   h * torch.cos(azimuth)   -- x'
-   dir = geom.normalize(dir)
+   dir     = geom.normalize(dir)
    -- return point and direction rotated to global coordiante
    return p.xyz[i], geom.rotate_by_quat(dir,p.quat[i])
 end
