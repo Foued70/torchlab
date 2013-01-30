@@ -110,12 +110,11 @@ end
 function pose.globalxyz2uv(p,i,pt)
    -- xyz in pose coordinates
    local v = pose.global2local(p,i,pt)
-   local azimuth = - r2d * torch.atan2(v[2],v[1])
+   local azimuth = -r2d * torch.atan2(v[2],v[1])
    local norm    = geom.normalize(v)
    local elevation = r2d * torch.asin(norm[3])
-   -- print(azimuth,elevation)
-   local proj_x  = p.cntrx[i] + (  azimuth / p.px[i][1])
-   local proj_y  = p.cntry[i] - (elevation / p.px[i][2])
+   local proj_x  = 0.5 + p.cntrx[i] + (  azimuth / p.px[i][1])
+   local proj_y  = 0.5 + p.cntry[i] - (elevation / p.px[i][2])
    local proj_u  = proj_x / p.w[i]
    local proj_v  = 1 - (proj_y / p.h[i])
    return proj_u, proj_v, proj_x, proj_y
