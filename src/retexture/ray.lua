@@ -1,12 +1,15 @@
 require 'math'
-require 'util'
+local util = require 'util'
+local geom = util.geom
+
+require 'intersection'
 
 -- Ray primitive
 local Ray = torch.class('Ray')
 
 function Ray:__init(o,d) 
    self.origin = o
-   self.dir     = util.geom.normalize(d)
+   self.dir     = geom.normalize(d)
    self.invdir  = self.dir:clone():pow(-1)
    self.sign    = torch.gt(self.dir,0):mul(2):add(-1)
    self.mint    = 0
@@ -15,6 +18,67 @@ end
 
 function Ray:__call(t)
    return self.origin + (self.dir * t)
+end
+
+-- pt (point) is the intersection between the ray and the plane of the
+-- polygon verts are the vertices of the polygon dims are the
+-- precomputed dominant dimensions in which we flatten the polygon to
+-- compute
+function point_in_polygon(pt,verts,dims)
+   -- dims 1 == X axis
+   -- dims 2 == Y axis
+   local x         = dims[1]
+   local y         = dims[2]
+   local nverts    = verts:size(1)
+   local inside    = false
+   local p1        = verts[nverts] 
+   local yflag1    = (p1[y] >= pt[y])
+   for vi = 1,nverts do
+      local p2     = verts[vi]
+      local yflag2 = (p2[y] >= pt[y])
+      -- do we have a crossing ?
+      if (yflag1 ~= yflag2) then
+         -- no division test of positive intersection with xaxis
+         if (yflag2 == 
+             ((p2[y] - pt[y])*(p1[x] - p2[x]) >= (p2[x] - pt[x])*(p1[y] - p2[y]))) then
+            inside = not inside
+         end
+      end
+      yflag1 = yflag2
+      p1 = p2
+   end
+   return inside
+end
+
+-- also tests normals and major dimensions
+function test_point_in_polygon()
+   print("Testing point in polygon")
+   local err = 0
+   -- all positive
+   local npts = 1000
+   local vs  = torch.randn(npts+3,3)
+   local vsmin = vs:min(1)
+   vsmin = vsmin:squeeze()
+   local vsmax = vs:max(1)
+   vsmax = vsmax:squeeze()
+
+   for i = 1,npts do 
+      local face_verts = vs:narrow(1,i,3)
+      local pt         = face_verts:mean(1):squeeze()
+      local normal     = geom.compute_normal(face_verts)
+      local _,ds = torch.sort(torch.abs(normal))
+      ds = ds:narrow(1,1,2)
+      if not point_in_polygon(pt,face_verts,ds) then
+         err = err + 1
+      end
+      if point_in_polygon(vsmin,face_verts,ds) then
+         err = err + 1
+      end
+      if point_in_polygon(vsmax,face_verts,ds) then
+         err = err + 1
+      end
+   end
+   printf("-- %d/%d Errors", err,npts*3)
 end
 
 -- For the BIH intersection you only check one bound for each child,
@@ -59,36 +123,7 @@ function ray_interval_intersect(ray,dim,imin,imax)
    return true, t0,t1
 end
 
--- pt (point) is the intersection between the ray and the plane of the polygon
--- verts are the vertices of the polygon
--- dims are the precomputed dominant dimensions in which we flatten the polygon to compute
-function point_in_polygon(pt,verts,dims)
-   -- dims 1 == X axis
-   -- dims 2 == Y axis
-   local x         = dims[1]
-   local y         = dims[2]
-   local nverts    = verts:size(1)
-   local inside    = false
-   local p1        = verts[nverts] 
-   local yflag1    = (p1[y] >= pt[y])
-   for vi = 1,nverts do
-      local p2     = verts[vi]
-      local yflag2 = (p2[y] >= pt[y])
-      -- do we have a crossing ?
-      if (yflag1 ~= yflag2) then
-         -- no division test of positive intersection with xaxis
-         if (yflag2 == 
-             ((p2[y] - pt[y])*(p1[x] - p2[x]) >= (p2[x] - pt[x])*(p1[y] - p2[y]))) then
-            inside = not inside
-         end
-      end
-      yflag1 = yflag2
-      p1 = p2
-   end
-   return inside
-end
-
-function ray_polygon_intersection(ray,obj,fid)
+function ray_polygon_intersection(ray,obj,fid,debug)
    local orig = ray.origin
    local  dir = ray.dir
    local norm = obj.normals[fid]
@@ -97,9 +132,12 @@ function ray_polygon_intersection(ray,obj,fid)
    if torch.abs(a) < 1e-8 then 
       return nil
    end
+
    local    t = -(norm:dot(orig) + d)/a
-   printf("  - %d %f", fid, t)
-   printf("  - bbox\n%s", obj.face_bboxes[fid]:resize(2,3))
+   if debug then
+      printf("  - %d %f", fid, t)
+      printf("  - bbox\n%s", obj.face_bboxes[fid]:resize(2,3))
+   end
    if t < 0 then 
       return nil
    end
@@ -109,7 +147,9 @@ function ray_polygon_intersection(ray,obj,fid)
    local nverts = obj.nverts_per_face[fid]
    local verts  = obj.face_verts[fid]:narrow(1,1,nverts)
    local found  = point_in_polygon(intersection,verts,ds)
-   printf("  - %s", found)
+   if debug then
+      printf("  - %s", found)
+   end
    if found then 
       return t
    else

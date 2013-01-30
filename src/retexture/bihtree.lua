@@ -382,7 +382,7 @@ function traverse_tree(tree,obj,ray,debug)
    local process_tree, ray_mint, ray_maxt = ray_bbox_intersect(ray,obj.bbox)
    
    local mindepth = math.huge
-
+   local face_id  = 0
    while (process_tree) do 
       -- CHECK intersect first
       local node  = nodes[node_id]
@@ -404,15 +404,15 @@ function traverse_tree(tree,obj,ray,debug)
             print(ids)
          end 
          for i = 1,ids:size(1) do 
-            -- local d = ray_polygon_intersection(ray,obj,ids[i])
-            local intersectp,d,dmax = ray_bbox_intersect(ray,obj.face_bboxes[ids[i]])
-            -- if there is an intersection 
-            if intersectp and d < mindepth then
+            local fid = ids[i]
+            local dp = ray_polygon_intersection(ray,obj,fid)
+            if dp and dp < mindepth then
                if debug then
-                  printf("new d: %f", d)
+                  printf("new d: %f", dp)
                end
-               mindepth = d
-               ray_maxt = d
+               mindepth = dp
+               ray_maxt = dp
+               face_id  = fid
             end
          end
          
@@ -500,12 +500,8 @@ function traverse_tree(tree,obj,ray,debug)
          end
       end
    end
-   return mindepth
+   return mindepth,face_id
 end
-
--- tree = build_tree(target)
--- dump_tree(tree,target)
-
 
 -- compare aggregate to and exhaustive search through all polygons.
 function test_traverse()

@@ -1,30 +1,157 @@
+local util = require 'util'
+local geom = util.geom
+
+-- FIXME make tests as this function seems to invert results for
+-- simple axis-aligned plane intersections
+
+function ray_plane_intersection(...)
+   local pt,dir,plane_norm,plane_d,debug
+   local args  = {...}
+   local nargs = #args
+   if nargs == 5 then
+      debug    = args[5]
+   end
+   if nargs < 4 then
+      print(dok.usage('ray_plane_intersection',
+                      'does ray intersect the plane', 
+                      '> returns: intersection,distance or nil,errno',
+                      {type='torch.Tensor', help='point (start of ray)'},
+                      {type='torch.Tensor', help='direction (of ray)', req=true},
+                      {type='torch.Tensor', help='normal (of plane)', req=true},
+                      {type='torch.Tensor', help='offset (of plane)', req=true},
+                      {type='torch.Tensor', help='debug', default=False}))
+
+      dok.error('incorrect arguements', 'ray_plane_intersection')
+   else
+      pt         = args[1]
+      dir        = args[2]
+      plane_norm = args[3]
+      plane_d    = args[4]
+   end
+   local a = torch.dot(plane_norm,dir)
+   if torch.abs(a) < 1e-8 then
+      if debug then print(" - angle parallel") end
+      return nil,1
+   end
+   local t = -(torch.dot(plane_norm,pt) + plane_d)/a
+   if debug then print(string.format(" - t: %f", t)) end
+   if t < 0 then
+      if debug then print(" - plane behind") end
+      return nil,2
+   end
+   local i = pt + dir * t
+   if debug then print(string.format(" - int: [%f, %f, %f]", 
+                                     i[1],i[2],i[3])) end
+   return i,t
+end
+      
+
+function ray_face_intersection(...)
+   local pt,dir,plane_norm,plane_d,face_verts,debug
+   local args  = {...}
+   local nargs = #args
+   if nargs == 6 then
+      debug    = args[6]
+   end
+   if nargs < 4 then
+      print(dok.usage('ray_face_intersection',
+                      'does ray intersect the face', 
+                      '> returns: intersection point,distance, or nil,errno',
+                      {type='torch.Tensor', help='point (start of ray)'},
+                      {type='torch.Tensor', help='direction (of ray)', req=true},
+                      {type='torch.Tensor', help='normal (of plane)', req=true},
+                      {type='torch.Tensor', help='offset (of plane)', req=true},
+                      {type='torch.Tensor', help='face vertices', req=true},
+                      {type='torch.Tensor', help='debug', default=False}))
+
+      dok.error('incorrect arguements', 'ray_plane_intersection')
+   else
+      pt         = args[1]
+      dir        = args[2]
+      plane_norm = args[3]
+      plane_d    = args[4]
+      face_verts = args[5]
+   end
+   -- First find planar intersection
+   local intersection,t = 
+      ray_plane_intersection(pt,dir,plane_norm,plane_d,debug)
+   if not intersection then
+      return nil,t
+   end
+   -- pick two most planar dimensions of the face throw away
+   -- coordinate with greatest magnitude (if normal is mostly z
+   -- then we want x and y) 
+   local nverts = face_verts:size(1)
+   local _,ds = torch.sort(torch.abs(plane_norm))
+   local ri = torch.Tensor(2)
+   local verts = torch.Tensor(nverts,2)
+   ri[1] = intersection[ds[1]]
+   ri[2] = intersection[ds[2]]
+   for i = 1,nverts do
+      verts[i][1] = face_verts[i][ds[1]] - ri[1]
+      verts[i][2] = face_verts[i][ds[2]] - ri[2]
+   end
+   -- count crossings along 'y' axis : b in slope intercept line equation
+   local pvert = verts[nverts]
+   local count = 0
+   for vi = 1,nverts do
+      local cvert = verts[vi]
+      --  compute y axis crossing (b = y - mx) 
+      local run  =  cvert[1] - pvert[1]
+      local b    = -math.huge
+      local cpos = 1
+      local ppos = 1
+      if math.abs(run) < 1e-8 then
+         if (math.abs(cvert[1]) < 1e-8) then
+            count = count + 1
+         end
+      else
+         b = cvert[2] - ((cvert[2] - pvert[2])/run) * cvert[1]
+         if (cvert[1] < 0) then cpos = -1 end
+         if (pvert[1] < 0) then ppos = -1 end
+         if (b >= 0) and ((cpos + ppos) == 0) then
+            count = count + 1 
+         end
+      end
+      pvert = cvert
+   end
+   if ((count > 0) and (count % 2)) then
+      return intersection,t
+   else
+      return nil,3
+   end
+end
+
 -- Very slow.  Checks all the faces. Returns closest
 -- intersection. Used for debugging the aggregates.
-function get_occlusions(pt,dir,obj)
-   local d = math.huge
-   dir = dir:narrow(1,1,3)
-   fid = 0
+function get_occlusions(ray,obj,debug)
+   local mindepth        = math.huge
+   local fid             = 0
    local nverts_per_face = obj.nverts_per_face
    local face_verts      = obj.face_verts
    local normals         = obj.normals
    local ds              = obj.d
+   -- exhausting loop through all faces
    for fi = 1,obj.nfaces do
       local nverts = nverts_per_face[fi]
       local verts  = face_verts[fi]:narrow(1,1,nverts)      
       local normal = normals[fi]
       local d      = ds[fi]
 
-      local intersection, tstd =
-         util.geom.ray_face_intersection(pt,dir,normal,d,verts)
-         
-      if intersection then
-         if (tstd < d) then
-            d = tstd
-            fid = fi
-         end
+      local testd = ray_polygon_intersection(ray,obj,fi)
+      local bstr  = " "
+      if testd and (testd < mindepth) then
+         bstr = "*"
+         mindepth = testd
+         fid = fi
       end
+      if not testd then testd = math.huge end
+      if debug then 
+         printf("%s[%05d] : %f", bstr,fi,testd)
+      end
+      
    end
-   return d,fid
+   return mindepth,fid
 end
 
 function fast_ray_face_intersection(pt,dirs,
@@ -162,65 +289,6 @@ function fast_ray_face_intersection(pt,dirs,
 
 end
 
--- pt (point) is the intersection between the ray and the plane of the polygon
--- verts are the vertices of the polygon
--- dims are the precomputed dominant dimensions in which we flatten the polygon to compute
-function point_in_polygon(pt,verts,dims)
-   -- dims 1 == X axis
-   -- dims 2 == Y axis
-   local x         = dims[1]
-   local y         = dims[2]
-   local nverts    = verts:size(1)
-   local inside    = false
-   local p1        = verts[nverts] 
-   local yflag1    = (p1[y] >= pt[y])
-   for vi = 1,nverts do
-      local p2     = verts[vi]
-      local yflag2 = (p2[y] >= pt[y])
-      -- do we have a crossing ?
-      if (yflag1 ~= yflag2) then
-         -- no division test of positive intersection with xaxis
-         if (yflag2 == 
-             ((p2[y] - pt[y])*(p1[x] - p2[x]) >= (p2[x] - pt[x])*(p1[y] - p2[y]))) then
-            inside = not inside
-         end
-      end
-      yflag1 = yflag2
-      p1 = p2
-   end
-   return inside
-end
-
--- also tests normals and major dimensions
-function test_point_in_polygon()
-   print("Testing point in polygon")
-   local err = 0
-   -- all positive
-   local npts = 1000
-   local vs  = torch.randn(npts+3,3)
-   local vsmin = vs:min(1)
-   vsmin = vsmin:squeeze()
-   local vsmax = vs:max(1)
-   vsmax = vsmax:squeeze()
-
-   for i = 1,npts do 
-      local face_verts = vs:narrow(1,i,3)
-      local pt         = face_verts:mean(1):squeeze()
-      local normal     = util.geom.compute_normal(face_verts)
-      local _,ds = torch.sort(torch.abs(normal))
-      ds = ds:narrow(1,1,2)
-      if not point_in_polygon(pt,face_verts,ds) then
-         err = err + 1
-      end
-      if point_in_polygon(vsmin,face_verts,ds) then
-         err = err + 1
-      end
-      if point_in_polygon(vsmax,face_verts,ds) then
-         err = err + 1
-      end
-   end
-   printf("-- %d/%d Errors", err,npts*3)
-end
 
 -- takes a bunch of rays (pt, dirs) and a bunch of planes (normals,d)
 -- and computes the distance to all planes for each direction using
@@ -373,7 +441,7 @@ function test_ray_plane_intersection()
          end
          local dist = distances[fi][di]
          local i,rpt = 
-            util.geom.ray_plane_intersection(pt,dir,norm,d)
+            geom.ray_plane_intersection(pt,dir,norm,d)
          if i then
             -- relative error
             local err = torch.abs(rpt - dist)
@@ -437,7 +505,7 @@ function test_ray_face_intersection ()
                        errs:size(1))
 end
 
-function test_get_occlustions ()
+function test_get_occlusions ()
    local pi    = 40
    local scale = 16
    local dirs  = compute_dirs(poses,pi,scale)

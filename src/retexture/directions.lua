@@ -1,5 +1,7 @@
 require 'sys'
 
+local util = require 'util'
+
 -- FIXME make this part of pose object
 --
 -- + FIXME improve speed : creation with a simple increment if possible. (SLERP)
@@ -73,6 +75,35 @@ function load_dirs(p,i,scale,ps)
       printf("Saving dirs to %s", dirscache)
    end
    return dirs
+end
+
+-- is unique for each scale and pose.
+function load_depth(cachedir,p,i,scale,ps)
+
+   local imgw = p.w[i]
+   local imgh = p.h[i]
+
+   local outw = math.ceil(imgw/scale)
+   local outh = math.ceil(imgh/scale)
+
+   local cntrx = p.cntrx[i]
+   local cntry = p.cntry[i]
+
+   local depthcache   = cachedir .. 
+      "orig_"..imgw.."x"..imgh.."_-_"..
+      "scaled_"..outw.."x"..outh.."_-_"..
+      "center_"..cntrx.."x"..cntry
+
+   dirscache = dirscache ..".t7"
+
+   local depthmap = nil
+   if paths.filep(dirscache) then
+      sys.tic()
+      depthmap = torch.load(dirscache)
+      printf("Loaded depths from %s in %2.2fs", posecache, sys.toc())
+      return depthmap
+   end
+   return nil
 end
 
 

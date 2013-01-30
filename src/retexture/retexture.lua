@@ -15,17 +15,20 @@ cmd:text('Compute depth maps')
 cmd:text()
 cmd:text('Options')
 cmd:option('-targetfile',
-           "/Users/marco/lofty/test/invincible-violet/retexture-tworoom.obj",
+           "models/rivercourt_3307_regeom/rivercourt_3307.obj",
            'target obj with new geometry')
 cmd:option('-sourcefile',
-           "/Users/marco/lofty/models//invincible-violet-3396_a_00/scanner371_job129001.obj",
+           "models/rivercourt_3307_scan/scanner371_job224000.obj",
            'source obj')
 cmd:option('-posefile',
-           "/Users/marco/lofty/models//invincible-violet-3396_a_00/scanner371_job129001_texture_info.txt",
+           'texture_swap/scanner371_job224000_texture_info.txt',
            'pose info file in same directory as the texture images')
+cmd:option('-occlusiondir',
+           'none/',
+           'directory with the computed depth maps')
+cmd:option('-occscale',8,'scale at which occlusions where processed')
+cmd:option('-maskdir','none/','mask for retexture')
 cmd:option('-outdir','output/')
-cmd:option('-scale',4,'scale at which to process 4 = 1/4 resolution')
-cmd:option('-packetsize',32,'window size for ray packets (32x32)')
 cmd:text()
 
 -- parse input params
@@ -34,9 +37,11 @@ params = cmd:parse(arg)
 targetfile = params.targetfile
 sourcefile = params.sourcefile
 posefile   = params.posefile
-scale      = params.scale
-packetsize = params.packetsize
 outdir     = params.outdir .. "/"
+
+occdir     = params.occlusiondir .. "/"
+occsc      = 1/params.occscale
+maskdir    = params.maskdir .."/"
 
 cachedir = "cache/"
 
@@ -66,6 +71,34 @@ end
 if not poses then
    poses  = loadcache(posefile,posecache,util.pose.loadtxtfile)
 end
+
+-- load precomputed pose occlusions
+if paths.dirp(occdir) then
+   use_occlusions = true
+   printf("Using occlusions from %s",occdir)
+   poses.occlusions = {}
+   for pi = 1,poses.nposes do 
+      local occfname = occdir .. poses[pi]:gsub("jpg","t7")
+      if paths.filep(occfname) then
+         poses.occlusions[pi] = torch.load(occfname)
+      end
+   end
+end
+
+-- load masks 
+if paths.dirp(maskdir) then
+   use_masks = true
+   printf("Using masks from %s",maskdir)
+   poses.masks = {}
+   for pi = 1,poses.nposes do
+      local mfname = maskdir..poses[pi]:gsub("jpg","png")
+      printf(" - loading %s", mfname)
+      if paths.filep(mfname) then
+         poses.masks[pi] = image.load(mfname)[1]
+      end
+   end
+end
+
 if not source then
    source = loadcache(sourcefile,sourcecache,util.obj.load,3)
 end
@@ -76,7 +109,7 @@ end
 -- more args FIXME become arguments and make local
 ppm        = 100 -- pixels per meter
 mpp        = 1/ppm -- meters per pixel
-nposes     = 5   -- max number of poses to consider per texture
+nposes     = 8   -- max number of poses to consider per texture
 mindist    = 0.7 -- min distance to scanner
 mindistsqr = mindist*mindist
 ideal      = 1.5 -- meters for fade
@@ -363,26 +396,39 @@ function retexture (fid,obj,debug)
             local pid  = pose_idx[pi]
             local timg = poses.images[pid]
             local pt   = poses.xyz[pid]
-
+            local pocc = nil
+            if use_occlusions then
+               pocc = poses.occlusions[pi]
+            end
             --  get uv of global coordinate in the pose
             local pu,pv,px,py = util.pose.globalxyz2uv(poses,pid,v)
 
             -- check obvious out of bounds (including a buffer at top
             -- and bottom 0px for matterport textures)
+            -- FIXME check mask
             if (((px < 0) or (px >= timg:size(3))) or
-             (py < vertbuffer) or (py >= (timg:size(2) - vertbuffer))) then
+             (py < vertbuffer) or (py >= (timg:size(2) - vertbuffer))) or
+            (use_mask and (poses.mask[pi][py][px] == 0)) then
                if debug then printf("[%d] out of range skipping",pid) end
             else
-               -- check occlusion (look up in ray traced pose mask)
-               -- FIXME
                --  compute alpha (mixing) for this pose. (see. func. compute_alpha())
                local dir  = v - pt -- from pose to surface
                local dist = dir:norm()
-               dir = dir * (1/dist)
-
-               found = found + 1
-               color[found] = timg[{{},py,px}]
-               alpha[found] = compute_alpha(dir,dist,normal)
+               local not_occluded = true
+               -- check occlusion (look up in ray traced pose mask)
+               if use_occlusions then
+                  local opx = math.max(1,math.floor(px*occsc + 0.5))
+                  local opy = math.max(1,math.floor(py*occsc + 0.5))
+                  local od  = pocc[opy][opx]
+                  not_occluded = torch.abs(dist - od) < 0.2
+                  printf("occluded: %s dist: %f od: %f",not not_occluded,dist,od)
+               end
+               if not_occluded then
+                  dir = dir * (1/dist) 
+                  found = found + 1
+                  color[found] = timg[{{},py,px}]
+                  alpha[found] = compute_alpha(dir,dist,normal)
+               end
             end
             if found >= nposes then break end
          end
@@ -416,15 +462,13 @@ function retexture_all()
    for fid = 1,target.nfaces do 
       local fname  = outdir .. 
          paths.basename(targetfile):gsub(".obj",string.format("_face%05d.png",fid))
-      if not paths.filep(fname) then 
-         sys.tic()
-         local textureimg = retexture(fid,target)
-         if textureimg then
-            printf(" - Saving: texture %s", fname)
-            printf(" - textured in %2.2fs",sys.toc())
-            image.display{image=textureimg,min=0,max=1}
-            image.save(fname,textureimg) 
-         end
+      sys.tic()
+      local textureimg = retexture(fid,target)
+      if textureimg then
+         printf(" - Saving: texture %s", fname)
+         printf(" - textured in %2.2fs",sys.toc())
+         win = image.display{image=textureimg,min=0,max=1,win=win}
+         image.save(fname,textureimg) 
       end
    end
    local objfile  = outdir .. paths.basename(targetfile)
