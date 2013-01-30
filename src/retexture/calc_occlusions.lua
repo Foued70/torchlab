@@ -30,27 +30,30 @@ cmd:option('-sourcefile',
 cmd:option('-posefile',
            'models/rivercourt_3307_scan/scanner371_job224000_texture_info.txt',
            'pose info file in same directory as the texture images')
+cmd:option('-outdir','output/')
 cmd:option('-scale',1,'scale at which to process 4 = 1/4 resolution')
 cmd:option('-packetsize',0,'window size for ray packets (32x32)')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+local params = cmd:parse(arg)
 
-targetfile = params.targetfile
-sourcefile = params.sourcefile
-posefile   = params.posefile
-scale      = params.scale
-packetsize = params.packetsize 
+local targetfile = params.targetfile
+local sourcefile = params.sourcefile
+local posefile   = params.posefile
+local outdir     = params.outdir .. "/"
+local scale      = params.scale
+local packetsize = params.packetsize 
 
 if packetsize < 1 then packetsize = nil end
-cachedir = "cache/"
+local cachedir = "cache/"
 sys.execute("mkdir -p " .. cachedir)
+sys.execute("mkdir -p " .. outdir)
 
-posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
-sourcecache = cachedir .. sourcefile:gsub("/","_") .. ".t7"
-targetcache = cachedir .. targetfile:gsub("/","_") .. ".t7"
-posedir = paths.dirname(posefile)
+local posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
+local sourcecache = cachedir .. sourcefile:gsub("/","_") .. ".t7"
+local targetcache = cachedir .. targetfile:gsub("/","_") .. ".t7"
+local posedir = paths.dirname(posefile)
 
 function loadcache (objfile,cachefile,loader,args)
    local object = nil
@@ -78,7 +81,7 @@ if not target then
 end
 
 sys.tic()
-tree = build_tree(target)
+local tree = build_tree(target)
 printf("Built tree in %2.2fs",sys.toc())
 
 function test_traverse()
@@ -117,11 +120,14 @@ end
 
 
 for pi = 1,poses.nposes do 
-misfaces = {}
-   dirs = load_dirs(poses,pi,scale,packetsize)
-   out_tree    = torch.Tensor(dirs:size(1),dirs:size(2))
-   fid_tree    = torch.LongTensor(dirs:size(1),dirs:size(2))
+   local misfaces = {}
+
+   local dirs     = load_dirs(cachedir,poses,pi,scale,packetsize)
+
+   local out_tree = torch.Tensor(dirs:size(1),dirs:size(2))
+   local fid_tree = torch.LongTensor(dirs:size(1),dirs:size(2))
    sys.tic()
+   printf("Computing depth map for pose[%d] at 1/%d scale",pi,scale)
    for ri = 1,dirs:size(1) do 
       for ci = 1,dirs:size(2) do 
          local ray = Ray(poses.xyz[pi],dirs[ri][ci])
@@ -150,7 +156,9 @@ misfaces = {}
    end
    printf("[%d] Done in %2.2fs",pi,sys.toc())
    image.display{image={out_tree},min=0,max=5}
-   torch.save(poses[pi]..'_s'..scale..'-depth.t7',out_tree)
-   torch.save(poses[pi]..'-misfaces.t7',misfaces)
+   local outdfname = outdir..poses[pi]..'_s'..scale..'-depth.t7'
+   printf("Saving: %s", outdfname)
+   torch.save(outdfname,out_tree)
+   torch.save(outdir..poses[pi]..'-misfaces.t7',misfaces)
 end
 

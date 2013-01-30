@@ -35,11 +35,8 @@ end
 -- 
 -- Caching
 -- 
--- is not dependant on pose position or other pose dependent
--- information other than width, height, scale and center, and thus can be
--- reused between multiple poses, by computing once for an image size
--- and scale and xdeg, ydeg and center.
-function load_dirs(p,i,scale,ps)
+-- isdependant on pose rotation as well as image width, height, scale and center
+function load_dirs(cachedir,p,i,scale,ps)
 
    local imgw = p.w[i]
    local imgh = p.h[i]
@@ -50,11 +47,12 @@ function load_dirs(p,i,scale,ps)
    local cntrx = p.cntrx[i]
    local cntry = p.cntry[i]
 
-   local dirscache   = cachedir .. 
-      "orig_"..imgw.."x"..imgh.."_-_"..
-      "scaled_"..outw.."x"..outh.."_-_"..
-      "center_"..cntrx.."x"..cntry
-
+   local dirscache   = 
+      string.format("%s/pose_rot_%f_%f_%f_%f_w_%d_h_%d_s_%d_cx_%d_cy_%f",
+                    cachedir,
+                    p.quat[i][1],p.quat[i][2],p.quat[i][3],p.quat[i][4],
+                    imgw,imgh,scale,cntrx,cntry)
+   
    if ps then 
       dirscache = dirscache .."_-_grid_".. ps
    end
@@ -66,11 +64,13 @@ function load_dirs(p,i,scale,ps)
       dirs = torch.load(dirscache)
       printf("Loaded dirs from %s in %2.2fs", posecache, sys.toc())
    else
+      sys.tic()
       if ps then 
          dirs = grid_contiguous(compute_dirs(p,i,scale),ps,ps)
       else
          dirs = compute_dirs(p,i,scale)
       end
+      printf("Built dirs in %2.2fs", sys.toc())
       torch.save(dirscache,dirs)
       printf("Saving dirs to %s", dirscache)
    end
