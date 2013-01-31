@@ -8,6 +8,8 @@ local pose = util.pose
 
 function compute_dirs(p,i,scale)
 
+   printf("Computing dirs for pose[%d]",i)
+
    local imgw = p.w[i]
    local imgh = p.h[i]
 
@@ -62,7 +64,7 @@ function load_dirs(cachedir,p,i,scale,ps)
    if paths.filep(dirscache) then
       sys.tic()
       dirs = torch.load(dirscache)
-      printf("Loaded dirs from %s in %2.2fs", posecache, sys.toc())
+      printf("Loaded dirs from %s in %2.2fs", dirscache, sys.toc())
    else
       sys.tic()
       if ps then 

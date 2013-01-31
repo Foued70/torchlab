@@ -539,8 +539,9 @@ function test_get_occlusions ()
 -- compute
 function point_in_polygon(pt,verts,dims,center)
    -- fudge to move points slightly towards the center
+   local eps = 1e-2 -- 1cm 
    if center then
-      pt = pt + (center - pt)*1e-8
+      pt = pt + (center - pt)*eps
    end
    -- dims 1 == X axis
    -- dims 2 == Y axis
