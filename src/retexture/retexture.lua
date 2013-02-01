@@ -22,12 +22,13 @@ cmd:option('-sourcefile',
            'source obj')
 cmd:option('-posefile',
            'texture_swap/scanner371_job224000_texture_info.txt',
+--           "models/rivercourt_3307_scan/scanner371_job224000_texture_info.txt",
            'pose info file in same directory as the texture images')
 cmd:option('-occlusiondir',
-           'none/',
+           'rivercourt_occlusions/',
            'directory with the computed depth maps')
-cmd:option('-occscale',8,'scale at which occlusions where processed')
-cmd:option('-maskdir','none/','mask for retexture')
+cmd:option('-occscale',4,'scale at which occlusions where processed')
+cmd:option('-maskdir','texture_swap/mask/','mask for retexture')
 cmd:option('-outdir','output/')
 cmd:text()
 
@@ -79,14 +80,16 @@ if paths.dirp(occdir) then
    poses.occlusions = {}
    for pi = 1,poses.nposes do 
       local occfname = occdir .. poses[pi]:gsub("jpg","t7")
-      printf(" - loading %s", occfname)
+      printf(" - trying %s", occfname)
       if paths.filep(occfname) then
          poses.occlusions[pi] = torch.load(occfname)
+         print(" - OK")
       else
          occfname = occdir .. poses[pi]:gsub("png","t7")
-         printf(" - loading %s", occfname)
+         printf(" - trying %s", occfname)
          if paths.filep(occfname) then
             poses.occlusions[pi] = torch.load(occfname)
+            print(" - OK")
          end
       end
    end
@@ -116,7 +119,7 @@ end
 -- more args FIXME become arguments and make local
 ppm        = 100 -- pixels per meter
 mpp        = 1/ppm -- meters per pixel
-nposes     = 8   -- max number of poses to consider per texture
+nposes     = 10   -- max number of poses to consider per texture
 mindist    = 0.7 -- min distance to scanner
 mindistsqr = mindist*mindist
 ideal      = 1.5 -- meters for fade
@@ -405,7 +408,7 @@ function retexture (fid,obj,debug)
             local pt   = poses.xyz[pid]
             local pocc = nil
             if use_occlusions then
-               pocc = poses.occlusions[pi]
+               pocc = poses.occlusions[pid]
             end
             --  get uv of global coordinate in the pose
             local pu,pv,px,py = util.pose.globalxyz2uv(poses,pid,v)
@@ -415,7 +418,7 @@ function retexture (fid,obj,debug)
             -- FIXME check mask
             if (((px < 0) or (px >= timg:size(3))) or
              (py < vertbuffer) or (py >= (timg:size(2) - vertbuffer))) or
-            (use_mask and (poses.mask[pi][py][px] == 0)) then
+            (use_mask and (poses.mask[pid][py][px] == 0)) then
                if debug then printf("[%d] out of range skipping",pid) end
             else
                --  compute alpha (mixing) for this pose. (see. func. compute_alpha())
@@ -427,8 +430,9 @@ function retexture (fid,obj,debug)
                   local opx = math.max(1,math.floor(px*occsc + 0.5))
                   local opy = math.max(1,math.floor(py*occsc + 0.5))
                   local od  = pocc[opy][opx]
+                  -- only is falsified 
                   not_occluded = torch.abs(dist - od) < 0.2
-                  printf("occluded: %s dist: %f od: %f",not not_occluded,dist,od)
+                  -- printf("occluded: %s dist: %f od: %f",not not_occluded,dist,od)
                end
                if not_occluded then
                   dir = dir * (1/dist) 
