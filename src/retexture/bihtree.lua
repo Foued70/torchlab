@@ -159,6 +159,7 @@ end
 -- sv : split_verts.    Used to split the faces (obj.centers)
 -- bb : bounding_boxes. Around the object centered in each bbox
 function recurse_tree(tree,sv,bb,noffset,absindex)
+   local debug  = false
    local nverts = sv:size(1)
    local rmin   = sv:min(1):squeeze()
    local rmax   = sv:max(1):squeeze()
@@ -194,6 +195,11 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    --     FIXME could do a single sort at the start
    local vals,indexes = sv:select(2,dim):sort()
    
+   if debug then
+      printf("dim: %d", dim)
+      print(vals)
+   end
+   
    -- bookeeping : keep track of the absolute indices
    if absindex then
       local idx = indexes:clone()
@@ -215,8 +221,13 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    -- child.
 
    -- b1) choose split plane in the middle of the range
+   -- FIXME could do an SAH (with count of emptiness) here and optimize traversal
    local splitval  = rmin[dim] + range[dim]*0.5 
-
+   
+   if debug then
+      printf("splitval: %f", splitval)
+   end
+   
    -- b2) get index into sorted vals s.t. 
    --      - all vals from index and below are < splitval
    --      - all vals above index are >= splitval
@@ -240,9 +251,16 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    local node      = tree.nodes[noffset]
    local cindex    = tree.child_index[noffset]
 
+   local eps = 1e-4
+
    node[1] = dim          -- dimension on which we split
-   node[2] = bb1:select(2,dim):max() -- max of left child 
-   node[3] = bb2:select(2,dim):min() -- min of right child
+   node[2] = bb1:select(2,dim+3):max() + eps -- max of left child bbox max
+   node[3] = bb2:select(2,dim):min() - eps -- min of right child bbox min
+
+   if debug then
+      printf("c1max: %f",node[2])
+      printf("c2min: %f",node[3])
+   end
 
    noffset = noffset + 1
    
@@ -257,7 +275,7 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    return noffset
 end
 
-function build_tree(obj)
+function build_tree(obj,debug)
    
    -- the tree is two torch tensors
    
@@ -286,8 +304,8 @@ function build_tree(obj)
    local noffset = recurse_tree(tree,obj.centers,obj.face_bboxes)
 
    -- clean up 
-   tree.child_index = tree.child_index:narrow(1,1,noffset)
-   tree.nodes       = tree.nodes:narrow(1,1,noffset)
+   tree.child_index = tree.child_index:narrow(1,1,noffset-1)
+   tree.nodes       = tree.nodes:narrow(1,1,noffset-1)
    tree.bbox        = obj.bbox
    return tree
 
@@ -338,35 +356,46 @@ end
 
 -- update mint,maxt based on the ray segment intersecting with the
 -- bounding interval
-function recurse_traverse (tree,node_id)
+function recurse_traverse (tree,node_id,obj)
    printf("Traversing: %d",node_id)
    local node    = tree.nodes[node_id]
    local nidx    = tree.child_index[node_id]
    local dim     = node[1]
    -- not leaf
    if (dim == 0) then
-      printf(" - leaf node: range: %d,%d",  nidx[1],nidx[2])
+      printf(" + leaf node: range: %d,%d",  nidx[1],nidx[2])
+      for i = 0,nidx[2]-nidx[1] do 
+         local fid = tree.leaf_fid[nidx[1] + i]
+         printf("  - face_id: %d @ %d", fid , nidx[1] + i)
+         if obj then
+            local bbx = obj.face_bboxes[fid]
+            printf("min: %f %f %f max: %f %f %f",
+                   bbx[1],bbx[2],bbx[3],bbx[4],bbx[5],bbx[6])
+         end
+      end
    else
-      printf(" - inner node: children: %d,%d",  nidx[1],nidx[2])
-   
-      recurse_traverse(tree,c1)
+      printf(" + inner node: children: %d,%d",  nidx[1],nidx[2])
+      printf(" - dim: %d c1max: %f c2min: %f", dim, node[2], node[3])
+ 
+      recurse_traverse(tree,nidx[1],obj)
 
-      recurse_traverse(tree,c2)
+      recurse_traverse(tree,nidx[2],obj)
    end
 end
 
 
 -- recursive traversal of tree useful for debugging or perhaps to flatten the tree.
-function walk_tree(tree)
+function walk_tree(tree,obj)
    local node_id    = 1
    -- start at parent
-   recurse_traverse(tree,node_id)
+   recurse_traverse(tree,node_id,obj)
 end
 
 -- return depth of closest intersection.
 function traverse_tree(tree,obj,ray,debug)
    -- stack used to keep track of nodes left to visit
    local todolist  = torch.LongTensor(64)
+   local todominmax = torch.Tensor(64,2)
    local todoindex = 0
    local node_id   = 1 -- start at parent 
    local nodes     = tree.nodes
@@ -382,9 +411,9 @@ function traverse_tree(tree,obj,ray,debug)
    local process_tree, ray_mint, ray_maxt = ray_bbox_intersect(ray,obj.bbox)
    
    local mindepth = math.huge
-
+   local face_id  = 0
    while (process_tree) do 
-      -- CHECK intersect first
+      -- FIXME rewrite to CHECK intersect first
       local node  = nodes[node_id]
       local cids  = children[node_id]
       local dim   = node[1]
@@ -399,27 +428,29 @@ function traverse_tree(tree,obj,ray,debug)
          local start_id = cids[1]
          local   end_id = cids[2]
          local      ids = fids[{{start_id,end_id}}]
-         if debug then
-            printf("start: %d end: %d", start_id, end_id)
-            print(ids)
-         end 
          for i = 1,ids:size(1) do 
-            -- local d = ray_polygon_intersection(ray,obj,ids[i])
-            local intersectp,d,dmax = ray_bbox_intersect(ray,obj.face_bboxes[ids[i]])
-            -- if there is an intersection 
-            if intersectp and d < mindepth then
+            local fid = ids[i]
+            if debug then
+               printf("  - fid: %d",fid)
+            end
+            local dp = ray_polygon_intersection(ray,obj,fid)
+            if debug then print(dp) end
+            if dp and dp < mindepth then
                if debug then
-                  printf("new d: %f", d)
+                  printf("new d: %f", dp)
                end
-               mindepth = d
-               ray_maxt = d
+               mindepth = dp
+               ray_maxt = dp
+               face_id  = fid
             end
          end
          
       else
          if debug then
-            printf("node: %d dim: %d c1max: %f c2min: %f ray: mint: %f maxt: %f",
-                   node_id, dim, c1max, c2min, ray_mint, ray_maxt)
+            printf("node: %d dim: %d c1max: %f c2min: %f",
+                   node_id, dim, c1max, c2min) 
+            printf("ray: o: %f d: %f mint: %f maxt: %f", 
+                   ray.origin[dim], ray.dir[dim], ray_mint, ray_maxt)
          end
          -- 2) inner node evaluate children
          local dsign = (rsign[dim] == 1)
@@ -427,27 +458,31 @@ function traverse_tree(tree,obj,ray,debug)
             local intersectp, new_min, new_max = 
                ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c2min)
             if debug then
-               printf("> intersect: %s dim: %d max: %f",
-                      intersectp, dim, c2min) 
+               printf("> min child[%d] intersect: %s dim: %d min: %f",
+                      cids[2], intersectp, dim, c2min) 
             end
             -- if intersection, add child2 to the todo list
             if intersectp then
                if debug then 
+                  printf("  - new_min: %f new_max: %f", new_min, new_max)
                   print("   - add to todo")
                end
                todoindex = todoindex + 1
-               todolist[todoindex] = cids[2]
+               todolist[todoindex]      = cids[2]
+               todominmax[todoindex][1] = new_min
+               todominmax[todoindex][2] = new_max
             end
             -- process child 1
             local intersectp, new_min, new_max = 
                ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c1max,true)
             if debug then 
-               printf("< intersect: %s new_min: %f new_max: %f dim: %d max: %f",
-                      intersectp, new_min, new_max, dim, c1max)
+               printf("< max child[%d] intersect: %s dim: %d max: %f ",
+                      cids[1], intersectp, dim, c1max)
             end
             if intersectp then
                if debug then 
-                  print("  - processing")
+                  printf("  - new_min: %f new_max: %f", new_min, new_max)
+                  print( "  - processing")
                end
                -- process child 
                ray_mint = new_min
@@ -460,27 +495,31 @@ function traverse_tree(tree,obj,ray,debug)
             local intersectp, new_min, new_max = 
                ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c1max,true) 
             if debug then 
-               printf("> intersect: %s dim: %d max: %f",
-                      intersectp, dim, c1max) 
+               printf("> max child[%d] intersect: %s dim: %d max: %f",
+                      cids[1], intersectp, dim, c1max) 
             end
             if intersectp then
                if debug then 
-                  print("   - add to todo")
+                  printf("  - new_min: %f new_max: %f", new_min, new_max)
+                  print ("  - add to todo")
                end
                -- add child1 to the todo list               
                todoindex = todoindex + 1
-               todolist[todoindex] = cids[1]
+               todolist[todoindex]      = cids[1] 
+               todominmax[todoindex][1] = new_min
+               todominmax[todoindex][2] = new_max
             end
             -- process child 2
             local intersectp, new_min, new_max = 
                ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c2min)
             if debug then 
-               printf("> intersect: %s new_min: %f new_max: %f dim: %d max: %f",
-                      intersectp, new_min, new_max, dim, c2min)
+               printf("> min child[%d] intersect: %s dim: %d min: %f",
+                      cids[2], intersectp, dim, c2min)
             end
             if intersectp then
                if debug then
-                  print("  - processing")
+                  printf("  - new_min: %f new_max: %f", new_min, new_max)
+                  print( "  - processing")
                end
                -- process child 
                ray_mint = new_min
@@ -493,19 +532,17 @@ function traverse_tree(tree,obj,ray,debug)
       -- process stack
       if process_stack then 
          if (todoindex > 0) then
-            node_id = todolist[todoindex] 
+            node_id  = todolist[todoindex]
+            ray_mint = todominmax[todoindex][1]
+            ray_maxt = todominmax[todoindex][2]
             todoindex = todoindex - 1
          else
             break -- we're done.
          end
       end
    end
-   return mindepth
+   return mindepth,face_id
 end
-
--- tree = build_tree(target)
--- dump_tree(tree,target)
-
 
 -- compare aggregate to and exhaustive search through all polygons.
 function test_traverse()

@@ -12,10 +12,10 @@ exports.pose = require "util/pose"
 require "util/global"
 
 function exports.run_tests()
-   local geom_test = require "util/geom-test"
+   local geom_test = require "util/test/geom-test"
    geom_test.all()
 
-   local pose_test = require "util/pose-test"
+   local pose_test = require "util/test/pose-test"
    pose_test.all()
 end
 

@@ -191,7 +191,7 @@ function objops.save(obj,objfname,mtlfname,imgbasename)
       end
       -- store face and mtl info to obj
       objf:write("\n")
-      objf:write(string.format("o face%05d\n",fid))
+      objf:write(string.format("g face%05d\n",fid))
       if filep  then
          objf:write(string.format("usemtl %s\n",iname))
       end

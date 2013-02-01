@@ -1,3 +1,4 @@
+util = require 'util'
 
 --   -- idea: projecting whole wireframe onto pose would help with
 --      alignment of all faces at once (Reduce human alignment
@@ -41,13 +42,31 @@ function draw_wireframe (p,i,obj)
    return wimage
 end
 
-function save_all_wireframes()
+function save_all_wireframes(poses,obj)
    for pi = 1,poses.nposes do
-      local wimage = draw_wireframe(poses,pi,target)
+      local wimage = draw_wireframe(poses,pi,obj)
       image.display(wimage)
       -- save
       local wimagename = poses[pi]:gsub(".jpg","_wireframe.png")
       printf("Saving: %s", wimagename)
       image.save(wimagename,wimage)
+   end
+end
+
+function show_all_wireframes(poses,obj)
+   for pi = 1,poses.nposes do 
+      local wimage = draw_wireframe(poses,pi,obj)
+      wimage = wimage[1]:mul(-1):add(1)
+      local cimage = poses.images[pi]:clone()
+      cimage[1]:cmul(wimage)
+      cimage[2]:cmul(wimage)
+      cimage[3]:cmul(wimage)
+      image.display(cimage) 
+      local wimagename = poses[pi]:gsub(".jpg","_wireframe_RGB.png")
+      if poses[pi]:gmatch("png") then
+         wimagename = poses[pi]:gsub(".png","_wireframe_RGB.png")
+      end
+      printf("Saving: %s", wimagename)
+      image.save(wimagename,cimage)
    end
 end
