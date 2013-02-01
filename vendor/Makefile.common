@@ -4,6 +4,8 @@ PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
 CC=
 CXX=
 	
+
+project_dir = $(abspath ../..)
 build_dir = $(abspath ../../build)
 install_root = $(build_dir)/usr/local
 

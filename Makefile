@@ -12,15 +12,11 @@ $(packages_install):
 	
 deps: build
 	cd vendor/gcc; make
-	cd vendor/boost; make
-	cd vendor/eigen; make
-	cd vendor/flann; make
 	cd vendor/qt; make
-	cd vendor/vtk; make
-	cd vendor/pcl; make
 	cd vendor/imagemagick; make
 	cd vendor/jpeg; make
 	cd vendor/torch; make
+	cd vendor/luarocks; make
 
 build: 
 	mkdir -p build
