@@ -3,6 +3,31 @@ local pb = require "protobuf"
 local geom = require "util/geom"
 
 
+local function clean_color(color)
+  if not color then return nil end
+  return {r = color.r, g = color.g, b = color.b, a = color.a}
+end
+
+
+local function clean_materials(materials)
+  mats = {}
+  for i, m in ipairs(materials) do
+    mats[i] = {
+      name = m.name,
+      ambient = clean_color(m.ambient),
+      diffuse = clean_color(m.diffuse),
+      specular = clean_color(m.specular),
+      shininess = m.shininess,
+      alpha = m.alpha,
+      illumType = m.illumType,
+      diffuseTexPath = m.diffuseTexPath
+    }
+  end
+
+  return mats
+end
+
+
 local function parse(pbx_data)
   local model_data = pb.ModelData()
 	model_data:ParseFromString(pbx_data)
@@ -104,7 +129,7 @@ local function parse(pbx_data)
   end
 
   local obj = {}
-  obj.materials          = materials
+  obj.materials          = clean_materials(materials)
   obj.verts              = verts
   obj.faces              = faces
   obj.nverts_per_face    = 3
@@ -124,8 +149,6 @@ local function load(filename)
   io.input(filename)
   return parse(io.read("*all"))
 end
-
-
 
 local exports = {}
 
