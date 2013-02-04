@@ -15,7 +15,8 @@ cmd:text('Compute depth maps')
 cmd:text()
 cmd:text('Options')
 cmd:option('-targetfile',
-           "models/rivercourt_3307_regeom/rivercourt_3307.obj",
+           --           "models/rivercourt_3307_regeom/rivercourt_3307.obj",
+           "models/withered-dust-2012_a_03/rivercourt_3307_v3.obj",
            'target obj with new geometry')
 cmd:option('-sourcefile',
            "models/rivercourt_3307_scan/scanner371_job224000.obj",
@@ -25,9 +26,9 @@ cmd:option('-posefile',
 --           "models/rivercourt_3307_scan/scanner371_job224000_texture_info.txt",
            'pose info file in same directory as the texture images')
 cmd:option('-occlusiondir',
-           'rivercourt_occlusions/',
+           'rivercourt_occlusions_s1/',
            'directory with the computed depth maps')
-cmd:option('-occscale',4,'scale at which occlusions where processed')
+cmd:option('-occscale',1,'scale at which occlusions where processed')
 cmd:option('-maskdir','texture_swap/mask/','mask for retexture')
 cmd:option('-outdir','output/')
 cmd:text()
@@ -117,9 +118,9 @@ if not target then
 end
 
 -- more args FIXME become arguments and make local
-ppm        = 100 -- pixels per meter
+ppm        = 150 -- pixels per meter
 mpp        = 1/ppm -- meters per pixel
-nposes     = 10   -- max number of poses to consider per texture
+nposes     = 8  -- max number of poses to consider per texture
 mindist    = 0.7 -- min distance to scanner
 mindistsqr = mindist*mindist
 ideal      = 1.5 -- meters for fade
@@ -407,19 +408,29 @@ function retexture (fid,obj,debug)
             local timg = poses.images[pid]
             local pt   = poses.xyz[pid]
             local pocc = nil
+            local debug = false
             if use_occlusions then
                pocc = poses.occlusions[pid]
             end
             --  get uv of global coordinate in the pose
             local pu,pv,px,py = util.pose.globalxyz2uv(poses,pid,v)
-
+            if debug then 
+               printf("pid: %d py: %f px: %f",pid,px,py)
+            end
             -- check obvious out of bounds (including a buffer at top
             -- and bottom 0px for matterport textures)
-            -- FIXME check mask
-            if (((px < 0) or (px >= timg:size(3))) or
-             (py < vertbuffer) or (py >= (timg:size(2) - vertbuffer))) or
-            (use_mask and (poses.mask[pid][py][px] == 0)) then
-               if debug then printf("[%d] out of range skipping",pid) end
+            if (px < 1) or (px >= timg:size(3)) then
+               printf("pose[%d] x: %f out of range (should not happen)",
+                      pid, px)
+            elseif (py < 1) or (py >= timg:size(2)) then
+               if debug then 
+                  printf("pose[%d] y: %f out of range",
+                         pid, py)
+               end
+            elseif (use_masks and (poses.masks[pid][py][px] < 1)) then
+               if debug then 
+                  printf("pose[%d] masked at %f, %f", pid, py, px)
+               end
             else
                --  compute alpha (mixing) for this pose. (see. func. compute_alpha())
                local dir  = v - pt -- from pose to surface
