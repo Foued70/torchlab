@@ -196,11 +196,20 @@ public:
 			}
 		}
 	}
-	
+  
+  inline sVector< T, N > operator*(const sVector< T, N >& _vector) {
+    sVector< T, N > result;
+  	for (int i = 0; i < N; i++) {
+      result[i] = 0;
+  		for (int j = 0; j < N; j++) {
+        result[i] += at(i, j) * _vector[j];
+      }
+    }
+    return result;
+  }	
 };
 
 typedef	sMatrix< float, 3 >	sMat9;
 typedef	sMatrix< float, 4 >	sMat16;
-
 
 #endif // MATRICES_H

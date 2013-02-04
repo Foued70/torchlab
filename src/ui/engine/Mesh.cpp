@@ -45,7 +45,7 @@ Mesh::show() {
 		
 		if (m.material)
 			m.material -> setMaterial();
-		
+    
 		glDrawElements(
 				__mode,
 				m.end,
@@ -58,7 +58,6 @@ Mesh::show() {
 			m.material -> unsetTextures();
 	
 	}
-	
 	glBindVertexArray(0);
 }
 

@@ -28,5 +28,5 @@ void main () {
 	}
 
 	sFragColor *= texture(textureUnit, sVaryingTexCoords.st);
-  triangleID = uvec3((gl_PrimitiveID+1), objectID, 0);
+  sPickingData = uvec3((gl_PrimitiveID+1), objectID, meshID);
 }

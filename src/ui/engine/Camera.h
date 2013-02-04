@@ -52,7 +52,44 @@ public:
   void setView();
 
   void calcUp();
-
+  
+  /**
+   * Sets the eye position absolutely in world space.
+   * @param x World positon: x.
+   * @param y World positon: y.
+   * @param z World positon: z.
+   */
+  void setEyePosition(GLfloat, GLfloat, GLfloat);
+  
+  /**
+   * Sets the eye position absolutely in world space.
+   * @param _position New World position
+   */ 
+  void setEyePosition(const Vector3&);
+   
+  /**
+   * Sets the center position absolutely in world space.
+   * @param x World positon: x.
+   * @param y World positon: y.
+   * @param z World positon: z.
+   */
+  void setCenterPosition(GLfloat, GLfloat, GLfloat);
+  
+  /**
+   * Sets the eye position absolutely in world space.
+   * @param _position New World position
+   */ 
+  void setCenterPosition(const Vector3&);
+   
+   
+	/**
+	 * Rotates the center around the camera by relative x and y values.
+   * Has the effect of a local rotation around the camera's nodal point.
+	 * @param x X rotation.
+	 * @param y Y rotation.
+	 */
+  void rotateCenterAroundCamera(GLfloat _x, GLfloat _y);
+   
 	/**
 	 * Moves the eye relative to the view/screen.
 	 * @param x horizontal.
@@ -80,15 +117,25 @@ public:
 	/**
 	 * @return The __eye's coords.
 	 */
-	Vector3 getEye();
+	Vector3 getEye() const;
 	
 	/**
 	 * @return The __center's coords.
 	 */
-	Vector3 getCenter();
+	Vector3 getCenter() const;
+   
+  float getFarPlane() const;
+  float getNearPlane() const;
    
   Vector3 rightDirection();
   Vector3 lookDirection();
+  
+ /**
+ * Returns the position in world space of a coordinate in window
+ * @param x X coordinate in pixels.
+ * @param y Y coordinate in pixels.
+ */
+  Vector3 cameraToWorld(GLfloat _x, GLfloat _y) const;
 	
 private:
 	

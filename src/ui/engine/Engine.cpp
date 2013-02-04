@@ -6,17 +6,25 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <QtOpenGL/QGLWidget>
+#include <QtOpenGL/QGLBuffer>
+#include <QtOpenGL/QGLShaderProgram>
+
 #include "Engine.h"
 #include "utils.h"
+#include "../ScanWidget.h"
 
 using namespace std;
 
 
 Engine::Engine() : 
 		Textures(__textureManagement),
-      Matrices(__matricesManagement),
+    Matrices(__matricesManagement),
 		Shaders(__shaderDataHandling),
 		VBOManagement(__vboManagement),
+    Timer(__timeManagement),
+    FBO(__frameBuffer),
+    ControllerManagment(__controllerManagement),
 		identityShader(NULL),
 		shadingShader(NULL),
 		texturedShadingShader(NULL),
@@ -24,6 +32,9 @@ Engine::Engine() :
 		__textureManagement(NULL),
 		__matricesManagement(NULL),
 		__shaderDataHandling(NULL),
+    __timeManagement(NULL),
+    __frameBuffer(NULL),
+    __controllerManagement(NULL),
     __shaderList(0),
     __sceneList(0) {
 			
@@ -32,6 +43,9 @@ Engine::Engine() :
 	__matricesManagement = new MatricesManager();
 	__shaderDataHandling = new ShaderDataHandler();
 	__vboManagement = new GPUMemory();
+  __timeManagement = new TimeManager();
+  //__frameBuffer = new FrameBuffer();
+  __controllerManagement = new ControllerManager();
 	
 	log(CONSTRUCTOR, "Engine constructed.");
 }
@@ -41,6 +55,9 @@ Engine::~Engine() {
 	delete __matricesManagement;
 	delete __shaderDataHandling;
 	delete __vboManagement;
+  delete __timeManagement;
+  delete __frameBuffer;
+  delete __controllerManagement;
 	
 	while (!__shaderList.empty()) delete  __shaderList.back(), __shaderList.pop_back();
 	while (!__extensions.empty()) delete __extensions.back(), __extensions.pop_back();
@@ -56,9 +73,8 @@ Engine::init() {
 	shadingShader = createShader("shadow");
 	texturedShadingShader = createShader("textured");
 	normalMapShader = createShader("normalmap");
-	
-	return true;
-	
+  	
+	return true;	
 }
 
 Scene *
@@ -76,9 +92,14 @@ Engine::createShader(const string& _fileName) {
 }
 
 
-void Engine::render(Scene* scene) {
+void Engine::render(Scene* scene, unsigned int _renderMode) {
+  //Render scene to our framebuffer
+  
+  if (_renderMode & RENDER_TO_FRAMEBUFFER) {
+    __frameBuffer -> renderToTexture();
+  }
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClearColor(0.0, 0.0, 0.0, 0.0);
 	checkGLErrors(AT);
 	
 	glEnable(GL_BLEND);
@@ -105,5 +126,69 @@ void Engine::render(Scene* scene) {
 	glDisable(GL_DEPTH_TEST);
 	
 	checkGLErrors(AT);
+  
+  if (_renderMode & RENDER_TO_FRAMEBUFFER) {
+    __frameBuffer -> unbind();
+  }
+  //display rendered color data to screen
+  if ((_renderMode & RENDER_TO_FRAMEBUFFER) &&
+      (_renderMode & RENDER_TO_WINDOW)) {
+    __frameBuffer -> displayToWindow();
+  }
+  checkGLErrors(AT);
+}
+
+void 
+Engine::regenerateFrameBuffer() {
+  if( __frameBuffer != NULL ) {
+    delete __frameBuffer;
+  }
+  __frameBuffer = new FrameBuffer();
+  __frameBuffer -> initialize();
+}
+
+void 
+Engine::simulateDynamics(ScanWidget* _scanWidget) {
+  while(__controllerManagement->needsUpdate()) {
+    __timeManagement->tick();
+    __controllerManagement->update();
+    _scanWidget->refresh();
+    log(PARAM, "End of simulation tick.");
+  }
+  log(PARAM, "Exiting simulation. All dynamics idle.");
+}
+
+bool 
+Engine::raycast(const Vector3& _source, const Vector3& _direction, Vector3& _outHitLocation, Scene* _scene) {
+  Vector3 currentEye;
+  Vector3 currentCenter;
+  if ( !_scene && !__sceneList.empty() ) {
+    _scene = __sceneList[0];
+  }
+  if ( !_scene ) {
+    return false;
+  }
+  Camera* camera = _scene->getActiveCamera();
+  currentEye = camera->getEye();
+  currentCenter = camera->getCenter();
+  camera->setEyePosition(_source);
+  camera->setCenterPosition(_direction);
+  render(_scene, RENDER_TO_FRAMEBUFFER);
+  GLint viewport[4];
+  glGetIntegerv(GL_VIEWPORT, viewport);   
+  float centerX = viewport[2] * 0.5f;
+  float centerY = viewport[3] * 0.5f;
+  _outHitLocation = camera->cameraToWorld(centerX, centerY);
+  
+  //Set the camera back to it's normal position, and do a render to refresh all frame buffer data to correct values.
+  camera->setEyePosition(currentEye);
+  camera->setCenterPosition(currentCenter);
+  render(_scene, (RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER));
+  
+  Vector3 rayOffset = _outHitLocation - _source;
+  if(rayOffset.magnitude() >= camera->getFarPlane()) {
+    return false;
+  }
+  return true;
 }
 
