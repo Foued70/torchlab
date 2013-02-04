@@ -117,32 +117,28 @@ end
 
 -- tests 2globalray in context of poses
 function test.localxy2globalray_pose ()
+   print("Testing localxy2globalray_poses") 
    local poses  = test.data.poses
    -- matterport textures go beyond 360 
-   local over = torch.floor((poses.w - 360 / poses.px[1][1])*0.5 + 0.5)
+   local over = torch.floor((poses.w - poses.px[1] * 1/360)*0.5 + 0.5)
    for pi = 1,poses.nposes do 
       local yerr = 0
       local xerr = 0
       local tot  = 0
-      local w  = poses.w[pi]
-      local h  = poses.h[pi]
+      local w  = poses[pi].w
+      local h  = poses[pi].h
       for y = 1,h,100 do 
          for x = over[pi],w-over[pi],100 do 
             local pt, dir = poses:localxy2globalray(pi, x, y)
             local r = Ray(pt,dir)
             local vec = r(10)
-            -- printf("ray: dir: (%f %f %f) v: (%f %f %f)",
-            --        dir[1],dir[2],dir[3],v[1],v[2],v[3])
-            
             local u,v,nx,ny = poses:globalxyz2uv(pi, vec)
             local nx = math.floor(nx)
             local ny = math.floor(ny) 
             if (y ~= ny) then
-               -- printf("y: %d -> %d ", y, ny) 
                yerr = yerr + 1
             end
             if (x ~= nx) then
-               -- printf("x: %d -> %d ", x, nx) 
                xerr = xerr + 1
             end
             tot = tot + 1
@@ -157,6 +153,7 @@ function test.all()
    test.global2local()
    test.globalxyz2uv()
    test.localxy2globalray()
+   test.localxy2globalray_pose()
 end
 
 

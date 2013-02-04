@@ -83,6 +83,21 @@ function Poses:loaddata(data)
    print(string.format("Loaded %d poses in %2.2fs", self.nposes, sys.toc()))
 end
 
+-- chose not to have a class for the easy access.
+function Poses:newPose(i)
+   self[i]     = {}
+   Pose        = self[i]
+   Pose.quat   = self.quat[i]
+   Pose.xyz    = self.xyz[i]
+   Pose.uv     = self.uv[i]
+   Pose.px     = self.px[i]
+   Pose.quat_r = self.quat_r[i]
+   Pose.cntrx  = self.cntrx[i]
+   Pose.cntry  = self.cntry[i]
+   Pose.w      = self.w[i]
+   Pose.h      = self.h[i]
+end
+
 function Poses:process()
    self.quat  = self.data:narrow(2,1,4)
    self.xyz   = self.data:narrow(2,5,3)
@@ -95,6 +110,9 @@ function Poses:process()
    self.cntry = self.data:select(2,17)
    self.w     = self.data:select(2,18)
    self.h     = self.data:select(2,19)
+   for i = 1,self.nposes do
+      self:newPose(i)
+   end
 end
 
 function Poses:global2local(i,v)
