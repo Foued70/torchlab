@@ -1,14 +1,13 @@
 require 'torch'
 require 'sys'
 
-require 'util'
-
-util.test.pose = {}
-local test  = util.test.pose
+local util = require 'util'
 local pose  = util.pose
 local geom  = util.geom
 
-torch.include('util','pose-data.lua')
+local test  = {}
+
+test.data = require 'util/test/pose-data'
 
 -- FIXME check serious numerical issues which are hopefully due to the
 -- precision at which the groundtruth is copied from blender
@@ -115,8 +114,48 @@ function test.localxy2globalray ()
                        e,cnt, maxerr,sys.toc()))
 end
 
+-- tests 2globalray in context of poses
+function test.localxy2globalray_pose (poses)
+   -- matterport textures go beyond 360 
+   local over = torch.floor((porig.w - 360 / porig.px[1][1])*0.5 + 0.5)
+   for pi = 1,poses.nposes do 
+      local yerr = 0
+      local xerr = 0
+      local tot  = 0
+      local w  = poses.w[pi]
+      local h  = poses.h[pi]
+      for y = 1,h,100 do 
+         for x = over[pi],w-over[pi],100 do 
+            local pt, dir = pose.localxy2globalray(poses, pi, x, y)
+            local r = Ray(pt,dir)
+            v = r(10)
+            -- printf("ray: dir: (%f %f %f) v: (%f %f %f)",
+            --        dir[1],dir[2],dir[3],v[1],v[2],v[3])
+            
+            local u,v,nx,ny = pose.globalxyz2uv(poses, pi, v)
+            local nx = math.floor(nx)
+            local ny = math.floor(ny) 
+            if (y ~= ny) then
+               -- printf("y: %d -> %d ", y, ny) 
+               yerr = yerr + 1
+            end
+            if (x ~= nx) then
+               -- printf("x: %d -> %d ", x, nx) 
+               xerr = xerr + 1
+            end
+            tot = tot + 1
+         end
+      end
+      printf(" - [%d] Errors: x:%d y:%d both: %d/%d", 
+             pi, xerr, yerr, xerr + yerr, tot)
+   end
+end 
+
 function test.all()
    test.global2local()
    test.globalxyz2uv()
    test.localxy2globalray()
 end
+
+
+return test

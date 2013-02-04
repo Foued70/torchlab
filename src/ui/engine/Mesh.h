@@ -79,16 +79,6 @@ public:
 	 */
 	void closeMesh(Material*);
 	
-	/**
-	 * Removes all data from mesh's vectors.
-	 */
-	void flush();
-	
-	/**
-	 * Maps the VBO and gets all data back.
-	 */
-	void raise();
-	
 	bool empty() { return __vertices.empty() && __indices.empty(); }
 	
 	bool hasAnyMaterials() { return __materials.size() > 1; }

@@ -1,0 +1,29 @@
+rock_manifest = {
+   lua = {
+      json = {
+         decode = {
+            ['composite.lua'] = "420b3aadc32bab0120102df57d30e880",
+            ['number.lua'] = "d7cb5280ad995ddbf8573489c6399265",
+            ['others.lua'] = "dc4b83733b9a3c3d04afe8f0a3884f02",
+            ['state.lua'] = "523b2cbc13f5d38d746d534e8703b2c6",
+            ['strings.lua'] = "06389cb8abc987bfdf3967f035d29396",
+            ['util.lua'] = "f81c54b56c062587fce3e38f29cf14ef"
+         },
+         ['decode.lua'] = "31308ad293b388150f585f79125796f9",
+         encode = {
+            ['array.lua'] = "87d999fd4477341ab594c4bb97c29903",
+            ['calls.lua'] = "f299005d808dec9e9cb54c4583d693f5",
+            ['number.lua'] = "65fefe3b5ddb0a2a09d45278b7e8015e",
+            ['object.lua'] = "fa3267f37503ac8f55615e6604aac0ad",
+            ['others.lua'] = "ea0a85fd2f5352c75b728062801a0e5a",
+            ['output.lua'] = "2088de8609906a067bbf27e5cdd9d01d",
+            ['output_utility.lua'] = "27c124f3a8ddbe16bf4cdb0267476791",
+            ['strings.lua'] = "a555af66555985b2e48e87256202243d"
+         },
+         ['encode.lua'] = "d9d8c5dc150b1bb8b04649e799089f54",
+         ['util.lua'] = "a0274d070e3237f275e8b1fe1aff9460"
+      },
+      ['json.lua'] = "d5aacc4b489e2223377c9a46d43d9b07"
+   },
+   ['luajson-1.3.1-1.rockspec'] = "0ba641f231032ecf4d45eb51422b1338"
+}

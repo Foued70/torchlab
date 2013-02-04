@@ -1,13 +1,11 @@
 require 'torch'
 require 'sys'
 
-require 'util'
-
-util.test.geom = {}
-local test = util.test.geom
+local util = require 'util'
 local geom = util.geom
 
-torch.include('util','geom-data.lua')
+local test = {}
+test.data = require "util/test/geom-data"
 
 function test.quaternion_angle()
    print("Testing quaternion angle btw. 2 vectors")
@@ -65,6 +63,33 @@ function test.rotation_by_quat()
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,res:size(1),maxerr,sys.toc()))
+end
+
+function test.quat_product()
+   print("Testing composition of rotations with quaternion")
+   local e = 0
+   local maxerr = 0
+   sys.tic()
+   local q1 = test.data.quat[1]
+   for j = 2,test.data.quat:size(1) do 
+      local q2 = test.data.quat[j]
+      for k = 1,test.data.vec:size(1) do
+         local v    = test.data.vec[k]
+         local vr1  = geom.rotate_by_quat(v,q1)
+         local vr2  = geom.rotate_by_quat(vr1,q2)
+         local q12  = geom.quat_product(q2,q1)
+         local vr12 = geom.rotate_by_quat(v,q12)
+         local ce = torch.max(torch.abs(vr12 - vr2))
+         if (ce > maxerr) then maxerr = ce end
+         if (ce > 5e-4) then 
+            print(ce,vr2,vr12)
+            e = e + 1
+         end
+         q2 = q1
+      end
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,test.data.quat:size(1)*test.data.vec:size(1),maxerr,sys.toc()))
 end
 
 function test.rotation_by_mat()
@@ -162,7 +187,7 @@ function test.largest_rotation()
    for i = 1,test.data.vec:size(1) do
       local tvec = test.data.vec[i]
       local quat,d = geom.largest_rotation(tvec)
-      local rvec = geom.rotate_by_quat(tvec,quat)
+      local rvec   = geom.rotate_by_quat(tvec,quat)
       local ce = rvec[d] - rvec:sum()
       if (ce > maxerr) then maxerr = ce end
       if (ce > 1e-8) then
@@ -292,6 +317,7 @@ function test.all()
    test.quat2rot()
    test.rotation_by_mat()
    test.rotation_by_quat()
+   test.quat_product()
    test.x_rotation()
    test.y_rotation()
    test.z_rotation()
@@ -300,3 +326,6 @@ function test.all()
    test.ray_face_intersection()
    test.compute_normals()
 end
+
+return test
+

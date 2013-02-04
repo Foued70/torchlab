@@ -3,11 +3,9 @@ require 'torch'
 require 'math'
 require 'image'
 require 'paths'
+local geom = require "util/geom"
 
-util.pose = {}
-
-local pose = util.pose
-local geom = util.geom
+local pose = {}
 
 local r2d = 180 / math.pi
 local d2r = math.pi / 180
@@ -112,12 +110,11 @@ end
 function pose.globalxyz2uv(p,i,pt)
    -- xyz in pose coordinates
    local v = pose.global2local(p,i,pt)
-   local azimuth = - r2d * torch.atan2(v[2],v[1])
-   local norm      = geom.normalize(v)
+   local azimuth = -r2d * torch.atan2(v[2],v[1])
+   local norm    = geom.normalize(v)
    local elevation = r2d * torch.asin(norm[3])
-   -- print(azimuth,elevation)
-   local proj_x  = p.cntrx[i] + (  azimuth / p.px[i][1])
-   local proj_y  = p.cntry[i] - (elevation / p.px[i][2])
+   local proj_x  = 0.5 + p.cntrx[i] + (  azimuth / p.px[i][1])
+   local proj_y  = 0.5 + p.cntry[i] - (elevation / p.px[i][2])
    local proj_u  = proj_x / p.w[i]
    local proj_v  = 1 - (proj_y / p.h[i])
    return proj_u, proj_v, proj_x, proj_y
@@ -137,7 +134,10 @@ function pose.localxy2globalray(p,i,x,y)
    dir[3]  =       torch.sin(elevation) -- z'
    dir[2]  =   h * torch.sin(azimuth)   -- y'
    dir[1]  =   h * torch.cos(azimuth)   -- x'
-   dir = geom.normalize(dir)
+   dir     = geom.normalize(dir)
    -- return point and direction rotated to global coordiante
    return p.xyz[i], geom.rotate_by_quat(dir,p.quat[i])
 end
+
+
+return pose

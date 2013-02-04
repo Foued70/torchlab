@@ -1,8 +1,8 @@
 require 'torch'
 require 'sys'
+local geom = require "util/geom"
 
-util.obj = {}
-local objops = util.obj
+local objops = {}
 
 -- see: http://en.wikipedia.org/wiki/Wavefront_.obj_file
 function objops.load(...)
@@ -84,12 +84,12 @@ function objops.load(...)
 
 
    sys.tic()
-   local face_verts = torch.Tensor(nfaces,maxvertsperface,3)
-   local normals    = torch.Tensor(nfaces,3)
-   local d          = torch.Tensor(nfaces) 
-   local centers    = torch.Tensor(nfaces,3)
-   local bbox       = torch.Tensor(nfaces,6) -- xmin,ymin,zmin,xmax,ymax,zmax
-
+   local face_verts  = torch.Tensor(nfaces,maxvertsperface,3)
+   local normals     = torch.Tensor(nfaces,3)
+   local d           = torch.Tensor(nfaces) 
+   local centers     = torch.Tensor(nfaces,3)
+   local face_bboxes = torch.Tensor(nfaces,6) -- xmin,ymin,zmin,xmax,ymax,zmax
+   local bbox        = torch.Tensor(6)
    for fid = 1,nfaces do
 
       local nverts = nverts_per_face[fid]
@@ -105,15 +105,18 @@ function objops.load(...)
       centers[fid] = fverts:mean(1):squeeze()
 
       -- c) compute plane normal and d distance from origin for plane eq.
-      normals[fid] = util.geom.compute_normal(fverts)
+      normals[fid] = geom.compute_normal(fverts)
       d[fid]       = - torch.dot(normals[fid],centers[fid])
 
       -- d) compute bbox
-      local thisbb   = bbox[fid]
+      local thisbb   = face_bboxes[fid]
       thisbb:narrow(1,1,3):copy(fverts:min(1):squeeze())
       thisbb:narrow(1,4,3):copy(fverts:max(1):squeeze())
       
    end
+
+   bbox:narrow(1,1,3):copy(face_bboxes:narrow(2,1,3):min(1):squeeze())
+   bbox:narrow(1,4,3):copy(face_bboxes:narrow(2,4,3):max(1):squeeze())
 
    print(string.format("Processed face_verts, centers and normals in %2.2fs", sys.toc()))
 
@@ -127,6 +130,7 @@ function objops.load(...)
    obj.normals         = normals
    obj.d               = d
    obj.centers         = centers
+   obj.face_bboxes     = face_bboxes
    obj.bbox            = bbox
    
    return obj
@@ -143,7 +147,7 @@ function objops.save(obj,objfname,mtlfname,imgbasename)
       mtlfname = "retexture.mtl"
    end
    local mtlf = assert(io.open(mtlfname, "w"))
-   objf:write(string.format("mtllib %s\n\n", mtlfname))
+   objf:write(string.format("mtllib %s\n\n", paths.basename(mtlfname)))
 
    if not imgbasename then 
       imgbasename = "texture"
@@ -174,18 +178,24 @@ function objops.save(obj,objfname,mtlfname,imgbasename)
 
       -- save texture to an image file
       local iname = string.format("%s_face%05d.png",imgbasename,fid)
-      image.save(iname,obj.textures[fid])
-
-      -- store path to image in mtlfile
-      mtlf:write(string.format("newmtl %s\n", iname))
-      mtlf:write(string.format("map_Ka %s\n", iname))
-      mtlf:write(string.format("map_Kd %s\n", iname))
-      mtlf:write("\n")
-
+      if obj.textures[fid] and not paths.filep(iname) then
+         image.save(iname,obj.textures[fid])
+      end
+      local filep = paths.filep(iname)
+      local biname = paths.basename(iname)
+      if filep then
+         -- store path to image in mtlfile
+         mtlf:write(string.format("newmtl %s\n", biname))
+         mtlf:write(string.format("map_Ka %s\n", biname))
+         mtlf:write(string.format("map_Kd %s\n", biname))
+         mtlf:write("\n")
+      end
       -- store face and mtl info to obj
       objf:write("\n")
-      objf:write(string.format("o face%05d\n",fid))
-      objf:write(string.format("usemtl %s\n",iname))
+      objf:write(string.format("g face%05d\n",fid))
+      if filep  then
+         objf:write(string.format("usemtl %s\n",biname))
+      end
       str = "f "
       for vid = 1,nvpf[fid] do 
          str = str .. string.format("%d/%d ",faces[fid][vid],vti)
@@ -197,3 +207,6 @@ function objops.save(obj,objfname,mtlfname,imgbasename)
    mtlf:close()
    objf:close()
 end
+
+
+return objops

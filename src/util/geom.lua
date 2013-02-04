@@ -1,14 +1,15 @@
 require 'torch'
 require 'dok'
 
-util.geom = {}
-local geom = util.geom
+local geom = {}
 
 local axes   = torch.eye(3)
 
 local x_axis = axes[1]
 local y_axis = axes[2]
 local z_axis = axes[3]
+
+local neg_axes   = torch.eye(3):mul(-1)
 
 function geom.normalize(...)
    local v,res
@@ -67,7 +68,7 @@ function geom.largest_rotation (normal)
    local d   = i[-1]
    local a   = axes[d]
    if (n[d] < 0) then
-      a = a * -1
+      a = neg_axes[d]
    end
    return geom.axis_rotation(n,a),d
 end
@@ -335,4 +336,7 @@ function geom.ray_face_intersection(...)
       return nil,3
    end
 end
+
+
+return geom
 

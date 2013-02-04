@@ -1,3 +1,5 @@
+.DS_Store
+
 build
 
 # Compiled Object files
@@ -13,3 +15,9 @@ build
 *.lai
 *.la
 *.a
+
+# rocks binaries
+/rocks/lib/lua
+
+cloudlab.sublime-project
+cloudlab.sublime-workspace

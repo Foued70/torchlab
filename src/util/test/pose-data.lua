@@ -1,6 +1,5 @@
-util.test.pose.data = {}
-
-local data = util.test.pose.data
+local util = require "util"
+local data = {}
 
 data.poses = util.pose.loaddata(
    torch.Tensor({
@@ -287,3 +286,6 @@ data.result_globalxyz2uv =
                       {0.12323516508189714, 0.6618059459418002, 252.38561808772533, 173.1553556777983}
                    }
                 })
+
+return data
+
