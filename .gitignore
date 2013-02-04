@@ -16,5 +16,8 @@ build
 *.la
 *.a
 
+# rocks binaries
+/rocks/lib/lua
+
 cloudlab.sublime-project
 cloudlab.sublime-workspace
