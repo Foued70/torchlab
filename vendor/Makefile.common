@@ -6,8 +6,12 @@ CXX=
 	
 
 project_dir = $(abspath ../..)
-build_dir = $(abspath ../../build)
-install_root = $(build_dir)/usr/local
+
+CLOUDLAB_INSTALL_ROOT ?= $(build_dir)/usr/local
+install_root = $(CLOUDLAB_INSTALL_ROOT)
+$(warning $(install_root))
+
+build_dir = $(abspath $(install_root)/build)
 
 default_cmake_args = \
 	-D CMAKE_INSTALL_PREFIX:PATH=$(install_root) \

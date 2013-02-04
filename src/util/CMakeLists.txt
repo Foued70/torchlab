@@ -1,9 +1,5 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6 FATAL_ERROR)
-CMAKE_POLICY(VERSION 2.6)
-FIND_PACKAGE(Torch REQUIRED)
+cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+cmake_policy(VERSION 2.6)
+include(../common.cmake REQUIRED)
 
-set(luasrc "")
-FILE(GLOB testlua test/[a-zA-Z]*.lua)
-SET(luasrc ${luasrc} ${testlua})
-
-ADD_TORCH_PACKAGE(util "" "${luasrc}" "Floored 3D utils")
+add_torch_package(util "" "" "Floored 3D utils")

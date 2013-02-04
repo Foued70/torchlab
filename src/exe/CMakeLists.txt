@@ -1,7 +1,6 @@
-cmake_minimum_required (VERSION 2.6 FATAL_ERROR)
-find_package(Torch REQUIRED)
-
-get_filename_component(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR} PATH)
+cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+cmake_policy(VERSION 2.6)
+include(../common.cmake REQUIRED)
 
 ADD_TORCH_LUA2EXE(cloudlab-exe "${CMAKE_CURRENT_SOURCE_DIR}/cloudlab-exe.lua")
 SET_TARGET_PROPERTIES(cloudlab-exe PROPERTIES OUTPUT_NAME "cloudlab")
