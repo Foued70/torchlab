@@ -131,8 +131,8 @@ local function parse(pbx_data)
   local obj = {}
   obj.materials          = clean_materials(materials)
   obj.verts              = verts
+  obj.uvs                = uvs
   obj.faces              = faces
-  obj.nverts_per_face    = 3
   obj.face_verts         = face_verts
   obj.face_normals       = face_normals
   obj.face_center_dists  = d

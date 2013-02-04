@@ -211,6 +211,71 @@ Object::setColor(int _R, int _G, int _B, GLfloat _A) {
 	return true;
 }
 
+sColor
+getColor(LuaObject* mat, const char* name) {
+	LuaObject* color = mat->getObject(name);
+	lua_Number* r = color->getNumber("r");
+	lua_Number* g = color->getNumber("g");
+	lua_Number* b = color->getNumber("b");
+	lua_Number* a = color->getNumber("a");
+	return sColor({(float)*r,(float)*g,(float)*b,(float)*a});
+}
+
+bool
+Object::loadFrom(LuaObject* obj) {
+	THDoubleTensor* verts = (THDoubleTensor*)(*obj)["verts"];
+	THDoubleTensor* uvs = (THDoubleTensor*)(*obj)["uvs"];
+	THIntTensor* faces = (THIntTensor*)(*obj)["faces"];
+	THIntTensor* submesh_ranges = (THIntTensor*)(*obj)["submesh_ranges"];
+	THIntTensor* submesh_materials = (THIntTensor*)(*obj)["submesh_materials"];
+
+	LuaList* materials = (LuaList*)(*obj)["materials"];
+
+	for (int i=0; i<materials->size(); i++) {
+		LuaObject* mat = (LuaObject*)((*materials)[i]);
+		Material* material = new Material(mat->getString("name"));
+		__materials.insert(make_pair(material->name, material));
+		material->loadMaterial(getColor(mat, "ambient"), MATERIAL_AMBIENT);
+		material->loadMaterial(getColor(mat, "diffuse"), MATERIAL_DIFFUSE);
+		material->loadMaterial(getColor(mat, "specular"), MATERIAL_SPECULAR);
+	}
+
+
+	Mesh* mesh = new Mesh("mesh");
+	__meshes.insert(make_pair(mesh->name, mesh));
+
+	long n_verts = verts->size[0];
+	for (int i=0; i<n_verts; i++) {
+		mesh->push_back(Vertex(
+			Position(
+				THDoubleTensor_get2d(verts, i, 0), 
+				THDoubleTensor_get2d(verts, i, 1), 
+				THDoubleTensor_get2d(verts, i, 2)),
+			TexCoords(
+				THDoubleTensor_get2d(uvs, i, 0), 
+				THDoubleTensor_get2d(uvs, i, 1)),
+			Normal(0, 0, 0)		
+		));
+	}
+
+	long n_faces = faces->size[0];
+	for (int i=0; i<n_faces; i++) {
+		mesh->addNewIdx(THIntTensor_get2d(faces, i, 0) - 1);
+		mesh->addNewIdx(THIntTensor_get2d(faces, i, 1) - 1);
+		mesh->addNewIdx(THIntTensor_get2d(faces, i, 2) - 1);
+	}
+
+	long n_submeshes = submesh_ranges->size[0];
+	for (int i=0; i<n_submeshes; i++) {
+
+	}
+
+
+
+  
+	__bindAppropriateShader();
+}
+
 bool
 Object::loadFromObj(const string &_objFile, unsigned _invert) {
 	log(PARAM, "Loading object (\"%s\")...", name.c_str());
@@ -315,15 +380,13 @@ Object::__parseObj(const string &_fileName, unsigned _invert) {
 			gLastTexSize = tempTex.size();
 			gLastNorSize = tempNor.size();
 		} else if (buffer.substr(0, 6) == "usemtl") {
-			if (!current)
-				current = new Mesh();
+			if (!current) current = new Mesh();
 			string mtlName;
 			line >> temp >> mtlName;
 			lastMtl = getMaterialByName(mtlName);
 			current -> useMtl(lastMtl);
 		} else if (buffer[0] == 's') {
-			if (!current)
-				current = new Mesh();
+			if (!current) current = new Mesh();
 			string tf;
 			line >> temp >> tf;
 			if (tf == "off")

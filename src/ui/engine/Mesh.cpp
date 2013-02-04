@@ -96,6 +96,15 @@ Mesh::loadIntoVbo() {
 }
 
 void
+Mesh::useMtl(Material *material, size_t begin, size_t end) {
+	MeshRange meshRange;
+	meshRange.begin = begin;
+	meshRange.end = end;
+	meshRange.material = material;
+	__materials.push_back(meshRange);
+}
+
+void
 Mesh::useMtl(Material *_mtl) {
 	if (!__indices.empty()) {
 		__materials[__materials.size() - 1].end = __indices.size() - __materials[__materials.size() - 1].begin;

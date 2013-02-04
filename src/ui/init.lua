@@ -1,9 +1,11 @@
 require 'torch'
 require 'libui'
 
-ui = {}
+local ui = {}
 
 function ui.display(obj)
    libui.display(obj)
 end
 
+
+return ui

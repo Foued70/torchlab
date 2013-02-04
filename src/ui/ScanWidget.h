@@ -17,6 +17,9 @@ public:
   ScanWidget(const QGLFormat& format, QWidget *parent = NULL);
   ~ScanWidget();
 
+  Engine* engine;
+  Scene* scene;
+
 protected:
   void initializeGL();
   void resizeGL(int w, int h);
@@ -38,8 +41,6 @@ private:
   GLuint m_vertexBuffer;
   GLuint m_shader;
 
-  Engine* engine;
-  Scene* scene;
   FrameBuffer* framebuffer;
   bool takeScreenShot;
 
