@@ -4,10 +4,13 @@ require 'paths'
 
 local exports = {}
 
-exports.pbx = require "util/pbx"
+exports.pbx  = require "util/pbx"
 exports.geom = require "util/geom"
-exports.obj = require "util/obj"
-exports.pose = require "util/pose"
+exports.obj  = require "util/obj"
+
+-- classes
+exports.Ray   = require "util/Ray"
+exports.Poses = require "util/Poses"
 
 require "util/global"
 

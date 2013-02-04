@@ -1,7 +1,11 @@
 local util = require "util"
+
+local Poses = util.Poses
 local data = {}
 
-data.poses = util.pose.loaddata(
+data.poses = Poses.new()
+
+data.poses:loaddata(
    torch.Tensor({
                    -- scanner371_job129001_000.jpg
                    {

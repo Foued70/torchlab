@@ -1,8 +1,8 @@
 require 'torch'
 require 'sys'
 
-local util = require 'util'
-local pose  = util.pose
+local util  = require 'util'
+local Poses = util.Poses
 local geom  = util.geom
 
 local test  = {}
@@ -18,13 +18,14 @@ function test.global2local ()
    local maxerr = 0
    local cnt    = 0
    local poses  = test.data.poses
+
    local gxyz   = test.data.xyz
    local result = test.data.result_global2local
    sys.tic()
    for i = 1,poses.nposes do
       for j = 1,gxyz:size(1) do
          cnt = cnt + 1
-         local t   = pose.global2local(poses,i,gxyz[j]):narrow(1,1,3)
+         local t   = poses:global2local(i,gxyz[j]):narrow(1,1,3)
          local gt  = result[i][j]
          local er  = torch.abs(gt - t)
          local err = torch.max(er)
@@ -55,7 +56,7 @@ function test.globalxyz2uv ()
    for i = 1,poses.nposes do
       for j = 1,gxyz:size(1) do
          cnt = cnt + 1
-         local t     = torch.Tensor({pose.globalxyz2uv(poses,i,gxyz[j])})
+         local t     = torch.Tensor({poses:globalxyz2uv(i,gxyz[j])})
          local gt    = result[i][j]
          local er    = torch.abs(gt - t)
          local uverr = torch.max(er:narrow(1,1,2))
@@ -80,25 +81,25 @@ end
 
 function test.localxy2globalray ()
    print("Testing localxy2globalray") 
-   local e        = 0
+   local e      = 0
    local maxerr = 0
-   local cnt      = 0
-   local poses    = test.data.poses
-   local gxyz     = test.data.xyz
+   local cnt    = 0
+   local poses  = test.data.poses
+
+   local gxyz   = test.data.xyz
    sys.tic()
    for i = 1,poses.nposes do
       for j = 1,gxyz:size(1) do
          cnt = cnt + 1
-         local gtxyz  = gxyz[j]      
-         local t      = torch.Tensor({pose.globalxyz2uv(poses,i,gtxyz)})
-         local pt,dir = pose.localxy2globalray(poses,i,t[3],t[4])
-         -- print(string.format("%2.2f %2.2f", t[3],t[4]))
+         local gtxyz  = gxyz[j]
+         local t      = torch.Tensor({poses:globalxyz2uv(i,gtxyz)})
+         local pt,dir = poses:localxy2globalray(i,t[3],t[4])
          local gdir   = geom.normalize(gtxyz - pt)
          local er     = torch.abs(dir:narrow(1,1,3) -gdir)
          local err, argerr = torch.max(er,1)
          err = err[1]
          argerr = argerr[1]
-         if err > 1e-6 then
+         if err > 2e-3 then
             e = e + 1
             print(string.format(" dir: %f, %f, %f",
                                 dir[1],dir[2],dir[3]))
@@ -115,9 +116,10 @@ function test.localxy2globalray ()
 end
 
 -- tests 2globalray in context of poses
-function test.localxy2globalray_pose (poses)
+function test.localxy2globalray_pose ()
+   local poses  = test.data.poses
    -- matterport textures go beyond 360 
-   local over = torch.floor((porig.w - 360 / porig.px[1][1])*0.5 + 0.5)
+   local over = torch.floor((poses.w - 360 / poses.px[1][1])*0.5 + 0.5)
    for pi = 1,poses.nposes do 
       local yerr = 0
       local xerr = 0
@@ -126,13 +128,13 @@ function test.localxy2globalray_pose (poses)
       local h  = poses.h[pi]
       for y = 1,h,100 do 
          for x = over[pi],w-over[pi],100 do 
-            local pt, dir = pose.localxy2globalray(poses, pi, x, y)
+            local pt, dir = poses:localxy2globalray(pi, x, y)
             local r = Ray(pt,dir)
-            v = r(10)
+            local vec = r(10)
             -- printf("ray: dir: (%f %f %f) v: (%f %f %f)",
             --        dir[1],dir[2],dir[3],v[1],v[2],v[3])
             
-            local u,v,nx,ny = pose.globalxyz2uv(poses, pi, v)
+            local u,v,nx,ny = poses:globalxyz2uv(pi, vec)
             local nx = math.floor(nx)
             local ny = math.floor(ny) 
             if (y ~= ny) then
