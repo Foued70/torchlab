@@ -7,7 +7,6 @@ data.poses = Poses.new()
 
 data.poses:loaddata(
    torch.Tensor({
-                   -- scanner371_job129001_000.jpg
                    {
                       3.288130e-03, 6.453760e-03, 4.244400e-03, 9.999650e-01, -- quat
                          -5.540680e-03, -2.421940e-03, 1.448850e+00, -- x,y,z
@@ -17,7 +16,6 @@ data.poses:loaddata(
                       1024, 253.402112, -- center_x, center_y
                       2.048000e+03, 5.120000e+02 -- w,h
                    },
-                   -- scanner371_job129001_009.jpg
                    {
                          -9.302220e-03, -2.557670e-02, 9.305020e-01, 3.652750e-01, -- quat
                       1.385290e+00, 2.360380e+00, 1.463040e+00, -- x,y,z
@@ -27,7 +25,15 @@ data.poses:loaddata(
                       1024, 253.16352, -- center_x, center_y
                       2.048000e+03, 5.120000e+02 -- w,h
                    }
-                })
+                   
+                   
+                   
+             
+                }),
+   { 
+      "scanner371_job129001_000.jpg",
+      "scanner371_job129001_009.jpg" 
+   }
 )
 
 data.xyz =

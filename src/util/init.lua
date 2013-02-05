@@ -2,7 +2,7 @@ require 'torch'
 require 'dok'
 require 'paths'
 
-local exports = require "util/local"
+local exports = require "util/util"
 
 exports.geom = require "util/geom"
 
@@ -11,6 +11,7 @@ exports.obj  = require "util/obj"
 
 -- classes
 exports.Ray   = require "util/Ray"
+exports.Pose  = require "util/Pose"
 exports.Poses = require "util/Poses"
 
 require "util/global"
