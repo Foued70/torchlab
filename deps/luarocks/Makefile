@@ -24,9 +24,11 @@ $(install): $(unpack)
 	cd $(install_root)/bin; ln -sf torch-lua lua
 	cd $(unpack); ./configure $(args)
 	cd $(unpack); LUADIR=$(install_root)/share/torch/lua make install
+	! grep MAKE $(install_root)/etc/luarocks/config.lua && echo "variables.MAKE = 'make'" >>  $(install_root)/etc/luarocks/config.lua
 
 $(unpack): $(tar_file)
 	cd $(build_dir)/deps; tar -xzf $(tar_file)
 
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
+
