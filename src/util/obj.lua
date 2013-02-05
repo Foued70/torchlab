@@ -147,7 +147,7 @@ function objops.save(obj,objfname,mtlfname,imgbasename)
       mtlfname = "retexture.mtl"
    end
    local mtlf = assert(io.open(mtlfname, "w"))
-   objf:write(string.format("mtllib %s\n\n", mtlfname))
+   objf:write(string.format("mtllib %s\n\n", paths.basename(mtlfname)))
 
    if not imgbasename then 
       imgbasename = "texture"
@@ -182,18 +182,19 @@ function objops.save(obj,objfname,mtlfname,imgbasename)
          image.save(iname,obj.textures[fid])
       end
       local filep = paths.filep(iname)
+      local biname = paths.basename(iname)
       if filep then
          -- store path to image in mtlfile
-         mtlf:write(string.format("newmtl %s\n", iname))
-         mtlf:write(string.format("map_Ka %s\n", iname))
-         mtlf:write(string.format("map_Kd %s\n", iname))
+         mtlf:write(string.format("newmtl %s\n", biname))
+         mtlf:write(string.format("map_Ka %s\n", biname))
+         mtlf:write(string.format("map_Kd %s\n", biname))
          mtlf:write("\n")
       end
       -- store face and mtl info to obj
       objf:write("\n")
       objf:write(string.format("g face%05d\n",fid))
       if filep  then
-         objf:write(string.format("usemtl %s\n",iname))
+         objf:write(string.format("usemtl %s\n",biname))
       end
       str = "f "
       for vid = 1,nvpf[fid] do 

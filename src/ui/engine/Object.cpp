@@ -156,9 +156,10 @@ Object::show() {
   
   // TO DO: Find out why updating the objectID uniform only works after the stream has been opened
   __shaders.updateData("objectID", (GLuint)__id);
-		
+	
+  GLuint meshCounter = 0;	
 	for (auto it = __meshes.begin(); it != __meshes.end(); ++it) {			
-			
+		__shaders.updateData("meshID", meshCounter++);
 		it -> second -> show();
 	}
 
@@ -176,6 +177,11 @@ Object::show() {
 void
 Object::move(GLfloat _x, GLfloat _y, GLfloat _z) {
 	__mov += Vector3( {_x, _y, _z} );
+}
+
+void 
+Object::setPosition(GLfloat _x, GLfloat _y, GLfloat _z) {
+  __mov = Vector3( {_x, _y, _z} );
 }
 
 void

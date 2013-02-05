@@ -22,6 +22,9 @@ Scene::Scene(const string &_name) :
 Scene::~Scene() {
 	while (!__objectList.empty())
 		delete __objectList.back(), __objectList.pop_back();
+  
+  __objectsByID.clear();
+  
 	while (!__cameraList.empty())
 		delete __cameraList.back(), __cameraList.pop_back();
 	while (!__lightList.empty())

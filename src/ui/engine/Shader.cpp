@@ -135,7 +135,7 @@ Shader::make(   GLuint _var1, const string& _param1,
 	
 	// Hacky... TO DO: find all fragment shader outputs, and bind locations logically.
 	glBindFragDataLocation(__shaderProgram, 0, "sFragColor");
-	glBindFragDataLocation(__shaderProgram, 1, "triangleID");
+	glBindFragDataLocation(__shaderProgram, 1, "sPickingData");
 	
 	glLinkProgram(__shaderProgram);
 	checkGLErrors(AT);
@@ -158,7 +158,7 @@ Shader::make(   GLuint _var1, const string& _param1,
 	__isCompiled = true;
 	
 	log(SHADER, "sFragColor bound to location: %d", (int)glGetFragDataLocation(__shaderProgram, "sFragColor"));
-	log(SHADER, "triangleID bound to location: %d", (int)glGetFragDataLocation(__shaderProgram, "triangleID"));
+	log(SHADER, "triangleID bound to location: %d", (int)glGetFragDataLocation(__shaderProgram, "sPickingData"));
 	
 	return true;
 

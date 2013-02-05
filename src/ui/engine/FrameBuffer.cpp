@@ -12,24 +12,31 @@
 using namespace std;
 
 FrameBuffer::FrameBuffer() :
-	__width(800),
-	__height(600),
 	__frameBufferID(0),
 	__depthBufferID(0),
 	__textureID0(0),
 	__textureID1(0)
 {
-	log(CONSTRUCTOR, "Frame Buffer Constructed");
+	log(CONSTRUCTOR, "Frame Buffer constructed.");
 	
+  /*
 	if ( !__initialize() ) {
 		//TO DO: exit routine or place framebuffer in some sort of "disabled" state
 	}
+  */
 	
-	unbind();
+	//unbind();
 }
 
-bool FrameBuffer::__initialize()
-{		
+bool FrameBuffer::initialize()
+{ 
+  GLint viewport[4];
+  glGetIntegerv(GL_VIEWPORT, viewport);
+	__width = viewport[2];
+	__height = viewport[3];
+  
+  log(PARAM, "Initializing Framebuffer: width=%i, height=%i", (int)__width, (int)__height);		
+  
 	__generateFrameBuffer();
 	__generateDepthBuffer();
 	__generateTexture();
@@ -39,17 +46,21 @@ bool FrameBuffer::__initialize()
 
 FrameBuffer::~FrameBuffer()
 {	
-	//glDeleteBuffers(1, &__billboardVBO);
-	//glDeleteProgram(__billboardProgram);
-	
-	//GLuint frameBuffers[1] = {__frameBufferID};
-	//glDeleteFrameBuffers(1, frameBuffers);
-	
-	//GLuint renderBuffers[1] = {__renderBufferID};
-	//glDeleteRenderbuffers(1, renderBuffers);
-	
-	//glDeleteTextures(1, &__debugTexture);
-	//glDeleteRenderBuffers(1, &__depthBuffer);
+  //TO DO: these openGL functions are undeclared for some reason...
+  /*
+  GLuint textures[2] = {__textureID0, __textureID1};
+  glDeleteTextures(2, textures);
+  glDeleteRenderbuffers(1, &__depthBufferID);
+	glDeleteFrameBuffers(1, &__frameBufferID);
+  */
+}
+
+GLuint FrameBuffer::__getAttachmentIndex(const RENDER_PASS& renderPass) const {
+  return GL_COLOR_ATTACHMENT0 + (GLuint)renderPass;
+}
+
+void FrameBuffer::__setReadBuffer(const RENDER_PASS& renderPass) {
+  glReadBuffer(__getAttachmentIndex(renderPass));
 }
 
 void FrameBuffer::__generateFrameBuffer()
@@ -74,9 +85,9 @@ void FrameBuffer::__generateDepthBuffer()
 	glBindRenderbuffer(GL_RENDERBUFFER, __depthBufferID);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, __width, __height);
 	glFramebufferRenderbuffer(	GL_DRAW_FRAMEBUFFER, 
-								GL_DEPTH_ATTACHMENT, 
-								GL_RENDERBUFFER,
-								__depthBufferID );
+								              GL_DEPTH_ATTACHMENT, 
+								              GL_RENDERBUFFER,
+								              __depthBufferID );
 	glBindRenderbuffer(GL_RENDERBUFFER, __depthBufferID);
 }
 
@@ -94,10 +105,10 @@ void FrameBuffer::__generateTexture()
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 	glFramebufferTexture2D(	GL_FRAMEBUFFER, 
-							GL_COLOR_ATTACHMENT0,
-							GL_TEXTURE_2D, 
-							__textureID0, 
-							0);
+							            __getAttachmentIndex(COLOR_PASS),
+							            GL_TEXTURE_2D, 
+							            __textureID0, 
+							            0);
 	
 	glGenTextures(1, &__textureID1);
 	glBindTexture(GL_TEXTURE_2D, __textureID1);
@@ -111,11 +122,10 @@ void FrameBuffer::__generateTexture()
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
 	glFramebufferTexture2D(	GL_FRAMEBUFFER, 
-							GL_COLOR_ATTACHMENT1,
-							GL_TEXTURE_2D,  
-							__textureID1, 
-							0);
-
+							            __getAttachmentIndex(PICKING_PASS),
+							            GL_TEXTURE_2D,  
+						              __textureID1, 
+							            0);
 }
 
 bool FrameBuffer::__evaluateConfiguration()
@@ -167,7 +177,7 @@ void FrameBuffer::renderToTexture()
 {
 	bind();
 
-	GLenum attachments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
+	GLenum attachments[3] = { __getAttachmentIndex(COLOR_PASS),  __getAttachmentIndex(PICKING_PASS),  __getAttachmentIndex(DEPTH_PASS)};
   glDrawBuffers(3, attachments);  
 }
 
@@ -208,7 +218,7 @@ void FrameBuffer::displayToWindow() {
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glBindFramebuffer(GL_READ_FRAMEBUFFER, __frameBufferID);
-  glReadBuffer(GL_COLOR_ATTACHMENT0);
+  __setReadBuffer(COLOR_PASS);
   glBlitFramebuffer(0, 0, __width, __height, 
                     0, 0, __width, __height, 
                     GL_COLOR_BUFFER_BIT, 
@@ -216,8 +226,10 @@ void FrameBuffer::displayToWindow() {
   unbind();
 }
 
-GLuint FrameBuffer::readPixel(const GLuint& x, const GLuint& y, const GLuint& channel)
-{
+GLint FrameBuffer::readPixel(const GLuint& x, const GLuint& y, const GLuint& channel) {
+  if (x >= __width || y >= __height || channel > 3) {
+    return -1;
+  }
 	//OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
 	GLuint flippedY = (__height -1) - y;
   
@@ -228,23 +240,43 @@ GLuint FrameBuffer::readPixel(const GLuint& x, const GLuint& y, const GLuint& ch
 	//glReadBuffer chooses which output to read from.
 	
 	bind();
-	glReadBuffer(GL_COLOR_ATTACHMENT1);
+	__setReadBuffer(PICKING_PASS);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glReadPixels(	(GLsizei)x,
-				 	(GLsizei)flippedY,
-					(GLsizei)1,
-					(GLsizei)1,
-					GL_RGB_INTEGER,
-					GL_UNSIGNED_INT,
-					&pixel );
+				 	      (GLsizei)flippedY,
+					      (GLsizei)1,
+					      (GLsizei)1,
+					      GL_RGB_INTEGER,
+					      GL_UNSIGNED_INT,
+					      &pixel );
   
   glReadBuffer(GL_NONE);
 	unbind();
 	return pixel[channel];
 }
 
-void FrameBuffer::saveToFile(const string& _filename)
-{
+GLfloat FrameBuffer::readDepthPixel(const GLuint& x, const GLuint& y) {
+  //if (x >= __width || y >= __height) {
+  //  return GL_FLOAT_MIN;
+  //}
+	//OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
+	GLuint flippedY = (__height -1) - y;
+  GLfloat depth;
+  bind();
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glReadPixels(	(GLsizei)x,
+				 	      (GLsizei)flippedY,
+					      (GLsizei)1,
+					      (GLsizei)1,
+					      GL_DEPTH_COMPONENT,
+					      GL_FLOAT,
+					      &depth );
+  glReadBuffer(GL_NONE);
+	unbind();
+	return depth;
+}
+
+void FrameBuffer::saveToFile(const string& _filename) {
 	const unsigned int channels = 3;
   const unsigned int bytesPerChannel = 4;
 	unsigned int fileSizeIn = __width*__height*channels;
@@ -256,7 +288,7 @@ void FrameBuffer::saveToFile(const string& _filename)
 	string __filename = _filename; __filename.append(".raw");
 	
 	bind();
-	glReadBuffer(GL_COLOR_ATTACHMENT1);
+	__setReadBuffer(PICKING_PASS);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
   /*
 	glReadPixels(   0,

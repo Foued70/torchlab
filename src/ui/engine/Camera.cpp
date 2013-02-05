@@ -3,6 +3,7 @@
 
 #include "Camera.h"
 #include "MatricesManager.h"
+#include "FrameBuffer.h"
 #include "utils.h"
 
 static const double PI = 3.1415265359;
@@ -76,7 +77,29 @@ Camera::calcUp() {
   }
 }
 
+void 
+Camera::setEyePosition(GLfloat _x, GLfloat _y, GLfloat _z) {
+  __eye = Vector3( {_x, _y, _z} );
+  calcUp();
+}
 
+void 
+Camera::setEyePosition(const Vector3& _position) {
+  __eye = _position;
+  calcUp();
+}
+
+void 
+Camera::setCenterPosition(GLfloat _x, GLfloat _y, GLfloat _z) {
+  __center = Vector3( {_x, _y, _z} );
+  calcUp();
+}
+
+void 
+Camera::setCenterPosition(const Vector3& _position) {
+  __center = _position;
+  calcUp();
+}
 
 void
 Camera::moveEye(GLfloat _x, GLfloat _y, GLfloat _z) {
@@ -93,6 +116,44 @@ Camera::moveEye(GLfloat _x, GLfloat _y, GLfloat _z) {
   __center += __up * _y;
 }
 
+void 
+Camera::rotateCenterAroundCamera(GLfloat _x, GLfloat _y) {
+  const float RADS = 0.001f;
+  float xAngle = _x * RADS;
+  float yAngle = _y * RADS;
+  Vector3 eyePosition = __eye;
+  
+  // Move center and eye so that eye is at the origin
+  __eye =  Vector3({0.0f, 0.0f, 0.0f});
+  __center -= eyePosition;
+  
+  // Rotate around a horizontal axis (y rotation)
+  Vector3 unitCenter = __center;
+  unitCenter.normalize();
+  float zAxisAngle = acos(dot(unitCenter, Z_AXIS));
+  
+  if (zAxisAngle - yAngle < 0) {
+    __center = Z_AXIS * __center.magnitude();
+    // rotate up for x instead of eye
+    __up = rotateAxisAngle(__up, Z_AXIS, xAngle);
+  }
+  else if (zAxisAngle - yAngle > PI) {
+    __center = Z_AXIS * -__center.magnitude();
+    // rotate up for x instead of eye
+    __up = rotateAxisAngle(__up, Z_AXIS, xAngle);
+  }
+  else {
+    Vector3 axis = cross(unitCenter, __up).normalize();
+    __center = rotateAxisAngle(__center, axis, yAngle);
+    // rotate around Z-up (x rotation)
+    __center = rotateAxisAngle(__center, Z_AXIS, xAngle);
+  }
+  
+  // move camera back into position
+  __eye = eyePosition;
+  __center += eyePosition;
+  calcUp();
+}
 
 void
 Camera::rotateAroundCenter(GLfloat _x, GLfloat _y) {
@@ -136,22 +197,58 @@ Camera::lookAt(GLfloat x, GLfloat y, GLfloat z) {
 	__center = Vector3({x, y, z});
 }
 
-Vector3 Camera::getEye() {
+Vector3 
+Camera::getEye() const {
 		return __eye;
 }
 
-Vector3 Camera::getCenter() {
+Vector3 
+Camera::getCenter() const {
 		return __center;
 }
 
-Vector3 Camera::rightDirection() {
+float 
+Camera::getNearPlane() const {
+  return __zNear;
+}
+
+float 
+Camera::getFarPlane() const {
+  return __zFar;
+}
+
+Vector3 
+Camera::rightDirection() {
   Vector3 dir = lookDirection();
   return cross(dir, __up).normalize();
 }
 
 
-Vector3 Camera::lookDirection() {
+Vector3 
+Camera::lookDirection() {
   return (__center - __eye).normalize();
+}
+
+Vector3 
+Camera::cameraToWorld(GLfloat _x, GLfloat _y) const { 
+  Vector4 screenPosition = Vector4({  (float)_x/(float)__windowWidth, 
+                                      (float)_y/(float)__windowHeight, 
+                                      FrameBuffer::GetSingleton().readDepthPixel(_x, _y), 
+                                      1.0f });
+                                                                      
+  screenPosition.r = (screenPosition.r * 2.0f) - 1.0f;
+  screenPosition.g = 1.0f - (screenPosition.g * 2.0f); // Invert Y
+  screenPosition.b = (screenPosition.b * 2.0f) - 1.0f;
+    
+  sMat16 modelViewMatrix = MatricesManager::GetSingleton().getModelViewMatrix();
+  sMat16 projectionMatrix = MatricesManager::GetSingleton().getProjectionMatrix();
+  sMat16 inverseCameraTransform = (projectionMatrix * modelViewMatrix).inversion();
+    
+  Vector4 viewPosition = inverseCameraTransform * screenPosition;
+  
+  viewPosition /= viewPosition.a;
+  
+  return Vector3({viewPosition.r, viewPosition.g, viewPosition.b});
 }
 
 
