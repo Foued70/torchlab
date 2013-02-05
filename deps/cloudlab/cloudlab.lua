@@ -1,11 +1,14 @@
 -- use paths lib
 require 'paths'
 
+local project_dir = "@project_dir@"
+local install_root = "@install_root@"
+
 -- help/args
 help = 
 [=[Cloudlab
 
-Usage: torch [options] [script [args]]
+Usage: cloudlab [options] [script [args]]
 
 General options:
   -e string        execute string
@@ -24,21 +27,11 @@ Qt options:
 lua = 'torch-qlua'
 
 -- preload torch environment
-env = ' -e "require \'exe/cloudlab-env\'" '
+local env = ' -e "require \'cloudlab-env\'" '
 
-local pwd = paths.cwd()
-local end_i = 1
-while true do
-  local s, e = pwd:find('src', end_i, true)
-  if not e then break end
-  end_i = e
-end
-
-if (end_i > 1) then
-  local src_dir = pwd:sub(1, end_i)
-  local src_path = paths.concat(src_dir, '?.lua') .. ';' .. paths.concat(src_dir, '?', 'init.lua') .. ';'
-  env = ' -e "package.path = \'' .. src_path ..'\' .. package.path"' .. env
-end
+local src_dir = paths.concat(project_dir, 'src')
+local src_path = paths.concat(src_dir, '?.lua') .. ';' .. paths.concat(src_dir, '?', 'init.lua') .. ';'
+env = ' -e "package.path = \'' .. src_path ..'\' .. package.path"' .. env
 
 -- by default, be interactive
 interactive = true
@@ -89,4 +82,5 @@ end
 args = table.concat(arg, ' ')
 
 -- finally execute main thread, with proper options
+-- print(paths.concat(paths.install_bin,lua) .. env .. args)
 os.execute(paths.concat(paths.install_bin,lua) .. env .. args)

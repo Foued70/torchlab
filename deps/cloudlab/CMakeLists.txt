@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
 cmake_policy(VERSION 2.6)
 include(../../src/common.cmake REQUIRED)
 
-ADD_TORCH_LUA2EXE(cloudlab "${CMAKE_CURRENT_SOURCE_DIR}/cloudlab.lua")
+CONFIGURE_FILE(cloudlab.lua "${CMAKE_CURRENT_BINARY_DIR}/cloudlab.lua")
+ADD_TORCH_LUA2EXE(cloudlab "${CMAKE_CURRENT_BINARY_DIR}/cloudlab.lua")
 
 INSTALL(
   TARGETS cloudlab
