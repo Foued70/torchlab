@@ -96,6 +96,7 @@ function Poses:newPose(i)
    Pose.cntry  = self.cntry[i]
    Pose.w      = self.w[i]
    Pose.h      = self.h[i]
+   return self[i]
 end
 
 function Poses:process()
@@ -153,6 +154,132 @@ function Poses:localxy2globalray(i,x,y)
    dir     = geom.normalize(dir)
    -- return point and direction rotated to global coordiante
    return self.xyz[i], geom.rotate_by_quat(dir,self.quat[i])
+end
+
+-- + FIXME improve speed : creation with a simple increment if possible. (SLERP)
+
+function Poses:compute_dirs(i,scale)
+
+   if not i then 
+      print("Error must pass pose_id")
+      return nil
+   end
+   if not scale then 
+      scale = 1
+   end
+   printf("Computing dirs for pose[%d] at scale 1/%d",i,scale)
+
+   local imgw = self[i].w
+   local imgh = self[i].h
+
+   local outw = math.ceil(imgw/scale)
+   local outh = math.ceil(imgh/scale)
+
+   -- dirs are 2D x 3
+   local dirs = torch.Tensor(outh,outw,3)
+   local cnt = 1
+   local inh = 0
+   local inw = 0
+   for h = 1,outh do
+      for w = 1,outw do
+         local _,dir = self:localxy2globalray(i,inw,inh)
+         dirs[h][w]:copy(dir:narrow(1,1,3))
+         cnt = cnt + 1
+         inw = inw + scale
+      end
+      inh = inh + scale
+      inw = 0
+   end
+   if not self.dirs then 
+      self.dirs = {}
+   end
+   if not self.dirs[i] then
+      self.dirs[i] = {}
+   end
+   self.dirs[i][scale] = dirs
+   if not self[i].dirs then
+      self[i].dirs = {}
+   end
+   self[i].dirs[scale] = self.dirs[i][scale]
+   return self[i].dirs[scale]
+end
+
+-- 
+-- Caching
+-- 
+-- isdependant on pose rotation as well as image width, height, scale and center
+function Poses:load_dirs(cachedir,i,scale,ps)
+
+   local imgw = self[i].w
+   local imgh = self[i].h
+
+   local outw = math.ceil(imgw/scale)
+   local outh = math.ceil(imgh/scale)
+
+   local cntrx = self[i].cntrx
+   local cntry = self[i].cntry
+
+   local dirscache   = 
+      string.format("%s/pose_rot_%f_%f_%f_%f_w_%d_h_%d_s_%d_cx_%d_cy_%f",
+                    cachedir,
+                    self[i].quat[1],self[i].quat[2],self[i].quat[3],self[i].quat[4],
+                    imgw,imgh,scale,cntrx,cntry)
+   
+   if ps then 
+      dirscache = dirscache .."_-_grid_".. ps
+   end
+   dirscache = dirscache ..".t7"
+
+   local dirs = nil
+   if paths.filep(dirscache) then
+      sys.tic()
+      dirs = torch.load(dirscache)
+      printf("Loaded dirs from %s in %2.2fs", dirscache, sys.toc())
+   else
+      sys.tic()
+      if ps then 
+         dirs = util.grid_contiguous(self:compute_dirs(i,scale),ps,ps)
+      else
+         dirs = self:compute_dirs(i,scale)
+      end
+      printf("Built dirs in %2.2fs", sys.toc())
+      torch.save(dirscache,dirs)
+      printf("Saving dirs to %s", dirscache)
+   end
+   return dirs
+end
+
+-- is unique for each scale and pose.
+function Poses:load_depth(cachedir,i,scale,ps)
+
+   local imgw = self[i].w
+   local imgh = self[i].h
+
+   local outw = math.ceil(imgw/scale)
+   local outh = math.ceil(imgh/scale)
+
+   local cntrx = self[i].cntrx
+   local cntry = self[i].cntry
+
+   local depthcache   = cachedir .. 
+      "orig_"..imgw.."x"..imgh.."_-_"..
+      "scaled_"..outw.."x"..outh.."_-_"..
+      "center_"..cntrx.."x"..cntry
+
+   dirscache = dirscache ..".t7"
+
+   local depthmap = nil
+   if paths.filep(dirscache) then
+      sys.tic()
+      depthmap = torch.load(dirscache)
+      printf("Loaded depths from %s in %2.2fs", posecache, sys.toc())
+      if not self[i].depthmap then
+         self[i].depthmap = {}
+      end
+      self[i].depthmap[scale] = depthmap
+   else
+      printf("No pose found")
+   end
 end
 
 
