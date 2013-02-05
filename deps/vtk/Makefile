@@ -5,8 +5,8 @@ ver=5.10.1
 ver_2=$(basename $(ver))
 url=http://www.vtk.org/files/release/$(ver_2)/vtk-$(ver).tar.gz
 
-tar_file=$(build_dir)/vendor/vtk-$(ver).tar.gz
-unpack=$(build_dir)/vendor/VTK$(ver)
+tar_file=$(build_dir)/deps/vtk-$(ver).tar.gz
+unpack=$(build_dir)/deps/VTK$(ver)
 
 install=$(install_root)/lib/vtk-$(ver_2)
 
@@ -33,7 +33,7 @@ $(install): $(unpack)
 	cd $(unpack)/build; make install
 
 $(unpack): $(tar_file)
-	cd $(build_dir)/vendor; tar -xzf $(tar_file)
+	cd $(build_dir)/deps; tar -xzf $(tar_file)
 
 $(tar_file):
 	curl -L -o $(tar_file) $(url)

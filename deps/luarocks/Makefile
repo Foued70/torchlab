@@ -4,8 +4,8 @@ ver=2.0.12
 
 url=http://luarocks.org/releases/luarocks-$(ver).tar.gz
 
-tar_file=$(build_dir)/vendor/luarocks-$(ver).tar.gz
-unpack=$(build_dir)/vendor/luarocks-$(ver)
+tar_file=$(build_dir)/deps/luarocks-$(ver).tar.gz
+unpack=$(build_dir)/deps/luarocks-$(ver)
 
 install=$(install_root)/bin/luarocks
 
@@ -26,7 +26,7 @@ $(install): $(unpack)
 	cd $(unpack); LUADIR=$(install_root)/share/torch/lua make install
 
 $(unpack): $(tar_file)
-	cd $(build_dir)/vendor; tar -xzf $(tar_file)
+	cd $(build_dir)/deps; tar -xzf $(tar_file)
 
 $(tar_file):
 	curl -L -o $(tar_file) $(url)

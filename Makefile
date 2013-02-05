@@ -1,17 +1,18 @@
-packages = $(notdir $(wildcard src/*))
+packages = ui protobuf
 
 all: $(packages)
 
 $(packages):
-	cd src/$@; torch-pkg deploy
+	cd src/$@; cook
 	
 deps: build
-	cd vendor/gcc; make
-	cd vendor/qt; make
-	cd vendor/imagemagick; make
-	cd vendor/jpeg; make
-	cd vendor/torch; make
-	cd vendor/luarocks; make
+	cd deps/gcc; make
+	cd deps/qt; make
+	cd deps/imagemagick; make
+	cd deps/jpeg; make
+	cd deps/torch; make
+	cd deps/luarocks; make
+	cd deps/cloudlab; make
 
 build: 
 	mkdir -p build

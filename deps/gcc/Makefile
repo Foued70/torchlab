@@ -2,7 +2,7 @@ include ../Makefile.common
 
 URL=http://downloads.sourceforge.net/project/hpc/hpc/gcc/gcc-mlion.tar.gz
 
-tar_file=$(build_dir)/vendor/gcc-mlion.tar.gz
+tar_file=$(build_dir)/deps/gcc-mlion.tar.gz
 
 install=$(install_root)/bin/gcc
 
@@ -16,7 +16,7 @@ $(install): $(tar_file)
 	cd $(install_root)/lib; $(CURDIR)/fix_paths
 
 $(tar_file):
-	mkdir -p $(build_dir)/vendor
+	mkdir -p $(build_dir)/deps
 	curl -L -o $(tar_file) $(URL)
 
 	

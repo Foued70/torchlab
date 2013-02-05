@@ -2,7 +2,7 @@ include ../Makefile.common
 
 ver=fb7ef6ae69932f84502343d2b443e6e96aa34669
 
-git_clone=$(build_dir)/vendor/torch
+git_clone=$(build_dir)/deps/torch
 
 install=$(install_root)/bin/torch
 

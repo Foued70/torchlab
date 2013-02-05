@@ -4,8 +4,8 @@ ver=1.7.1
 
 url=http://people.cs.ubc.ca/~mariusm/uploads/FLANN/flann-$(ver)-src.zip
 
-tar_file=$(build_dir)/vendor/flann-$(ver)-src.zip
-unpack=$(build_dir)/vendor/flann-$(ver)-src
+tar_file=$(build_dir)/deps/flann-$(ver)-src.zip
+unpack=$(build_dir)/deps/flann-$(ver)-src
 
 install=$(install_root)/lib/libflann.$(ver).dylib
 
@@ -23,7 +23,7 @@ $(install): $(unpack)
 	cd $(unpack)/build; make install
 
 $(unpack): $(tar_file)
-	cd $(build_dir)/vendor; unzip -o $(tar_file)
+	cd $(build_dir)/deps; unzip -o $(tar_file)
 	touch $(unpack)
 
 $(tar_file):

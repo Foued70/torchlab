@@ -4,8 +4,8 @@ ver=4.8.4
 
 url=http://releases.qt-project.org/qt4/source/qt-everywhere-opensource-src-$(ver).tar.gz
 
-tar_file=$(build_dir)/vendor/qt-everywhere-opensource-src-$(ver).tar.gz
-unpack=$(build_dir)/vendor/qt-everywhere-opensource-src-$(ver)
+tar_file=$(build_dir)/deps/qt-everywhere-opensource-src-$(ver).tar.gz
+unpack=$(build_dir)/deps/qt-everywhere-opensource-src-$(ver)
 
 install=$(install_root)/lib/QtCore.la
 
@@ -37,7 +37,7 @@ $(install): $(unpack)
 	cd $(unpack); make install
 
 $(unpack): $(tar_file)
-	cd $(build_dir)/vendor; tar -xzf $(tar_file)
+	cd $(build_dir)/deps; tar -xzf $(tar_file)
 
 $(tar_file):
 	curl -L -o $(tar_file) $(url)

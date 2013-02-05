@@ -4,8 +4,8 @@ ver=6.7.7-6
 
 url=http://downloads.sf.net/project/machomebrew/mirror/ImageMagick-$(ver).tar.bz2
 
-tar_file=$(build_dir)/vendor/ImageMagick-$(ver).tar.bz2
-unpack=$(build_dir)/vendor/ImageMagick-$(ver)
+tar_file=$(build_dir)/deps/ImageMagick-$(ver).tar.bz2
+unpack=$(build_dir)/deps/ImageMagick-$(ver)
 
 install=$(install_root)/bin/convert
 
@@ -36,7 +36,7 @@ $(install): $(unpack)
 	cd $(unpack); make install
 
 $(unpack): $(tar_file)
-	cd $(build_dir)/vendor; tar -xjf $(tar_file)
+	cd $(build_dir)/deps; tar -xjf $(tar_file)
 
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
