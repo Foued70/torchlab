@@ -43,8 +43,6 @@ private:
   GLuint m_vertexBuffer;
   GLuint m_shader;
 
-  Engine* engine;
-  Scene* scene;
   Object* selectionModel;
   CameraController* sphereCameraController;
 
