@@ -9,7 +9,6 @@ project_dir = $(abspath ../..)
 
 CLOUDLAB_INSTALL_ROOT ?= $(build_dir)/usr/local
 install_root = $(CLOUDLAB_INSTALL_ROOT)
-$(warning $(install_root))
 
 build_dir = $(abspath $(install_root)/build)
 

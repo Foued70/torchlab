@@ -12,6 +12,7 @@ all: $(install)
 $(install): $(tar_file)
 	cd $(build_dir); tar -xzf $(tar_file)
 	mv $(build_dir)/usr/local/* $(install_root)/
+	rm -r $(build_dir)/usr/
 	cd $(install_root)/lib; $(CURDIR)/fix_paths
 
 $(tar_file):
