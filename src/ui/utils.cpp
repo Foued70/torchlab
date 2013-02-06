@@ -124,4 +124,6 @@ void log(LogType _type, const std::string& _out, ...) {
 				std::cout << LOG_ERROR << msg << std::endl;
 			exit(1);
 	}
+
+	cout.flush();
 }

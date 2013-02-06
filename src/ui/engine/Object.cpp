@@ -140,7 +140,7 @@ Object::select() {
 
 void
 Object::show() {
-  // log(PARAM, "Object::show");
+  // log(PARAM, "Object::show, %s", name.c_str());
 	__matrices.storeModelViewMatrix();
 	__matrices.translate(__mov);
 	__matrices.scale(__scale);
@@ -236,14 +236,28 @@ Object::loadFrom(LuaObject* obj) {
 	THIntTensor* submesh_materials = (THIntTensor*)(*obj)["submesh_materials"];
 
 	LuaList* materials = (LuaList*)(*obj)["materials"];
+	Material* mats[materials->size()];
 
 	for (int i=0; i<materials->size(); i++) {
 		LuaObject* mat = (LuaObject*)((*materials)[i]);
 		Material* material = new Material(mat->getString("name"));
 		__materials.insert(make_pair(material->name, material));
+		mats[i] = material;
 		material->loadMaterial(getColor(mat, "ambient"), MATERIAL_AMBIENT);
 		material->loadMaterial(getColor(mat, "diffuse"), MATERIAL_DIFFUSE);
 		material->loadMaterial(getColor(mat, "specular"), MATERIAL_SPECULAR);
+
+		char* tex_file = mat->getString("diffuseTexPath");
+		if (tex_file != NULL && strlen(tex_file) > 0) {
+			Texture* newTex = TextureManager::GetSingleton().getTextureByName(Texture::getName(tex_file));
+			if (newTex == NULL) {
+				newTex = new Texture(tex_file);
+			}
+
+			material->appendTexture(newTex);
+			__content |= TEXTURE;
+			__content |= NORMALS;
+		}
 	}
 
 
@@ -255,29 +269,33 @@ Object::loadFrom(LuaObject* obj) {
 		mesh->push_back(Vertex(
 			Position(
 				THDoubleTensor_get2d(verts, i, 0), 
-				THDoubleTensor_get2d(verts, i, 1), 
-				THDoubleTensor_get2d(verts, i, 2)),
+				THDoubleTensor_get2d(verts, i, 2), 
+				THDoubleTensor_get2d(verts, i, 1)),
 			TexCoords(
 				THDoubleTensor_get2d(uvs, i, 0), 
 				THDoubleTensor_get2d(uvs, i, 1)),
-			Normal(0, 0, 0)		
+			Normal(0, 0, 1)		
 		));
 	}
 
 	long n_faces = faces->size[0];
 	for (int i=0; i<n_faces; i++) {
-		mesh->addNewIdx(THIntTensor_get2d(faces, i, 0) - 1);
-		mesh->addNewIdx(THIntTensor_get2d(faces, i, 1) - 1);
 		mesh->addNewIdx(THIntTensor_get2d(faces, i, 2) - 1);
+		mesh->addNewIdx(THIntTensor_get2d(faces, i, 1) - 1);
+		mesh->addNewIdx(THIntTensor_get2d(faces, i, 0) - 1);
 	}
 
 	long n_submeshes = submesh_ranges->size[0];
 	for (int i=0; i<n_submeshes; i++) {
-
+		int submesh_begin = THIntTensor_get2d(submesh_ranges, i, 0) - 1;
+		int submesh_end = THIntTensor_get2d(submesh_ranges, i, 1) - 1;
+		int submesh_material_i = THIntTensor_get1d(submesh_materials, i) - 1;
+		Material* material = mats[submesh_material_i];
+		// log(WARN, "useMtl %d %d %d", submesh_begin, submesh_end, material);
+		mesh->useMtl(material, submesh_begin, submesh_end - submesh_begin);
 	}
 
-
-
+	mesh->loadIntoVbo();
   
 	__bindAppropriateShader();
 }
@@ -666,19 +684,23 @@ Object::__fileExists(const string &_fileName) {
 }
 
 void
-Object::__bindAppropriateShader() {
+Object::__bindAppropriateShader() {	
 	Engine& global = Engine::GetSingleton();
 	
 	if ((__content & (TEXTURE | NORMAL_MAP)) == (TEXTURE | NORMAL_MAP)) {
+		log(PARAM, "Object::__bindAppropriateShader %s", "normalMapShader");
 		global.normalMapShader -> bind(this);
 		return;
 	} else if ((__content & (TEXTURE | NORMALS)) == (TEXTURE | NORMALS)) {
+		log(PARAM, "Object::__bindAppropriateShader %s", "texturedShadingShader");
 		global.texturedShadingShader -> bind(this);
 		return;
 	} else if (__content & (NORMALS)) {
+		log(PARAM, "Object::__bindAppropriateShader %s", "shadingShader");
 		global.shadingShader -> bind(this);
 		return;
 	}
 	
+	log(PARAM, "Object::__bindAppropriateShader %s", "identityShader");
 	global.identityShader -> bind(this);
 }
