@@ -5,156 +5,11 @@ require 'math'
 local util = require 'util'
 
 require('intersection')
-require('ray')
+local Ray = util.Ray
 
 -- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
 
--- FIXME add next funcs to utils
 
--- need C code for this
-
-function select_by_index(ind,mat)
-   local nelem = ind:size(1)
-   -- allow for any dimension as long as we index by the first
-   local shape = mat:size()
-   shape[1] = nelem
-
-   local s = torch.Tensor(shape)
-   for i = 1,nelem do 
-      s[i] = mat[ind[i]]
-   end
-   return s
-end
-
--- <vals> sorted list of values
--- 
--- <val> value for which we want pointer into list where everything
---       before pointer is < val and after >= val
-
-function get_index_lt_val(vals,val)
-   local idx = vals:size(1)*0.5
-   local cval = vals[idx]
-   local nval = vals[idx+1]
-   local step = idx*0.5
-   local count = 0
-   while true do 
-      count = count + 1
-      if (cval >= val) then
-         idx = idx - step
-      elseif (nval < val) then
-         idx = idx + step
-      else
-         break
-      end
-      step = math.floor(0.5 + (step * 0.5))
-      if (idx <= 0) or (idx >= vals:size(1)) or (step < 1) then
-         break
-      end
-      cval = vals[idx]
-      nval = vals[idx+1]
-   end
-   if (idx < 1) or (idx >= vals:size(1)) then
-      return -1,count
-   end
-
-   return math.floor(idx),count
-end
-
-function test_get_index_lt_val()
-   local r = torch.sort(torch.randn(1000))
-   local nr = r:size(1)
-   
-   function eval_test(r,val,verbose)
-      local idx,count = get_index_lt_val(r,val)
-      local err = 0
-      if (idx > 0) then
-         local cval = r[idx]
-         local nval = r[idx+1]
-         if (cval < val) and (nval >= val) then
-            if verbose then
-               printf("  OK idx: %d val: %f count: %d", idx, val, count)
-            end
-         else
-            if verbose then
-               printf("  ERROR idx: %d val: %f cval: %f nval: %f", idx, val, cval, nval)
-            end
-            errs = 1
-         end
-      else
-         if (val <= r[1]) or (val > r[-1]) then
-            if verbose then
-               printf("  OK val: %f out of bounds",val)
-            end
-         else
-            if verbose then
-               printf("  ERROR idx: %d val: %f minr: %f maxr: %f", idx, val, r[1],r[nval])
-            end
-            errs = 1
-         end
-      end
-      return err,count
-   end
-
-   print("Test 1 values in set")
-   local steps = 0
-   local errs  = 0
-   
-   for i = 1,nr do 
-      local val = r[i]
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
-
-   print("Test 2 jittered values")
-   steps = 0
-   errs  = 0
-   
-   for i = 1,nr do 
-      local val = r[i] + torch.randn(1)[1]*1e-5
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
-
-   print("Test 3 bounds")
-   steps = 0
-   errs  = 0
-   local rmin = r[1]
-   local rmax = r[-1]
-   for i = 1,nr*0.5 do 
-      local val = rmin - torch.rand(1)[1]*1e-5
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   for i = 1,nr*0.5 do 
-      local val = rmax + torch.rand(1)[1]*1e-5
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
-
-   print("Test 4 duplicate + jittered values")
-   steps = 0
-   errs  = 0
-   local uf = r:unfold(1,3,3)
-   for i = 1,uf:size(1) do 
-      uf[i]:fill(torch.randn(1)[1])
-   end
-   r = torch.sort(r)
-   for i = 1,nr do 
-      local val = r[i] + torch.randn(1)[1]*1e-5
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   printf("-- %d/%d Errors average steps: %2.2f",errs,nr,steps/nr,nr)
-   
-end
 
 -- sv : split_verts.    Used to split the faces (obj.centers)
 -- bb : bounding_boxes. Around the object centered in each bbox
@@ -231,7 +86,7 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    -- b2) get index into sorted vals s.t. 
    --      - all vals from index and below are < splitval
    --      - all vals above index are >= splitval
-   local splitidx  = get_index_lt_val(vals,splitval)
+   local splitidx  = util.get_index_lt_val(vals,splitval)
 
    -- book keeping
    --  - keep track of absolute indices in to face array
@@ -242,10 +97,10 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    local elems2    = indexes[{{splitidx+1,nverts}}]
 
    -- b3) find new points lists
-   local sv1       = select_by_index(elems1,sv)
-   local sv2       = select_by_index(elems2,sv)
-   local bb1       = select_by_index(elems1,bb)
-   local bb2       = select_by_index(elems2,bb)
+   local sv1       = util.select_by_index(elems1,sv)
+   local sv2       = util.select_by_index(elems2,sv)
+   local bb1       = util.select_by_index(elems1,bb)
+   local bb2       = util.select_by_index(elems2,bb)
 
    -- c) record: this node is a split node
    local node      = tree.nodes[noffset]

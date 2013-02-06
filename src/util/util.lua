@@ -17,7 +17,7 @@ end
 
 -- need C code for this
 
-function select_by_index(ind,mat)
+function util.select_by_index(ind,mat)
    local nelem = ind:size(1)
    -- allow for any dimension as long as we index by the first
    local shape = mat:size()

@@ -65,8 +65,8 @@ function Poses:__init(posefile)
          self.data[pc][17] = self.data[pc][19] * (1-self.data[pc][9])
          pc = pc + 1
       end
-      self:process()
       self.cachedir = "cache/"
+      self:process()
       print(string.format("Loaded %d poses in %2.2fs", pc-1, sys.toc()))
    end
 end

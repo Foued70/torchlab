@@ -10,6 +10,8 @@ function Pose:__init(poses,i)
    self.pid    = i
    self.name   = poses.names[i]
    self.image  = poses.images[i]
+   self.cachedir = poses.cachedir
+
    self.quat   = poses.quat[i]
    self.xyz    = poses.xyz[i]
    self.uv     = poses.uv[i]
@@ -98,14 +100,7 @@ function Pose:store_dirs(dirs,scale)
    if not self.dirs then 
       self.dirs = {}
    end
-   if not self.dirs then
-      self.dirs = {}
-   end
    self.dirs[scale] = dirs
-   if not self.dirs then
-      self.dirs = {}
-   end
-   self.dirs[scale] = self.dirs[scale]
    return self.dirs[scale]
 end
 
@@ -151,12 +146,15 @@ function Pose:load_dirs(scale,ps)
       torch.save(dirscache,dirs)
       printf("Saving dirs to %s", dirscache)
    end
-   return self:store_dirs(dirs,i,scale)
+   return self:store_dirs(dirs,scale)
 end
 
 function Pose:get_dirs(scale,ps)
+   if not self.dirs then
+      self.dirs = {}
+   end
    if not self.dirs[scale] then
-      return load_dirs(scale,ps)
+      return self:load_dirs(scale,ps)
    else
       return self.dirs[scale]
    end
