@@ -4,7 +4,8 @@ require 'paths'
 
 local exports = require "util/util"
 
-exports.geom = require "util/geom"
+exports.geom      = require "util/geom"
+exports.intersect = require "util/intersect"
 
 exports.pbx  = require "util/pbx"
 exports.obj  = require "util/obj"
@@ -22,6 +23,9 @@ function exports.run_tests()
 
    local geom_test = require "util/test/geom-test"
    geom_test.all()
+
+   local intersect_test = require "util/test/intersect-test"
+   intersect_test.all()
 
    local pose_test = require "util/test/pose-test"
    pose_test.all()

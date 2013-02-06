@@ -9,7 +9,10 @@ local Pose = torch.class('Pose')
 function Pose:__init(poses,i)
    self.pid    = i
    self.name   = poses.names[i]
-   self.image  = poses.images[i]
+   if poses.images then
+      self.image  = poses.images[i]
+   end
+
    self.cachedir = poses.cachedir
 
    self.quat   = poses.quat[i]
