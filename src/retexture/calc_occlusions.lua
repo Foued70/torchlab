@@ -7,9 +7,7 @@ local util = require 'util'
 
 local Ray = util.Ray
 
-require 'intersection'
 require 'interpolate'
-require 'directions'
 require 'bihtree'
 
 -- top level filenames

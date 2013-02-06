@@ -2,9 +2,11 @@ require 'torch'
 require 'sys'
 require 'paths'
 require 'math'
+
 local util = require 'util'
 
-require('intersection')
+local intersect = util.intersect
+
 local Ray = util.Ray
 
 -- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
@@ -263,7 +265,7 @@ function traverse_tree(tree,obj,ray,debug)
    -- tree needs to be run first. This is an uglier loop than I would like...
 
    -- intersect w/ bbox of whole object
-   local process_tree, ray_mint, ray_maxt = ray_bbox_intersect(ray,obj.bbox)
+   local process_tree, ray_mint, ray_maxt = intersect.ray_bbox(ray,obj.bbox)
    
    local mindepth = math.huge
    local face_id  = 0
@@ -288,7 +290,7 @@ function traverse_tree(tree,obj,ray,debug)
             if debug then
                printf("  - fid: %d",fid)
             end
-            local dp = ray_polygon_intersection(ray,obj,fid)
+            local dp = intersect.ray_polygon(ray,obj,fid)
             if debug then print(dp) end
             if dp and dp < mindepth then
                if debug then
@@ -311,7 +313,7 @@ function traverse_tree(tree,obj,ray,debug)
          local dsign = (rsign[dim] == 1)
          if (dsign) then
             local intersectp, new_min, new_max = 
-               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c2min)
+               intersect.ray_boundary(ray,ray_mint,ray_maxt,dim,c2min)
             if debug then
                printf("> min child[%d] intersect: %s dim: %d min: %f",
                       cids[2], intersectp, dim, c2min) 
@@ -329,7 +331,7 @@ function traverse_tree(tree,obj,ray,debug)
             end
             -- process child 1
             local intersectp, new_min, new_max = 
-               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c1max,true)
+               intersect.ray_boundary(ray,ray_mint,ray_maxt,dim,c1max,true)
             if debug then 
                printf("< max child[%d] intersect: %s dim: %d max: %f ",
                       cids[1], intersectp, dim, c1max)
@@ -348,7 +350,7 @@ function traverse_tree(tree,obj,ray,debug)
          else
             -- check child1 
             local intersectp, new_min, new_max = 
-               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c1max,true) 
+               intersect.ray_boundary(ray,ray_mint,ray_maxt,dim,c1max,true) 
             if debug then 
                printf("> max child[%d] intersect: %s dim: %d max: %f",
                       cids[1], intersectp, dim, c1max) 
@@ -366,7 +368,7 @@ function traverse_tree(tree,obj,ray,debug)
             end
             -- process child 2
             local intersectp, new_min, new_max = 
-               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c2min)
+               intersect.ray_boundary(ray,ray_mint,ray_maxt,dim,c2min)
             if debug then 
                printf("> min child[%d] intersect: %s dim: %d min: %f",
                       cids[2], intersectp, dim, c2min)
