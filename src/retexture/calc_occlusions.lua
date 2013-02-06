@@ -8,7 +8,7 @@ local util = require 'util'
 local Ray = util.Ray
 
 local bihtree = util.bihtree
-require 'interpolate'
+local interpolate = util.interpolate
 
 -- top level filenames
 
@@ -113,7 +113,7 @@ function do_calc_occlusions(save)
       printf("[%d] Done in %2.2fs %d/%d",pi,sys.toc(),totmiss,tot)
       printf("interpolating for %d missed edges", totmiss)
       sys.tic()
-      interpolate(out_tree)
+      interpolate.math_huge(out_tree)
       printf(" - done in %2.2fs",sys.toc())
       
       image.display{image={out_tree},min=0,max=5}

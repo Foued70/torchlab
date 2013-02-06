@@ -1,6 +1,6 @@
-require 'image'
+local interpolate = {}
 
-function interpolate(m)
+function interpolate.math_huge(m)
    local k = 1
    while (m:max() == math.huge) do
       print("pass: "..k)
@@ -33,3 +33,4 @@ function interpolate(m)
    end
 end
 
+return interpolate
