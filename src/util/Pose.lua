@@ -9,6 +9,7 @@ local Pose = torch.class('Pose')
 function Pose:__init(poses,i)
    self.pid    = i
    self.name   = poses.names[i]
+   self.image  = poses.images[i]
    self.quat   = poses.quat[i]
    self.xyz    = poses.xyz[i]
    self.uv     = poses.uv[i]
