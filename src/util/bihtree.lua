@@ -3,19 +3,19 @@ require 'sys'
 require 'paths'
 require 'math'
 
-local util = require 'util'
+local util = require 'util/util'
 
-local intersect = util.intersect
+local intersect = require 'util/intersect'
 
-local Ray = util.Ray
+local Ray = require 'util/Ray'
+
+local bihtree = {}
 
 -- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
 
-
-
 -- sv : split_verts.    Used to split the faces (obj.centers)
 -- bb : bounding_boxes. Around the object centered in each bbox
-function recurse_tree(tree,sv,bb,noffset,absindex)
+local function recurse_build(tree,sv,bb,noffset,absindex)
    local debug  = false
    local nverts = sv:size(1)
    local rmin   = sv:min(1):squeeze()
@@ -124,15 +124,15 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    -- d) recurse
 
    cindex[1] = noffset -- left child
-   noffset = recurse_tree(tree,sv1,bb1,noffset,absindex1)
+   noffset = recurse_build(tree,sv1,bb1,noffset,absindex1)
    
    cindex[2] = noffset -- right child
-   noffset = recurse_tree(tree,sv2,bb2,noffset,absindex2)
+   noffset = recurse_build(tree,sv2,bb2,noffset,absindex2)
    
    return noffset
 end
 
-function build_tree(obj,debug)
+function bihtree.build(obj,debug)
    
    -- the tree is two torch tensors
    
@@ -158,7 +158,7 @@ function build_tree(obj,debug)
    tree.leafindex = 1 -- Global offset at which to write the next leaf
    tree.min_for_leaf = 4 
 
-   local noffset = recurse_tree(tree,obj.centers,obj.face_bboxes)
+   local noffset = recurse_build(tree,obj.centers,obj.face_bboxes)
 
    -- clean up 
    tree.child_index = tree.child_index:narrow(1,1,noffset-1)
@@ -171,7 +171,7 @@ end
 -- write a simple obj file to visualize the tree partitioning: each
 -- leaf as separate objects.
 
-function dump_tree(tree,obj)
+function bihtree.dump(tree,obj)
    local objfilename = "tree_dump.obj"
    local objf = assert(io.open(objfilename, "w"))
 
@@ -213,7 +213,7 @@ end
 
 -- update mint,maxt based on the ray segment intersecting with the
 -- bounding interval
-function recurse_traverse (tree,node_id,obj)
+local function recurse_traverse (tree,node_id,obj)
    printf("Traversing: %d",node_id)
    local node    = tree.nodes[node_id]
    local nidx    = tree.child_index[node_id]
@@ -241,15 +241,16 @@ function recurse_traverse (tree,node_id,obj)
 end
 
 
--- recursive traversal of tree useful for debugging or perhaps to flatten the tree.
-function walk_tree(tree,obj)
+-- recursive traversal of tree useful for debugging or perhaps to
+-- flatten the tree.
+function bihtree.walk(tree,obj)
    local node_id    = 1
    -- start at parent
    recurse_traverse(tree,node_id,obj)
 end
 
 -- return depth of closest intersection.
-function traverse_tree(tree,obj,ray,debug)
+function bihtree.traverse(tree,obj,ray,debug)
    -- stack used to keep track of nodes left to visit
    local todolist  = torch.LongTensor(64)
    local todominmax = torch.Tensor(64,2)
@@ -402,13 +403,17 @@ function traverse_tree(tree,obj,ray,debug)
 end
 
 -- compare aggregate to and exhaustive search through all polygons.
-function test_traverse()
-   local tree = build_tree(target)
+-- FIXME write this test case.  Return get_occlusions from icebox.
+local function test_traverse()
+   local tree = bihtree.build(target)
    local obj  = target
    local ray  = Ray(torch.Tensor({0,0,0}),torch.Tensor({1,1,1}))
    
-   local d    = traverse_tree(tree,obj,ray)
+   local d    = bihtree.traverse(tree,obj,ray)
    
    local slow_d,slow_fid = get_occlusions(ray.origin,ray.dir,obj)
    printf("tree: %f exhaustive: %f, %d",d,slow_d,slow_fid)
 end
+
+
+return bihtree

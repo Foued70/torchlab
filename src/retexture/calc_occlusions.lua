@@ -7,8 +7,8 @@ local util = require 'util'
 
 local Ray = util.Ray
 
+local bihtree = util.bihtree
 require 'interpolate'
-require 'bihtree'
 
 -- top level filenames
 
@@ -82,7 +82,7 @@ if not target then
 end
 
 sys.tic()
-tree = build_tree(target)
+tree = bihtree.build(target)
 printf("Built tree in %2.2fs",sys.toc())
 
 function do_calc_occlusions(save)
@@ -101,7 +101,7 @@ function do_calc_occlusions(save)
          for ci = 1,dirs:size(2) do
             local ray = Ray.new(pt,dirs[ri][ci])
 
-            local tree_d, tree_fid = traverse_tree(tree,target,ray)
+            local tree_d, tree_fid = bihtree.traverse(tree,target,ray)
             tot = tot + 1
             out_tree[ri][ci] = tree_d
             fid_tree[ri][ci] = tree_fid
