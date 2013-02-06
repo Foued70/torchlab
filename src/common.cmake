@@ -8,7 +8,7 @@ if (DEFINED ENV{CLOUDLAB_INSTALL_ROOT})
 endif (DEFINED ENV{CLOUDLAB_INSTALL_ROOT})
 
 
-set(CMAKE_INSTALL_PREFIX ${install_root})
-set(CMAKE_CXX_COMPILER ${install_root}/bin/g++)
-set(CMAKE_CXX_FLAGS "-std=gnu++11")
+set(CMAKE_INSTALL_PREFIX ${install_root} CACHE PATH "" FORCE)
+set(CMAKE_CXX_COMPILER ${install_root}/bin/g++ CACHE FILEPATH "" FORCE)
+set(CMAKE_CXX_FLAGS "-std=gnu++11" CACHE STRING "" FORCE)
 
