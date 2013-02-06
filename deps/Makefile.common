@@ -7,7 +7,7 @@ CXX=
 
 project_dir = $(abspath ../..)
 
-CLOUDLAB_INSTALL_ROOT ?= $(build_dir)/usr/local
+CLOUDLAB_INSTALL_ROOT ?= $(project_dir)build/usr/local
 install_root = $(CLOUDLAB_INSTALL_ROOT)
 
 build_dir = $(abspath $(install_root)/build)
