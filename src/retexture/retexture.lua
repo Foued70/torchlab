@@ -22,7 +22,7 @@ cmd:option('-sourcefile',
            "models/rivercourt_3307_scan/scanner371_job224000.obj",
            'source obj')
 cmd:option('-posefile',
-           'texture_swap/scanner371_job224000_texture_info.txt',
+           'test/texture_swap/scanner371_job224000_texture_info.txt',
 --           "models/rivercourt_3307_scan/scanner371_job224000_texture_info.txt",
            'pose info file in same directory as the texture images')
 cmd:option('-occlusiondir',
@@ -71,7 +71,7 @@ function loadcache (objfile,cachefile,loader,args)
 end
 
 if not poses then
-   poses  = loadcache(posefile,posecache,util.pose.loadtxtfile)
+   poses  = loadcache(posefile,posecache,Poses.new)
 end
 
 -- load precomputed pose occlusions
@@ -79,20 +79,23 @@ if paths.dirp(occdir) then
    use_occlusions = true
    printf("Using occlusions from %s",occdir)
    poses.occlusions = {}
-   for pi = 1,poses.nposes do 
-      local occfname = occdir .. poses[pi]:gsub("jpg","t7")
+   for pi = 1,poses.nposes do
+      local pose = poses[pi]
+      
+      local occfname = occdir .. pose:gsub("jpg","t7")
       printf(" - trying %s", occfname)
       if paths.filep(occfname) then
-         poses.occlusions[pi] = torch.load(occfname)
+         pose.occlusions = torch.load(occfname)
          print(" - OK")
       else
-         occfname = occdir .. poses[pi]:gsub("png","t7")
+         occfname = occdir .. pose.name:gsub("png","t7")
          printf(" - trying %s", occfname)
          if paths.filep(occfname) then
-            poses.occlusions[pi] = torch.load(occfname)
+            pose.occlusions = torch.load(occfname)
             print(" - OK")
          end
       end
+      poses.occlusions[pi] = pose.occlusions
    end
 end
 
@@ -102,11 +105,13 @@ if paths.dirp(maskdir) then
    printf("Using masks from %s",maskdir)
    poses.masks = {}
    for pi = 1,poses.nposes do
-      local mfname = maskdir..poses[pi]:gsub("jpg","png")
+      local pose = poses[pi]
+      local mfname = maskdir..pose.name:gsub("jpg","png")
       printf(" - loading %s", mfname)
       if paths.filep(mfname) then
-         poses.masks[pi] = image.load(mfname)[1]
+         pose.mask = image.load(mfname)[1]
       end
+      poses.masks[pi] = pose.mask
    end
 end
 
@@ -125,7 +130,6 @@ mindist    = 0.7 -- min distance to scanner
 mindistsqr = mindist*mindist
 ideal      = 1.5 -- meters for fade
 maxdist    = 50
-idealdist  = 2   -- prefered distance in meters
 vertbuffer = 0   -- how close in pixels to edge of texture do we accept
 
 pi  = math.pi
@@ -148,6 +152,7 @@ fout_b  =  1 - fout_a * idealdist
 -- get_closest_poses()
 -- for a given face select the best poses we will use to color it.
 -- input: poses <p> , face ids <fid>, object <obj>
+-- FIXME redo this function.  Trace ray to each pose.
 function get_closest_poses(p,fid,obj,debug)
 
    --  a) find poses which are on the correct side of the face normal
@@ -318,6 +323,7 @@ end
 function compute_alpha(dir,d,norm,debug)
    if debug then printf(" - d: %f", d) end
    if (d < mindist) or (d > maxdist) then return 0 end
+   -- angle 1 == perpendicular.
    local a = 1 - torch.acos(torch.dot(-dir,norm))/pi2
    if debug then printf(" - a: %f",a) end
    -- reject obvious wrong
@@ -405,15 +411,16 @@ function retexture (fid,obj,debug)
          -- loop through closest poses
          for pi = 1,pose_idx:size(1) do
             local pid  = pose_idx[pi]
-            local timg = poses.images[pid]
-            local pt   = poses.xyz[pid]
+            local pose = poses[pid]
+            local timg = pose.image
+            local pt   = pose.xyz
             local pocc = nil
             local debug = false
             if use_occlusions then
-               pocc = poses.occlusions[pid]
+               pocc = pose.occlusions
             end
             --  get uv of global coordinate in the pose
-            local pu,pv,px,py = util.pose.globalxyz2uv(poses,pid,v)
+            local pu,pv,px,py = pose:globalxyz2uv(v)
             if debug then 
                printf("pid: %d py: %f px: %f",pid,px,py)
             end
@@ -427,7 +434,7 @@ function retexture (fid,obj,debug)
                   printf("pose[%d] y: %f out of range",
                          pid, py)
                end
-            elseif (use_masks and (poses.masks[pid][py][px] < 1)) then
+            elseif (use_masks and (pose.mask[py][px] < 1)) then
                if debug then 
                   printf("pose[%d] masked at %f, %f", pid, py, px)
                end

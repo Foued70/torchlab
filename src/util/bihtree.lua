@@ -2,163 +2,20 @@ require 'torch'
 require 'sys'
 require 'paths'
 require 'math'
-local util = require 'util'
 
-require('intersection')
-require('ray')
+local util = require 'util/util'
+
+local intersect = require 'util/intersect'
+
+local Ray = require 'util/Ray'
+
+local bihtree = {}
 
 -- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
 
--- FIXME add next funcs to utils
-
--- need C code for this
-
-function select_by_index(ind,mat)
-   local nelem = ind:size(1)
-   -- allow for any dimension as long as we index by the first
-   local shape = mat:size()
-   shape[1] = nelem
-
-   local s = torch.Tensor(shape)
-   for i = 1,nelem do 
-      s[i] = mat[ind[i]]
-   end
-   return s
-end
-
--- <vals> sorted list of values
--- 
--- <val> value for which we want pointer into list where everything
---       before pointer is < val and after >= val
-
-function get_index_lt_val(vals,val)
-   local idx = vals:size(1)*0.5
-   local cval = vals[idx]
-   local nval = vals[idx+1]
-   local step = idx*0.5
-   local count = 0
-   while true do 
-      count = count + 1
-      if (cval >= val) then
-         idx = idx - step
-      elseif (nval < val) then
-         idx = idx + step
-      else
-         break
-      end
-      step = math.floor(0.5 + (step * 0.5))
-      if (idx <= 0) or (idx >= vals:size(1)) or (step < 1) then
-         break
-      end
-      cval = vals[idx]
-      nval = vals[idx+1]
-   end
-   if (idx < 1) or (idx >= vals:size(1)) then
-      return -1,count
-   end
-
-   return math.floor(idx),count
-end
-
-function test_get_index_lt_val()
-   local r = torch.sort(torch.randn(1000))
-   local nr = r:size(1)
-   
-   function eval_test(r,val,verbose)
-      local idx,count = get_index_lt_val(r,val)
-      local err = 0
-      if (idx > 0) then
-         local cval = r[idx]
-         local nval = r[idx+1]
-         if (cval < val) and (nval >= val) then
-            if verbose then
-               printf("  OK idx: %d val: %f count: %d", idx, val, count)
-            end
-         else
-            if verbose then
-               printf("  ERROR idx: %d val: %f cval: %f nval: %f", idx, val, cval, nval)
-            end
-            errs = 1
-         end
-      else
-         if (val <= r[1]) or (val > r[-1]) then
-            if verbose then
-               printf("  OK val: %f out of bounds",val)
-            end
-         else
-            if verbose then
-               printf("  ERROR idx: %d val: %f minr: %f maxr: %f", idx, val, r[1],r[nval])
-            end
-            errs = 1
-         end
-      end
-      return err,count
-   end
-
-   print("Test 1 values in set")
-   local steps = 0
-   local errs  = 0
-   
-   for i = 1,nr do 
-      local val = r[i]
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
-
-   print("Test 2 jittered values")
-   steps = 0
-   errs  = 0
-   
-   for i = 1,nr do 
-      local val = r[i] + torch.randn(1)[1]*1e-5
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
-
-   print("Test 3 bounds")
-   steps = 0
-   errs  = 0
-   local rmin = r[1]
-   local rmax = r[-1]
-   for i = 1,nr*0.5 do 
-      local val = rmin - torch.rand(1)[1]*1e-5
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   for i = 1,nr*0.5 do 
-      local val = rmax + torch.rand(1)[1]*1e-5
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   printf("-- %d/%d Errors average steps: %2.2f/%d",errs,nr,steps/nr,nr)
-
-   print("Test 4 duplicate + jittered values")
-   steps = 0
-   errs  = 0
-   local uf = r:unfold(1,3,3)
-   for i = 1,uf:size(1) do 
-      uf[i]:fill(torch.randn(1)[1])
-   end
-   r = torch.sort(r)
-   for i = 1,nr do 
-      local val = r[i] + torch.randn(1)[1]*1e-5
-      local err,count = eval_test(r,val)
-      steps = steps + count
-      errs = errs + err
-   end
-   printf("-- %d/%d Errors average steps: %2.2f",errs,nr,steps/nr,nr)
-   
-end
-
 -- sv : split_verts.    Used to split the faces (obj.centers)
 -- bb : bounding_boxes. Around the object centered in each bbox
-function recurse_tree(tree,sv,bb,noffset,absindex)
+local function recurse_build(tree,sv,bb,noffset,absindex)
    local debug  = false
    local nverts = sv:size(1)
    local rmin   = sv:min(1):squeeze()
@@ -231,7 +88,7 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    -- b2) get index into sorted vals s.t. 
    --      - all vals from index and below are < splitval
    --      - all vals above index are >= splitval
-   local splitidx  = get_index_lt_val(vals,splitval)
+   local splitidx  = util.get_index_lt_val(vals,splitval)
 
    -- book keeping
    --  - keep track of absolute indices in to face array
@@ -242,10 +99,10 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    local elems2    = indexes[{{splitidx+1,nverts}}]
 
    -- b3) find new points lists
-   local sv1       = select_by_index(elems1,sv)
-   local sv2       = select_by_index(elems2,sv)
-   local bb1       = select_by_index(elems1,bb)
-   local bb2       = select_by_index(elems2,bb)
+   local sv1       = util.select_by_index(elems1,sv)
+   local sv2       = util.select_by_index(elems2,sv)
+   local bb1       = util.select_by_index(elems1,bb)
+   local bb2       = util.select_by_index(elems2,bb)
 
    -- c) record: this node is a split node
    local node      = tree.nodes[noffset]
@@ -267,15 +124,15 @@ function recurse_tree(tree,sv,bb,noffset,absindex)
    -- d) recurse
 
    cindex[1] = noffset -- left child
-   noffset = recurse_tree(tree,sv1,bb1,noffset,absindex1)
+   noffset = recurse_build(tree,sv1,bb1,noffset,absindex1)
    
    cindex[2] = noffset -- right child
-   noffset = recurse_tree(tree,sv2,bb2,noffset,absindex2)
+   noffset = recurse_build(tree,sv2,bb2,noffset,absindex2)
    
    return noffset
 end
 
-function build_tree(obj,debug)
+function bihtree.build(obj,debug)
    
    -- the tree is two torch tensors
    
@@ -301,7 +158,7 @@ function build_tree(obj,debug)
    tree.leafindex = 1 -- Global offset at which to write the next leaf
    tree.min_for_leaf = 4 
 
-   local noffset = recurse_tree(tree,obj.centers,obj.face_bboxes)
+   local noffset = recurse_build(tree,obj.centers,obj.face_bboxes)
 
    -- clean up 
    tree.child_index = tree.child_index:narrow(1,1,noffset-1)
@@ -314,7 +171,7 @@ end
 -- write a simple obj file to visualize the tree partitioning: each
 -- leaf as separate objects.
 
-function dump_tree(tree,obj)
+function bihtree.dump(tree,obj)
    local objfilename = "tree_dump.obj"
    local objf = assert(io.open(objfilename, "w"))
 
@@ -356,7 +213,7 @@ end
 
 -- update mint,maxt based on the ray segment intersecting with the
 -- bounding interval
-function recurse_traverse (tree,node_id,obj)
+local function recurse_traverse (tree,node_id,obj)
    printf("Traversing: %d",node_id)
    local node    = tree.nodes[node_id]
    local nidx    = tree.child_index[node_id]
@@ -384,15 +241,16 @@ function recurse_traverse (tree,node_id,obj)
 end
 
 
--- recursive traversal of tree useful for debugging or perhaps to flatten the tree.
-function walk_tree(tree,obj)
+-- recursive traversal of tree useful for debugging or perhaps to
+-- flatten the tree.
+function bihtree.walk(tree,obj)
    local node_id    = 1
    -- start at parent
    recurse_traverse(tree,node_id,obj)
 end
 
 -- return depth of closest intersection.
-function traverse_tree(tree,obj,ray,debug)
+function bihtree.traverse(tree,obj,ray,debug)
    -- stack used to keep track of nodes left to visit
    local todolist  = torch.LongTensor(64)
    local todominmax = torch.Tensor(64,2)
@@ -408,7 +266,7 @@ function traverse_tree(tree,obj,ray,debug)
    -- tree needs to be run first. This is an uglier loop than I would like...
 
    -- intersect w/ bbox of whole object
-   local process_tree, ray_mint, ray_maxt = ray_bbox_intersect(ray,obj.bbox)
+   local process_tree, ray_mint, ray_maxt = intersect.ray_bbox(ray,obj.bbox)
    
    local mindepth = math.huge
    local face_id  = 0
@@ -433,7 +291,7 @@ function traverse_tree(tree,obj,ray,debug)
             if debug then
                printf("  - fid: %d",fid)
             end
-            local dp = ray_polygon_intersection(ray,obj,fid)
+            local dp = intersect.ray_polygon(ray,obj,fid)
             if debug then print(dp) end
             if dp and dp < mindepth then
                if debug then
@@ -456,7 +314,7 @@ function traverse_tree(tree,obj,ray,debug)
          local dsign = (rsign[dim] == 1)
          if (dsign) then
             local intersectp, new_min, new_max = 
-               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c2min)
+               intersect.ray_boundary(ray,ray_mint,ray_maxt,dim,c2min)
             if debug then
                printf("> min child[%d] intersect: %s dim: %d min: %f",
                       cids[2], intersectp, dim, c2min) 
@@ -474,7 +332,7 @@ function traverse_tree(tree,obj,ray,debug)
             end
             -- process child 1
             local intersectp, new_min, new_max = 
-               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c1max,true)
+               intersect.ray_boundary(ray,ray_mint,ray_maxt,dim,c1max,true)
             if debug then 
                printf("< max child[%d] intersect: %s dim: %d max: %f ",
                       cids[1], intersectp, dim, c1max)
@@ -493,7 +351,7 @@ function traverse_tree(tree,obj,ray,debug)
          else
             -- check child1 
             local intersectp, new_min, new_max = 
-               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c1max,true) 
+               intersect.ray_boundary(ray,ray_mint,ray_maxt,dim,c1max,true) 
             if debug then 
                printf("> max child[%d] intersect: %s dim: %d max: %f",
                       cids[1], intersectp, dim, c1max) 
@@ -511,7 +369,7 @@ function traverse_tree(tree,obj,ray,debug)
             end
             -- process child 2
             local intersectp, new_min, new_max = 
-               ray_boundary_intersect(ray,ray_mint,ray_maxt,dim,c2min)
+               intersect.ray_boundary(ray,ray_mint,ray_maxt,dim,c2min)
             if debug then 
                printf("> min child[%d] intersect: %s dim: %d min: %f",
                       cids[2], intersectp, dim, c2min)
@@ -545,13 +403,17 @@ function traverse_tree(tree,obj,ray,debug)
 end
 
 -- compare aggregate to and exhaustive search through all polygons.
-function test_traverse()
-   local tree = build_tree(target)
+-- FIXME write this test case.  Return get_occlusions from icebox.
+local function test_traverse()
+   local tree = bihtree.build(target)
    local obj  = target
    local ray  = Ray(torch.Tensor({0,0,0}),torch.Tensor({1,1,1}))
    
-   local d    = traverse_tree(tree,obj,ray)
+   local d    = bihtree.traverse(tree,obj,ray)
    
    local slow_d,slow_fid = get_occlusions(ray.origin,ray.dir,obj)
    printf("tree: %f exhaustive: %f, %d",d,slow_d,slow_fid)
 end
+
+
+return bihtree
