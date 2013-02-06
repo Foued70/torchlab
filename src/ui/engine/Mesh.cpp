@@ -45,7 +45,7 @@ Mesh::show() {
 		
 		if (m.material)
 			m.material -> setMaterial();
-		
+    
 		glDrawElements(
 				__mode,
 				m.end,
@@ -58,7 +58,6 @@ Mesh::show() {
 			m.material -> unsetTextures();
 	
 	}
-	
 	glBindVertexArray(0);
 }
 
@@ -93,6 +92,15 @@ Mesh::loadIntoVbo() {
 	checkGLErrors(AT);
 	
 	glBindVertexArray(0);
+}
+
+void
+Mesh::useMtl(Material *material, size_t begin, size_t end) {
+	MeshRange meshRange;
+	meshRange.begin = begin;
+	meshRange.end = end;
+	meshRange.material = material;
+	__materials.push_back(meshRange);
 }
 
 void

@@ -7,8 +7,8 @@
 #include "engine/Engine.h"
 #include "engine/Scene.h"
 
-
 class FrameBuffer;
+class CameraController;
 
 class ScanWidget : public QGLWidget {
   Q_OBJECT // must include this if you use Qt signals/slots
@@ -16,6 +16,11 @@ class ScanWidget : public QGLWidget {
 public:
   ScanWidget(const QGLFormat& format, QWidget *parent = NULL);
   ~ScanWidget();
+  
+  void refresh();
+
+  Engine* engine;
+  Scene* scene;
 
 protected:
   void initializeGL();
@@ -38,13 +43,14 @@ private:
   GLuint m_vertexBuffer;
   GLuint m_shader;
 
-  Engine* engine;
-  Scene* scene;
-  FrameBuffer* framebuffer;
-  bool takeScreenShot;
+  Object* selectionModel;
+  CameraController* sphereCameraController;
 
   int dragStartX;
   int dragStartY;
+  double clickTimerRMB_Start;
+  double clickTimerRMB_Current;
+  bool rotateMode;
 };
 
 #endif  /* _SCAN_WIDGET_H */

@@ -1,0 +1,19 @@
+# set a default path for the common system stuff
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
+# make sure a user's CC or CCX variable don't mess up config scripts
+CC=
+CXX=
+	
+
+project_dir = $(abspath ../..)
+
+CLOUDLAB_INSTALL_ROOT ?= $(build_dir)/usr/local
+install_root = $(CLOUDLAB_INSTALL_ROOT)
+
+build_dir = $(abspath $(install_root)/build)
+
+default_cmake_args = \
+	-D CMAKE_INSTALL_PREFIX:PATH=$(install_root) \
+	-D CMAKE_C_COMPILER:PATH=$(install_root)/bin/gcc \
+	-D CMAKE_CXX_COMPILER:PATH=$(install_root)/bin/g++ \
+	-D CMAKE_BUILD_TYPE=Release

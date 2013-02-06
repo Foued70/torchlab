@@ -7,6 +7,8 @@
 
 #include <assert.h>
 
+#include <utils.h>
+
 template < typename T >
 class sVectorBase {
 public:
@@ -81,6 +83,22 @@ public:
 			++index;
 		}
 	}
+  
+  /**
+  * Ctor that initializes all components as the same value.
+  */
+  inline sVector(const T& _component) : sVectorReferences< T, N >(__data) {
+    for (short i = 0; i < N; ++i) {
+      __data[i] = _component;
+    }
+  }
+  
+  /**
+   * Copy ctor
+   */
+  inline sVector(const sVector& _orig) : sVectorReferences< T, N >(__data) {
+    memcpy(__data, _orig, N * sizeof(T));
+  }
 	
 	inline const size_t size() const { return N; }
 
@@ -162,6 +180,14 @@ public:
 		
 		return result;
 	}
+  
+	inline friend sVector< T, N > operator /(const sVector< T, N >& _a, const T& _b) {
+		sVector< T, N > result;
+		for (short i = 0; i < N; ++i)
+			result[i] = _a[i] / _b;
+		
+		return result;
+	}
 	
 	inline friend sVector< T, N > operator -(const sVector< T, N >& _a) {
 		sVector< T, N > result;
@@ -209,6 +235,36 @@ inline T dot(const sVectorBase< T >& _a, const sVectorBase< T >& _b) {
 	for (short i = 0; i < _a.size(); ++i)
 		result += (_a[i] * _b[i]);
 	return result;
+}
+
+template < typename T >
+inline T distance(const sVector< T, 3 >& _a, const sVector< T, 3 >& _b) {
+  return sqrt(  distanceSquared(_a, _b) );
+}
+
+template < typename T >
+inline T distanceSquared(const sVector< T, 3>& _a, const sVector< T, 3 >& _b) {
+  return  ((_b[0]-_a[0])*(_b[0]-_a[0])) +
+          ((_b[1]-_a[1])*(_b[1]-_a[1])) +
+          ((_b[2]-_a[2])*(_b[2]-_a[2]));
+}
+
+template < typename T, int N >
+inline sVector< T, N > min(const sVector< T, N >& _a, const sVector< T, N >& _b) {
+  sVector< T, N > result;
+  for (short i = 0; i < _a.size(); ++i) {
+    result[i] = (_a[i] < _b[i]) ? _a[i] : _b[i];
+  }
+  return result;
+}
+
+template < typename T, int N >
+inline sVector< T, N > max(const sVector< T, N >& _a, const sVector< T, N >& _b) {
+  sVector< T, N > result;
+  for (short i = 0; i < _a.size(); ++i) {
+    result[i] = (_a[i] > _b[i]) ? _a[i] : _b[i];
+  }
+  return result;
 }
 
 /*

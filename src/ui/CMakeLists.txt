@@ -1,15 +1,10 @@
-cmake_minimum_required (VERSION 2.6 FATAL_ERROR)
-CMAKE_POLICY(VERSION 2.6)
-find_package(Torch REQUIRED)
+cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+cmake_policy(VERSION 2.6)
+include(../common.cmake REQUIRED)
+
 find_library(COCOA_LIBRARY Cocoa)
 
-set(CMAKE_CXX_COMPILER ../../../build/usr/local/bin/g++)
-set(CMAKE_CXX_FLAGS "-std=gnu++11")
-
-# FILE(GLOB luasrc "*.lua")
-set(luasrc "")
 FILE(GLOB src "*.cpp" "engine/*.cpp" "engine/*.c")
-# SET(src qui.cpp ScanWidget.cpp)
 
 SET( QT_USE_QTOPENGL TRUE )
 find_package(Qt4 REQUIRED)
@@ -63,6 +58,6 @@ ADD_CUSTOM_COMMAND(
   COMMAND  clang -c ${CMAKE_CURRENT_SOURCE_DIR}/core_profile_attributes.mm -o ${CMAKE_CURRENT_BINARY_DIR}/core_profile_attributes.o
 )
 
-ADD_TORCH_PACKAGE(ui "${src}" "${luasrc}" "Floored Viewer")
+ADD_TORCH_PACKAGE(ui "${src}" "" "Floored Viewer")
 
 target_link_libraries(ui precomp luaT TH ${COCOA_LIBRARY} ${OPENGL_LIBRARIES} ${QT_LIBRARIES} )

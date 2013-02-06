@@ -1,11 +1,17 @@
 #ifndef FRAME_BUFFER_H
 #define FRAME_BUFFER_H
 
-
 #include <string>
+#include "Singleton.h"
 #include "opengl.h"
 
-class FrameBuffer
+enum RENDER_PASS {
+    COLOR_PASS,
+    PICKING_PASS,
+    DEPTH_PASS
+};
+
+class FrameBuffer : public Singleton< FrameBuffer >
 {
 public:
 	FrameBuffer();
@@ -13,12 +19,15 @@ public:
 	
 	void bind();
 	void unbind();
+  
+  bool initialize();
 	
 	void renderToTexture();
 	void renderDebugMesh();
 	
 	void printInfo();
-	GLuint readPixel(const GLuint& x, const GLuint& y, const GLuint& channel);
+	GLint readPixel(const GLuint& x, const GLuint& y, const GLuint& channel);
+  GLfloat readDepthPixel(const GLuint& x, const GLuint& y);
 	void saveToFile(const std::string& _filename);
   
   /* Method to send color pass data to the default framebuffer */
@@ -31,9 +40,10 @@ private:
 	
 	void __generateTexture();
 	
-	bool __initialize();
-	
 	bool __evaluateConfiguration();
+  
+  GLuint __getAttachmentIndex(const RENDER_PASS&) const;
+  void __setReadBuffer(const RENDER_PASS&);
 	
 private:
 	GLuint __width;

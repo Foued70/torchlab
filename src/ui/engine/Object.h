@@ -8,6 +8,7 @@
 #include "Vectors.h"
 #include "Material.h"
 #include "Mesh.h"
+#include "LuaObject.h"
 
 class Shader;
 class MatricesManager;
@@ -59,12 +60,20 @@ public:
 	virtual void show();
 	
 	/**
-	 * Moves the oject.
+	 * Moves the object.
 	 * @param x factor;
 	 * @param y factor;
 	 * @param z factor.
 	 */
 	void move(GLfloat, GLfloat, GLfloat);
+  
+	/**
+	 * Moves the object to an absolute position in world space.
+	 * @param x factor;
+	 * @param y factor;
+	 * @param z factor.
+	 */ 
+  void setPosition(GLfloat, GLfloat, GLfloat);
 	
 	/**
 	 * Scales the object.
@@ -108,6 +117,8 @@ public:
 	 * @return False if something went wrong.
 	 */
 	bool loadFromObj(const std::string&, unsigned = 0);
+	
+	bool loadFrom(LuaObject* obj);
 	
 	/**
 	 * Loads the whole object into the VBO.
