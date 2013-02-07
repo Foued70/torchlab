@@ -7,7 +7,6 @@ require 'paths'
 -- this is container class for all the poses
 local Poses = torch.class('Poses')
 
-
 --
 -- Email containing information about the pose file from matterport
 --
@@ -76,23 +75,48 @@ function Poses:loaddata(data,names)
    self.nposes = data:size(1)
    self.data   = data
    self.names  = names
-   print(self.names)
+   print(string.formal("Loading: %s",self.names))
    self:process()
    print(string.format("Loaded %d poses in %2.2fs", self.nposes, sys.toc()))
 end
 
 function Poses:process()
-   self.quat  = self.data:narrow(2,1,4)
-   self.xyz   = self.data:narrow(2,5,3)
-   self.uv    = self.data:narrow(2,8,2)
-   self.px    = self.data:narrow(2,10,2)
+   -- quaternion rotation from local xyz to global xyz
+   self.quat          = self.data:narrow(2,1,4)
+
+   -- position of origin in global xyz coordinates
+   self.xyz           = self.data:narrow(2,5,3)
+
+   -- image center in u and v coordinates
+   self.center_u            = self.data:select(2,8)
+
+   -- image center in u and v coordinates
+   self.center_v            = self.data:select(2,9)
+
+   -- degree per pixel in x 
+   self.degree_per_px_x = self.data:select(2,10)
+
+   -- degree per pixel in y
+   self.degree_per_px_y = self.data:select(2,11)
+
+   -- reverse rotation from global to local
    self.quat_r = self.data:narrow(2,12,4)
    self.quat_r:copy(self.quat)
    self.quat_r:narrow(2,1,3):mul(-1)
-   self.cntrx = self.data:select(2,16)
-   self.cntry = self.data:select(2,17)
-   self.w     = self.data:select(2,18)
-   self.h     = self.data:select(2,19)
+
+   -- center x in pixel offset
+   self.center_x  = self.data:select(2,16)
+
+   -- center y in pixel offset
+   self.center_y  = self.data:select(2,17)
+
+   -- image width in pixels
+   self.image_w      = self.data:select(2,18)
+
+   -- image height in pixels
+   self.image_h      = self.data:select(2,19)
+
+   -- create individual pose objects
    for i = 1,self.nposes do
       self[i] = Pose.new(self,i)
    end
