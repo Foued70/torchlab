@@ -5,7 +5,6 @@ local d2r = math.pi / 180
 
 local Pose = torch.class('Pose')
 
--- chose not to have a class for the easy access.
 function Pose:__init(poses,i)
    self.pid    = i
    self.name   = poses.names[i]
@@ -27,10 +26,10 @@ function Pose:__init(poses,i)
    self.quat_r          = poses.quat_r[i]
    self.center_x        = poses.center_x[i]
    self.center_y        = poses.center_y[i]
-   self.image_w            = poses.image_w[i]
-   self.image_h            = poses.image_h[i]
-   self.inv_image_w        = 1/self.image_w
-   self.inv_image_h        = 1/self.image_h
+   self.image_w         = poses.image_w[i]
+   self.image_h         = poses.image_h[i]
+   self.inv_image_w     = 1/self.image_w
+   self.inv_image_h     = 1/self.image_h
 end
 
 function Pose:global2local(v)
@@ -159,6 +158,7 @@ function Pose:load_dirs(scale,ps)
    return self:store_dirs(dirs,scale)
 end
 
+-- loads if needed or return
 function Pose:get_dirs(scale,ps)
    if not self.dirs then
       self.dirs = {}
@@ -187,20 +187,55 @@ function Pose:load_depth(scale,ps)
       "scaled_"..outw.."x"..outh.."_-_"..
       "center_"..center_x.."x"..center_y
 
-   dirscache = dirscache ..".t7"
+   depthcache = depthcache ..".t7"
 
    local depthmap = nil
-   if paths.filep(dirscache) then
+   if paths.filep(depthcache) then
       sys.tic()
-      depthmap = torch.load(dirscache)
-      printf("Loaded depths from %s in %2.2fs", posecache, sys.toc())
+      depthmap = torch.load(depthcache)
+      printf("Loaded depths from %s in %2.2fs", depthcache, sys.toc())
       if not self.depthmap then
          self.depthmap = {}
       end
       self.depthmap[scale] = depthmap
    else
-      printf("No pose found")
+      printf("No depth map found")
    end
+end
+
+function Pose:draw_wireframe (obj)
+   local pimage = self.image
+   local psize = pimage:size()
+   psize[1] = 4
+   local wimage = torch.Tensor(psize):fill(0)
+   local face_verts = obj.face_verts
+   local nverts = obj.nverts_per_face
+   for fi = 1,face_verts:size(1) do
+      local nv = nverts[fi]
+      local f = face_verts[fi]:narrow(1,1,nv)
+      local pvert = f[nv]
+      for vi = 1,nv do
+         local cvert = f[vi]
+         local dir = cvert - pvert
+         local len = torch.norm(dir)
+         if (len > 1e-8) then
+            dir = dir/len
+            step = dir * mpp
+            -- printf("step: %f,%f,%f",step[1],step[2],step[3])
+            for s = 0,len,mpp do
+               -- draw verts first
+               local u,v,x,y = self:globalxyz2uv(pvert)
+               -- printf("u: %f v: %f x: %f y %f", u, v, x, y)
+               if (u > 0) and (u < 1) and (v > 0) and (v < 1) then
+                  wimage[{1,y,x}] = 1  -- RED
+                  wimage[{4,y,x}] = 1  -- Alpha Channel
+               end
+               pvert = pvert + step 
+            end
+         end
+      end
+   end
+   return wimage
 end
 
 

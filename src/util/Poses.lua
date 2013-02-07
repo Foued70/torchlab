@@ -122,5 +122,50 @@ function Poses:process()
    end
 end
 
+function Poses:save_wireframes_red_alpha(obj,outdir,ext)
+   if not outdir then
+      outdir = ""
+   end
+   if not ext then 
+      ext = "_wireframe.png"
+   end
+
+   for pi = 1,self.nposes do
+      local pose = self[pi]
+      local wimage = pose:draw_wireframe(obj)
+      image.display(wimage)
+      -- save
+      local wimagename = outdir .. pose.name:gsub(".jpg",ext)
+      printf("Saving: %s", wimagename)
+      image.save(wimagename,wimage)
+   end
+end
+
+function Poses:save_wireframes_image_blacklines(obj,outdir,ext)
+   if not outdir then
+      outdir = ""
+   end
+   if not ext then 
+      ext = "_wireframe_RGB.png"
+   end
+   for pi = 1,self.nposes do 
+      local pose = self[pi]
+      local wimage = pose:draw_wireframe(obj)
+      -- invert 0 and 1 in red channel
+      wimage = wimage[1]:mul(-1):add(1)
+      local cimage = pose.image:clone()
+      cimage[1]:cmul(wimage)
+      cimage[2]:cmul(wimage)
+      cimage[3]:cmul(wimage)
+      image.display(cimage) 
+      local wimagename = outdir .. pose.name:gsub(".jpg",ext)
+      if pose.name:gmatch("png") then
+         wimagename = outdir .. pose.name:gsub(".png",ext)
+      end
+      printf("Saving: %s", wimagename)
+      image.save(wimagename,cimage)
+   end
+end
+
 
 return Poses
