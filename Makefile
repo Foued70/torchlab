@@ -16,3 +16,6 @@ deps: build
 
 build: 
 	mkdir -p build
+
+rocks:
+	@torch-lua deps/cloudlab/make_rocks.lua

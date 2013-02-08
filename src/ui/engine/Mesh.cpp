@@ -33,6 +33,7 @@ Mesh::~Mesh() {
 
 void
 Mesh::show() {
+	// log(PARAM, "Mesh::show %s", name.c_str());
 	if (!__isShown)
 		return;
 	// there we go!
@@ -40,6 +41,8 @@ Mesh::show() {
 	checkGLErrors(AT);
 	
 	for (MeshRange& m: __materials) {
+		// log(WARN, "show submesh %d %d %d", m.begin, m.end, m.material);
+
 		if (m.begin == m.end)
 			continue;
 		
@@ -95,10 +98,10 @@ Mesh::loadIntoVbo() {
 }
 
 void
-Mesh::useMtl(Material *material, size_t begin, size_t end) {
+Mesh::useMtl(Material *material, size_t begin, size_t length) {
 	MeshRange meshRange;
 	meshRange.begin = begin;
-	meshRange.end = end;
+	meshRange.end = length;
 	meshRange.material = material;
 	__materials.push_back(meshRange);
 }

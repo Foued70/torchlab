@@ -58,8 +58,8 @@ ScanWidget::initializeGL() {
   monkey -> setColor(80, 24, 25);
   */
   
-  Object* dryDragon = scene -> createObject("dryDragon");
-  if (!dryDragon -> loadFromObj("objects/dryDragon.obj", (INVERT_X | INVERT_Y))) exit(1);
+  // Object* dryDragon = scene -> createObject("dryDragon");
+  // if (!dryDragon -> loadFromObj("objects/dryDragon.obj", (INVERT_X | INVERT_Y))) exit(1);
   
   selectionModel = scene -> createObject("crate");
   if (!selectionModel -> loadFromObj("objects/crate.obj", (INVERT_X | INVERT_Y))) exit(1);

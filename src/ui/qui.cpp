@@ -54,9 +54,16 @@ int libui_display(lua_State *L) {
 int libui_create_object(lua_State *L) {
   LuaObject obj = LuaObject(L, 1);
 
-  Scene* scene = scanWidget->engine->createScene("aScene");
+  scanWidget->makeCurrent();
+  Scene* scene = scanWidget->scene;
   Object* object = scene->createObject("space");
   object->loadFrom(&obj);
+  // object->scale(-1, 1, 1);
+  // object -> move(0, 0, 0);
+  // object -> rotate(0, 0, 0);
+  // object -> setColor(80, 24, 25);
+
+  scanWidget->updateGL();
 
   return 0;
 }

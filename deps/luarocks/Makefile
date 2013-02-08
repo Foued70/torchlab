@@ -13,7 +13,6 @@ args = \
   --prefix=$(install_root) \
   --with-lua=$(install_root) \
   --with-lua-include=$(install_root)/include/torch \
-  --rocks-tree=$(project_dir)/rocks \
   --force-config 
 
 
