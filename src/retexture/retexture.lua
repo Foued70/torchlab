@@ -16,17 +16,17 @@ cmd:text()
 cmd:text('Options')
 cmd:option('-targetfile',
            --           "models/rivercourt_3307_regeom/rivercourt_3307.obj",
-           "models/withered-dust-2012_a_03/rivercourt_3307_v3.obj",
+           "../data/models/withered-dust-2012_a_03/rivercourt_3307_v3.obj",
            'target obj with new geometry')
 cmd:option('-sourcefile',
-           "models/rivercourt_3307_scan/scanner371_job224000.obj",
+           "../data/models/rivercourt_3307_scan/scanner371_job224000.obj",
            'source obj')
 cmd:option('-posefile',
-           'test/texture_swap/scanner371_job224000_texture_info.txt',
---           "models/rivercourt_3307_scan/scanner371_job224000_texture_info.txt",
+           '../data/test/texture_swap/scanner371_job224000_texture_info.txt',
+--           "../data/models/rivercourt_3307_scan/scanner371_job224000_texture_info.txt",
            'pose info file in same directory as the texture images')
 cmd:option('-occlusiondir',
-           'rivercourt_occlusions_s1/',
+           '../data/depth_maps/1_rivercourt_3307/rivercourt_occlusions_s1/',
            'directory with the computed depth maps')
 cmd:option('-occscale',1,'scale at which occlusions where processed')
 cmd:option('-maskdir','texture_swap/mask/','mask for retexture')
@@ -45,14 +45,14 @@ occdir     = params.occlusiondir .. "/"
 occsc      = 1/params.occscale
 maskdir    = params.maskdir .."/"
 
-cachedir = "cache/"
+cachedir = "../cache/"
 
 sys.execute("mkdir -p " .. cachedir)
 sys.execute("mkdir -p " .. outdir)
 
-posecache   = cachedir .. posefile:gsub("/","_")   .. ".t7"
-sourcecache = cachedir .. sourcefile:gsub("/","_") .. ".t7"
-targetcache = cachedir .. targetfile:gsub("/","_") .. ".t7"
+posecache   = cachedir ..   posefile:gsub("/","_"):gsub("%.","dot") .. ".t7"
+sourcecache = cachedir .. sourcefile:gsub("/","_"):gsub("%.","dot") .. ".t7"
+targetcache = cachedir .. targetfile:gsub("/","_"):gsub("%.","dot") .. ".t7"
 posedir     = paths.dirname(posefile)
 
 function loadcache (objfile,cachefile,loader,args)
@@ -82,17 +82,17 @@ if paths.dirp(occdir) then
    for pi = 1,poses.nposes do
       local pose = poses[pi]
       
-      local occfname = occdir .. pose:gsub("jpg","t7")
+      local occfname = occdir .. pose.name:gsub("jpg","t7")
       printf(" - trying %s", occfname)
       if paths.filep(occfname) then
          pose.occlusions = torch.load(occfname)
-         print(" - OK")
+         printf(" - Loaded depth map for pose: %d",pi)
       else
          occfname = occdir .. pose.name:gsub("png","t7")
          printf(" - trying %s", occfname)
          if paths.filep(occfname) then
             pose.occlusions = torch.load(occfname)
-            print(" - OK")
+            printf(" - Loaded depth map for pose: %d",pi) 
          end
       end
       poses.occlusions[pi] = pose.occlusions
