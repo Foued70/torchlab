@@ -11,6 +11,7 @@ exports.interpolate = require "util/interpolate"
 
 exports.pbx  = require "util/pbx"
 exports.obj  = require "util/obj"
+exports.obj2  = require "util/obj2"
 
 -- classes
 exports.Ray   = require "util/Ray"

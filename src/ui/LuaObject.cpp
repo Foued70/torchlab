@@ -24,6 +24,11 @@ LuaObject::getObject(const char* name) {
   return (LuaObject*)((*this)[name]);
 }
 
+LuaList* 
+LuaObject::getList(const char* name) {
+  return (LuaList*)((*this)[name]);
+}
+
 lua_Number* 
 LuaObject::getNumber(const char* name) {
   return (lua_Number*)((*this)[name]);
@@ -55,6 +60,29 @@ LuaList::LuaList(lua_State *L, int index) {
     lua_pop(L, 1);
   }
 }
+
+
+LuaObject* 
+LuaList::getObject(int i) {
+  return (LuaObject*)((*this)[i]);
+}
+
+LuaList* 
+LuaList::getList(int i) {
+  return (LuaList*)((*this)[i]);
+}
+
+lua_Number* 
+LuaList::getNumber(int i) {
+  return (lua_Number*)((*this)[i]);
+}
+
+char* 
+LuaList::getString(int i) {
+  return (char*)((*this)[i]);
+}
+
+
 
 
 void*
