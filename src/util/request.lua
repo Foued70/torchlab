@@ -72,7 +72,7 @@ function Request:init(options)
   if self.file and self.data then
     p('FILE AND DATA!')
   elseif self.file then
-    local file = io.open(self.file)
+    local file = io.open(self.file, "r")
     self.source = ltn12.source.file(file)
     self:set_header('content-type', 'multipart/form-data')
     self:set_header(file_size(file))
@@ -86,11 +86,11 @@ function Request:init(options)
   end
   
   local sink = false
-  if self.sink and self.sink == 'string' then
-    self.sink = ltn12.sink.file(io.open(self.sink))    
-  else 
+  if not self.sink then
     sink = {}
     self.sink = ltn12.sink.table(sink)
+  elseif type(self.sink) == 'string' then
+    self.sink = ltn12.sink.file(io.open(self.sink, "w"))    
   end
     
   local resp, code, headers, status = http.request{
