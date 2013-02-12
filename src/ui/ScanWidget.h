@@ -19,6 +19,9 @@ public:
   
   void refresh();
 
+  Engine* engine;
+  Scene* scene;
+
 protected:
   void initializeGL();
   void resizeGL(int w, int h);
@@ -39,6 +42,7 @@ private:
 
   GLuint m_vertexBuffer;
   GLuint m_shader;
+
 
   Engine* engine;
   CameraController* sphereCameraController;

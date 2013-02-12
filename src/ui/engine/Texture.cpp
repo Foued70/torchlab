@@ -68,6 +68,7 @@ Texture::getName(const string& _fileName) {
 
 GLuint
 Texture::__loadTexture(const string &_filename) {
+	// log(WARN, "__loadTexture %s", _filename.c_str());
 	/* Based on SOIL library */
 	unsigned char* img;
 	int width, height, channels;

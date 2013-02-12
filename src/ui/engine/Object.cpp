@@ -32,7 +32,7 @@ struct Index {
 	long v;
 	long t;
 	long n;
-	
+
 	Index() : v(0), t(0), n(0) {}
 	Index(const long& _v, const long& _t, const long& _n) :
 			v(_v), t(_t), n(_n) {}
@@ -50,9 +50,9 @@ struct HashMyIndex {
 		uint32_t len = sizeof(Index);
 		uint32_t hash = len, tmp;
 		int rem = len & 3;
-		
+
 		len >>= 2;
-		
+
 		for (; len > 0; len--) {
 			hash += get16bits(x);
 			tmp = (get16bits(x + 2) << 11) ^ hash;
@@ -60,7 +60,7 @@ struct HashMyIndex {
 			x += 2 * sizeof(uint16_t);
 			hash += hash >> 1;
 		}
-		
+
 		switch(rem) {
 		case 3:
 			hash += get16bits(x);
@@ -78,17 +78,17 @@ struct HashMyIndex {
 			hash ^= hash << 10;
 			hash += hash >> 1;
 		}
-		
+
 		hash ^= hash << 3;
 		hash += hash >> 5;
 		hash ^= hash << 4;
 		hash += hash >> 17;
 		hash ^= hash << 25;
 		hash += hash >> 6;
-		
+
 		return hash;
 	}
-	
+
 };
 
 unsigned int Object::nextAvailableID = 0;
@@ -113,13 +113,13 @@ Object::Object(const string &_name) :
 Object::~Object() {
 	while (!__children.empty())
 		delete __children.back(), __children.pop_back();
-	
+
 	for (auto it = __meshes.begin(); it != __meshes.end(); ++it)
 		delete it -> second;
-	
+
 	for (auto it = __materials.begin(); it != __materials.end(); ++it)
 		delete it -> second;
-	
+
 	log(DESTRUCTOR, "Object (\"%s\") destructed.", name.c_str());
 }
 
@@ -152,37 +152,37 @@ Object::select() {
 
 void
 Object::show() {
-  // log(PARAM, "Object::show");
+  // log(PARAM, "Object::show, %s", name.c_str());
 	__matrices.storeModelViewMatrix();
 	__matrices.translate(__mov);
 	__matrices.scale(__scale);
 	__matrices.rotate(__rot.x, X);
 	__matrices.rotate(__rot.y, Y);
 	__matrices.rotate(__rot.z, Z);
-		
-  
+
+
 	__shaders.updateData("sDefColor", __defColor);
-		
+
 	__shader -> toggle();
 	__shaders.openStream(__shader);
-  
+
   // TO DO: Find out why updating the objectID uniform only works after the stream has been opened
   __shaders.updateData("objectID", (GLuint)__id);
-	
-  GLuint meshCounter = 0;	
-	for (auto it = __meshes.begin(); it != __meshes.end(); ++it) {			
+
+  GLuint meshCounter = 0;
+	for (auto it = __meshes.begin(); it != __meshes.end(); ++it) {
 		__shaders.updateData("meshID", meshCounter++);
 		it -> second -> show();
 	}
 
 	__shaders.closeStream();
 	__shader -> toggle();
-		
+
 	for (Object*& child: __children)
 		child -> show();
-		
+
 	__wasShown = true;
-		
+
 	__matrices.restoreModelViewMatrix();
 }
 
@@ -191,7 +191,7 @@ Object::move(GLfloat _x, GLfloat _y, GLfloat _z) {
 	__mov += Vector3( {_x, _y, _z} );
 }
 
-void 
+void
 Object::setPosition(GLfloat _x, GLfloat _y, GLfloat _z) {
   __mov = Vector3( {_x, _y, _z} );
 }
@@ -210,7 +210,7 @@ bool
 Object::setColor(GLfloat _R, GLfloat _G, GLfloat _B, GLfloat _A) {
 	if (_R < 0 || _R > 1 || _G < 0 || _G > 1 || _B < 0 || _B > 1 || _A < 0 || _A > 1)
 		return false;
-	
+
 	__defColor = sColor( {_R, _G, _B, _A} );
 	return true;
 }
@@ -219,7 +219,7 @@ bool
 Object::setColor(int _R, int _G, int _B, GLfloat _A) {
 	if (_R < 0 || _R > 255 || _G < 0 || _G > 255 || _B < 0 || _B > 255 || _A < 0 || _A > 1)
 		return false;
-	
+
 	__defColor = sColor( {
 			static_cast< GLfloat >(_R) / 255,
 			static_cast< GLfloat >(_G) / 255,
@@ -229,15 +229,100 @@ Object::setColor(int _R, int _G, int _B, GLfloat _A) {
 	return true;
 }
 
+sColor
+getColor(LuaObject* mat, const char* name) {
+	LuaList* color = mat->getList(name);
+	if (!color) return sColor({0,0,0,1});
+
+	lua_Number* r = color->getNumber(0);
+	lua_Number* g = color->getNumber(1);
+	lua_Number* b = color->getNumber(2);
+	lua_Number* a = color->getNumber(3);
+	return sColor({(float)*r,(float)*g,(float)*b,(float)*a});
+}
+
+bool
+Object::loadFrom(LuaObject* obj) {
+	log(PARAM, "Object::loadFrom");
+	THDoubleTensor* verts = (THDoubleTensor*)(*obj)["verts"];
+	THDoubleTensor* uvs = (THDoubleTensor*)(*obj)["uvs"];
+	THIntTensor* faces = (THIntTensor*)(*obj)["faces"];
+	THIntTensor* submeshes = (THIntTensor*)(*obj)["submeshes"];
+
+	LuaList* materials = (LuaList*)(*obj)["materials"];
+	Material* mats[materials->size()];
+
+	for (int i=0; i<materials->size(); i++) {
+		LuaObject* mat = (LuaObject*)((*materials)[i]);
+		Material* material = new Material(mat->getString("name"));
+		__materials.insert(make_pair(material->name, material));
+		mats[i] = material;
+		material->loadMaterial(getColor(mat, "ambient"), MATERIAL_AMBIENT);
+		material->loadMaterial(getColor(mat, "diffuse"), MATERIAL_DIFFUSE);
+		material->loadMaterial(getColor(mat, "specular"), MATERIAL_SPECULAR);
+		char* tex_file = mat->getString("diffuseTexPath");
+		if (tex_file != NULL && strlen(tex_file) > 0) {
+			Texture* newTex = TextureManager::GetSingleton().getTextureByName(Texture::getName(tex_file));
+
+			if (newTex == NULL) {
+				newTex = new Texture(tex_file);
+			}
+
+			material->appendTexture(newTex);
+			__content |= TEXTURE;
+			__content |= NORMALS;
+		}
+	}
+
+
+	Mesh* mesh = new Mesh("mesh");
+	__meshes.insert(make_pair(mesh->name, mesh));
+	
+	long n_verts = verts->size[0];
+	for (int i=0; i<n_verts; i++) {
+		mesh->push_back(Vertex(
+			Position(
+				THDoubleTensor_get2d(verts, i, 0),
+				THDoubleTensor_get2d(verts, i, 1),
+				THDoubleTensor_get2d(verts, i, 2)),
+			TexCoords(
+				THDoubleTensor_get2d(uvs, i, 0),
+				THDoubleTensor_get2d(uvs, i, 1)),
+			Normal(0, 0, 1)
+		));
+	}
+
+	long n_faces = faces->size[0];
+	for (int i=0; i<n_faces; i++) {
+		mesh->addNewIdx(THIntTensor_get2d(faces, i, 0) - 1);
+		mesh->addNewIdx(THIntTensor_get2d(faces, i, 1) - 1);
+		mesh->addNewIdx(THIntTensor_get2d(faces, i, 2) - 1);
+	}
+
+	long n_submeshes = submeshes->size[0];
+	for (int i=0; i<n_submeshes ; i++) {
+		int submesh_begin =      (THIntTensor_get2d(submeshes, i, 0) - 1) * 3;
+		int submesh_end =        (THIntTensor_get2d(submeshes, i, 1)) * 3;
+		int submesh_material_i = THIntTensor_get2d(submeshes, i, 2) - 1;
+		// log(WARN, " %d %d %d", submesh_material_i, submesh_begin, submesh_end);
+		Material* material = mats[submesh_material_i];
+		mesh->useMtl(material, submesh_begin, submesh_end - submesh_begin);
+	}
+
+	mesh->loadIntoVbo();
+
+	__bindAppropriateShader();
+}
+
 bool
 Object::loadFromObj(const string &_objFile, unsigned _invert) {
 	log(PARAM, "Loading object (\"%s\")...", name.c_str());
-	
+
 	if (!__fileExists(_objFile)) {
 		log(WARN, "%s: file %s not found!", name.c_str(), _objFile.c_str());
 		return false;
 	}
-	
+
 	__parseObj(_objFile, _invert);
 	__bindAppropriateShader();
   
@@ -247,7 +332,6 @@ Object::loadFromObj(const string &_objFile, unsigned _invert) {
     it->second->logMeshData();
     it++;
   }
-	
 	return true;
 }
 
@@ -266,47 +350,47 @@ void
 Object::__parseObj(const string &_fileName, unsigned _invert) {
 	unsigned int lastSlash = _fileName.rfind('/'); // we need the localization
 	string loc = (lastSlash == string::npos) ? "" : _fileName.substr(0, lastSlash+1);
-	
+
 	// some temporary variables
 	indicesMap indices;
-	
+
 	vector< Position > tempPos;
 	tempPos.push_back(Position(0, 0, 0));
-	
+
 	vector< TexCoords > tempTex;
 	tempTex.push_back(TexCoords(0, 0));
-	
+
 	vector< Normal > tempNor;
 	tempNor.push_back(Normal(0, 0, 0));
-	
+
 	unsigned gLastPosSize = 0, gLastTexSize = 0, gLastNorSize = 0;
 	unsigned howToParse = 0;
 	bool normalsChecked = false, textureChecked = false;
 	string buffer, temp;
 	long p = 0;
 	GLfloat x, y, z;
-	
+
 	Material* lastMtl = (Material*)NULL;
-	
+
 	Mesh *current = NULL;
-	
+
  	fstream objFile(_fileName.c_str(), ios::in);
-	
+
 	while (!objFile.eof()) {
 		getline (objFile, buffer);
-		
+
 		if (buffer[0] == '#')
 			continue;	// comment, pass this
-		
+
 		if (buffer.find((char)92) != string::npos) { // we have backslash - divided to next line
 			buffer.erase(buffer.find((char)92), 1);
 			string secondLine;
 			getline(objFile, secondLine);
 			buffer += secondLine;
 		}
-		
+
 		istringstream line(buffer);
-		
+
 		if (buffer.substr(0, 6) == "mtllib") {
 			string mtlFileName;
 			line >> temp >> mtlFileName;
@@ -322,11 +406,11 @@ Object::__parseObj(const string &_fileName, unsigned _invert) {
 					line >> temp;
 				}
 			}
-			
+
 			// to prevent from creating two meshes with the same name
 			while (__meshes.find(gName) != __meshes.end())
 				gName += "_";
-			
+
 			if (current && !current -> empty()) {
 				current -> closeMesh(lastMtl);
 				__meshes.insert(make_pair(current -> name, current));
@@ -335,20 +419,18 @@ Object::__parseObj(const string &_fileName, unsigned _invert) {
 				current -> name = gName;
 			else
 				current = new Mesh(gName);
-			
+
 			gLastPosSize = tempPos.size();
 			gLastTexSize = tempTex.size();
 			gLastNorSize = tempNor.size();
 		} else if (buffer.substr(0, 6) == "usemtl") {
-			if (!current)
-				current = new Mesh();
+			if (!current) current = new Mesh();
 			string mtlName;
 			line >> temp >> mtlName;
 			lastMtl = getMaterialByName(mtlName);
 			current -> useMtl(lastMtl);
 		} else if (buffer[0] == 's') {
-			if (!current)
-				current = new Mesh();
+			if (!current) current = new Mesh();
 			string tf;
 			line >> temp >> tf;
 			if (tf == "off")
@@ -388,10 +470,10 @@ Object::__parseObj(const string &_fileName, unsigned _invert) {
 				);
 	}
 	objFile.close();
-	
+
 	current -> closeMesh(lastMtl);
 	__meshes.insert(make_pair(current -> name, current));
-	
+
 	if ((__content & (TEXTURE | NORMALS)) == (TEXTURE | NORMALS))
 		log(PARAM, "Detected texture coordinates and normals.");
 	else if (__content & TEXTURE)
@@ -421,7 +503,7 @@ Object::__parseFace(
 	char d; // delim
 	Index idx; // temporary index
 	_line >> d; // passes 'f'
-	
+
 	for (int s = 0; s < 3; ++s) {
 		if ((_howToParse & (GET_TEXTURE | GET_NORMALS)) == (GET_TEXTURE | GET_NORMALS))
 			_line >> idx.v >> d >> idx.t >> d >> idx.n;
@@ -431,14 +513,14 @@ Object::__parseFace(
 			_line >> idx.v >> d >> d >> idx.n;
 		else
 			_line >> idx.v;
-		
+
 		if (idx.v < 0)
 			idx.v = _tPos.size() + idx.v;
 		if (idx.t < 0)
 			idx.t = _tTex.size() + idx.t;
 		if (idx.n < 0)
 			idx.n = _tNor.size() + idx.n;
-		
+
 		auto it = _indices.find(idx);
 		if (it == _indices.end()) {
 			unsigned newVertIdx = _current -> push_back(
@@ -464,9 +546,9 @@ Object::__parseFace(
 			_current -> addNewIdx(it -> second);
 		}
 		++_iCount;
-		
+
 	}
-	
+
 	if (!_line.eof()) { // we have quad here
 		if ((_howToParse & (GET_TEXTURE | GET_NORMALS)) == (GET_TEXTURE | GET_NORMALS))
 			_line >> idx.v >> d >> idx.t >> d >> idx.n;
@@ -476,14 +558,14 @@ Object::__parseFace(
 			_line >> idx.v >> d >> d >> idx.n;
 		else
 			_line >> idx.v;
-		
+
 		if (idx.v < 0)
 			idx.v = _tPos.size() + idx.v;
 		if (idx.t < 0)
 			idx.t = _tTex.size() + idx.t;
 		if (idx.n < 0)
 			idx.n = _tNor.size() + idx.n;
-		
+
 		auto it = _indices.find(idx);
 		if (it == _indices.end()) {
 			unsigned newVertIdx = _current -> push_back(
@@ -515,22 +597,22 @@ Object::__parseFace(
 void
 Object::__parseMtl(const string &_fileName) {
 	fstream mtlFile(_fileName.c_str(), ios::in);
-	
+
 	string buffer, temp;
-	
+
 	Material *current = (Material*)NULL;
-	
+
 	while (!mtlFile.eof()) {
 		getline (mtlFile, buffer);
-		
+
 		if (buffer[0] == '#')
 			continue;	// komentarz, idziemy dalej
-		
+
 		istringstream line(buffer);
-		
+
 		string paramName;
 		line >> paramName;
-		
+
 		if (paramName == "newmtl") {
 			string newMtlName;
 			line >>  newMtlName;
@@ -607,9 +689,9 @@ Object::__parseMtl(const string &_fileName) {
 			__content |= SPECULAR_MAP;
 		}
 	}
-	
+
 	mtlFile.close();
-	
+
 }
 
 bool
@@ -624,17 +706,21 @@ Object::__fileExists(const string &_fileName) {
 void
 Object::__bindAppropriateShader() {
 	Engine& global = Engine::GetSingleton();
-	
+
 	if ((__content & (TEXTURE | NORMAL_MAP)) == (TEXTURE | NORMAL_MAP)) {
+		log(PARAM, "Object::__bindAppropriateShader %s", "normalMapShader");
 		global.normalMapShader -> bind(this);
 		return;
 	} else if ((__content & (TEXTURE | NORMALS)) == (TEXTURE | NORMALS)) {
+		log(PARAM, "Object::__bindAppropriateShader %s", "texturedShadingShader");
 		global.texturedShadingShader -> bind(this);
 		return;
 	} else if (__content & (NORMALS)) {
+		log(PARAM, "Object::__bindAppropriateShader %s", "shadingShader");
 		global.shadingShader -> bind(this);
 		return;
 	}
-	
+
+	log(PARAM, "Object::__bindAppropriateShader %s", "identityShader");
 	global.identityShader -> bind(this);
 }

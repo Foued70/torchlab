@@ -9,6 +9,7 @@
 #include "Vectors.h"
 #include "Material.h"
 #include "Mesh.h"
+#include "LuaObject.h"
 
 class Shader;
 class MatricesManager;
@@ -117,6 +118,8 @@ public:
 	 * @return False if something went wrong.
 	 */
 	bool loadFromObj(const std::string&, unsigned = 0);
+	
+	bool loadFrom(LuaObject* obj);
 	
 	/**
 	 * Loads the whole object into the VBO.

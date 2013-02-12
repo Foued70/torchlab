@@ -140,6 +140,7 @@ Scene::__setObjects() {
 	
 	__objectIterator = __objectList.begin();
 	while(__objectIterator != __objectList.end()) {
+		// log(PARAM, "Scene::__setObjects %s", (*__objectIterator)->name.c_str());
 		if (!(*__objectIterator) -> wasShown())
 			(*__objectIterator) -> show();
 		++__objectIterator;

@@ -1,22 +1,21 @@
-build_dir = $(abspath build)
-install_root = $(build_dir)/usr/local
+packages = ui protobuf
 
+all: $(packages)
 
-packages = $(notdir $(wildcard src/*))
-packages_install = $(addprefix $(install_root)/share/torch/lua/,$(packages))
-
-all: $(packages_install)
-
-$(packages_install):
-	cd src/$(notdir $@); $(install_root)/bin/torch-pkg deploy
+$(packages):
+	cd src/$@; cook
 	
 deps: build
-	cd vendor/gcc; make
-	cd vendor/qt; make
-	cd vendor/imagemagick; make
-	cd vendor/jpeg; make
-	cd vendor/torch; make
-	cd vendor/luarocks; make
+	cd deps/gcc; make
+	cd deps/qt; make
+	cd deps/imagemagick; make
+	cd deps/jpeg; make
+	cd deps/torch; make
+	cd deps/luarocks; make
+	cd deps/cloudlab; make
 
 build: 
 	mkdir -p build
+
+rocks:
+	@torch-lua deps/cloudlab/make_rocks.lua

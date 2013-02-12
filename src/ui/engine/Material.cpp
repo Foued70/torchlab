@@ -41,12 +41,15 @@ Material::~Material() {
 
 void
 Material::loadMaterial(const sColor &_param, unsigned _type) {
-	if (_type & MATERIAL_AMBIENT)
+	if (_type & MATERIAL_AMBIENT) {
 		__mAmbient = _param;
-	else if (_type & MATERIAL_DIFFUSE)
+	}
+	else if (_type & MATERIAL_DIFFUSE) {
 		__mDiffuse = _param;
-	else if (_type & MATERIAL_SPECULAR)
+	}
+	else if (_type & MATERIAL_SPECULAR) {
 		__mSpecular = _param;
+	}
 }
 
 void
@@ -67,7 +70,6 @@ Material::setTextures() {
 
 void
 Material::setMaterial() {
-	
 	__shaders.updateData("sFrontMaterial.ambient", __mAmbient);
 	__shaders.updateData("sFrontMaterial.diffuse", __mDiffuse);
 	__shaders.updateData("sFrontMaterial.specular", __mSpecular);

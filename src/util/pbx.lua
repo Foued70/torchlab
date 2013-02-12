@@ -73,8 +73,8 @@ local function parse(pbx_data)
       face_end_i = face_i + #triangles - 1
       faces[{{ face_i, face_end_i }}] = tri_vert_indexes
 
-      submesh_ranges[{submesh_i, 1}] = (face_i - 1) / 3 + 1
-      submesh_ranges[{submesh_i, 2}] = face_end_i / 3
+      submesh_ranges[{submesh_i, 1}] = face_i
+      submesh_ranges[{submesh_i, 2}] = face_end_i + 1
       submesh_materials[submesh_i] = material_map[submesh.materialName]
 
       face_i = face_end_i + 1
@@ -131,8 +131,8 @@ local function parse(pbx_data)
   local obj = {}
   obj.materials          = clean_materials(materials)
   obj.verts              = verts
+  obj.uvs                = uvs
   obj.faces              = faces
-  obj.nverts_per_face    = 3
   obj.face_verts         = face_verts
   obj.face_normals       = face_normals
   obj.face_center_dists  = d

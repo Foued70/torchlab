@@ -5,18 +5,21 @@ out float sAttenuation;
 
 void main() {
 	sVaryingTexCoords = sTexCoords;
+	// sVaryingTexCoords.x = 1.0 - sVaryingTexCoords.x;
+	sVaryingTexCoords.y = 1.0 - sVaryingTexCoords.y;
+
 	sVaryingNormal = sNormalMatrix * sNormal;
 
 	vec3 tempVertex = vec3(sModelViewMatrix * sVertex);
 	sVaryingLightDir = vec3(sLightSource[0].position.xyz - tempVertex);
 	sEyeVector = -tempVertex;
-	
+
 	float d = length(sVaryingLightDir);
-	
-	sAttenuation = 1.0 / ( sLightSource[0].constantAttenuation + 
-	(sLightSource[0].linearAttenuation*d) + 
+
+	sAttenuation = 1.0 / ( sLightSource[0].constantAttenuation +
+	(sLightSource[0].linearAttenuation*d) +
 	(sLightSource[0].quadraticAttenuation*d*d) );
-	
+
 
 	gl_Position = sModelViewProjectionMatrix * sVertex;
 }

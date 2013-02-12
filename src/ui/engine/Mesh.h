@@ -108,6 +108,7 @@ public:
 	 * Sets active material to this given.
 	 */
 	void useMtl(Material*);
+	void useMtl(Material*, size_t begin, size_t length);
 	
 	/**
 	 * If true, the smooth shading is set on.

@@ -1,5 +1,6 @@
 .DS_Store
-
+src/cache
+src/assets
 build
 
 # Compiled Object files
@@ -21,3 +22,4 @@ build
 
 cloudlab.sublime-project
 cloudlab.sublime-workspace
+.idea

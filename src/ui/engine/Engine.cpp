@@ -115,6 +115,10 @@ void Engine::render(unsigned int _renderMode) {
   glEnable(GL_DEPTH_TEST);
   checkGLErrors(AT);
   
+  glCullFace(GL_BACK);
+  glEnable(GL_CULL_FACE);
+  checkGLErrors(AT);
+  
   // glEnable(GL_POLYGON_SMOOTH);
   // checkGLErrors(AT);
   // 
