@@ -22,13 +22,31 @@ Mesh::Mesh(const string &_name) :
 	__materials[0].begin = 0;
 	
 	log(CONSTRUCTOR, "Mesh (\"%s\") constructed.", name.c_str());
-
 }
 
 Mesh::~Mesh() {
 	__buffer.deleteBuffers();
 	checkGLErrors(AT);
+  __clearAllTriangles();
 	log(DESTRUCTOR, "Mesh (\"%s\") destructed.", name.c_str());
+}
+
+Triangle* 
+Mesh::getTriangleByID(unsigned int _id) {
+  if ((_id*3) >= __indices.size()) {
+    log(WARN, "Requested a triangle id of %d where the total number of triangles is %d and total verts is %d", _id, __indices.size()/3, __vertices.size());
+    return NULL;
+  }
+  auto it = __triangles.find(_id);
+  if ( it != __triangles.end() ) {
+    return it->second;
+  }
+  Vertex* v1 = &__vertices[__indices[(_id*3)]];
+  Vertex* v2 = &__vertices[__indices[(_id*3)+1]];
+  Vertex* v3 = &__vertices[__indices[(_id*3)+2]];
+  Triangle* triangle = new Triangle(TriangleID(0, 0, _id), v1, v2, v3);
+  __triangles.insert(make_pair(_id, triangle));
+  return triangle;
 }
 
 void
@@ -63,11 +81,20 @@ Mesh::show() {
 
 void
 Mesh::loadIntoVbo() {
+  log(PARAM, "Loading Mesh into VBO...");
 	__buffer.vboID[ELEMENTS_ARRAY].dataCount = __indices.size();
+  log(PARAM, "__indices.size() in vbo: %d", __indices.size());
+  
 	__buffer.vboID[ELEMENTS_ARRAY].dataSize = sizeof(IndicesType) * __indices.size();
 	
 	__buffer.vboID[DATA_ARRAY].dataCount = __vertices.size();
+  log(PARAM, "__vertices.size() in vbo: %d", __vertices.size());
 	__buffer.vboID[DATA_ARRAY].dataSize = sizeof(Vertex) * __vertices.size();
+  
+  for(unsigned int v = 0; v < __vertices.size(); v++) {
+    log(PARAM, "Vertex %d= %f %f %f", v, __vertices[v].vertexPosition.x, __vertices[v].vertexPosition.y, __vertices[v].vertexPosition.z);
+  }
+
 	
 	__buffer.prepareRoom();
 	__buffer.sendData(ELEMENTS_ARRAY, &__indices[0]);
@@ -133,5 +160,16 @@ Mesh::closeMesh(Material* _mat) {
 	__materials[__materials.size() - 1].end = __indices.size() - __materials[__materials.size() - 1].begin;
 	
 	loadIntoVbo();
+}
+
+void 
+Mesh::__clearAllTriangles() {
+  auto it = __triangles.begin();
+  while(it != __triangles.end()) {
+    auto eraseIter = it;
+    ++it;
+    delete eraseIter->second;
+    __triangles.erase(eraseIter);
+  }
 }
 

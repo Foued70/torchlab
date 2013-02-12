@@ -81,6 +81,7 @@ Scene *
 Engine::createScene(const string &_sceneName) {
 	Scene *newScene = new Scene(_sceneName);
 	__sceneList.push_back(newScene);
+  __currentSceneIndex = __sceneList.size() - 1;
 	return newScene;
 }
 
@@ -92,8 +93,13 @@ Engine::createShader(const string& _fileName) {
 }
 
 
-void Engine::render(Scene* scene, unsigned int _renderMode) {
+void Engine::render(unsigned int _renderMode) {
   //Render scene to our framebuffer
+  Scene* currentScene = getCurrentScene();
+  if (!currentScene) {
+    log(WARN, "Cannot render scene. No scene set.");
+    return;
+  }
   
   if (_renderMode & RENDER_TO_FRAMEBUFFER) {
     __frameBuffer -> renderToTexture();
@@ -120,7 +126,7 @@ void Engine::render(Scene* scene, unsigned int _renderMode) {
   glEnable(GL_MULTISAMPLE);
   checkGLErrors(AT);
 	
-  scene -> show();
+  currentScene -> show();
   
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
@@ -159,21 +165,20 @@ Engine::simulateDynamics(ScanWidget* _scanWidget) {
 }
 
 bool 
-Engine::raycast(const Vector3& _source, const Vector3& _direction, Vector3& _outHitLocation, Scene* _scene) {
+Engine::raycast(const Vector3& _source, const Vector3& _direction, Vector3& _outHitLocation) {
   Vector3 currentEye;
   Vector3 currentCenter;
-  if ( !_scene && !__sceneList.empty() ) {
-    _scene = __sceneList[0];
-  }
-  if ( !_scene ) {
+  Scene* currentScene = getCurrentScene();
+  if(!currentScene) {
+    log(WARN, "Cannot raycast. No scene set.");
     return false;
   }
-  Camera* camera = _scene->getActiveCamera();
+  Camera* camera = currentScene->getActiveCamera();
   currentEye = camera->getEye();
   currentCenter = camera->getCenter();
   camera->setEyePosition(_source);
   camera->setCenterPosition(_direction);
-  render(_scene, RENDER_TO_FRAMEBUFFER);
+  render(RENDER_TO_FRAMEBUFFER);
   GLint viewport[4];
   glGetIntegerv(GL_VIEWPORT, viewport);   
   float centerX = viewport[2] * 0.5f;
@@ -183,12 +188,23 @@ Engine::raycast(const Vector3& _source, const Vector3& _direction, Vector3& _out
   //Set the camera back to it's normal position, and do a render to refresh all frame buffer data to correct values.
   camera->setEyePosition(currentEye);
   camera->setCenterPosition(currentCenter);
-  render(_scene, (RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER));
+  render(RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER);
   
   Vector3 rayOffset = _outHitLocation - _source;
   if(rayOffset.magnitude() >= camera->getFarPlane()) {
     return false;
   }
   return true;
+}
+
+Triangle* 
+Engine::getTriangleByID(const TriangleID& _id) {
+  Triangle* triangle =  getCurrentScene()->
+                        getObjectByID(_id.objectID)->
+                        getMeshByID(_id.meshID)->
+                        getTriangleByID(_id.primitiveID);
+  
+  triangle->ID = _id; 
+  return triangle;
 }
 

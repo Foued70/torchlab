@@ -51,7 +51,7 @@ SteeringComponent::moveTo(const Vector3& _goal, const MOVE_BEHAVIOR& _behavior, 
     }
     case SMOOTH_DAMP :{
       __endAllTransitions();
-      __transitions.push_back(new SmoothDampInterpolate<Vector3>(&__position, _goal, 0.4f, _speed));
+      __transitions.push_back(new SmoothDampInterpolate<Vector3>(&__position, _goal, 0.29f, _speed));
       break;
     }
     default:

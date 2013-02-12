@@ -2,6 +2,7 @@
 #define MESH_H
 
 #include <vector>
+#include <map>
 
 #include "Vertex.h"
 #include "Material.h"
@@ -19,7 +20,56 @@ struct MeshRange {
 	
 };
 
+struct TriangleID {
+  unsigned int objectID;
+  unsigned int meshID;
+  unsigned int primitiveID;
+  
+  TriangleID() {
+    objectID = 0;
+    meshID = 0;
+    primitiveID = 0;
+  }
+  TriangleID( unsigned int _objectID,
+              unsigned int _meshID,
+              unsigned int _primitiveID ) 
+  {
+    objectID = _objectID;
+    meshID = _meshID;
+    primitiveID = _primitiveID;
+  }
+};
+
+struct Triangle {
+  TriangleID ID;
+  Vertex* vertices[3];
+  
+  Triangle() {
+    ID.objectID = 0;
+    ID.meshID = 0;
+    ID.primitiveID = 0;
+    vertices[0] = NULL;
+    vertices[1] = NULL;
+    vertices[2] = NULL;
+  }
+  Triangle(Vertex* _v1, Vertex* _v2, Vertex* _v3) {
+    ID.objectID = 0;
+    ID.meshID = 0;
+    ID.primitiveID = 0;
+    vertices[0] = _v1;
+    vertices[1] = _v2;
+    vertices[2] = _v3;
+  }
+  Triangle(const TriangleID& _ID, Vertex* _v1, Vertex* _v2, Vertex* _v3) {
+    ID = _ID;
+    vertices[0] = _v1;
+    vertices[1] = _v2;
+    vertices[2] = _v3;
+  }
+};
+
 typedef GLuint IndicesType;
+typedef std::map< unsigned int, Triangle* > triangleMap;
 
 class Mesh {
 	
@@ -35,6 +85,14 @@ public:
 	 * Empties the VBO (if used), some output.
 	 */
 	virtual ~Mesh();
+   
+	/**
+	 * Look for the triangle.
+	 * @param id ID of the triangle that is looked for. 
+   * ID's for triangles are local to the mesh that owns them. To get a unique triangle, you need to know the object's ID, the meshes's ID, as well as the triangle ID
+	 * @return Pointer to the found Triangle, or NULL if nothing was found.
+	 */ 
+  Triangle* getTriangleByID(unsigned int);
 	
 	/**
 	 * Renders the mesh.
@@ -86,6 +144,11 @@ public:
 	void rendering(bool _s = true) { __isShown = _s; }
 	
 	std::string name;
+  
+  void logMeshData() { log(PARAM, "__vertices.size()=%d __indices.size()=%d __materials.size()=%d", __vertices.size(), __indices.size(), __materials.size());}
+  
+private:
+  void __clearAllTriangles();
 	
 private:
 	
@@ -99,6 +162,8 @@ private:
 	
 	/* Materials that will be used */
 	std::vector < MeshRange > __materials;
+  
+  triangleMap __triangles;
 	
 	/* If true, then glShadeModel(GL_SMOOTH) */
 	bool __smooth;

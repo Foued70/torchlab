@@ -41,8 +41,6 @@ private:
   GLuint m_shader;
 
   Engine* engine;
-  Scene* scene;
-  Object* selectionModel;
   CameraController* sphereCameraController;
 
   int dragStartX;
