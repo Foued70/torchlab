@@ -68,7 +68,7 @@ Shader::make(   GLuint _var1, const string& _param1,
   static const string HEADER = readResourceText(":/shaders/_header_common.shader");
   static const string VERTEX_HEADER = readResourceText(":/shaders/_header_vert.shader");
   static const string FRAGMENT_HEADER = readResourceText(":/shaders/_header_frag.shader");
-
+  
 	if (!__vertFile.empty() && !__fragFile.empty()) {
     __vertCode = HEADER + VERTEX_HEADER + string(readResourceText(__vertFile.c_str()));
     __fragCode = HEADER + FRAGMENT_HEADER + string(readResourceText(__fragFile.c_str()));

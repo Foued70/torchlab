@@ -44,7 +44,7 @@ ScanWidget::initializeGL() {
   engine->createScene("SceneName");
   
   Object* dryDragon = engine->getCurrentScene()->createObject("dryDragon");
-  if (!dryDragon -> loadFromObj("objects/dryDragon.obj", (INVERT_X | INVERT_Y))) exit(1);
+  if (!dryDragon -> loadFromObj("objects/dryDragon.obj", (INVERT_X))) exit(1);
      
   Camera *sphereCamera = engine->getCurrentScene()->createCamera(-20, 0, 7);
   sphereCamera -> lookAt(0, 0, 7);
