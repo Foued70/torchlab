@@ -36,6 +36,12 @@ class LuaList : public std::vector<void*>, public LuaContainer {
 
 public:
   LuaList(lua_State *L, int index);
+
+  LuaObject* getObject(int i);
+  LuaList* getList(int i);
+  lua_Number* getNumber(int i);
+  char* getString(int i);
+
 };
 
 
@@ -44,7 +50,9 @@ class LuaObject : public std::unordered_map<std::string, void*>, public LuaConta
 
 public:
   LuaObject(lua_State *L, int index);
+  
   LuaObject* getObject(const char* name);
+  LuaList* getList(const char* name);
   lua_Number* getNumber(const char* name);
   char* getString(const char* name);
 };
