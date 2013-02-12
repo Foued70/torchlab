@@ -1,9 +1,9 @@
-setfenv(1, setmetatable({x = 1}, {__index = _G}))
+setfenv(1, setmetatable({}, {__index = _G}))
 
-require 'torch'
+local torch = require 'torch'
 
 local _t = sys.clock()
-function tic(msg)
+local function tic(msg)
   local lapse = sys.clock() - _t
   _t = sys.clock()
   if msg then
