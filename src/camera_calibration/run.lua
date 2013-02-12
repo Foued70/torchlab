@@ -94,11 +94,6 @@ camera.focal_px_y = (camera.sensor_h * 0.5)/(camera.center_y * camera.focal)
 -- ycorr = y * distortion
 
 
--- bbox
-rmax = math.sqrt(2)
-
-
-
 -- from x,y (-1,1) in camera local to distorted raw px coordinates 
 -- 
 -- FIXME To keep things sane, we would rather express radial
@@ -141,16 +136,15 @@ function make_map (camera,scale)
    local half_image_w = out_w * 0.5
    local half_image_h = out_h * 0.5
 
-   local out = torch.Tensor(3,h*scale,w*scale)
+   local map = torch.Tensor(h*scale,w*scale,2)
 
    local half_camera_w = w * 0.5
    local half_camera_h = h * 0.5
 
-
    -- We only need to compute one quadrant and copy to the others
    -- map of even steps between -1,0 1/2 camera resolution 
    out_row = torch.linspace(0,aspect_ratio,half_camera_w)
-   out_col = torch.linspace(0,1,half_camera_h)
+   out_col = torch.linspace(0,1,half_camera_h) -- assumes that out_col is the short edge
 
    for yi = 1,half_camera_h do
       for xi = 1,half_camera_w do
@@ -169,29 +163,52 @@ function make_map (camera,scale)
          local xdst2 = - xp
          local ydst2 = - yp
 
-         if (ydst1 >= 1) and (ydst1 <= out_h) then
-            if (xdst1 >=1) and (xdst1 <= out_w) then
-               printf("x: %f y:%f -> x':%f y':%f",xsrc1,ysrc1,xdst1,ydst1)
-               --out[{{},ydst1,xdst1}] = images[1][{{},ysrc1,xsrc1}]
-            end
-            if (xdst2 >=1) and (xdst2 <= out_w) then
-               printf("x: %f y:%f -> x':%f y':%f",xsrc2,ysrc1,xdst2,ydst1)
-               -- out[{{},ydst1,xdst2}] = images[1][{{},ysrc1,xsrc2}]
-            end
-         end
-         if (ydst2 >= 1) and (ydst2 <= out_h) then
-            if (xdst1 >=1) and (xdst1 <= out_w) then
-               printf("x: %f y:%f -> x':%f y':%f",xsrc1,ysrc2,xdst1,ydst2)
-               -- out[{{},ydst2,xdst1}] = images[1][{{},ysrc2,xsrc1}]
-            end
+         printf("x: %f y:%f -> x':%f y':%f",xsrc1,ysrc1,xdst1,ydst1)
 
-            if (xdst2 >=1) and (xdst2 <= out_w) then
-               printf("x: %f y:%f -> x':%f y':%f",xsrc2,ysrc2,xdst2,ydst2)
-               -- out[{{},ydst2,xdst2}] = images[1][{{},ysrc2,xsrc2}]
-            end
+         -- top-right quadrant
+         if (xdst1 > -aspect_ratio and xdst1 < aspect_ratio and ydst1 > -1 and ydst1 < 1) then
+            map[{half_camera_h + yi, half_camera_w + xi,1}] = (xdst1 + aspect_ratio)/(2*aspect_ratio) * out_w
+            map[{half_camera_h + yi, half_camera_w + xi,2}] = (ydst1 + 1)/2 * out_h
          end
+
+         
+
+         -- bottom-right quadrant
+         if (xdst2 > -aspect_ratio and xdst2 < aspect_ratio and ydst1 > -1 and ydst1 < 1) then
+            map[{yi + half_camera_h, -xi + half_camera_w, 1}] = (xdst2 + aspect_ratio)/(2*aspect_ratio) * out_w
+            map[{yi + half_camera_h, -xi + half_camera_w, 2}] = (ydst1 + 1)/2 * out_h
+         end
+
+         -- bottom-left quadrant
+         if (xdst2 > -aspect_ratio and xdst2 < aspect_ratio and ydst1 > -1 and ydst1 < 1) then
+            map[{-yi + half_camera_h, -xi + half_camera_w, 1}] = (xdst2 + aspect_ratio)/(2*aspect_ratio) * out_w
+            map[{-yi + half_camera_h, -xi + half_camera_w, 2}] = (ydst2 + 1)/2 * out_h
+         end
+
+         -- printf("x: %f y:%f -> x':%f y':%f",xsrc2,ysrc1,xdst2,ydst1)
+         -- out[{{},ydst1,xdst2}] = images[1][{{},ysrc1,xsrc2}]
+
+         -- printf("x: %f y:%f -> x':%f y':%f",xsrc1,ysrc2,xdst1,ydst2)
+         -- out[{{},ydst2,xdst1}] = images[1][{{},ysrc2,xsrc1}]
+
+         -- printf("x: %f y:%f -> x':%f y':%f",xsrc2,ysrc2,xdst2,ydst2)
+         -- out[{{},ydst2,xdst2}] = images[1][{{},ysrc2,xsrc2}]
       end
    end
+   return map
+end
+
+function remap(img, map)
+   local out = torch.Tensor(img:size())
+
+   for yi = 1, map:size(1) do
+      for xi = 1, map:size(2) do
+         local coord = map[{yi, xi, {}}]
+
+         out[{{}, yi, xi}] = img[{{}, coord[2] + 1, coord[1] + 1}]
+      end
+   end
+
    return out
 end
 
@@ -200,6 +217,6 @@ function img_rot (img)
    return  image.vflip(img:transpose(2,3))
 end
 
-out = make_map(camera)
-
-image.display{image={img_rot(out),img_rot(images[1])}}
+map = make_map(camera)
+output_image = remap(images[1], map)
+image.display{image={img_rot(output_image),img_rot(images[1])}}
