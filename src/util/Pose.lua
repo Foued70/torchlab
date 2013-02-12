@@ -32,6 +32,10 @@ function Pose:__init(poses,i)
    self.inv_image_h     = 1/self.image_h
 end
 
+
+-- Extrinsic Parameters: 
+-- global x,y,z to camera local x,y,z (origin at
+-- camera ray origin, and 0,0,0 direction in center of image)
 function Pose:global2local(v)
    return geom.rotate_by_quat(v - self.xyz,self.quat_r)
 end
@@ -40,7 +44,9 @@ function Pose:local2global(v)
    return geom.rotate_by_quat(v,self.quat) + self.xyz
 end
 
+-- Intrinsic parameters: from camera xyz to 
 -- FIXME optimize (in C) these funcs.
+-- FIXME simplify number of ops.
 function Pose:globalxyz2uv(pt)
    -- xyz in pose coordinates
    local v       = self:global2local(pt)
@@ -49,6 +55,7 @@ function Pose:globalxyz2uv(pt)
    local elevation = r2d * torch.asin(norm[3])
    local proj_x  = 0.5 + self.center_x + (  azimuth * self.px_per_degree_x)
    local proj_y  = 0.5 + self.center_y - (elevation * self.px_per_degree_y)
+   -- u,v = 0,0 in upper left
    local proj_u  = proj_x * self.inv_image_w
    local proj_v  = 1 - (proj_y * self.inv_image_h)
    return proj_u, proj_v, proj_x, proj_y
