@@ -1,12 +1,13 @@
 local json = require "json"
-local sys = require "sys"
+local paths = require "paths"
 local qs = require "util/qs"
 local request = require "util/request"
 local host = "http://depot.floored.com/"
-local asset_dir = '../assets/'
+local asset_dir = paths.concat(paths.dirname(paths.thisfile())..'/../assets')..'/'
 
 local function login(username, password)
-  return request.post(host.."comrade/login.json", {data = {username = username, password = password}})
+  resp, status_code = request.post(host.."comrade/login.json", {data = {username = username, password = password}})
+  return status_code == 200
 end
 
 local function is_logged_in()
@@ -30,10 +31,10 @@ local function load_local(scan_name)
   local folder = asset_dir..scan_name
   local found = false
   
-  if sys.dirp(folder) then
-    for f in sys.files(folder) do
-      if sys.basename(f):find('.obj') then
-        found = sys.concat(asset_dir..'/'..f)
+  if paths.dirp(folder) then
+    for f in paths.files(folder) do
+      if paths.basename(f):find('.obj') then
+        found = asset_dir..f
         break
       end
     end   
@@ -51,9 +52,9 @@ local function load_remote(scan_name)
   local filepath = folder..".zip"    
 
   local resp, stat_code = request.get(job_url(scan_name).."/download", {sink = filepath})
-  if stat_code == 200 and sys.filep(filepath) then  
-    sys.execute("unzip ".. filepath.. " -d "..folder)
-    sys.execute("rm "..filepath)
+  if stat_code == 200 and paths.filep(filepath) then  
+    os.execute("unzip ".. filepath.. " -d "..folder)
+    os.execute("rm "..filepath)
     return load_local(scan_name)
   end
   
@@ -61,7 +62,7 @@ local function load_remote(scan_name)
 end
 
 local function get(scan_name)
-  if not sys.dirp(asset_dir) then sys.execute("mkdir -p "..asset_dir) end    
+  if not paths.dirp(asset_dir) then os.execute("mkdir -p "..asset_dir) end    
   return load_local(scan_name) or load_remote(scan_name)  
 end
 
@@ -71,15 +72,14 @@ local function put(scan_name)
   if sys.dirp(scan_name) then    
     local filepath = folder..".zip"    
     sys.execute("zip -9 -j "..filepath.." "..folder.."/*")    
-    resp, stat_code = request.put(job_url(scan_name), {files = {scan = sys.concat(filepath)}})
+    resp, stat_code = request.put(job_url(scan_name), {files = {scan = filepath}})
     if stat_code == 200 then
       success = true 
       sys.execute("rm "..filepath)
     end
   end
   
-  return success
-  
+  return success  
 end
 
 
