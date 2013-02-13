@@ -51,11 +51,16 @@ local function load_remote(scan_name)
   local folder = asset_dir..scan_name
   local filepath = folder..".zip"    
 
-  local resp, stat_code = request.get(job_url(scan_name).."/download", {sink = filepath})
-  if stat_code == 200 and paths.filep(filepath) then  
-    os.execute("unzip ".. filepath.. " -d "..folder)
-    os.execute("rm "..filepath)
-    return load_local(scan_name)
+  local resp, stat_code = request.get(job_url(scan_name).."/download", {sink = filepath, redirect = false})
+  if paths.filep(filepath) then
+    if stat_code ~= 200 then
+      p('ERROR GETTING MODEL FROM DEPOT', stat_code)
+      os.execute("rm "..filepath)      
+    else
+      os.execute("unzip ".. filepath.. " -d "..folder)
+      os.execute("rm "..filepath)      
+      return load_local(scan_name)      
+    end
   end
   
   return false
@@ -68,18 +73,18 @@ end
 
 local function put(scan_name)
   local success = false
-  local folder = asset_dir..scan_name
-  if sys.dirp(scan_name) then    
+  local folder = asset_dir..scan_name  
+  if paths.dirp(folder) then    
     local filepath = folder..".zip"    
-    sys.execute("zip -9 -j "..filepath.." "..folder.."/*")    
-    resp, stat_code = request.put(job_url(scan_name), {files = {scan = filepath}})
+    os.execute("zip -9 -j "..filepath.." "..folder.."/*")    
+    resp, stat_code, headers = request.put(job_url(scan_name)..'/edit.json', {files = {scan = filepath}})
+    os.execute("rm "..filepath)    
     if stat_code == 200 then
       success = true 
-      sys.execute("rm "..filepath)
     end
   end
   
-  return success  
+  return success
 end
 
 

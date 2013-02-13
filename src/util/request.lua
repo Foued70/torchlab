@@ -64,39 +64,48 @@ local function gen_boundary()
   return table.concat(t)
 end
 
-local function gen_source(boundary, files, data)
-  local r = {}
+local function gen_source(boundary, files, data)  
+  local sources = {}
+  local len = 0
   if data then
-    local str_data = {}
-    _.each(data, function(v, k)
-      table.insert(str_data, "--"..boundary.."\r\n")
-      table.insert(str_data, 'content-disposition: form-data; name="'..k..'"\r\n\r\n'..v..'\r\n')
-    end)
-    table.insert(r, ltn12.source.string(table.concat(str_data)))    
-  end
-  
-  _.each(files, function(v, k)
-    if type(v) == 'string' and paths.filep(v) then
-      local file = ltn12.source.file(io.open(v, "r"))
-      local str_data = {}
-      
-      table.insert(str_data, "--"..boundary.."\r\n")
-      table.insert(str_data, 'content-disposition: form-data; name="'..k..'";')
-      table.insert(str_data, 'filename="'..paths.basename(v)..'"\r\ncontent-type: application/octet-stream\r\n\r\n')
-      table.insert(r, ltn12.source.string(table.concat(str_data)))     
-      table.insert(r, file)
-      table.insert(r, ltn12.source.string("\r\n"))
+    local s = {}
+    for k,v in pairs(data) do
+      table.insert(s, string.format("--%s\r\n",boundary))
+      table.insert(s, string.format("content-disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n",k,v))
     end
-  end)
-  
-  
-  if #r > 0 then
-    r[#r+1] = ltn12.source.string("--"..boundary.."--\r\n")
-  else
-    r[#r+1] = ltn12.source.empty()
+    s = table.concat(s)
+    len = len + #s
+    table.insert(sources, ltn12.source.string(s))
   end
   
-  return ltn12.source.cat(unpack(r))  
+  for k, v in pairs(files) do
+    if type(v) == 'string' and paths.filep(v) then
+      local file = io.open(v, "r")
+      local s = {}
+      table.insert(s, "--"..boundary.."\r\n")
+      table.insert(s, 'content-disposition: form-data; name="'..k..'";')
+      table.insert(s, 'filename="'..paths.basename(v)..'"\r\ncontent-type: application/octet-stream\r\n\r\n')
+      s = table.concat(s)
+      table.insert(sources, ltn12.source.string(s))      
+      len = len + #s
+      -- add the file
+      table.insert(sources, ltn12.source.file(file))
+      len = len + file_size(file)
+      
+      local str_end = "\r\n"
+      table.insert(sources, ltn12.source.string(str_end))
+      len = len + #str_end
+    end
+  end
+  
+  if #sources > 0 then
+    local str = string.format("--%s--\r\n",boundary)
+    table.insert(sources, ltn12.source.string(str))
+    len = len + #str
+  else
+    table.insert(sources, ltn12.source.empty())
+  end
+  return len, ltn12.source.cat(unpack(sources))
 end
 
 function Request:init(options)
@@ -126,11 +135,16 @@ function Request:init(options)
   
   self.method = self.method or 'GET'
   
+  if type(self.redirect) ~= 'boolean' then
+    self.redirect = true
+  end
+  
   if self.files then
-    --p('UPLOAD FILE', self.files)
     self.boundary = gen_boundary()    
     self:set_header('content-type', 'multipart/form-data; boundary='..self.boundary)      
-    self.source = gen_source(self.boundary, self.files, self.data)
+    local source_len, source = gen_source(self.boundary, self.files, self.data)
+    self.source = source
+    self:set_header('content-length', source_len)
   elseif self.data then
     if type(self.data) == 'table' then
       self.data = qs.stringify(self.data)
@@ -147,15 +161,14 @@ function Request:init(options)
   elseif type(self.sink) == 'string' then
     self.sink = ltn12.sink.file(io.open(self.sink, "w"))    
   end
-    
-  --p('URI:', self.uri, 'METHOD:', self.method, 'HEADERS:', self.headers, 'SINK:', self.sink, 'SOURCE:', self.source)
   
   local resp, code, headers, status =  http.request{
     url = self.uri, 
     method = self.method,
     headers = self.headers,
     sink = self.sink,
-    source = self.source
+    source = self.source,
+    redirect = self.redirect
   }
   
   if headers['set-cookie'] and not self._disableCookies then
