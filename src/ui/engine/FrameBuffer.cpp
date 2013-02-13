@@ -1,10 +1,6 @@
 #include "FrameBuffer.h"
 
-//#include "Shader.h"
-//#include "ShaderDataHandler.h"
-//#include "Mesh.h"
-//#include "Material.h"
-//#include "Object.h"
+#include "Mesh.h"
 #include "utils.h"
 
 #include <fstream>
@@ -214,7 +210,8 @@ void FrameBuffer::printInfo()
 
 }
 
-void FrameBuffer::displayToWindow() {
+void 
+FrameBuffer::displayToWindow() {
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glBindFramebuffer(GL_READ_FRAMEBUFFER, __frameBufferID);
@@ -226,45 +223,17 @@ void FrameBuffer::displayToWindow() {
   unbind();
 }
 
-GLint FrameBuffer::readPixel(const GLuint& x, const GLuint& y, const GLuint& channel) {
-  if (x >= __width || y >= __height || channel > 3) {
-    return -1;
-  }
-	//OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
-	GLuint flippedY = (__height -1) - y;
-  
-  //R, G, B channels
-  GLuint pixel[3];
-	
-	//Currently reads the Red component of the Pixel.
-	//glReadBuffer chooses which output to read from.
-	
-	bind();
-	__setReadBuffer(PICKING_PASS);
-	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadPixels(	(GLsizei)x,
-				 	      (GLsizei)flippedY,
-					      (GLsizei)1,
-					      (GLsizei)1,
-					      GL_RGB_INTEGER,
-					      GL_UNSIGNED_INT,
-					      &pixel );
-  
-  glReadBuffer(GL_NONE);
-	unbind();
-	return pixel[channel];
-}
-
-GLfloat FrameBuffer::readDepthPixel(const GLuint& x, const GLuint& y) {
+GLfloat 
+FrameBuffer::readDepthPixel(GLuint _x, GLuint _y) {
   //if (x >= __width || y >= __height) {
   //  return GL_FLOAT_MIN;
   //}
 	//OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
-	GLuint flippedY = (__height -1) - y;
+	GLuint flippedY = (__height -1) - _y;
   GLfloat depth;
   bind();
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadPixels(	(GLsizei)x,
+	glReadPixels(	(GLsizei)_x,
 				 	      (GLsizei)flippedY,
 					      (GLsizei)1,
 					      (GLsizei)1,
@@ -274,6 +243,32 @@ GLfloat FrameBuffer::readDepthPixel(const GLuint& x, const GLuint& y) {
   glReadBuffer(GL_NONE);
 	unbind();
 	return depth;
+}
+
+TriangleID 
+FrameBuffer::pickTriangle(GLuint _x, GLuint _y) {
+  if (_x >= __width || _y >= __height) {
+    return TriangleID();
+  }
+	//OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
+	GLuint flippedY = (__height -1) - _y;
+  GLuint pickingData[3];	
+	bind();
+	__setReadBuffer(PICKING_PASS);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glReadPixels(	(GLsizei)_x,
+				 	      (GLsizei)flippedY,
+					      (GLsizei)1,
+					      (GLsizei)1,
+					      GL_RGB_INTEGER,
+					      GL_UNSIGNED_INT,
+					      &pickingData );
+  
+  glReadBuffer(GL_NONE);
+	unbind();
+  return TriangleID(  pickingData[OBJECT_ID],
+                      pickingData[MESH_ID],
+                      pickingData[PRIMITIVE_ID]  );
 }
 
 void FrameBuffer::saveToFile(const string& _filename) {

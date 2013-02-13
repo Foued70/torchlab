@@ -16,6 +16,26 @@ class MatricesManager;
  * That is why gluLookAt(..) is being called with center as __center + __eye.
  */
 
+/*
+ * BoundingRect
+ * struct used to define the bounding box of an object in screenspace
+ * @param min Minimum x and y values of box
+ * @param max Maximum x and y values of box
+*/
+struct BoundingRect {
+  Vector2 min;
+  Vector2 max;
+  
+  BoundingRect() {
+    min = Vector2({0.0f, 0.0f});
+    max = Vector2({0.0f, 0.0f});
+  }
+  BoundingRect(const Vector2& _min, const Vector2& _max) {
+    min = _min;
+    max = _max;
+  }
+};
+
 class Camera {
 
 public:
@@ -136,6 +156,7 @@ public:
  * @param y Y coordinate in pixels.
  */
   Vector3 cameraToWorld(GLfloat _x, GLfloat _y) const;
+  Vector3 worldToCamera(const Vector3& _positionWorld) const;
 	
 private:
 	

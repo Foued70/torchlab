@@ -7,7 +7,7 @@ struct sMaterialParams {
  vec4 specular;
  float shininess;
 };
-		
+
 struct sLightParams {
  vec4 ambient;
  vec4 diffuse;
@@ -17,7 +17,7 @@ struct sLightParams {
  float linearAttenuation;
  float quadraticAttenuation;
 };
-		
+
 struct sLightModelParameters {
  vec4 ambient;
 };
@@ -32,3 +32,4 @@ uniform mat3 sNormalMatrix;
 uniform sMaterialParams sFrontMaterial;
 uniform sLightParams sLightSource[7];
 uniform sLightModelParameters sLightModel;
+

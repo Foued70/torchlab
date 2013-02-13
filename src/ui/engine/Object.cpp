@@ -102,7 +102,7 @@ Object::Object(const string &_name) :
 		__scale({1, 1, 1}),
 		__shader(NULL),
 		__children(0),
-		__meshes(0),
+		//__meshes(0),
 		__materials(0),
 		__content(0),
 		__matrices(MatricesManager::GetSingleton()),
@@ -131,6 +131,18 @@ Object::__getNewID() {
 unsigned int
 Object::getID() {
   return __id;
+}
+
+Mesh* 
+Object::getMeshByID(unsigned int _id) {
+  unsigned int meshCounter = 0;	
+	for (auto it = __meshes.begin(); it != __meshes.end(); ++it) {		
+    if ( meshCounter == (_id) ) {
+      return it->second;
+    }
+    meshCounter++;
+	}
+  return NULL;
 }
 
 void
@@ -313,7 +325,13 @@ Object::loadFromObj(const string &_objFile, unsigned _invert) {
 
 	__parseObj(_objFile, _invert);
 	__bindAppropriateShader();
-
+  
+  auto it = __meshes.begin();
+  while(it != __meshes.end()) {
+    log(PARAM, "Logging next mesh in object with ID %d", __id);
+    it->second->logMeshData();
+    it++;
+  }
 	return true;
 }
 

@@ -98,7 +98,7 @@ SmoothDampInterpolate<float>::isComplete() {
 template <>
 bool
 SmoothDampInterpolate<Vector3>::isComplete() {
-  const float goalThreshold = 0.5f;
+  const float goalThreshold = 0.0125f;
   return distanceSquared((*LinearInterpolate<Vector3>::__value), LinearInterpolate<Vector3>::__endValue) < (goalThreshold*goalThreshold);
 }
 
