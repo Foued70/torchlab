@@ -55,7 +55,9 @@ public:
 	 * @param id ID of the object that is looked for.
 	 * @return Pointer to the found object, or NULL if nothing was found.
 	 */ 
-  Object * getObjectByID(const unsigned int&);
+  Object * getObjectByID(unsigned int);
+   
+  
 	
 //============ CAMERAS ============//
 	

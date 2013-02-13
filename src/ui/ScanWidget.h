@@ -43,7 +43,6 @@ private:
   GLuint m_vertexBuffer;
   GLuint m_shader;
 
-  Object* selectionModel;
   CameraController* sphereCameraController;
 
   int dragStartX;

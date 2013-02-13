@@ -65,7 +65,8 @@ Camera::setView() {
 void
 Camera::calcUp() {
   Vector3 dir = lookDirection();
-  if (dir == Z_AXIS || dir == -Z_AXIS) {
+  float zFactor = dot(dir, Z_AXIS);
+  if ( zFactor > 0.999f || zFactor < -0.999f ) {
     // use our last up value
     __up[2] = 0;
     __up.normalize();
@@ -249,6 +250,15 @@ Camera::cameraToWorld(GLfloat _x, GLfloat _y) const {
   viewPosition /= viewPosition.a;
   
   return Vector3({viewPosition.r, viewPosition.g, viewPosition.b});
+}
+
+Vector3 
+Camera::worldToCamera(const Vector3& _positionWorld) const {
+  sMat16 modelViewMatrix = MatricesManager::GetSingleton().getModelViewMatrix();
+  sMat16 projectionMatrix = MatricesManager::GetSingleton().getProjectionMatrix();
+  Vector4 positionCamera = (projectionMatrix*modelViewMatrix) * Vector4({_positionWorld.x, _positionWorld.y, _positionWorld.z, 1.0f});
+  
+  return Vector3({positionCamera.r, positionCamera.g, positionCamera.b});
 }
 
 
