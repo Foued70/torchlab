@@ -107,10 +107,10 @@ function radial_undistort(x,y,cam)
 
    -- a*r^2 + b*r^4 + c*r^6
    local scale = 1 + ((cam.c*r + cam.b)*r + cam.a)*r
-   -- printf("x': %f y': %f x'': %f y'': %f",x,y,x*scale,y*scale)
 
    -- rescale -1,1 to px coords in image space
    return x*scale,y*scale
+   -- return x,y
 end
 
 
@@ -131,70 +131,28 @@ function make_map (camera,scale)
    local aspect_ratio = w / h
 
    -- these are if we want to change the resolution of the lookup table.
-   local out_h = h*scale
-   local out_w = w*scale
-   local half_image_w = out_w * 0.5
-   local half_image_h = out_h * 0.5
+   local map_h = h*scale
+   local map_w = w*scale
 
-   local map = torch.Tensor(h*scale,w*scale,2)
-
-   local half_camera_w = w * 0.5
-   local half_camera_h = h * 0.5
+   map = torch.Tensor(map_h,map_w,2)
 
    -- We only need to compute one quadrant and copy to the others
    -- map of even steps between -1,0 1/2 camera resolution 
-   out_row = torch.linspace(0,aspect_ratio,half_camera_w)
-   out_col = torch.linspace(0,1,half_camera_h) -- assumes that out_col is the short edge
+   out_row = torch.linspace(-aspect_ratio,aspect_ratio,map_w)
+   out_col = torch.linspace(-1,1,map_h) -- assumes that out_col is the short edge
 
-   for yi = 1,half_camera_h do
-      for xi = 1,half_camera_w do
+   for yi = 1,map_h do
+      for xi = 1,map_w do
          local xlin  = out_row[xi]
          local ylin  = out_col[yi]
 
          local xp,yp = radial_undistort(xlin,ylin,camera)
 
-         local xsrc1 =   xlin
-         local ysrc1 =   ylin
-         local xsrc2 = - xlin
-         local ysrc2 = - ylin
-
-         local xdst1 =   xp
-         local ydst1 =   yp
-         local xdst2 = - xp
-         local ydst2 = - yp
-
-         printf("x: %f y:%f -> x':%f y':%f",xsrc1,ysrc1,xdst1,ydst1)
-
-         -- top-right quadrant
-         if (xdst1 > -aspect_ratio and xdst1 < aspect_ratio and ydst1 > -1 and ydst1 < 1) then
-            map[{half_camera_h + yi, half_camera_w + xi,1}] = (xdst1 + aspect_ratio)/(2*aspect_ratio) * out_w
-            map[{half_camera_h + yi, half_camera_w + xi,2}] = (ydst1 + 1)/2 * out_h
-         end
-
-         
-
-         -- bottom-right quadrant
-         if (xdst2 > -aspect_ratio and xdst2 < aspect_ratio and ydst1 > -1 and ydst1 < 1) then
-            map[{yi + half_camera_h, -xi + half_camera_w, 1}] = (xdst2 + aspect_ratio)/(2*aspect_ratio) * out_w
-            map[{yi + half_camera_h, -xi + half_camera_w, 2}] = (ydst1 + 1)/2 * out_h
-         end
-
-         -- bottom-left quadrant
-         if (xdst2 > -aspect_ratio and xdst2 < aspect_ratio and ydst1 > -1 and ydst1 < 1) then
-            map[{-yi + half_camera_h, -xi + half_camera_w, 1}] = (xdst2 + aspect_ratio)/(2*aspect_ratio) * out_w
-            map[{-yi + half_camera_h, -xi + half_camera_w, 2}] = (ydst2 + 1)/2 * out_h
-         end
-
-         -- printf("x: %f y:%f -> x':%f y':%f",xsrc2,ysrc1,xdst2,ydst1)
-         -- out[{{},ydst1,xdst2}] = images[1][{{},ysrc1,xsrc2}]
-
-         -- printf("x: %f y:%f -> x':%f y':%f",xsrc1,ysrc2,xdst1,ydst2)
-         -- out[{{},ydst2,xdst1}] = images[1][{{},ysrc2,xsrc1}]
-
-         -- printf("x: %f y:%f -> x':%f y':%f",xsrc2,ysrc2,xdst2,ydst2)
-         -- out[{{},ydst2,xdst2}] = images[1][{{},ysrc2,xsrc2}]
+         map[{yi,xi,1}] = (xp + aspect_ratio)/(2*aspect_ratio) * map_w
+         map[{yi,xi,2}] = (yp + 1)/2 * map_h
       end
    end
+
    return map
 end
 
@@ -205,7 +163,9 @@ function remap(img, map)
       for xi = 1, map:size(2) do
          local coord = map[{yi, xi, {}}]
 
-         out[{{}, yi, xi}] = img[{{}, coord[2] + 1, coord[1] + 1}]
+         if (coord[2] > 0 and coord[2] < 683 and coord[1] > 0 and coord[1] < 1024) then
+            out[{{}, yi, xi}] = img[{{}, coord[2], coord[1]}]
+         end
       end
    end
 
