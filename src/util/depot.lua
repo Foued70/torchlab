@@ -71,13 +71,17 @@ local function get(scan_name)
   return load_local(scan_name) or load_remote(scan_name)  
 end
 
+local function job_name(scan_name)
+  return string.gsub(scan_name, "_%a_%d%d$", '')
+end
+
 local function put(scan_name)
   local success = false
   local folder = asset_dir..scan_name  
   if paths.dirp(folder) then    
-    local filepath = folder..".zip"    
+    local filepath = folder..".zip"        
     os.execute("zip -9 -j "..filepath.." "..folder.."/*")    
-    resp, stat_code, headers = request.put(job_url(scan_name)..'/edit.json', {files = {scan = filepath}})
+    resp, stat_code, headers = request.put(job_url(job_name(scan_name))..'/edit.json', {files = {scan = filepath}})
     os.execute("rm "..filepath)    
     if stat_code == 200 then
       success = true 
