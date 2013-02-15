@@ -68,19 +68,22 @@ Shader::make(   GLuint _var1, const string& _param1,
   static const string HEADER = readResourceText(":/shaders/_header_common.shader");
   static const string VERTEX_HEADER = readResourceText(":/shaders/_header_vert.shader");
   static const string FRAGMENT_HEADER = readResourceText(":/shaders/_header_frag.shader");
-
+  
 	if (!__vertFile.empty() && !__fragFile.empty()) {
-    __vertCode = HEADER + VERTEX_HEADER + readResourceText(__vertFile.c_str());
-    __fragCode = HEADER + FRAGMENT_HEADER + readResourceText(__fragFile.c_str());
+    __vertCode = HEADER + VERTEX_HEADER + string(readResourceText(__vertFile.c_str()));
+    __fragCode = HEADER + FRAGMENT_HEADER + string(readResourceText(__fragFile.c_str()));
 	} else if (!__vertCode.empty() && !__fragCode.empty()) {
 		__vertCode = HEADER + VERTEX_HEADER + __vertCode;
 		__fragCode = HEADER + FRAGMENT_HEADER + __fragCode;
+    
 	} else {
 		log(ERROR, "Shader source could not be obtained!");
 	}
 
 	vert = __vertCode.c_str();
 	frag = __fragCode.c_str();
+  
+  log(PARAM, "Frag shader code: %s", frag);
 
 	GLint vlength = __vertCode.length();
 	GLint flength = __fragCode.length();

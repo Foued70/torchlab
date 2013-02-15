@@ -83,7 +83,7 @@ Scene::getObjectByName(const string &_name) {
 }
 
 Object * 
-Scene::getObjectByID(const unsigned int& _id) {
+Scene::getObjectByID(unsigned int _id) {
 	auto result = __objectsByID.find(_id);	
   return (result != __objectsByID.end()) ? result -> second : NULL;
 }

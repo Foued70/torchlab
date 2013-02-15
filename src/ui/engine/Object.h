@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
+#include <map>
 
 #include "Vectors.h"
 #include "Material.h"
@@ -34,7 +35,7 @@ enum {
 class Object;
 
 typedef std::unordered_map< Index, long, HashMyIndex > indicesMap;
-typedef std::unordered_map< std::string, Mesh* > meshesMap;
+typedef std::map< std::string, Mesh* > meshesMap;
 typedef std::unordered_map< std::string, Material* > materialsMap;
 typedef std::vector< GLfloat > s3DVector;
 
@@ -131,6 +132,15 @@ public:
 	 * @return Mesh.
 	 */
 	inline Mesh * getMeshByName(const std::string& _name) { return __meshes[_name]; }
+   
+	/**
+	 * Look for the mesh.
+	 * @param id ID of the mesh that is looked for. 
+   * ID's for meshes are local to the object that owns them. To get a unique mesh, you need to know the object's ID, as well as the mesh ID
+	 * @return Pointer to the found Mesh, or NULL if nothing was found.
+	 */ 
+  Mesh* getMeshByID(unsigned int);
+  
 	
 	inline Material * getMaterialByName(const std::string& _name) { return __materials[_name]; }
 	

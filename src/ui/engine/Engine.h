@@ -13,6 +13,7 @@
 #include "ControllerManager.h"
 
 class ScanWidget;
+struct TriangleID;
 
 enum RENDER_FLAGS {
   RENDER_TO_WINDOW = 1,
@@ -51,7 +52,7 @@ public:
 	 */
 	Shader * createShader(const std::string&);
   
-  void render(Scene* scene, unsigned int _renderMode = (RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER));
+  void render(unsigned int _renderMode = (RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER));
   
   /**
    * Creates a new frame buffer and deletes the old one. Necessary if the window is resized as the frame buffer is resolution dependant.
@@ -68,10 +69,13 @@ public:
    * @param source The start point of the ray
    * @param direction the direction vector of the ray
    * @param outHitLocation position in world space of the first intersection.
-   * @param scene current scene
    * @param return Weather or not the ray intersected a polygon
    */
-  bool raycast(const Vector3& _source, const Vector3& _direction, Vector3& _outHitLocation, Scene* _scene = NULL);
+  bool raycast(const Vector3& _source, const Vector3& _direction, Vector3& _outHitLocation);
+  
+  inline Scene* getCurrentScene() { return (__currentSceneIndex < __sceneList.size()) ? __sceneList[__currentSceneIndex] : NULL; }
+  
+  Triangle* getTriangleByID(const TriangleID& _id);
 	
 	/* Access to managers from outside the class */
 	TextureManager*& Textures;
@@ -115,6 +119,9 @@ private:
 	
  	/* All scenes */
  	std::vector< Scene* > __sceneList;
+  
+  /* Index into the current scene */
+  unsigned int __currentSceneIndex;
 	
 	/* Vector with available extensions */
 	std::vector< std::string* > __extensions;
