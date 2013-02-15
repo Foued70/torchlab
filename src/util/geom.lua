@@ -1,17 +1,25 @@
+setfenv(1, setmetatable({}, {__index = _G}))
+
 require 'torch'
 require 'dok'
 
-local geom = {}
-
 local axes   = torch.eye(3)
 
-local x_axis = axes[1]
-local y_axis = axes[2]
-local z_axis = axes[3]
+x_axis = axes[1]
+y_axis = axes[2]
+z_axis = axes[3]
 
 local neg_axes   = torch.eye(3):mul(-1)
 
-function geom.normalize(...)
+function eq(vec1, vec2)
+  return torch.min(torch.eq(vec1,vec2))
+end
+
+function normalize(vec)
+  return torch.div(vec, vec, vec:norm())
+end
+
+function normalized(...)
    local v,res
    local args = {...}
    local nargs = #args
@@ -39,29 +47,28 @@ function geom.normalize(...)
 end
 
 -- compute normal from first three vertices in a face
-function geom.compute_normal(v)
-   return geom.normalize(
-      torch.cross(v[3] - v[2], v[1] - v[2]))
+function compute_normal(v)
+   return normalize(torch.cross(v[3] - v[2], v[1] - v[2]))
 end
 
-function geom.axis_rotation(normal,d)
-   local n   = geom.normalize(normal:narrow(1,1,3))
-   return geom.quaternion_angle(n,d)
+function axis_rotation(normal,d)
+   local n   = normalized(normal:narrow(1,1,3))
+   return quaternion_from_to(n,d)
 end
 
-function geom.x_rotation(normal)
-   return geom.axis_rotation(normal,z_axis)
+function x_rotation(normal)
+   return axis_rotation(normal,z_axis)
 end
 
-function geom.y_rotation(normal)
-   return geom.axis_rotation(normal,z_axis)
+function y_rotation(normal)
+   return axis_rotation(normal,z_axis)
 end
 
-function geom.z_rotation(normal)
-   return geom.axis_rotation(normal,z_axis)
+function z_rotation(normal)
+   return axis_rotation(normal,z_axis)
 end
 
-function geom.largest_rotation (normal)
+function largest_rotation (normal)
    local n   = normal:narrow(1,1,3)
    local p   = n:clone():abs()
    local v,i = p:sort()
@@ -70,10 +77,10 @@ function geom.largest_rotation (normal)
    if (n[d] < 0) then
       a = neg_axes[d]
    end
-   return geom.axis_rotation(n,a),d
+   return axis_rotation(n,a),d
 end
 
-function geom.rotation_matrix(quaternion, res)
+function rotation_matrix(quaternion, res)
    if (not res) then
       res   = torch.Tensor(4,4)
    end
@@ -98,8 +105,14 @@ function geom.rotation_matrix(quaternion, res)
    return res
 end
 
+-- rotate a vector around axis by angle radians
+function rotate_axis_angle(vec, rot_axis, rot_angle)
+  local quat = quaternion_from_axis_angle(rot_axis, rot_angle)
+  return rotate_by_quat(vec, vec, quat)
+end
+
 -- rotate vector by rotation matrix
-function geom.rotate_by_mat(...)
+function rotate_by_mat(...)
    local res,vec,mat
    local args = {...}
    local nargs = #args
@@ -127,7 +140,7 @@ end
 -- rotate vector by quaternion 
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
-function geom.rotate_by_quat(...)
+function rotate_by_quat(...)
    local res,v,q
    local args = {...}
    local nargs = #args
@@ -159,7 +172,7 @@ function geom.rotate_by_quat(...)
    return res
 end
 
-function geom.quat_conjugate(quat,res)
+function quat_conjugate(quat,res)
    if (not res) then
       res = quat:clone()
    end
@@ -169,7 +182,7 @@ end
 
 -- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
 -- FIXME test cases
-function geom.quat_product(quat1,quat2,res)
+function quat_product(quat1,quat2,res)
    if (not res) then
       res = torch.Tensor(4)
    end
@@ -182,44 +195,38 @@ function geom.quat_product(quat1,quat2,res)
 end
 
 -- returns quaternion represnting angle between two vectors
-function geom.quaternion_angle(...)
-   local quat, from_vector, to_vector
-   local args = {...}
-   local nargs = #args
-   if nargs == 3 then
-      quat = args[1]
-      from_vector = args[2]:narrow(1,1,3)
-      to_vector   = args[3]:narrow(1,1,3)
-   elseif nargs == 2 then
-      from_vector = args[1]:narrow(1,1,3)
-      to_vector   = args[2]:narrow(1,1,3)
-      quat = torch.Tensor(4):fill(0)
-      quat[4] = 1
-   else
-      print(dok.usage('quaternion_angle',
-                      'compute rotation quaternion from <from_vector> to <to_vector>', 
-                      '> returns: quaternion',
-                      {type='torch.Tensor', help='quaternion'},
-                      {type='torch.Tensor', help='from_vector', req=true},
-                      {type='torch.Tensor', help='to_vector',   req=true}))
-      dok.error('incorrect arguements', 'quaternion_angle')
-   end
-   local rot_axis = torch.cross(from_vector, to_vector)
-   local m        = torch.norm(rot_axis)
-   --avoid the degenerate case when from_vector is very close to to_vector
-   if(m > 1e-8) then
-      rot_axis  = rot_axis/m
-      rot_angle = torch.acos(torch.dot(from_vector, to_vector))
-      quat:narrow(1,1,3):copy(rot_axis * torch.sin(rot_angle / 2))
-      quat[4]   = torch.cos(rot_angle / 2)
-   end
-   return quat
+function quaternion_from_to(from_vector, to_vector, quat)
+  from_vector = args[2]:narrow(1,1,3)
+  to_vector   = args[3]:narrow(1,1,3)
+
+  local rot_axis = torch.cross(from_vector, to_vector)
+  local rot_angle = 0
+
+  --avoid the degenerate case when from_vector is very close to to_vector
+  local m = torch.norm(rot_axis)
+  if(m > 1e-8) then
+    rot_axis  = rot_axis/m
+    rot_angle = torch.acos(torch.dot(from_vector, to_vector))
+  end
+
+  return quaternion_from_axis_angle(rot_axis, rot_angle, quat)
+end
+
+function quaternion_from_axis_angle(rot_axis, rot_angle, quat)
+  if not quat then 
+      quat = torch.Tensor(4)
+  end
+
+  quat[{1,3}] = rot_axis * torch.sin(rot_angle / 2)
+  quat[4] = torch.cos(rot_angle / 2)
+
+  return quat
 end
 
 -- FIXME make tests as this function seems to invert results for
 -- simple axis-aligned plane intersections
 
-function geom.ray_plane_intersection(...)
+function ray_plane_intersection(...)
    local pt,dir,plane_norm,plane_d,debug
    local args  = {...}
    local nargs = #args
@@ -261,7 +268,7 @@ function geom.ray_plane_intersection(...)
 end
       
 
-function geom.ray_face_intersection(...)
+function ray_face_intersection(...)
    local pt,dir,plane_norm,plane_d,face_verts,debug
    local args  = {...}
    local nargs = #args
@@ -289,7 +296,7 @@ function geom.ray_face_intersection(...)
    end
    -- First find planar intersection
    local intersection,t = 
-      geom.ray_plane_intersection(pt,dir,plane_norm,plane_d,debug)
+      ray_plane_intersection(pt,dir,plane_norm,plane_d,debug)
    if not intersection then
       return nil,t
    end
@@ -338,5 +345,5 @@ function geom.ray_face_intersection(...)
 end
 
 
-return geom
+return (getfenv())
 

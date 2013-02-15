@@ -74,7 +74,7 @@ function Pose:localxy2globalray(x,y)
    dir[3]  =       torch.sin(elevation) -- z'
    dir[2]  =   h * torch.sin(azimuth)   -- y'
    dir[1]  =   h * torch.cos(azimuth)   -- x'
-   dir     = geom.normalize(dir)
+   geom.normalize(dir)
    -- return point and direction rotated to global coordiante
    return self.xyz, geom.rotate_by_quat(dir,self.quat)
 end

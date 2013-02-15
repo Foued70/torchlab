@@ -5,7 +5,7 @@ local project_dir = "@project_dir@"
 local install_root = "@install_root@"
 
 -- help/args
-help = 
+help =
 [=[Cloudlab
 
 Usage: cloudlab [options] [script [args]]
@@ -31,7 +31,7 @@ local env = ' -e "require \'cloudlab-env\'" '
 
 local src_dir = paths.concat(project_dir, 'src')
 local src_path = paths.concat(src_dir, '?.lua') .. ';' .. paths.concat(src_dir, '?', 'init.lua') .. ';'
-env = ' -e "package.path = \'' .. src_path ..'\' .. package.path"' .. env
+env = ' -e "package.path = \'' .. src_path ..'\' .. package.path;"' .. env
 
 -- by default, be interactive
 interactive = true

@@ -17,7 +17,7 @@ function Ray:__init(o,d)
       d = torch.ones(3)
    end
    -- always normalized
-   self.dir     = geom.normalize(d)
+   self.dir     = geom.normalized(d)
 
    -- inverse direction is stored as this is needed in any
    -- axis-aligned intersection
