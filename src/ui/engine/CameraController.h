@@ -4,28 +4,16 @@
 #include "Controller.h"
 #include "Vectors.h"
 #include <list>
-
 using namespace std;
 
 class Camera;
 class SteeringComponent;
+class Surface;
 
-/*
-struct CameraGoal {
-  Vector3 __eye;
-  Vector3 __center;
-  
-  CameraGoal() : 
-    __eye(Vector3({0.0f, 0.0f, 0.0f})),
-    __center(Vector3({0.0f, 0.0f, 0.0f}))
-  {}
-      
-  CameraGoal(const Vector3& _eye, const Vector3& _center) :
-    __eye(_eye),
-    __center(_center)
-  {}
+enum FLIGHT_MODE {
+  FREE_FLIGHT,
+  SURFACE_FLIGHT
 };
-*/
 
 class CameraController : public Controller<Camera> {
 public:
@@ -34,7 +22,11 @@ public:
   
   virtual void update();
   
+  float getZoom() const;
+  void setZoom(float _zoom);
+  void rotate(float _x, float _y);
   void flyTo(const Vector3& _destination);
+  void selectSurface(Surface* _surface, const Vector3& _startAim);
   
 protected:
   virtual void updateState();
@@ -44,8 +36,12 @@ private:
   bool __atGoal();
   
 private:
+  FLIGHT_MODE __flightMode;
+  float __zoom;
   SteeringComponent* __steeringEye;
   SteeringComponent* __steeringCenter;
+  
+  Surface* __selectedSurface;
 };
 
 #endif

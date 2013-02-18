@@ -312,6 +312,7 @@ typedef sVector< float, 4 > sColor;
 
 
 const Vector3 Z_AXIS = Vector3({0,0,1});
+const Vector3 Y_AXIS = Vector3({0,1,0});
 const Vector3 X_AXIS = Vector3({1,0,0});
   
 #endif /* VECTORS_H */

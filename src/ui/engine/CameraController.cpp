@@ -3,11 +3,15 @@
 #include "ControllerManager.h"
 #include "SteeringComponent.h"
 #include "Engine.h"
+#include "Surface.h"
 
 CameraController::CameraController() : 
   Controller<Camera>(),
+  __flightMode(FREE_FLIGHT),
+  __zoom(1.0f),
   __steeringEye(NULL),
-  __steeringCenter(NULL)
+  __steeringCenter(NULL),
+  __selectedSurface(NULL)
 {
   __steeringEye = new SteeringComponent();
   __steeringCenter = new SteeringComponent();
@@ -18,6 +22,10 @@ CameraController::CameraController() :
 CameraController::~CameraController() {
   delete __steeringEye;
   delete __steeringCenter;
+  
+  if (__selectedSurface) {
+    delete __selectedSurface;
+  }
 }
 
 void CameraController::update() {
@@ -54,9 +62,38 @@ CameraController::updateState() {
   }
 }
 
+float 
+CameraController::getZoom() const {
+  return __zoom;
+}
+
+void 
+CameraController::setZoom(float _zoom) {
+  __zoom = _zoom;
+  Vector3 newEyePosition = __pawn->getCenter() - (__pawn->lookDirection() * __zoom);
+  __pawn->setEyePosition(newEyePosition);
+}
+
+void 
+CameraController::rotate(float _deltaX, float _deltaY) {
+  const float surfaceRotationSpeed = 0.08f;
+  switch(__flightMode) {
+    case FREE_FLIGHT:
+      __pawn->rotateCenterAroundCamera(_deltaX, _deltaY);
+      break;
+    case SURFACE_FLIGHT:
+      __pawn->rotateAroundCenter(_deltaX*surfaceRotationSpeed, _deltaY*-surfaceRotationSpeed);
+      break;
+    default:
+      __flightMode = FREE_FLIGHT;
+      break;
+  }
+}
+
 void 
 CameraController::flyTo(const Vector3& _destination) {
-  const float goalPadding = 5.0f;
+  __flightMode = FREE_FLIGHT;
+  const float goalPadding = 8.0f;
   const float viewingHeight = 2.25f;
   Vector3 eyeOffsetDirection = __pawn->getEye() - _destination;
   eyeOffsetDirection.normalize();
@@ -69,6 +106,31 @@ CameraController::flyTo(const Vector3& _destination) {
   __steeringCenter->setPosition(__pawn->getCenter());
   __steeringEye->moveTo(eyePosition, SMOOTH_DAMP); //no max speed
   __steeringCenter->moveTo(_destination, SMOOTH_DAMP); //no max speed
+  updateState();
+}
+
+void 
+CameraController::selectSurface(Surface* _surface, const Vector3& _startAim) {
+  __flightMode = SURFACE_FLIGHT;
+  if (__selectedSurface) {
+    delete __selectedSurface;
+  }
+  __selectedSurface = _surface;
+  
+  float viewDistance = 5.0f;
+  
+  Vector3 viewOffset = __selectedSurface->getNormal()*viewDistance;
+  if (dot(__pawn->getEye() - _startAim, viewOffset) < 0.0f) {
+    viewOffset = -viewOffset;
+  }
+  
+  Vector3 eyeGoal = _startAim + viewOffset;
+  Vector3 centerGoal = _startAim;
+  
+  __steeringEye->setPosition(__pawn->getEye());
+  __steeringCenter->setPosition(__pawn->getCenter());
+  __steeringEye->moveTo(eyeGoal, SMOOTH_DAMP); //no max speed
+  __steeringCenter->moveTo(centerGoal, SMOOTH_DAMP); //no max speed
   updateState();
 }
 

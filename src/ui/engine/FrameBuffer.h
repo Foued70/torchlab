@@ -6,10 +6,18 @@
 #include "opengl.h"
 
 enum RENDER_PASS {
-    COLOR_PASS,
-    PICKING_PASS,
-    DEPTH_PASS
+  COLOR_PASS = 0,
+  PICKING_PASS = 1,
+  DEPTH_PASS = 2
 };
+
+enum PICKING_CHANNELS {
+  OBJECT_ID = 0,
+  MESH_ID = 1,
+  PRIMITIVE_ID = 2
+};
+
+struct TriangleID;
 
 class FrameBuffer : public Singleton< FrameBuffer >
 {
@@ -26,8 +34,8 @@ public:
 	void renderDebugMesh();
 	
 	void printInfo();
-	GLint readPixel(const GLuint& x, const GLuint& y, const GLuint& channel);
-  GLfloat readDepthPixel(const GLuint& x, const GLuint& y);
+  GLfloat readDepthPixel(GLuint _x, GLuint _y);
+  TriangleID pickTriangle(GLuint _x, GLuint _y);
 	void saveToFile(const std::string& _filename);
   
   /* Method to send color pass data to the default framebuffer */

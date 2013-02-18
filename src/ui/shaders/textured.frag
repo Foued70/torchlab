@@ -5,6 +5,7 @@ in float sAttenuation;
 
 void main () {
 
+/*
 	sFragColor = ((sFrontMaterial.emission + sFrontMaterial.ambient * sLightModel.ambient)
 			* sFrontMaterial.ambient) + (sLightSource[0].ambient * sFrontMaterial.ambient) * sAttenuation;
 	
@@ -26,9 +27,16 @@ void main () {
 		
 		sFragColor += sLightSource[0].specular *
 		sFrontMaterial.specular * specular * sAttenuation;
-	}
-	
+    */
 
-	sFragColor = texture(textureUnit, sVaryingTexCoords.st);
-  sPickingData = uvec3((gl_PrimitiveID+1), objectID, meshID);
+    
+    sFragColor = texture(textureUnit, sVaryingTexCoords.st);
+    sPickingData = uvec3(objectID, meshID, gl_PrimitiveID);
 }
+
+  
+
+
+
+
+

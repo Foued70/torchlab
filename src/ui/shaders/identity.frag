@@ -1,4 +1,4 @@
 void main() {
 	sFragColor = sDefColor;
-  sPickingData = uvec3((gl_PrimitiveID+1), objectID, meshID);
+  sPickingData = uvec3(objectID, meshID, gl_PrimitiveID);
 }

@@ -9,6 +9,7 @@ exports.intersect = require "util/intersect"
 exports.bihtree   = require "util/bihtree"
 exports.interpolate = require "util/interpolate"
 
+exports.depot = require "util/depot"
 exports.pbx  = require "util/pbx"
 exports.obj  = require "util/obj"
 exports.obj2  = require "util/obj2"
