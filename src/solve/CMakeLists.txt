@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
 cmake_policy(VERSION 2.6)
 include(../common.cmake REQUIRED)
 
+FILE(GLOB src "*.cc")
+
 set(EIGEN_INCLUDE_DIR ${install_root}/include/eigen3/)
 include_directories(${EIGEN_INCLUDE_DIR})
 
@@ -28,18 +30,10 @@ set(GOOGLE_LIBS glog gflags protobuf)
 # many different ways to use ceres, suitesparse is LGPL'd full speedup
 # (which we might not be able to exploit anyway which means we could
 # use ceres without)
-
 set(NUMERICAL_LIBS cholmod ccolamd camd colamd amd suitesparseconfig cxsparse)
-set(CERES_LIBRARY_DEPENDENCIES ${GOOGLE_LIBS} ${VECLIB_LIBRARY} ${NUMERICAL_LIBS} gomp)
 
-ADD_EXECUTABLE(simple_bundle_adjuster
-                simple_bundle_adjuster.cc)
-TARGET_LINK_LIBRARIES(simple_bundle_adjuster ${CERES_LIBRARY} ${CERES_LIBRARY_DEPENDENCIES})
+set(CERES_DEPENDENCIES ${GOOGLE_LIBS} ${VECLIB_LIBRARY} ${NUMERICAL_LIBS} gomp)
 
-# ADD_EXECUTABLE(quadratic
-#                quadratic.cc)
-# TARGET_LINK_LIBRARIES(quadratic ${CERES_LIBRARY} ${CERES_LIBRARY_DEPENDENCIES})
+ADD_TORCH_PACKAGE(solve "${src}" "" "Floored Ceres Solver")
+TARGET_LINK_LIBRARIES(solve luaT TH ${CERES_LIBRARY} ${CERES_DEPENDENCIES})
 
-# ADD_TORCH_PACKAGE(solve "${src}" "" "Floored Solver")
-
-# target_link_libraries(solve luaT TH ${CERES_LIBRARY})

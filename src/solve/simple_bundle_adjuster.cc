@@ -35,6 +35,11 @@
 // This does not use the best configuration for solving; see the more involved
 // bundle_adjuster.cc file for details.
 
+extern "C" {
+#include <TH.h>
+#include <luaT.h>
+}
+
 #include <cmath>
 #include <cstdio>
 #include <iostream>
@@ -164,7 +169,7 @@ struct SnavelyReprojectionError {
   double observed_y;
 };
 
-int main(int argc, char** argv) {
+int process(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   if (argc != 2) {
     std::cerr << "usage: simple_bundle_adjuster <bal_problem>\n";
