@@ -169,16 +169,58 @@ struct SnavelyReprojectionError {
   double observed_y;
 };
 
-int process(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  if (argc != 2) {
-    std::cerr << "usage: simple_bundle_adjuster <bal_problem>\n";
-    return 1;
+
+LUA_EXTERNC DLL_EXPORT void simplesba(int* points, int npts, 
+                                      int* cameras, int ncam, 
+                                      double *obs, int nobs,
+                                      double *params, int nparams){
+  int i;
+
+  std::cout << "npoints: " << npts << std::endl;
+  std::cout << "ncameras: " << ncam << std::endl;
+  std::cout << "nobservations: " << nobs << std::endl;
+  std::cout << "nparams: " << nparams << std::endl;
+  if (nparams != 9 * ncam + 3 * npts){
+    std::cerr << "Error wrong number of parameters" << std::endl;
+    return;
   }
 
+  // Create residuals for each observation in the bundle adjustment problem. The
+  // parameters for cameras and points are added automatically.
+  ceres::Problem problem;
+  for (int i = 0; i < nobs; ++i) {
+    // Each Residual block takes a point and a camera as input and outputs a 2
+    // dimensional residual. Internally, the cost function stores the observed
+    // image location and compares the reprojection against the observation.
+    ceres::CostFunction* cost_function =
+        new ceres::AutoDiffCostFunction<SnavelyReprojectionError, 2, 9, 3>(
+            new SnavelyReprojectionError(
+                obs[2 * i + 0],
+                obs[2 * i + 1]));
+
+    problem.AddResidualBlock(cost_function,
+                             NULL /* squared loss */,
+                             bal_problem.mutable_camera_for_observation(i),
+                             bal_problem.mutable_point_for_observation(i));
+  }
+
+  // Make Ceres automatically detect the bundle structure. Note that the
+  // standard solver, SPARSE_NORMAL_CHOLESKY, also works fine but it is slower
+  // for standard bundle adjustment problems.
+  ceres::Solver::Options options;
+  options.linear_solver_type = ceres::DENSE_SCHUR;
+  options.minimizer_progress_to_stdout = true;
+
+  ceres::Solver::Summary summary;
+  ceres::Solve(options, &problem, &summary);
+  std::cout << summary.FullReport() << "\n";
+}
+
+LUA_EXTERNC DLL_EXPORT int loadBALfile(char *fname){
+  
   BALProblem bal_problem;
-  if (!bal_problem.LoadFile(argv[1])) {
-    std::cerr << "ERROR: unable to open file " << argv[1] << "\n";
+  if (!bal_problem.LoadFile(fname)) {
+    std::cerr << "ERROR: unable to open file " << fname << "\n";
     return 1;
   }
 
