@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
 cmake_policy(VERSION 2.6)
 include(../common.cmake REQUIRED)
 
-SET(CMAKE_CXX_FLAGS "-DCERES_HAVE_PTHREAD -DCERES_HAVE_RWLOCK -DCERES_USE_OPENMP -fopenmp \"-DCERES_HASH_NAMESPACE_START=namespace std { namespace tr1 {" "-DCERES_HASH_NAMESPACE_END=}}\"")
-
 set(EIGEN_INCLUDE_DIR ${install_root}/include/eigen3/)
 include_directories(${EIGEN_INCLUDE_DIR})
 
@@ -13,16 +11,26 @@ include_directories(${CERES_INCLUDE_DIR})
 set(CERES_INTERNAL_INCLUDE_DIR ${install_root}/include/ceres/internal)
 include_directories(${CERES_INTERNAL_INCLUDE_DIR})
 
-# FIXME THIS needs an IF APPLE wrapper
-
-find_library(VECLIB_LIBRARY veclib)
-
-# find_library(BLAS_LIBRARY blas)
-# find_library(LAPACK_LIBRARY lapack)
+IF (APPLE)
+   find_library(VECLIB_LIBRARY veclib)
+ELSE (APPLE)
+     message( FATAL_ERROR "FIXME figure out ceres linking on non-apple platforms" )
+     # FIXME perhaps with use some of
+     # find_library(BLAS_LIBRARY blas)
+     # find_library(LAPACK_LIBRARY lapack)
+ENDIF(APPLE)
 
 set(CERES_LIBRARY ceres)
 
-set(CERES_LIBRARY_DEPENDENCIES ${VECLIB_LIBRARY} glog gflags cholmod ccolamd camd colamd amd suitesparseconfig cxsparse gomp protobuf )
+# perhaps we can remove some of these mostly handle fileio which we do in torch anyways.
+set(GOOGLE_LIBS glog gflags protobuf)
+
+# many different ways to use ceres, suitesparse is LGPL'd full speedup
+# (which we might not be able to exploit anyway which means we could
+# use ceres without)
+
+set(NUMERICAL_LIBS cholmod ccolamd camd colamd amd suitesparseconfig cxsparse)
+set(CERES_LIBRARY_DEPENDENCIES ${GOOGLE_LIBS} ${VECLIB_LIBRARY} ${NUMERICAL_LIBS} gomp)
 
 ADD_EXECUTABLE(simple_bundle_adjuster
                 simple_bundle_adjuster.cc)
