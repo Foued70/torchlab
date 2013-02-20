@@ -1,6 +1,7 @@
 setfenv(1, setmetatable({}, {__index = _G}))
 
 local torch = require 'torch'
+require 'image' -- fucking image global
 
 local _t = sys.clock()
 local function tic(msg)
@@ -109,6 +110,7 @@ function load_materials(pathname, filename)
       mtl.illumType = tonumber(line:sub(7))
     elseif line:match('^map_Kd ') then
       mtl.diffuseTexPath = paths.concat(pathname, trim(line:sub(8)))
+      mtl.diffuse_tex_img = image.load(mtl.diffuseTexPath, nil, 'byte')
     end
   end
 
@@ -125,7 +127,7 @@ function load(filename)
   local tmp_verts = torch.Tensor(n_tmp_verts,3)
   local tmp_uvs = torch.Tensor(n_tmp_uvs,2)
   local faces = torch.IntTensor(n_faces,3)
-  local verts = torch.Tensor(n_faces*3,6):fill(1)
+  local verts = torch.Tensor(n_faces*3,9):fill(1)
 
   tic('alloc')
 
@@ -194,7 +196,7 @@ function load(filename)
   tic('load tmp')
 
   n_verts = next_vert_i - 1
-  local trim_verts = torch.Tensor(n_verts, 6)
+  local trim_verts = torch.Tensor(n_verts, 9)
   trim_verts[{{1,n_verts}}] = verts[{{1, n_verts}}]
 
   tic('trim')
@@ -205,7 +207,7 @@ function load(filename)
   obj.verts              = trim_verts:narrow(2, 1, 4)
   obj.uvs                = trim_verts:narrow(2, 5, 2)
   obj.faces              = faces
-  obj.submeshes          = torch.IntTensor(submeshes)
+  obj.submeshes          = submeshes
   obj.materials          = materials
 
   return obj
