@@ -7,14 +7,14 @@ local geom = util.geom
 local test = {}
 test.data = require "util/test/geom-data"
 
-function test.quaternion_angle()
+function test.quaternion_from_to()
    print("Testing quaternion angle btw. 2 vectors")
    local e = 0
-   local p = geom.normalize(test.data.vec[1])
+   local p = geom.normalized(test.data.vec[1])
 
    for i = 2,test.data.vec:size(1) do
-      local v = geom.normalize(test.data.vec[i])
-      local q = geom.quaternion_angle(p,v)
+      local v = geom.normalized(test.data.vec[i])
+      local q = geom.quaternion_from_to(p,v)
       local d = q - test.data.result_vec_quat[i-1]
       if (d:abs():max() > 1e-6) then
          print(d,q,test.data.result_vec_quat[i-1])
@@ -313,7 +313,7 @@ function test.compute_normals()
 end
 
 function test.all()
-   test.quaternion_angle()
+   test.quaternion_from_to()
    test.quat2rot()
    test.rotation_by_mat()
    test.rotation_by_quat()

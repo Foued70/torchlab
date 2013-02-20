@@ -13,8 +13,8 @@ using namespace std;
 
 static const unsigned int MAX_LOG_SIZE = 4096;
 
-  
-Shader::Shader(const string& _fileName) : 
+
+Shader::Shader(const string& _fileName) :
     __name(_fileName),
 		__vertFile(":/shaders/" + _fileName + ".vert"),
 		__fragFile(":/shaders/" + _fileName + ".frag"),
@@ -22,10 +22,10 @@ Shader::Shader(const string& _fileName) :
 		__fragCode(""),
 		__isRunning(false),
 		__isCompiled(false) {
-	
+
 	__vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	__fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	
+
 	log(CONSTRUCTOR, "Shader (\"%s\", \"%s\") constructed.", __vertFile.c_str(), __fragFile.c_str());
 }
 
@@ -37,10 +37,10 @@ Shader::Shader(const string& _vertexCode, const string& _fragmentCode) :
 		__fragCode(_fragmentCode),
 		__isRunning(false),
 		__isCompiled(false) {
-			
+
 	__vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	__fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	
+
 	log(CONSTRUCTOR, "Shader constructed (from source code).");
 }
 
@@ -53,7 +53,7 @@ Shader::~Shader() {
 	glDeleteShader(__vertexShader);
 	glDeleteShader(__fragmentShader);
 	checkGLErrors(AT);
-	
+
 	log(DESTRUCTOR, "Shader (\"%s\", \"%s\") destructed.", __vertFile.c_str(), __fragFile.c_str());
 }
 
@@ -64,7 +64,7 @@ Shader::make(   GLuint _var1, const string& _param1,
                 GLuint _var4, const string& _param4 ) {
 	const char *vert;
 	const char *frag;
-	
+
   static const string HEADER = readResourceText(":/shaders/_header_common.shader");
   static const string VERTEX_HEADER = readResourceText(":/shaders/_header_vert.shader");
   static const string FRAGMENT_HEADER = readResourceText(":/shaders/_header_frag.shader");
@@ -87,7 +87,7 @@ Shader::make(   GLuint _var1, const string& _param1,
 
 	GLint vlength = __vertCode.length();
 	GLint flength = __fragCode.length();
-	
+
 	glShaderSource(__vertexShader, 1, (const GLchar**)&vert, &vlength);
 	checkGLErrors(AT);
 	glShaderSource(__fragmentShader, 1, (const GLchar**)&frag, &flength);
@@ -102,7 +102,7 @@ Shader::make(   GLuint _var1, const string& _param1,
 	if (!result) {
 		char msg[MAX_LOG_SIZE];
 		glGetShaderInfoLog(__vertexShader, MAX_LOG_SIZE, NULL, msg);
-		
+
 		log(ERROR, "Error compiling vertex shader! Compilation log:\n%s", msg);
 	}
 
@@ -113,7 +113,7 @@ Shader::make(   GLuint _var1, const string& _param1,
 	if (!result) {
 		char msg[MAX_LOG_SIZE];
 		glGetShaderInfoLog(__fragmentShader, MAX_LOG_SIZE, NULL, msg);
-		
+
 		log(ERROR, "Error compiling fragment shader! Compilation log:\n%s", msg);
 	}
 
@@ -121,12 +121,12 @@ Shader::make(   GLuint _var1, const string& _param1,
 	checkGLErrors(AT);
 	if (!__shaderProgram)
 		log(ERROR, "Error creating shader program!");
-	
+
 	glAttachShader(__shaderProgram, __vertexShader);
 	checkGLErrors(AT);
 	glAttachShader(__shaderProgram, __fragmentShader);
 	checkGLErrors(AT);
-	
+
 	if (!_param1.empty())
 		glBindAttribLocation(__shaderProgram, _var1, _param1.c_str());
 	if (!_param2.empty())
@@ -135,11 +135,11 @@ Shader::make(   GLuint _var1, const string& _param1,
 		glBindAttribLocation(__shaderProgram, _var3, _param3.c_str());
   if (!_param4.empty())
     glBindAttribLocation(__shaderProgram, _var4, _param4.c_str());
-	
+
 	// Hacky... TO DO: find all fragment shader outputs, and bind locations logically.
 	glBindFragDataLocation(__shaderProgram, 0, "sFragColor");
 	glBindFragDataLocation(__shaderProgram, 1, "sPickingData");
-	
+
 	glLinkProgram(__shaderProgram);
 	checkGLErrors(AT);
 
@@ -148,21 +148,21 @@ Shader::make(   GLuint _var1, const string& _param1,
 	if (!result) {
 		char msg[MAX_LOG_SIZE];
 		glGetProgramInfoLog(__shaderProgram, MAX_LOG_SIZE, NULL, msg);
-		
+
 		log(ERROR, "Error linking shader program! Linking log:\n%s", msg);
 	}
 	checkGLErrors(AT);
-	
+
 	if (glIsProgram(__shaderProgram) == GL_FALSE)
 		log(ERROR, "Error creating shader program!");
 
 	log(SHADER, "Shader compiled. No errors reported.");
-	
+
 	__isCompiled = true;
-	
+
 	log(SHADER, "sFragColor bound to location: %d", (int)glGetFragDataLocation(__shaderProgram, "sFragColor"));
 	log(SHADER, "triangleID bound to location: %d", (int)glGetFragDataLocation(__shaderProgram, "sPickingData"));
-	
+
 	return true;
 
 }
@@ -184,9 +184,9 @@ void
 Shader::bind(Object *_dest) {
 	if (!__isCompiled)
 		make();
-	
+
 	_dest -> __shader = this;
-	
+
 	log(SHADER, "Shader %s bound to %s.", __name.c_str(), _dest -> name.c_str());
 }
 
@@ -207,7 +207,7 @@ void
 Shader::setUniformFloat(const string& _name, const sVectorBase< GLfloat >& _params) const {
 	GLint location = glGetUniformLocation(__shaderProgram, _name.c_str());
 	checkGLErrors(AT);
-	
+
 	switch (_params.size()) {
 		case 2:
 			glUniform2f(location, _params[0], _params[1]);
@@ -253,7 +253,7 @@ Shader::setMatrixFloat(const string& _name, const sMat9& _matrix) const {
 	checkGLErrors(AT);
 }
 
-GLint 
+GLint
 Shader::getAttribLocation(const std::string& _name) const {
 	return glGetAttribLocation(__shaderProgram, _name.c_str());
 }

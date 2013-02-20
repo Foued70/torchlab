@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-build_dir = $(install_root)/build/cloudlab
+build_dir = $(install_root)/build/deps/cloudlab
 
 all:
 	mkdir -p $(build_dir)
