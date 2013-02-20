@@ -11,27 +11,49 @@ ffi.cdef[[
             int loadBALfile(char* fname); 
          ]]
 
-local solveC = ffi.load("/Users/marco/local/lib/torch/libsolve.dylib")
+-- FIXME make this loading cleaner for other ffi projects
+-- ffi doesn't look in the right place by default
+local ffidir = paths.install_lib .. "/torch/"
+local solveC = ffi.load(ffidir .. "libsolve.dylib")
 
 local solve = {}
 
 -- torch interface to simple bundle adjust
-function solve.simplesba(cam,pts,obs,prm)
-   
-   local cam_cdata = torch.data(cam)
-   local ncam      = cam:max() + 1
+function solve.simplesba(cam_index,pts_index,obs,prm)
 
-   local pts_cdata = torch.data(pts)
-   local npts      = pts:max() + 1
+   cam_index = cam_index:contiguous()
+   local cam_index_cdata = torch.data(cam_index)
+   local ncam      = cam_index:max() + 1
 
+   pts_index = pts_index:contiguous()
+   local pts_index_cdata = torch.data(pts_index)
+   local npts      = pts_index:max() + 1
+
+   obs = obs:contiguous()
    local obs_cdata = torch.data(obs)
    local nobs      = obs:size(1)
 
+   prm = prm:contiguous()
    local prm_cdata = torch.data(prm)
    local nprm      = prm:size(1)
 
-   solveC.simplesba(cam_cdata,ncam,
-                    pts_cdata,npts,
+   if (cam_index:size(1) ~= pts_index:size(1)) then
+      print("ERROR cam_index not same size as pts_index")
+      return
+   end
+
+   if (cam_index:size(1) ~= nobs) then
+      print("ERROR cam_index not same size as number of observations")
+      return
+   end
+
+   if (pts_index:size(1) ~= nobs) then
+      print("ERROR pts_index not same size as number of observations")
+      return
+   end
+   
+   solveC.simplesba(cam_index_cdata,ncam,
+                    pts_index_cdata,npts,
                     obs_cdata,nobs,
                     prm_cdata,nprm)
 end
