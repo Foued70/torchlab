@@ -14,8 +14,8 @@ args = $(default_cmake_args) \
 
 
 all: $(install)
-	
-	
+
+
 $(install): $(unpack)
 	cd $(unpack)/cmake; sed -i .bak 's/PROPERTIES LINK_FLAGS -Wl)/PROPERTIES LINK_FLAGS "")/g' pcl_targets.cmake 
 	cd $(unpack); mkdir -p build

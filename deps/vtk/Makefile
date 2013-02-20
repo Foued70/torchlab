@@ -25,8 +25,8 @@ args = \
 
 
 all: $(install)
-	
-	
+
+
 $(install): $(unpack)
 	cd $(unpack); mkdir -p build
 	cd $(unpack)/build; cmake $(args) ..

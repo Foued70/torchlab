@@ -17,8 +17,8 @@ args = \
 
 
 all:$(install)
-	
-	
+
+
 $(install): $(unpack)
 	cd $(install_root)/bin; ln -sf torch-lua lua
 	cd $(unpack); ./configure $(args)
