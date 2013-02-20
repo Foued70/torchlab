@@ -61,8 +61,8 @@ end
 -- Test the torch interface to simplesba by loading a sample bal file
 -- which is already stored as torch tensors
 function solve.testsimplesba()
-   local bal = dofile("test/problem-16-22106-pre.lua")
-   solve.simplesba(bal.cam_index,bal.pt_index, 
+   local bal = require ("solve/test/problem-16-22106-pre")
+   solve.simplesba(bal.cam_index,bal.pts_index, 
                    bal.observations,bal.parameters)
 end
 

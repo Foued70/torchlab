@@ -11,7 +11,7 @@ local thisdir = paths.dirname(paths.thisfile())
 -- limit (main function has more than 65536 constants)
 
 local cam_index    = dofile(thisdir.."/problem-16-22106-pre-cam_index.lua")
-local pt_index     = dofile(thisdir.."/problem-16-22106-pre-pt_index.lua")
+local pts_index    = dofile(thisdir.."/problem-16-22106-pre-pt_index.lua")
 local parameters   = dofile(thisdir.."/problem-16-22106-pre-parameters.lua")
 local observations = dofile(thisdir.."/problem-16-22106-pre-observations.lua")
 
