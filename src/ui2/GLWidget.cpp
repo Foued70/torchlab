@@ -93,7 +93,8 @@ GLWidget::pushMouseEvent(QMouseEvent* event) {
 void 
 GLWidget::initializeGL() {
   selfFunction("init");
-  callLua(1, 0);
+  lua_pushlightuserdata(L, this);
+  callLua(2, 0);
 }
 
 void GLWidget::resizeGL(int width, int height) {

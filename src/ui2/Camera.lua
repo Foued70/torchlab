@@ -13,9 +13,10 @@ function Camera:__init()
   self.clip_far = 1000
   self.fov_y = 45
 
-  self.projection_matrix = torch.Tensor(4, 4)
-  self.model_view_matrix = torch.Tensor(4, 4)
-  self.translation_matrix = torch.Tensor(4, 4)
+  self.projection_matrix = torch.FloatTensor(4, 4)
+  self.model_view_matrix = torch.FloatTensor(4, 4)
+  self.normal_matrix = torch.FloatTensor(3,3)
+  self.translation_matrix = torch.FloatTensor(4, 4)
 
   self.look_dir = torch.Tensor(3)
   self.up_dir = torch.Tensor(3)
@@ -27,7 +28,7 @@ function Camera:__init()
 end
 
 function Camera:update_projection_matrix()
-  local viewport = gl.GetIntegerv(gl.VIEWPORT)
+  local viewport = gl.GetIntegerv(gl.VIEWPORT, 4)
   self.width = viewport[2]
   self.height = viewport[3]
   local aspect = viewport[2] / viewport[3]
@@ -49,22 +50,25 @@ function Camera:update_matrices()
   self.model_view_matrix[{1, {1,3}}] = self.right_dir
   self.model_view_matrix[{2, {1,3}}] = self.up_dir
   self.model_view_matrix[{3, {1,3}}] = self.look_dir
-  
+
   self.translation_matrix:eye(4,4)
   self.translation_matrix[{4, {1, 3}}] = self.eye
   
   self.model_view_matrix = self.model_view_matrix * self.translation_matrix
 
+  torch.inverse(self.normal_matrix, self.model_view_matrix[{{1, 3}, {1, 3}}])
+  self.normal_matrix = self.normal_matrix:t()
 end
 
 function Camera:update()
   -- look direction
-  torch.add(self.look_dir, self.center, -1, self.eye)
+  torch.add(self.look_dir, self.center, -1, self.eye) -- look_dir = center - eye
   geom.normalize(self.look_dir)
   
   local up
   -- calculate a temporary up
-  if geom.eq(self.look_dir, Z_AXIS_POS) or gemo.eq(self.look_dir, Z_AXIS_POS) then
+  if geom.eq(self.look_dir, Z_AXIS_POS) or geom.eq(self.look_dir, Z_AXIS_POS) then
+
     -- use our last up value but make it horizontal
     self.up_dir[3] = 0
     up = self.up_dir
@@ -73,8 +77,8 @@ function Camera:update()
     up = Z_AXIS_POS
   end
 
-  torch.cross(self.right_dir, self.look_dir, up)
-  gemo.normalize(self.right_dir)
+  torch.cross(self.right_dir, self.look_dir, up) -- right_dir = look_dir X up
+  geom.normalize(self.right_dir)
 
   torch.cross(self.up_dir, self.right_dir, self.look_dir)
   torch.mul(self.look_dir, self.look_dir, -1)
@@ -154,5 +158,16 @@ function Camera:camera_to_world(x, y)
 
 end
 
+function Camera:set_eye(x, y, z)
+  self.eye[1] = x
+  self.eye[2] = y
+  self.eye[3] = z
+end
+
+function Camera:set_center(x, y, z)
+  self.center[1] = x
+  self.center[2] = y
+  self.center[3] = z
+end
 
 return Camera

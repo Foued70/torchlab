@@ -12,7 +12,7 @@ z_axis = axes[3]
 local neg_axes   = torch.eye(3):mul(-1)
 
 function eq(vec1, vec2)
-  return torch.min(torch.eq(vec1,vec2))
+  return torch.min(torch.eq(vec1,vec2)) == 1
 end
 
 function normalize(vec)

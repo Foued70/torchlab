@@ -3496,14 +3496,17 @@ typedef void (PFNGLTEXTURESTORAGE3DEXTPROC) (GLuint texture, GLenum target, GLsi
 ]]
 
 
-
 gl_lib = ffi.load(ffi.os == 'OSX' and 'OpenGL.framework/OpenGL' or 'GL')
 gl = setmetatable({}, {
   __index = function(tbl, name)
     local val
     if name:find('[a-z]') then
       -- lowercase letters indicate a function
-      val = gl_lib['gl'..name]
+      local func = gl_lib['gl'..name]
+      val = function(...)
+        log.trace_x(3, log.cyan, name, ...)
+        return func(...)
+      end
     end
 
     -- must be a constant
@@ -3515,6 +3518,10 @@ gl = setmetatable({}, {
     return val
   end
 })
+
+gl.float_ptr   = ffi.typeof('GLfloat*')
+gl.double_ptr   = ffi.typeof('GLdouble*')
+gl.uint_ptr   = ffi.typeof('GLuint*')
 
 gl.float   = ffi.typeof('GLfloat[?]')
 gl.ushort  = ffi.typeof('GLushort[?]')
@@ -3529,9 +3536,15 @@ gl.char    = ffi.typeof('GLchar[?]')
 gl.const_char_pp = ffi.typeof('const GLchar *[1]')
 
 function gl.GetIntegerv(name, size)
-  local value = gl.int(4)
+  size = size or 1
+  local value = gl.int(size)
   gl_lib.glGetIntegerv(name, value)
-  return value
+  
+  if size == 1 then
+    return value[0]
+  else
+    return value
+  end
 end
 
 function gl.GetShaderiv(shader_id, name)
@@ -3564,12 +3577,41 @@ function gl.GetProgramInfoLog(program_id)
   return gl.GetInfoLog(program_id, gl.GetProgramiv, gl_lib.glGetProgramInfoLog)
 end
 
+function gl.GetVertexAttrib(index, name)
+  local value = gl.int(1)
+  gl_lib.glGetVertexAttribiv(index, name, value)
+  return value[0]
+end
+
+function gl.GenUint(func)
+  local value = gl.uint(1)
+  func(1, value)
+  return value[0]
+end
+
+function gl.GenTexture()
+  return gl.GenUint(gl_lib.glGenTextures)
+end
+
+function gl.GenVertexArray()
+  return gl.GenUint(gl_lib.glGenVertexArrays)
+end
+
+function gl.GenBuffer()
+  return gl.GenUint(gl_lib.glGenBuffers)
+end
+
+local err_map = {
+  [gl.INVALID_ENUM]                   = 'GL_INVALID_ENUM',
+  [gl.INVALID_VALUE]                  = 'GL_INVALID_VALUE',
+  [gl.INVALID_OPERATION]              = 'GL_INVALID_OPERATION',
+  [gl.OUT_OF_MEMORY]                  = 'GL_OUT_OF_MEMORY'
+}
+
 function gl.check_errors()
-  local err = gl.GetError() -- fetch errors
-  while not err == gl.NO_ERROR do
-    local debug = require 'debug'
-    local info = debug.getinfo(2)
-    log.error('OpenGL error ('..err..'): ')
+  local err = gl_lib.glGetError() -- fetch errors
+  while err ~= gl.NO_ERROR do
+    log.error('OpenGL error: '..err_map[err])
     err = gl.GetError()
   end
 end

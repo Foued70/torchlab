@@ -18,29 +18,14 @@ class gui_launcher : public QObject
     if( ev->type() == QEvent::User ) {
       // Create a GLWidget requesting our format
       GLWidget* glWidget = new GLWidget(L, luaWidgetRef);
+
+      delete this;
+      
       return true;
     }
     return false;
   }
 };
-
-// int libui2_display(lua_State *L) {
-//   if (!PACKAGE_PATH) {
-//     lua_getglobal(L, "package");
-//     lua_getfield(L, -1, "path");
-//     PACKAGE_PATH = (char*)luaL_checkstring(L, -1);
-//     lua_pop(L, 2);
-//   }
-
-//   // create holder
-//   gui_launcher* gl = new gui_launcher;
-//   // move it to main thread
-//   gl->moveToThread( QApplication::instance()->thread() );
-//   // send it event which will be posted from main thread
-//   QCoreApplication::postEvent( gl, new QEvent( QEvent::User ) );
-
-//   return 0;
-// }
 
 
 int libui2_attach_qt(lua_State* L) {
@@ -48,10 +33,18 @@ int libui2_attach_qt(lua_State* L) {
   gl->L = L;
   lua_pushvalue(L, -1);
   gl->luaWidgetRef = luaL_ref(L, LUA_REGISTRYINDEX);
+
   // move it to main thread
   gl->moveToThread( QApplication::instance()->thread() );
   // send it event which will be posted from main thread
   QCoreApplication::postEvent( gl, new QEvent( QEvent::User ) );
+
+  return 0;
+}
+
+int libui2_update_gl(lua_State* L) {
+  GLWidget* glWidget = (GLWidget*)lua_touserdata(L, 1);
+  glWidget->updateGL();
 
   return 0;
 }
@@ -63,10 +56,24 @@ int libui2_int_storage_info(lua_State* L) {
   return 2;
 }
 
+int libui2_byte_storage_info(lua_State* L) {
+  THByteTensor* tensor = (THByteTensor*)luaT_checkudata(L, 1, "torch.ByteTensor");
+  lua_pushlightuserdata(L, tensor->storage->data);
+  lua_pushinteger(L, tensor->storage->size * 1);
+  return 2;
+}
+
 int libui2_double_storage_info(lua_State* L) {
   THDoubleTensor* tensor = (THDoubleTensor*)luaT_checkudata(L, 1, "torch.DoubleTensor");
   lua_pushlightuserdata(L, tensor->storage->data);
   lua_pushinteger(L, tensor->storage->size * sizeof(double));
+  return 2;
+}
+
+int libui2_float_storage_info(lua_State* L) {
+  THFloatTensor* tensor = (THFloatTensor*)luaT_checkudata(L, 1, "torch.FloatTensor");
+  lua_pushlightuserdata(L, tensor->storage->data);
+  lua_pushinteger(L, tensor->storage->size * sizeof(float));
   return 2;
 }
 
@@ -75,8 +82,11 @@ static const luaL_reg libui2_init[] =
 {
   // {"display", libui2_display},
   {"attach_qt", libui2_attach_qt},
+  {"update_gl", libui2_update_gl},
   {"int_storage_info", libui2_int_storage_info},
+  {"byte_storage_info", libui2_byte_storage_info},
   {"double_storage_info", libui2_double_storage_info},
+  {"float_storage_info", libui2_float_storage_info},
   {NULL, NULL}
 };
 
