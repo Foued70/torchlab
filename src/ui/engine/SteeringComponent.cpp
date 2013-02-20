@@ -1,5 +1,6 @@
 #include "SteeringComponent.h"
 #include "SmoothDampInterpolate.h"
+#include "BezierInterpolate.h"
 
 SteeringComponent::SteeringComponent() : 
   PhysicsComponent()
@@ -38,20 +39,31 @@ SteeringComponent::moveTo(const Vector3& _goal, const MOVE_BEHAVIOR& _behavior, 
   switch(_behavior) {
     case LINEAR :{
       __endAllTransitions();
-      if (_speed <= 0.0f) {
-        __transitions.push_back(new LinearInterpolate<Vector3>(&__position, _goal, 1.0f));
-      }
-      else {
-        Vector3 offset = _goal - __position;
-        float transitionLength = offset.magnitude() / _speed;
-        __transitions.push_back(new LinearInterpolate<Vector3>(&__position, _goal, transitionLength));
-      }
-      
+      __transitions.push_back(new BezierInterpolate(&__position.x, _goal.x, _speed, BEZIER_LINEAR, BEZIER_LINEAR));
+      __transitions.push_back(new BezierInterpolate(&__position.y, _goal.y, _speed, BEZIER_LINEAR, BEZIER_LINEAR));
+      __transitions.push_back(new BezierInterpolate(&__position.z, _goal.z, _speed, BEZIER_LINEAR, BEZIER_LINEAR));
       break;
     }
-    case SMOOTH_DAMP :{
+    case SOFT :{
       __endAllTransitions();
-      __transitions.push_back(new SmoothDampInterpolate<Vector3>(&__position, _goal, 0.29f, _speed));
+      __transitions.push_back(new BezierInterpolate(&__position.x, _goal.x, _speed, BEZIER_SLOW, BEZIER_SLOW));
+      __transitions.push_back(new BezierInterpolate(&__position.y, _goal.y, _speed, BEZIER_SLOW, BEZIER_SLOW));
+      __transitions.push_back(new BezierInterpolate(&__position.z, _goal.z, _speed, BEZIER_SLOW, BEZIER_SLOW));      
+      break;
+    }
+    case FAST_BOUNCE :{
+      __endAllTransitions();
+      Vector2 startBezierHandleX = Vector2({0.0f, 1.09f});
+      Vector2 endBezierHandleX = Vector2({0.0f, 1.0f});
+      __transitions.push_back(new BezierInterpolate(&__position.x, _goal.x, _speed, startBezierHandleX, endBezierHandleX));
+      
+      Vector2 startBezierHandleY = Vector2({0.0f, 1.09f});
+      Vector2 endBezierHandleY = Vector2({0.0f, 1.0f});
+      __transitions.push_back(new BezierInterpolate(&__position.y, _goal.y, _speed, startBezierHandleY, endBezierHandleY));
+      
+      Vector2 startBezierHandleZ = Vector2({0.0f, 1.09f});
+      Vector2 endBezierHandleZ = Vector2({0.0f, 1.0f});
+      __transitions.push_back(new BezierInterpolate(&__position.z, _goal.z, _speed, startBezierHandleZ, endBezierHandleZ));
       break;
     }
     default:

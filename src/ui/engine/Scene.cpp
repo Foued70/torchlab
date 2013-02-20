@@ -23,8 +23,6 @@ Scene::~Scene() {
 	while (!__objectList.empty())
 		delete __objectList.back(), __objectList.pop_back();
   
-  __objectsByID.clear();
-  
 	while (!__cameraList.empty())
 		delete __cameraList.back(), __cameraList.pop_back();
 	while (!__lightList.empty())
@@ -51,18 +49,12 @@ Scene::show() {
 
 Object *
 Scene::createObject(const string &_name, Object *_parent) {
-	Object *newObject;
-	newObject = new Object(_name);
-  
-  unsigned int objectID = newObject -> getID();
-  if( __objectsByID.find(objectID) == __objectsByID.end()) {
-	  __objectsByID.insert(make_pair(objectID, newObject));
-  }
-  else {
-    log(WARN, "Object with id %d already exists! Object %s is requesting to own the same id", (int)objectID, _name.c_str() );
-    delete newObject;
+  if ( getObjectByName(_name) ) {
+    log(WARN, "Object %s already exists! Cannot create a new object of the same name.", _name.c_str());
     return NULL;
   }
+	Object *newObject;
+	newObject = new Object(_name);
   
 	if (_parent != NULL)
 		_parent -> addChild(newObject);
@@ -71,21 +63,40 @@ Scene::createObject(const string &_name, Object *_parent) {
 	return newObject;
 }
 
+bool 
+Scene::deleteObject(const std::string& _name) {
+  auto it = __objectList.begin();
+  while ( it != __objectList.end() ) {
+     if( (*it)->name == _name ) {
+       delete *it;
+       it = __objectList.erase(it);
+       return true;
+     }
+     else {
+        ++it;
+     }
+  }
+  return false;
+}
+
 Object *
 Scene::getObjectByName(const string &_name) {
-	if (_name == "")
-		return NULL;
-	for (unsigned i = 0; i < __objectList.size(); i++) {
-		if (__objectList[i] -> name == _name)
-			return __objectList[i];
-	}
-	return NULL;
+  for ( int object = 0; object < __objectList.size(); object++ ) {
+    if (__objectList[object]->name == _name) {
+      return __objectList[object];
+    }
+  }
+  return NULL;
 }
 
 Object * 
 Scene::getObjectByID(unsigned int _id) {
-	auto result = __objectsByID.find(_id);	
-  return (result != __objectsByID.end()) ? result -> second : NULL;
+  for ( int object = 0; object < __objectList.size(); object++ ) {
+    if (__objectList[object]->getID() == _id) {
+      return __objectList[object];
+    }
+  }
+  return NULL;
 }
 
 Camera *

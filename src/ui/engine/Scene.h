@@ -10,8 +10,6 @@
 
 class ShaderDataHandler;
 
-typedef std::unordered_map< unsigned int, Object* > objectMap;
-
 class Scene {
 public:
 	
@@ -42,6 +40,8 @@ public:
 	 * @return Pointer to the newly created object.
 	 */
 	Object * createObject(const std::string&, Object* = (Object*)NULL);
+   
+  bool deleteObject(const std::string&);
 	
 	/**
 	 * Look for the object.
@@ -122,9 +122,6 @@ private:
 	
 	/* Vector of objects */
 	std::vector< Object* > __objectList;
-  
-  /* unique ids and object pointers */
-  objectMap __objectsByID;
 	
 	/* Objects' iterator */
 	std::vector< Object* >::const_iterator __objectIterator;

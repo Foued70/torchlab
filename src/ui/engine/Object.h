@@ -120,6 +120,18 @@ public:
 	bool loadFromObj(const std::string&, unsigned = 0);
 	
 	bool loadFrom(LuaObject* obj);
+  
+  bool explicitLoad(  const std::string& _objFilePath,
+                      unsigned _invertUVFlags,
+                      const std::string& _materialName,
+                      Shader* _shader, 
+                      float _ambientFactor, 
+                      float _diffuseFactor, 
+                      float _specularFactor,
+                      Texture** _textures,
+                      unsigned int _numTextures);
+                      
+  bool createVertexCloud(Object* _object);
 	
 	/**
 	 * Loads the whole object into the VBO.
@@ -140,6 +152,8 @@ public:
 	 * @return Pointer to the found Mesh, or NULL if nothing was found.
 	 */ 
   Mesh* getMeshByID(unsigned int);
+   
+  inline unsigned int getMeshCount() { return __meshes.size(); }
   
 	
 	inline Material * getMaterialByName(const std::string& _name) { return __materials[_name]; }
@@ -199,6 +213,9 @@ private:
 	 * @param fileName Name of the .obj file.
 	 */
 	void __parseObj(const std::string&, unsigned);
+   
+  void __parseObjSingleMesh(const std::string& _fileName, Material* _material, unsigned _invert);
+  
 	
 	/**
 	 * Helpful function to shorten a bit parsing the obj file.
@@ -240,8 +257,10 @@ private:
 	/* Vector of children's pointers. */
 	std::vector< Object* > __children;
 	
+public:
 	meshesMap __meshes;
-	
+  
+private:
 	materialsMap __materials;
 	
 	short unsigned __content;

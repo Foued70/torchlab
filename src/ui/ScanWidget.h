@@ -9,6 +9,7 @@
 
 class FrameBuffer;
 class CameraController;
+class Object;
 
 class ScanWidget : public QGLWidget {
   Q_OBJECT // must include this if you use Qt signals/slots
@@ -21,6 +22,9 @@ public:
 
   Engine* engine;
   Scene* scene;
+  Scene* mainScene;
+  Scene* postScene;
+  Object* mainModel;
 
 protected:
   void initializeGL();

@@ -11,5 +11,9 @@
         <file>shaders/shadow.frag</file>
         <file>shaders/textured.vert</file>
         <file>shaders/textured.frag</file>
+        <file>shaders/wireframe.vert</file>
+        <file>shaders/wireframe.frag</file>
+        <file>shaders/vertexHighlight.vert</file>
+        <file>shaders/vertexHighlight.frag</file>
     </qresource>
 </RCC>
