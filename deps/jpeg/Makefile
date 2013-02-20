@@ -15,8 +15,8 @@ args = \
 
 
 all:$(install)
-	
-	
+
+
 $(install): $(unpack)
 	cd $(unpack); ./configure $(args)
 	cd $(unpack); make install
