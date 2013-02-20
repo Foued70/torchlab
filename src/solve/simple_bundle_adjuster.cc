@@ -198,9 +198,7 @@ LUA_EXTERNC DLL_EXPORT void simplesba(int* cam_index, int ncam,
     // image location and compares the reprojection against the observation.
     ceres::CostFunction* cost_function =
         new ceres::AutoDiffCostFunction<SnavelyReprojectionError, 2, 9, 3>(
-            new SnavelyReprojectionError(
-                obs[2 * i + 0],
-                obs[2 * i + 1]));
+            new SnavelyReprojectionError(obs[2 * i + 0], obs[2 * i + 1]));
 
     problem.AddResidualBlock(cost_function,
                              NULL /* squared loss */,

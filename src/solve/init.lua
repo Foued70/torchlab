@@ -4,9 +4,9 @@ require 'torchffi'
 local ffi = require 'ffi'
 
 ffi.cdef[[ 
-            void simplesba(int* cameras, int ncam,
-                           int* points,  int npts,  
-                           double *obs, int nobs,
+            void simplesba(int* cameras,   int ncam,
+                           int* points,    int npts,  
+                           double *obs,    int nobs,
                            double *params, int nparams);
             int loadBALfile(char* fname); 
          ]]
@@ -57,16 +57,16 @@ function solve.simplesba(cam_index,pts_index,obs,prm)
                     obs_cdata,nobs,
                     prm_cdata,nprm)
 end
-
--- load a sample bal file which is already stored as torch tensors, to
--- test the torch interface to simplesba
+ 
+-- Test the torch interface to simplesba by loading a sample bal file
+-- which is already stored as torch tensors
 function solve.testsimplesba()
    local bal = dofile("test/problem-16-22106-pre.lua")
    solve.simplesba(bal.cam_index,bal.pt_index, 
                    bal.observations,bal.parameters)
 end
 
--- load a bal file sample as simple_bundle_adjust in ceres examples
+-- Load a bal file. Same as simple_bundle_adjust in ceres examples.
 function solve.loadbalfile(fname)
    -- FIXME this string copy is annoyingly not working...
    local fcdata = ffi.new("char[?]",fname:len())
