@@ -3,7 +3,8 @@
 #include <QString>
 #include <QDebug>
 
-char* readResourceText(const QString& filename) {
+
+std::string readResourceText(const QString& filename) {
   QFile file( filename );
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)){
       qWarning() << "Cannot open file " << filename;
@@ -13,5 +14,5 @@ char* readResourceText(const QString& filename) {
   char* data = file.readAll().data();
   file.close();
   
-  return data;
+  return std::string(data);
 }
