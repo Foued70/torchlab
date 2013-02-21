@@ -24,6 +24,7 @@ public:
   
   float getZoom() const;
   void setZoom(float _zoom);
+  void setPositionAndRotation(const Vector3& _position, const Vector3& _rotation);
   void rotate(float _x, float _y);
   void flyTo(const Vector3& _destination);
   void selectSurface(Surface* _surface, const Vector3& _startAim);

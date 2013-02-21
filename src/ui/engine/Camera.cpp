@@ -119,9 +119,8 @@ Camera::moveEye(GLfloat _x, GLfloat _y, GLfloat _z) {
 
 void 
 Camera::rotateCenterAroundCamera(GLfloat _x, GLfloat _y) {
-  const float RADS = 0.001f;
-  float xAngle = _x * RADS;
-  float yAngle = _y * RADS;
+  float xAngle = _x;
+  float yAngle = _y;
   Vector3 eyePosition = __eye;
   
   // Move center and eye so that eye is at the origin
@@ -158,9 +157,8 @@ Camera::rotateCenterAroundCamera(GLfloat _x, GLfloat _y) {
 
 void
 Camera::rotateAroundCenter(GLfloat _x, GLfloat _y) {
-  const float RADS = 0.02;
-  float xAngle = _x * RADS;
-  float yAngle = _y * RADS;
+  float xAngle = _x;
+  float yAngle = _y;
   
   // move eye as if center is at origin
   __eye -= __center;

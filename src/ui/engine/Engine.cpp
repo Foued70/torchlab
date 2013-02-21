@@ -234,3 +234,66 @@ Engine::getTriangleByID(const TriangleID& _id) {
   return triangle;
 }
 
+Vertex* 
+Engine::pickVertex(float _x, float _y, unsigned int _searchDistance, float _foundThreshold) {
+  Vertex* selectedVertex = NULL;
+      
+  GLint viewport[4];
+  glGetIntegerv(GL_VIEWPORT, viewport);
+  float windowWidth = viewport[2];
+	float windowHeight = viewport[3];
+      
+  std::vector<Triangle*> foundTriangles;
+      
+  for ( unsigned int x = (((int)_x-_searchDistance) >= 0) ? ((int)_x-_searchDistance) : 0; 
+        x < ((int)_x+_searchDistance) && x < windowWidth;
+        x++ )
+  {
+    for ( unsigned int y = (((int)_y-_searchDistance) >= 0) ? ((int)_y-_searchDistance) : 0;
+          y < ((int)_y+_searchDistance) && y < windowHeight;
+          y++ )
+    {
+      TriangleID pickingData = __frameBuffer->pickTriangle((GLuint)x, (GLuint)y);
+      if (pickingData.objectID != 0) {
+        Triangle* tempTriangle = getTriangleByID(pickingData);
+        bool triangleExists = false;
+        for (unsigned int t = 0; t < foundTriangles.size(); t++) {
+          if (foundTriangles[t] == tempTriangle) {
+            triangleExists = true;
+            break;
+          }
+        }
+        if (!triangleExists) {
+          foundTriangles.push_back(tempTriangle); 
+        }
+      } 
+    }
+  }
+  //Find the closest vertex to click
+  Vector3 clickPosition = getScene("MainScene")->getActiveCamera()->cameraToWorld(_x, _y);
+  for (unsigned int t = 0; t < foundTriangles.size(); t++) {
+    for (unsigned int v = 0; v < 3; v++) {
+      Vertex* tempVertex = foundTriangles[t]->vertices[v];
+                                              
+      if (t == 0 && v == 0) {
+        selectedVertex = tempVertex;
+        continue;
+      }
+      if (  distanceSquared(clickPosition, Vector3({tempVertex->vertexPosition.x, tempVertex->vertexPosition.y, tempVertex->vertexPosition.z})) 
+            < distanceSquared(clickPosition, Vector3({selectedVertex->vertexPosition.x, selectedVertex->vertexPosition.y, selectedVertex->vertexPosition.z})) ) {
+        selectedVertex = tempVertex;
+      }                          
+    }
+  }
+  foundTriangles.clear();
+  if ( distanceSquared( clickPosition, 
+                        Vector3({selectedVertex->vertexPosition.x, selectedVertex->vertexPosition.y, selectedVertex->vertexPosition.z}))
+        < (_foundThreshold*_foundThreshold))
+  {
+    log(PARAM, "Vertex Selected. Distance from mouse: %f", distance(clickPosition, Vector3{selectedVertex->vertexPosition.x, selectedVertex->vertexPosition.y, selectedVertex->vertexPosition.z}));
+    return selectedVertex;
+  }
+  log(PARAM, "No vertex found.");
+  return NULL;
+}
+

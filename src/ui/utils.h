@@ -69,6 +69,4 @@ void checkGLErrors(const std::string&);
 
 void log(LogType, const std::string&, ...);
 
-//std::string readResourceText(const std::string& _filename);
-
 #endif // UTILS_H

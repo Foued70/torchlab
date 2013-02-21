@@ -128,18 +128,6 @@ void log(LogType _type, const std::string& _out, ...) {
 	cout.flush();
 }
 
-/*
-std::string 
-readResourceText(const std::string& _filename) {
-  std::ifstream textFile;
-  textFile.open(_filename.c_str(), ifstream::in);
-  std::stringstream buffer;
-  buffer << textFile.rdbuf();
-  textFile.close();
-  return buffer.str();
-}
-*/
-
 
 
 
