@@ -15,8 +15,8 @@ args = $(default_cmake_args) \
 
 
 all:$(install)
-	
-	
+
+
 $(install): $(unpack)
 	cd $(unpack); mkdir -p build
 	cd $(unpack)/build; cmake $(args) ..

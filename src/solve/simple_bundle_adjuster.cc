@@ -170,10 +170,12 @@ struct SnavelyReprojectionError {
 };
 
 
-LUA_EXTERNC DLL_EXPORT void simplesba(int* points, int npts, 
-                                      int* cameras, int ncam, 
-                                      double *obs, int nobs,
+LUA_EXTERNC DLL_EXPORT void simplesba(int* cam_index, int ncam, 
+                                      int* pt_index,  int npts, 
+                                      double *obs,  int nobs,
                                       double *params, int nparams){
+
+  google::InitGoogleLogging("simplesba");
   int i;
 
   std::cout << "npoints: " << npts << std::endl;
@@ -184,6 +186,8 @@ LUA_EXTERNC DLL_EXPORT void simplesba(int* points, int npts,
     std::cerr << "Error wrong number of parameters" << std::endl;
     return;
   }
+  double *mutable_cameras = params;
+  double *mutable_points  = params + 9 * ncam;
 
   // Create residuals for each observation in the bundle adjustment problem. The
   // parameters for cameras and points are added automatically.
@@ -194,14 +198,12 @@ LUA_EXTERNC DLL_EXPORT void simplesba(int* points, int npts,
     // image location and compares the reprojection against the observation.
     ceres::CostFunction* cost_function =
         new ceres::AutoDiffCostFunction<SnavelyReprojectionError, 2, 9, 3>(
-            new SnavelyReprojectionError(
-                obs[2 * i + 0],
-                obs[2 * i + 1]));
+            new SnavelyReprojectionError(obs[2 * i + 0], obs[2 * i + 1]));
 
     problem.AddResidualBlock(cost_function,
                              NULL /* squared loss */,
-                             bal_problem.mutable_camera_for_observation(i),
-                             bal_problem.mutable_point_for_observation(i));
+                             mutable_cameras + cam_index[i] * 9,
+                             mutable_points  +  pt_index[i] * 3);
   }
 
   // Make Ceres automatically detect the bundle structure. Note that the
@@ -214,9 +216,12 @@ LUA_EXTERNC DLL_EXPORT void simplesba(int* points, int npts,
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
   std::cout << summary.FullReport() << "\n";
+
 }
 
 LUA_EXTERNC DLL_EXPORT int loadBALfile(char *fname){
+
+  google::InitGoogleLogging("loadBALfile");
   
   BALProblem bal_problem;
   if (!bal_problem.LoadFile(fname)) {

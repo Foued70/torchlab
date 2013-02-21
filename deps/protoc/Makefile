@@ -14,8 +14,8 @@ args=--prefix=$(install_root) \
 
 
 all:$(install)
-	
-	
+
+
 $(install): $(unpack)
 	cd $(unpack); ./configure $(args)
 	# cd $(unpack); make check
