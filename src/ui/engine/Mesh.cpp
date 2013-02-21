@@ -94,9 +94,9 @@ Mesh::loadIntoVbo() {
   log(PARAM, "__vertices.size() in vbo: %d", __vertices.size());
 	__buffer.vboID[DATA_ARRAY].dataSize = sizeof(Vertex) * __vertices.size();
   
-  for(unsigned int v = 0; v < __vertices.size(); v++) {
-    log(PARAM, "Vertex %d= %f %f %f", v, __vertices[v].vertexPosition.x, __vertices[v].vertexPosition.y, __vertices[v].vertexPosition.z);
-  }
+  // for(unsigned int v = 0; v < __vertices.size(); v++) {
+  //   log(PARAM, "Vertex %d= %f %f %f", v, __vertices[v].vertexPosition.x, __vertices[v].vertexPosition.y, __vertices[v].vertexPosition.z);
+  // }
 
 	
 	__buffer.prepareRoom();

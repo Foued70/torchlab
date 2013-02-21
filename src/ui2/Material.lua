@@ -24,7 +24,7 @@ function Material:__init(mtl_data)
   self.diffuse_tex_img = format_image(mtl_data.diffuse_tex_img)
   self.texture_loaded = not self.diffuse_tex_img -- texture_loaded = false is we have a texture to load
 
-  self.shader = require('ui2.Shader').shaders.identity
+  self.shader = require('ui2.Shader').shaders.textured
 
   self.tex_id = nil
 end
@@ -41,33 +41,42 @@ function Material:load_texture()
   gl.check_errors()
 
   gl.TexImage2D(
-      gl.TEXTURE_2D, 0,
-      gl.RGB, width, height, 0,
-      gl.RGB, gl.UNSIGNED_BYTE, img_data_ptr
+      gl.TEXTURE_2D, 
+      0, -- level
+      gl.RGB, -- internalFormat
+      width, height, 
+      0, -- border
+      gl.RGB, -- format 
+      gl.UNSIGNED_BYTE, -- type
+      img_data_ptr
   )
+  gl.check_errors()
+
+  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.check_errors()
 
   gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_BORDER)
   gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_BORDER)
   gl.check_errors()
 
-  self.texture_loaded = false
+  self.texture_loaded = true
 end
 
 function Material:use(context)
   self.shader:use(context)
-  -- self.shader:set_uniform_float('sFrontMaterial.ambient', self.ambient)
-  -- self.shader:set_uniform_float('sFrontMaterial.diffuse', self.diffuse)
-  -- self.shader:set_uniform_float('sFrontMaterial.specular', self.specular)
-  -- self.shader:set_uniform_float('sFrontMaterial.shininess', self.shininess)
-  -- self.shader:set_uniform_float('sFrontMaterial.emission', self.emission)
+  self.shader:set_uniform_float('sFrontMaterial.ambient', self.ambient)
+  self.shader:set_uniform_float('sFrontMaterial.diffuse', self.diffuse)
+  self.shader:set_uniform_float('sFrontMaterial.specular', self.specular)
+  self.shader:set_uniform_float('sFrontMaterial.shininess', self.shininess)
+  self.shader:set_uniform_float('sFrontMaterial.emission', self.emission)
 
-  -- self:set_texture()
+  self:set_texture()
 end
 
 function Material:set_texture()
-  if not self.tex_id then return end
   if not self.texture_loaded then self:load_texture() end
+  if not self.tex_id then return end
 
   gl.ActiveTexture(gl.TEXTURE0)
   gl.BindTexture(gl.TEXTURE_2D, self.tex_id)

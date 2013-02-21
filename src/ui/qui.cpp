@@ -55,8 +55,9 @@ int libui_create_object(lua_State *L) {
   LuaObject obj = LuaObject(L, 1);
 
   scanWidget->makeCurrent();
-  Scene* scene = scanWidget->scene;
+  Scene* scene = scanWidget->engine->getCurrentScene();
   Object* object = scene->createObject("space");
+  printf("load\n");
   object->loadFrom(&obj);
   // object->scale(-1, 1, 1);
   // object -> move(0, 0, 0);
