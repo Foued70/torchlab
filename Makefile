@@ -1,4 +1,4 @@
-packages = ui protobuf
+packages = ui
 
 all: $(packages)
 
