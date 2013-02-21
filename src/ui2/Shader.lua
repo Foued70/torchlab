@@ -60,11 +60,11 @@ function Shader:load()
   local header_vert = read('_header_vert.shader')
   local header_frag = read('_header_frag.shader')
 
-  local vert_code = read(self.name..'.vert')
-  local frag_code = read(self.name..'.frag')
+  -- local vert_code = read(self.name..'.vert')
+  -- local frag_code = read(self.name..'.frag')
 
-  -- local vert_code = header_common..header_vert..read(self.name..'.vert')
-  -- local frag_code = header_common..header_frag..read(self.name..'.frag')
+  local vert_code = header_common..header_vert..read(self.name..'.vert')
+  local frag_code = header_common..header_frag..read(self.name..'.frag')
 
   setShaderSource(self.vert_shader_id, vert_code)
   setShaderSource(self.frag_shader_id, frag_code)
@@ -79,11 +79,11 @@ function Shader:load()
   gl.check_errors()
 
   gl.BindAttribLocation(self.program_id, 0, 'sVertex')
-  gl.BindAttribLocation(self.program_id, 1, 'sTexCoord')
+  gl.BindAttribLocation(self.program_id, 1, 'sTexCoords')
   gl.BindAttribLocation(self.program_id, 2, 'sNormal')
 
-  -- gl.BindFragDataLocation(self.program_id, 0, 'sFragColor')
-  -- gl.BindFragDataLocation(self.program_id, 1, 'sPickingData')
+  gl.BindFragDataLocation(self.program_id, 0, 'sFragColor')
+  gl.BindFragDataLocation(self.program_id, 1, 'sPickingData')
 
   gl.LinkProgram(self.program_id)
   gl.check_errors()
@@ -98,17 +98,30 @@ function Shader:load()
   end
 end
 
+local function memlog(label, x)
+  local s = x:storage()
+  p(label)
+  p(("%.4f %.4f %.4f %.4f"):format(s[1], s[2], s[3], s[4]))
+  p(("%.4f %.4f %.4f %.4f"):format(s[5], s[6], s[7], s[8]))
+  p(("%.4f %.4f %.4f %.4f"):format(s[9], s[10], s[11], s[12]))
+  p(("%.4f %.4f %.4f %.4f"):format(s[13], s[14], s[15], s[16]))
+  p('')
+end
+
+
+
 function Shader:use(context)
-  log.trace(self.name)
   gl.UseProgram(self.program_id)
   gl.check_errors()
 
-  -- log.trace(context.projection_matrix, context.model_view_matrix, context.normal_matrix)
+  -- log.trace(context.model_view_matrix)
+  context.model_view_projection_matrix:mm(context.projection_matrix, context.model_view_matrix)
+  memlog('model_view_projection_matrix', context.model_view_projection_matrix)
 
-  -- self:set_uniform_matrix('sProjectionMatrix', context.projection_matrix)
-  -- self:set_uniform_matrix('sModelViewMatrix', context.model_view_matrix)
-  -- self:set_uniform_matrix('sNormalMatrix',context.normal_matrix)
-  -- self:set_uniform_matrix('sModelViewProjectionMatrix', context.model_view_projection_matrix:mm(context.projection_matrix, context.model_view_matrix))
+  self:set_uniform_matrix('sProjectionMatrix', context.projection_matrix)
+  self:set_uniform_matrix('sModelViewMatrix', context.model_view_matrix)
+  self:set_uniform_matrix('sNormalMatrix',context.normal_matrix)
+  self:set_uniform_matrix('sModelViewProjectionMatrix', context.model_view_projection_matrix)
 end
 
 function Shader:set_uniform_int(name, value)

@@ -162,6 +162,9 @@ LuaContainer::getValue(lua_State *L, int index) {
   else if (lua_istable(L, index)) {
     value = (void*)extractObjectOrList(L, index);
   }
+  else if (lua_isuserdata(L, index)) {
+    value = (void*)lua_touserdata(L, index);
+  }
   else {
       log(WARN, "LuaObject: unknown value type (%s)", lua_typename(L, lua_type(L, index)));
   }

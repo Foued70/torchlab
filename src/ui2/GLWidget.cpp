@@ -15,40 +15,6 @@ GLWidget::GLWidget(lua_State* L, int luaWidgetRef, QWidget* parent) : QGLWidget(
   show();
 }
 
-// GLWidget::GLWidget(QWidget* parent) : QGLWidget( new Core3_2_context(format), parent )
-// {
-//   setMouseTracking(false);
-
-//   L = luaL_newstate();
-//   luaL_openlibs(L);
-
-//   // set package.path
-//   lua_getglobal(L, "package");
-//   lua_pushstring(L, PACKAGE_PATH);
-//   lua_setfield(L, -2, "path"); // package.path = PACKAGE_PATH
-//   lua_pop(L, 1); // pop package
-
-//   // require 'cloudlab-env'
-//   lua_getglobal(L, "require");
-//   lua_pushstring(L, "cloudlab-env");
-//   callLua(1, 0);
-
-
-//   // get GLWidget class onto the top of the 
-//   // <top> = require 'GLWidget'
-//   lua_getglobal(L, "require");
-//   lua_pushstring(L, "ui2/GLWidget");
-//   callLua(1, 1);
-
-//   // <top> = GLWidget.new()
-//   lua_getfield(L, -1, "new");
-//   callLua(0, 1);
-
-//   // remove the GLWidget class
-//   lua_remove(L, -2);
-
-//   // table on the top of the stack is a GLWidget instance
-// }
 
 GLWidget::~GLWidget() {
 }
@@ -135,6 +101,10 @@ void GLWidget::wheelEvent(QWheelEvent* event) {
 }
   
 void GLWidget::keyPressEvent(QKeyEvent* event) {
+  selfFunction("key_press");
+  lua_createtable(L, 0, 8);
+  setTableInt("key", event->key());
+  callLua(2, 0);
 }
 
 

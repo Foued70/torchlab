@@ -1,6 +1,7 @@
 local ffi = require 'ffi'
 local libui = require 'libui2'
 local gl = require 'ui2.gl'
+local key = require 'ui2.key'
 
 local Shader = require 'ui2.Shader'
 
@@ -10,13 +11,16 @@ function GLWidget:__init()
   libui.attach_qt(self)
 
   self.camera = require('ui2.Camera').new()
-  self.camera:set_eye(-20, 0, 7)
-  self.camera:set_center(0, 0, 7)
+  self.camera:set_eye(2,3,5)
+  self.camera:set_center(0,0,1)
 
   self.objects = {}
 
   self.context = {}
-  self.context.model_view_projection_matrix = torch.FloatTensor(4,4)
+  self.context.projection_matrix = self.camera.projection_matrix
+  self.context.model_view_matrix = self.camera.model_view_matrix
+  self.context.normal_matrix = self.camera.normal_matrix
+  self.context.model_view_projection_matrix = torch.FloatTensor(4,4):t() -- transposed for opengl's column majorness
 end
 
 function GLWidget:init(qt_widget)
@@ -24,9 +28,9 @@ function GLWidget:init(qt_widget)
 
   self.qt_widget = qt_widget
 
-  -- self.textured_shader = Shader.new('textured') 
+  self.textured_shader = Shader.new('textured') 
   -- self.shadow_shader = Shader.new('shadow') 
-  self.identity_shader = Shader.new('identity') 
+  -- self.identity_shader = Shader.new('identity') 
 
 end
 
@@ -41,7 +45,6 @@ function GLWidget:resize(width, height)
 end
 
 function GLWidget:paint()
-  log.trace()
   gl.Clear(gl.COLOR_BUFFER_BIT)
   gl.Clear(gl.DEPTH_BUFFER_BIT)
   gl.ClearColor(0, 0, 0, 0)
@@ -54,24 +57,19 @@ function GLWidget:paint()
   gl.Enable(gl.DEPTH_TEST)
   gl.check_errors()
   
-  -- gl.CullFace(gl.BACK)
-  -- gl.Enable(gl.CULL_FACE)
-  -- gl.check_errors()
+  gl.CullFace(gl.BACK)
+  gl.Enable(gl.CULL_FACE)
+  gl.check_errors()
   
   gl.Enable(gl.MULTISAMPLE)
   gl.check_errors()
 
-  local context = {}
   -- setup camera
   self.camera:update_matrices()
-  context.projection_matrix = self.camera.projection_matrix
-  context.model_view_matrix = self.camera.model_view_matrix
-  context.normal_matrix = self.camera.normal_matrix
-  context.model_view_projection_matrix = torch.FloatTensor(4,4)
 
   -- show objects
   for i, object in ipairs(self.objects) do
-    object:paint(context)
+    object:paint(self.context)
   end
   
   gl.Disable(gl.BLEND)
@@ -93,6 +91,25 @@ end
 
 function GLWidget:mouse_wheel(event)
   -- p('mouse_wheel', event)
+end
+
+function GLWidget:key_press(event)
+  -- p('key_press', event)
+  if event.key == key.Left then
+    self.camera:move_eye(-0.3,0,0)
+  elseif event.key == key.Right then
+    self.camera:move_eye(0.3,0,0)
+  elseif event.key == key.Up then
+    self.camera:move_eye(0,0.3,0)
+  elseif event.key == key.Down then
+    self.camera:move_eye(0,-0.3,0)
+  end
+  self:update()
+end
+
+function GLWidget:add_object(data_obj)
+  table.insert(self.objects, require('ui2.Object').new(data_obj))
+  self:update()
 end
 
 return GLWidget
