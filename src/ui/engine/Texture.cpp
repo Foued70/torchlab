@@ -33,6 +33,17 @@ Texture::Texture(const string &_fileName, Mode _mode) :
 	__boss -> insert(this);
 }
 
+Texture::Texture(const std::string& _name, GLuint _existingID, Mode _mode) :
+   name(_name),
+   __type(GL_TEXTURE_2D),
+   __texture(_existingID),
+   __mode(_mode),
+ 	 __boss(TextureManager::GetSingletonPtr()),
+ 	 __shaders(ShaderDataHandler::GetSingleton())
+{
+  __boss -> insert(this);
+}
+
 Texture::~Texture() {
 	glDeleteTextures(1, &__texture);
 	checkGLErrors(AT);
@@ -49,8 +60,14 @@ Texture::setTexture(unsigned _number) {
 		__shaders.updateSampler2D("textureUnit", _number);
 	else if (__mode == MODE_NORMAL_MAP)
 		__shaders.updateSampler2D("normalMap", _number);
-	else // MODE_SPECULAR_MAP
+	else if (__mode == MODE_SPECULAR_MAP)
 		__shaders.updateSampler2D("specularMap", _number);
+  else {  // Mode: MODE_INDEXED_MAP
+    stringstream ss;
+    ss << "textureMap_" << _number; 
+    string sampler2DName = ss.str();
+    __shaders.updateSampler2D(sampler2DName.c_str(), _number);
+  }
 }
 
 void
@@ -181,7 +198,47 @@ Texture::__loadTexture(const string &_filename) {
 	
 	return texID;
 }
-		
+
+/*
+Texture::__loadTextureFromData( GLvoid** _data,
+                                GLuint _format=GL_RGBA, 
+                                GLuint _dataType=GL_UNSIGNED_BYTE, 
+                                GLuint _width, 
+                                GLuint _height) {
+  
+	GLuint texID;
+	glGenTextures(1, &texID);
+	checkGLErrors(AT);
+	
+	if (!texID)
+		return 0;
+	
+	glBindTexture(GL_TEXTURE_2D, texID);
+	checkGLErrors(AT);
+	
+	glTexImage2D( GL_TEXTURE_2D, 
+                0,
+			          _format, 
+                _width, 
+                _height, 
+                0,
+			          _format, 
+                _dataType, 
+                _data );
+	checkGLErrors(AT);
+  
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	checkGLErrors(AT);
+  
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, __wrapping);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, __wrapping);
+	checkGLErrors(AT);
+  
+  delete [] _data;
+  return texID;
+}
+*/		
 
 
 /* TODO: Cube map support. */

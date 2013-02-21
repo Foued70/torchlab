@@ -36,11 +36,11 @@ private:
   bool __atGoal();
   
 private:
-  FLIGHT_MODE __flightMode;
   float __zoom;
+  float __flightTime;
+  FLIGHT_MODE __flightMode;
   SteeringComponent* __steeringEye;
   SteeringComponent* __steeringCenter;
-  
   Surface* __selectedSurface;
 };
 

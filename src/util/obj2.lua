@@ -207,7 +207,7 @@ function load(filename)
   obj.verts              = trim_verts:narrow(2, 1, 4)
   obj.uvs                = trim_verts:narrow(2, 5, 2)
   obj.faces              = faces
-  obj.submeshes          = submeshes
+  obj.submeshes          = torch.IntTensor(submeshes)
   obj.materials          = materials
 
   return obj

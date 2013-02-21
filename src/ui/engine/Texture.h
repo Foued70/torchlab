@@ -10,7 +10,8 @@ class ShaderDataHandler;
 enum Mode {
 	MODE_TEXTURE,
 	MODE_NORMAL_MAP,
-	MODE_SPECULAR_MAP
+	MODE_SPECULAR_MAP,
+  MODE_INDEXED_MAP
 };
 
 class Texture {
@@ -24,6 +25,12 @@ public:
 	 * @param fileName Location of file with the texture.
 	 */
 	Texture(const std::string&, Mode = MODE_TEXTURE);
+  
+  /*
+  Ctor that builds a texture off of a preexisting texture, using its ID.
+  Useful for using Frame Buffer textures in shaders as textureSampler2Ds during multipass rendering.
+  */ 
+  Texture(const std::string& _name, GLuint _existingID, Mode = MODE_TEXTURE);
 	
 	/**
 	 * Destructor destroys the texture and removes it from the GPU's buffer.
@@ -55,6 +62,7 @@ private:
 	 * @return Texture.
 	 */
 	GLuint __loadTexture(const std::string&);
+  
 	
 	/* Pointer to GL's texture */
 	GLuint __texture;

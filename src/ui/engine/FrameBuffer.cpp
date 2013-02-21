@@ -1,6 +1,7 @@
 #include "FrameBuffer.h"
 
 #include "Mesh.h"
+#include "Texture.h"
 #include "utils.h"
 
 #include <fstream>
@@ -8,10 +9,7 @@
 using namespace std;
 
 FrameBuffer::FrameBuffer() :
-	__frameBufferID(0),
-	__depthBufferID(0),
-	__textureID0(0),
-	__textureID1(0)
+	__frameBufferID(0)
 {
 	log(CONSTRUCTOR, "Frame Buffer constructed.");
 	
@@ -34,24 +32,30 @@ bool FrameBuffer::initialize()
   log(PARAM, "Initializing Framebuffer: width=%i, height=%i", (int)__width, (int)__height);		
   
 	__generateFrameBuffer();
-	__generateDepthBuffer();
-	__generateTexture();
+	//__generateDepthBuffer();
+	__generateTextures();
 	
 	return __evaluateConfiguration();
 }
 
 FrameBuffer::~FrameBuffer()
 {	
-  //TO DO: these openGL functions are undeclared for some reason...
-  /*
-  GLuint textures[2] = {__textureID0, __textureID1};
-  glDeleteTextures(2, textures);
-  glDeleteRenderbuffers(1, &__depthBufferID);
-	glDeleteFrameBuffers(1, &__frameBufferID);
-  */
+  __deleteAllTextures();
+}
+
+void FrameBuffer::__deleteAllTextures() {
+  while (!__textures.empty()) {
+    if (__textures.back() != NULL) { 
+      delete  __textures.back(); 
+    }
+    __textures.pop_back();
+  } 
 }
 
 GLuint FrameBuffer::__getAttachmentIndex(const RENDER_PASS& renderPass) const {
+  if (renderPass == DEPTH_PASS) {
+    return GL_DEPTH_ATTACHMENT;
+  }
   return GL_COLOR_ATTACHMENT0 + (GLuint)renderPass;
 }
 
@@ -75,22 +79,12 @@ void FrameBuffer::unbind()
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void FrameBuffer::__generateDepthBuffer()
+void FrameBuffer::__generateTextures()
 {
-	glGenRenderbuffers(1, &__depthBufferID);
-	glBindRenderbuffer(GL_RENDERBUFFER, __depthBufferID);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, __width, __height);
-	glFramebufferRenderbuffer(	GL_DRAW_FRAMEBUFFER, 
-								              GL_DEPTH_ATTACHMENT, 
-								              GL_RENDERBUFFER,
-								              __depthBufferID );
-	glBindRenderbuffer(GL_RENDERBUFFER, __depthBufferID);
-}
-
-void FrameBuffer::__generateTexture()
-{
-	glGenTextures(1, &__textureID0);
-	glBindTexture(GL_TEXTURE_2D, __textureID0);
+  // C O L O R   T E X T U R E
+  GLuint tempIDColor = 0;
+	glGenTextures(1, &tempIDColor);
+	glBindTexture(GL_TEXTURE_2D, tempIDColor);
 	
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -103,11 +97,16 @@ void FrameBuffer::__generateTexture()
 	glFramebufferTexture2D(	GL_FRAMEBUFFER, 
 							            __getAttachmentIndex(COLOR_PASS),
 							            GL_TEXTURE_2D, 
-							            __textureID0, 
+							            tempIDColor, 
 							            0);
+  
+  __textures.push_back( new Texture("FrameBufferPass_Color", tempIDColor, MODE_INDEXED_MAP) );
 	
-	glGenTextures(1, &__textureID1);
-	glBindTexture(GL_TEXTURE_2D, __textureID1);
+  
+  // P I C K I N G   T E X T U R E
+  GLuint tempIDPicking = 0;
+	glGenTextures(1, &tempIDPicking);
+	glBindTexture(GL_TEXTURE_2D, tempIDPicking);
 	
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -120,8 +119,32 @@ void FrameBuffer::__generateTexture()
 	glFramebufferTexture2D(	GL_FRAMEBUFFER, 
 							            __getAttachmentIndex(PICKING_PASS),
 							            GL_TEXTURE_2D,  
-						              __textureID1, 
+						              tempIDPicking, 
 							            0);
+  
+  __textures.push_back( new Texture("FrameBufferPass_Picking", tempIDPicking, MODE_INDEXED_MAP) );
+  
+  
+  // D E P T H   T E X T U R E
+  GLuint tempIDDepth = 0;
+  glGenTextures(1, &tempIDDepth);
+  glBindTexture(GL_TEXTURE_2D, tempIDDepth);
+  
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, __width, __height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  
+  glFramebufferTexture2D( GL_FRAMEBUFFER, 
+                          GL_DEPTH_ATTACHMENT, 
+                          GL_TEXTURE_2D,
+                          tempIDDepth, 
+                          0);
+                          
+  __textures.push_back( new Texture("FrameBufferPass_Color", tempIDDepth, MODE_INDEXED_MAP) );
 }
 
 bool FrameBuffer::__evaluateConfiguration()
@@ -173,8 +196,12 @@ void FrameBuffer::renderToTexture()
 {
 	bind();
 
-	GLenum attachments[3] = { __getAttachmentIndex(COLOR_PASS),  __getAttachmentIndex(PICKING_PASS),  __getAttachmentIndex(DEPTH_PASS)};
-  glDrawBuffers(3, attachments);  
+	GLenum attachments[2] = { __getAttachmentIndex(COLOR_PASS),  __getAttachmentIndex(PICKING_PASS)};
+  glDrawBuffers(2, attachments);  
+}
+
+Texture* FrameBuffer::getTexture(RENDER_PASS _pass) {
+  return ((unsigned int)_pass < __textures.size()) ? __textures[_pass] : NULL;
 }
 
 void FrameBuffer::printInfo()
@@ -245,6 +272,7 @@ FrameBuffer::readDepthPixel(GLuint _x, GLuint _y) {
 	return depth;
 }
 
+
 TriangleID 
 FrameBuffer::pickTriangle(GLuint _x, GLuint _y) {
   if (_x >= __width || _y >= __height) {
@@ -269,69 +297,4 @@ FrameBuffer::pickTriangle(GLuint _x, GLuint _y) {
   return TriangleID(  pickingData[OBJECT_ID],
                       pickingData[MESH_ID],
                       pickingData[PRIMITIVE_ID]  );
-}
-
-void FrameBuffer::saveToFile(const string& _filename) {
-	const unsigned int channels = 3;
-  const unsigned int bytesPerChannel = 4;
-	unsigned int fileSizeIn = __width*__height*channels;
-  unsigned int fileSizeOut = fileSizeIn*bytesPerChannel;
-  
-  GLuint* pixelsIn = new GLuint[fileSizeIn];
-	char* pixelsOut = new char[fileSizeOut];
-  
-	string __filename = _filename; __filename.append(".raw");
-	
-	bind();
-	__setReadBuffer(PICKING_PASS);
-	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-  /*
-	glReadPixels(   0,
-				 	        0,
-					        (GLsizei)__width,
-                  (GLsizei)__height,
-					        GL_RGB_INTEGER,
-					        GL_UNSIGNED_INT,
-					        pixelsIn );
-                  */
-  
-	glBindTexture(GL_TEXTURE_2D, __textureID1);
-	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB_INTEGER, GL_UNSIGNED_INT, pixelsIn);
-	glBindTexture(GL_TEXTURE_2D, 0);
-  
-  glReadBuffer(GL_NONE);
-  unbind();
-
-  //Convert Data to a viewable format
-  unsigned int rowOffset;
-  unsigned int columnOffset; 
-  for(unsigned int row = 0; row < __height; row++) {
-    rowOffset = (row * __width * channels);
-    for(unsigned int column = 0; column < __width; column++) {
-      columnOffset = (column * channels);
-      for(unsigned int channel = 0; channel < channels; channel++) {
-          pixelsOut[(rowOffset*bytesPerChannel) + (columnOffset*bytesPerChannel) + (channel*bytesPerChannel) + 0] = char(pixelsIn[rowOffset + columnOffset + channel] >> 24);
-          pixelsOut[(rowOffset*bytesPerChannel) + (columnOffset*bytesPerChannel) + (channel*bytesPerChannel) + 1] = char(pixelsIn[rowOffset + columnOffset + channel] >> 16);
-          pixelsOut[(rowOffset*bytesPerChannel) + (columnOffset*bytesPerChannel) + (channel*bytesPerChannel) + 2] = char(pixelsIn[rowOffset + columnOffset + channel] >> 8);
-          pixelsOut[(rowOffset*bytesPerChannel) + (columnOffset*bytesPerChannel) + (channel*bytesPerChannel) + 3] = char(pixelsIn[rowOffset + columnOffset + channel]);
-      }
-    }
-  }
-	
-  /*
-	//OpenGL populates the pixel data bottom to top.
-	//Flipping data vertically for correct orientation in external applications.
-	for(unsigned int row = 0; row < (__height/2); row++) {
-		unsigned int oppositeRow = __height - 1 - row;
-		unsigned int rowSize = __width*channels;
-		for(unsigned int pixelChannel = 0; pixelChannel < rowSize; pixelChannel++) {
-			swap(pixelsOut[pixelChannel+(row*rowSize)], pixelsOut[pixelChannel+(oppositeRow*rowSize)]);
-		}
-	}
-  */
-
-	ofstream imageFile(__filename.c_str(), ios::out | ios::binary);
-	imageFile.write(pixelsOut, fileSizeOut);
-	delete[] pixelsIn;
-  delete[] pixelsOut;
 }

@@ -13,6 +13,7 @@
 #include "MatricesManager.h"
 #include "ShaderDataHandler.h"
 #include "TextureManager.h"
+#include "FrameBuffer.h"
 #include "utils.h"
 
 #define get16bits(d) (*((const uint16_t *) (d)))
@@ -242,6 +243,49 @@ getColor(LuaObject* mat, const char* name) {
 }
 
 bool
+Object::explicitLoad( const std::string& _objFilePath,
+                      unsigned _invertUVFlags,
+                      const std::string& _materialName,
+                      Shader* _shader, 
+                      float _ambientFactor, 
+                      float _diffuseFactor, 
+                      float _specularFactor,
+                      Texture** _textures,
+                      unsigned int _numTextures) 
+{
+	log(PARAM, "Loading object explicitly(\"%s\")...", name.c_str());
+
+	if (!__fileExists(_objFilePath)) {
+		log(WARN, "%s: file %s not found!", name.c_str(), _objFilePath.c_str());
+		return false;
+	}
+  
+  Material* material = new Material(_materialName);
+  __materials.insert(make_pair(material->name, material));
+  material->loadMaterial(_ambientFactor, MATERIAL_AMBIENT);
+  material->loadMaterial(_diffuseFactor, MATERIAL_DIFFUSE);
+  material->loadMaterial(_specularFactor, MATERIAL_SPECULAR);
+  
+  for(int t = 0; t < _numTextures; t++) {
+    Texture* temp = _textures[t];
+    if (temp)
+      material->appendTexture( temp );
+    else
+      log(WARN, "Object::explicitLoad was passed a NULL texture at index %d", t);
+  }
+  
+  __parseObjSingleMesh(_objFilePath, material, _invertUVFlags);
+  
+  if (!_shader) {
+    log(WARN, "Cannot explicitly load model. NULL shader passed in.");
+    return false;
+  }
+  _shader->bind(this);
+
+  return true;
+}
+
+bool
 Object::loadFrom(LuaObject* obj) {
 	log(PARAM, "Object::loadFrom");
 	THDoubleTensor* verts = (THDoubleTensor*)(*obj)["verts"];
@@ -344,6 +388,164 @@ Object::loadIntoVBO() {
 void
 Object::addChild(Object* _childPtr) {
 	__children.push_back(_childPtr);
+}
+
+bool
+Object::createVertexCloud(Object* _object) {
+  if (!_object) {
+    log(WARN, "Cannot create vertex cloud from NULL Object!");
+    return false;
+  }
+  stringstream meshName;
+  meshName << name << "_vertexCloud_Mesh";
+  
+  Mesh* mesh = new Mesh();
+  
+  stringstream matName;
+  matName << meshName.str() << "_Mat";
+  Material* material = new Material(matName.str());
+  __materials.insert(make_pair(material->name, material));
+  material->loadMaterial(1.0f, MATERIAL_AMBIENT);
+  material->loadMaterial(0.0f, MATERIAL_DIFFUSE);
+  material->loadMaterial(0.0f, MATERIAL_SPECULAR);
+  material->appendTexture( new Texture("texture/vertexBillboard.png", MODE_INDEXED_MAP) );
+  material->appendTexture( FrameBuffer::GetSingleton().getTexture(DEPTH_PASS) );
+    
+  Engine::GetSingleton().vertexHighlightShader->bind(this);
+  
+	for (auto it = _object->__meshes.begin(); it != _object->__meshes.end(); ++it) {
+    //log(PARAM, "Looking at object %s's mesh: %s", _object->name.c_str(), it->second->name.c_str());
+		Mesh* currentMesh = it -> second;
+    //log(PARAM, "currentMesh->getVerticesSize() %d", currentMesh->getVerticesSize());  
+    for(unsigned v = 0; v < currentMesh->getVerticesSize(); v++) {
+      //log(PARAM, "Grabbing vertex number: %d", v);
+      Vertex vertex = currentMesh->readVertex(v);
+      
+      unsigned int indexA = mesh->push_back( Vertex(  vertex.vertexPosition, 
+                                                      TexCoords(-0.5f, -0.5f),
+                                                      Normal(0.0f, 0.0f, 0.0f)  ));
+                                                      
+      unsigned int indexB = mesh->push_back( Vertex(  vertex.vertexPosition, 
+                                                      TexCoords( 0.5f, -0.5f),
+                                                      Normal(0.0f, 0.0f, 0.0f)  ));
+                                                      
+      unsigned int indexC = mesh->push_back( Vertex(  vertex.vertexPosition, 
+                                                      TexCoords(-0.5f,  0.5f),
+                                                      Normal(0.0f, 0.0f, 0.0f)  ));
+                                                      
+      unsigned int indexD = mesh->push_back( Vertex(  vertex.vertexPosition, 
+                                                      TexCoords( 0.5f,  0.5f),
+                                                      Normal(0.0f, 0.0f, 0.0f)  ));
+                                                      
+      mesh->addNewIdx(indexA);
+      mesh->addNewIdx(indexB);
+      mesh->addNewIdx(indexC);
+      
+      mesh->addNewIdx(indexB);
+      mesh->addNewIdx(indexD);
+      mesh->addNewIdx(indexC);
+    }
+	}
+	mesh -> closeMesh(material);
+	__meshes.insert(make_pair(meshName.str(), mesh));
+  
+  return true;
+}
+
+void 
+Object::__parseObjSingleMesh(const string&_fileName, Material* _material, unsigned _invert) {
+  unsigned int lastSlash = _fileName.rfind('/');
+  string loc = (lastSlash == string::npos) ? "" : _fileName.substr(0, lastSlash+1);
+  
+  indicesMap indices;
+  
+  vector< Position > tempPos;
+  tempPos.push_back(Position(0.0f, 0.0f, 0.0f));
+  
+  vector< TexCoords > tempTex;
+  tempTex.push_back(TexCoords(0.0f, 0.0f));
+  
+  vector< Normal > tempNor;
+  tempNor.push_back(Normal(0.0f, 0.0f, 0.0f));
+  
+  stringstream meshNameStream;
+  long p = 0;
+  string buffer, temp;
+  GLfloat x, y, z;
+  
+  Mesh* mesh = new Mesh();
+  
+  fstream objFile(_fileName.c_str(), ios::in);
+  
+  while (!objFile.eof()) {
+    getline (objFile, buffer);
+    
+		if (buffer[0] == '#')
+			continue;	// comment, pass this
+    
+		if (buffer.find((char)92) != string::npos) { // we have backslash - divided to next line
+			buffer.erase(buffer.find((char)92), 1);
+			string secondLine;
+			getline(objFile, secondLine);
+			buffer += secondLine;
+		}
+    
+		istringstream line(buffer);
+
+		if (buffer.substr(0, 6) == "mtllib") {
+			continue; //Do nothing. Ignoring materials for this simple loader
+		} 
+    else if (buffer[0] == 'g') {
+			string gName = "";
+			if (buffer.length() > 2) {
+				char g;
+				line >> g >> temp;
+				while (!line.eof()) {
+					gName += temp;
+					line >> temp;
+				}
+        meshNameStream << gName << "_";
+      }
+		  continue;
+    }
+    else if (buffer.substr(0, 2) == "v ") {
+      line >> temp >> x >> y >> z;
+    	tempPos.push_back(Position(x, y, z));
+      continue;
+    }
+    else if (buffer.substr(0, 2) == "vt") {
+    	line >> temp >> x >> y;
+    	if (_invert & INVERT_X)
+    		x = 1 - x;
+    	if (_invert & INVERT_Y)
+    		y = 1 - y;
+    	tempTex.push_back(TexCoords(x, y));
+      continue;
+    }
+    else if (buffer.substr(0, 2) == "vn") {
+    	line >> temp >> x >> y >> z;
+    	tempNor.push_back(Normal(x, y, z));  
+    }
+    else if (buffer[0] == 'f') {
+      __parseFace(  line, 
+                    mesh,
+    					      tempPos, 
+                    tempTex, 
+                    tempNor,
+    					      indices,
+    					      1, 
+                    1, 
+                    1,
+    					      p, 
+                    (GET_TEXTURE | GET_NORMALS) );
+    }
+    else {
+      continue; //Ignore all any line that doesn't fit the above criteria
+    }
+  }
+	objFile.close();
+	mesh -> closeMesh(_material);
+	__meshes.insert(make_pair(meshNameStream.str(), mesh));
 }
 
 void
@@ -706,7 +908,7 @@ Object::__fileExists(const string &_fileName) {
 void
 Object::__bindAppropriateShader() {
 	Engine& global = Engine::GetSingleton();
-
+  
 	if ((__content & (TEXTURE | NORMAL_MAP)) == (TEXTURE | NORMAL_MAP)) {
 		log(PARAM, "Object::__bindAppropriateShader %s", "normalMapShader");
 		global.normalMapShader -> bind(this);

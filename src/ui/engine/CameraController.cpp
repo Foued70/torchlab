@@ -7,8 +7,9 @@
 
 CameraController::CameraController() : 
   Controller<Camera>(),
-  __flightMode(FREE_FLIGHT),
   __zoom(1.0f),
+  __flightTime(0.35f),
+  __flightMode(FREE_FLIGHT),
   __steeringEye(NULL),
   __steeringCenter(NULL),
   __selectedSurface(NULL)
@@ -104,8 +105,8 @@ CameraController::flyTo(const Vector3& _destination) {
   }
   __steeringEye->setPosition(__pawn->getEye());
   __steeringCenter->setPosition(__pawn->getCenter());
-  __steeringEye->moveTo(eyePosition, SMOOTH_DAMP); //no max speed
-  __steeringCenter->moveTo(_destination, SMOOTH_DAMP); //no max speed
+  __steeringEye->moveTo(eyePosition, SOFT, __flightTime);
+  __steeringCenter->moveTo(_destination, SOFT, __flightTime);
   updateState();
 }
 
@@ -129,8 +130,8 @@ CameraController::selectSurface(Surface* _surface, const Vector3& _startAim) {
   
   __steeringEye->setPosition(__pawn->getEye());
   __steeringCenter->setPosition(__pawn->getCenter());
-  __steeringEye->moveTo(eyeGoal, SMOOTH_DAMP); //no max speed
-  __steeringCenter->moveTo(centerGoal, SMOOTH_DAMP); //no max speed
+  __steeringEye->moveTo(eyeGoal, FAST_BOUNCE, __flightTime);
+  __steeringCenter->moveTo(centerGoal, FAST_BOUNCE, __flightTime);
   updateState();
 }
 
