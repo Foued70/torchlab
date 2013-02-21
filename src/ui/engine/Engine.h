@@ -12,6 +12,9 @@
 #include "FrameBuffer.h"
 #include "ControllerManager.h"
 
+#include <string>
+#include <map>
+
 class ScanWidget;
 struct TriangleID;
 
@@ -51,8 +54,10 @@ public:
 	 * @param sourceFiles Source file of both - vertex and fragment shaders (without extensions).
 	 */
 	Shader * createShader(const std::string&);
+    
+  void render(const std::string& _sceneName, unsigned int _renderMode = (RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER));
   
-  void render(unsigned int _renderMode = (RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER));
+  void multiPassRender();
   
   /**
    * Creates a new frame buffer and deletes the old one. Necessary if the window is resized as the frame buffer is resolution dependant.
@@ -73,7 +78,7 @@ public:
    */
   bool raycast(const Vector3& _source, const Vector3& _direction, Vector3& _outHitLocation);
   
-  inline Scene* getCurrentScene() { return (__currentSceneIndex < __sceneList.size()) ? __sceneList[__currentSceneIndex] : NULL; }
+  Scene* getScene(const string& _sceneName);
   
   Triangle* getTriangleByID(const TriangleID& _id);
 	
@@ -90,6 +95,8 @@ public:
 	Shader* shadingShader;
 	Shader* texturedShadingShader;
 	Shader* normalMapShader;
+  Shader* wireframeShader;
+  Shader* vertexHighlightShader;
 	
 private:
 	
@@ -118,10 +125,7 @@ private:
 	std::vector< Shader* > __shaderList;
 	
  	/* All scenes */
- 	std::vector< Scene* > __sceneList;
-  
-  /* Index into the current scene */
-  unsigned int __currentSceneIndex;
+ 	std::map<string, Scene*> __sceneMap;
 	
 	/* Vector with available extensions */
 	std::vector< std::string* > __extensions;

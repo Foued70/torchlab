@@ -1,0 +1,22 @@
+# Simple setup file for pose alignment testing.
+#
+# Controls: (Really awkward but hopefully clear which mode you are in)
+#
+# To select a vertex: 
+# Hold down "v" and left click on vertex
+#
+# To select a point on the photo: 
+# Hold down "p" and left click on photo
+#
+# To save all vertex and point data to file:
+# Press "s"
+#
+#****************************************************************************************
+# Path to model relative to ui directory. No spaces. No quotes.
+Model=objects/dryDragon.obj
+
+# Path to photo we are aligning pose to. Relative to ui directory. No spaces. No quotes.
+Photo=texture/_DSC6044.jpg
+
+# Path to desired output folder. Relative to ui directory. No spaces. No quotes.
+Output=poseAlignData/

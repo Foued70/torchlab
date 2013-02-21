@@ -5,7 +5,7 @@ out float sAttenuation;
 
 void main() {
 	sVaryingTexCoords = sTexCoords;
-	// sVaryingTexCoords.x = 1.0 - sVaryingTexCoords.x;
+	sVaryingTexCoords.x = 1.0 - sVaryingTexCoords.x;
 	sVaryingTexCoords.y = 1.0 - sVaryingTexCoords.y;
 
 	sVaryingNormal = sNormalMatrix * sNormal;

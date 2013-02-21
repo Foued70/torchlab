@@ -34,9 +34,8 @@ Engine::Engine() :
 		__shaderDataHandling(NULL),
     __timeManagement(NULL),
     __frameBuffer(NULL),
-    __controllerManagement(NULL),
-    __shaderList(0),
-    __sceneList(0) {
+    __controllerManagement(NULL)
+{
 			
 	/* Create instances of singletons */
 	__textureManagement = new TextureManager();
@@ -61,7 +60,12 @@ Engine::~Engine() {
 	
 	while (!__shaderList.empty()) delete  __shaderList.back(), __shaderList.pop_back();
 	while (!__extensions.empty()) delete __extensions.back(), __extensions.pop_back();
-	while (!__sceneList.empty()) delete   __sceneList.back(),  __sceneList.pop_back();
+  
+  auto it = __sceneMap.begin();
+  while (it != __sceneMap.end()) {
+    delete it->second;
+  }
+  __sceneMap.clear();
   
 	log(DESTRUCTOR, "Engine destructed.");
 }
@@ -73,16 +77,34 @@ Engine::init() {
 	shadingShader = createShader("shadow");
 	texturedShadingShader = createShader("textured");
 	normalMapShader = createShader("normalmap");
+  wireframeShader = createShader("wireframe");
+  vertexHighlightShader = createShader("vertexHighlight");
   	
 	return true;	
 }
 
 Scene *
 Engine::createScene(const string &_sceneName) {
-	Scene *newScene = new Scene(_sceneName);
-	__sceneList.push_back(newScene);
-  __currentSceneIndex = __sceneList.size() - 1;
-	return newScene;
+  Scene* scene;
+  auto it = __sceneMap.find(_sceneName);
+  if ( it == __sceneMap.end() ) {
+    scene = new Scene(_sceneName);
+    __sceneMap.insert( make_pair(_sceneName, scene) );
+    return scene;
+  }
+
+  log(WARN, "Scene %s already exists! No scene created.", _sceneName.c_str());
+  return NULL;
+}
+
+Scene* 
+Engine::getScene(const string& _sceneName) {
+  auto it = __sceneMap.find(_sceneName);
+  if (it == __sceneMap.end()) {
+    log(WARN, "Scene %s does not exist!", _sceneName.c_str());
+    return NULL;
+  }
+  return it->second;
 }
 
 Shader*
@@ -92,12 +114,12 @@ Engine::createShader(const string& _fileName) {
 	return newShader;
 }
 
-
-void Engine::render(unsigned int _renderMode) {
+void 
+Engine::render(const std::string& _sceneName, unsigned int _renderMode) {
   //Render scene to our framebuffer
-  Scene* currentScene = getCurrentScene();
+  Scene* currentScene = getScene(_sceneName);
   if (!currentScene) {
-    log(WARN, "Cannot render scene. No scene set.");
+    log(WARN, "Cannot render scene. No scene %s found.", _sceneName.c_str());
     return;
   }
   
@@ -172,7 +194,7 @@ bool
 Engine::raycast(const Vector3& _source, const Vector3& _direction, Vector3& _outHitLocation) {
   Vector3 currentEye;
   Vector3 currentCenter;
-  Scene* currentScene = getCurrentScene();
+  Scene* currentScene = getScene("MainScene");
   if(!currentScene) {
     log(WARN, "Cannot raycast. No scene set.");
     return false;
@@ -182,7 +204,7 @@ Engine::raycast(const Vector3& _source, const Vector3& _direction, Vector3& _out
   currentCenter = camera->getCenter();
   camera->setEyePosition(_source);
   camera->setCenterPosition(_direction);
-  render(RENDER_TO_FRAMEBUFFER);
+  render("MainScene", RENDER_TO_FRAMEBUFFER);
   GLint viewport[4];
   glGetIntegerv(GL_VIEWPORT, viewport);   
   float centerX = viewport[2] * 0.5f;
@@ -192,7 +214,7 @@ Engine::raycast(const Vector3& _source, const Vector3& _direction, Vector3& _out
   //Set the camera back to it's normal position, and do a render to refresh all frame buffer data to correct values.
   camera->setEyePosition(currentEye);
   camera->setCenterPosition(currentCenter);
-  render(RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER);
+  render("MainScene", RENDER_TO_WINDOW | RENDER_TO_FRAMEBUFFER);
   
   Vector3 rayOffset = _outHitLocation - _source;
   if(rayOffset.magnitude() >= camera->getFarPlane()) {
@@ -203,7 +225,7 @@ Engine::raycast(const Vector3& _source, const Vector3& _direction, Vector3& _out
 
 Triangle* 
 Engine::getTriangleByID(const TriangleID& _id) {
-  Triangle* triangle =  getCurrentScene()->
+  Triangle* triangle =  getScene("MainScene")->
                         getObjectByID(_id.objectID)->
                         getMeshByID(_id.meshID)->
                         getTriangleByID(_id.primitiveID);

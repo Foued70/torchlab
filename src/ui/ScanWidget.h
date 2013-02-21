@@ -9,6 +9,7 @@
 
 class FrameBuffer;
 class CameraController;
+class Object;
 
 class ScanWidget : public QGLWidget {
   Q_OBJECT // must include this if you use Qt signals/slots
@@ -21,6 +22,9 @@ public:
 
   Engine* engine;
   Scene* scene;
+  Scene* mainScene;
+  Scene* postScene;
+  Object* mainModel;
 
 protected:
   void initializeGL();
@@ -31,6 +35,10 @@ protected:
   void mouseMoveEvent(QMouseEvent *event);
   void wheelEvent(QWheelEvent* event);
   void keyPressEvent(QKeyEvent *event);
+  void keyReleaseEvent(QKeyEvent *event);
+  
+  void setupSceneFromFile(const std::string& _filename);
+  void savePoseAlignmentData(const std::string& _filename);
   
 private:
   bool prepareShaderProgram( const QString& vertexShaderPath, const QString& fragmentShaderPath );
@@ -50,6 +58,19 @@ private:
   double clickTimerRMB_Start;
   double clickTimerRMB_Current;
   bool rotateMode;
+  
+  bool __vertexPointMode;
+  bool __picturePointMode;
+  
+  string __modelFile;
+  string __photoFile;
+  string __outputPath;
+  unsigned int __outputIndex;
+  
+  std::map<Vector3, Vector2> __poseAlignmentData;
+  
+  Vector3 __selectedVertex;
+  Vector2 __selectedPicturePoint;
 };
 
 #endif  /* _SCAN_WIDGET_H */

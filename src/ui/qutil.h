@@ -2,7 +2,8 @@
 #define _QUTIL_H
 
 #include <QString>
+#include <string>
 
-char* readResourceText(const QString& filename);
+std::string readResourceText(const QString& filename);
 
 #endif

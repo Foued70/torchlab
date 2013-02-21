@@ -10,7 +10,8 @@ class Transition;
 
 enum MOVE_BEHAVIOR {
   LINEAR,
-  SMOOTH_DAMP
+  SOFT,
+  FAST_BOUNCE
 };
 
 class SteeringComponent : public PhysicsComponent {

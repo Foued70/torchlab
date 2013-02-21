@@ -2,6 +2,7 @@
 #define FRAME_BUFFER_H
 
 #include <string>
+#include <vector>
 #include "Singleton.h"
 #include "opengl.h"
 
@@ -18,6 +19,7 @@ enum PICKING_CHANNELS {
 };
 
 struct TriangleID;
+class Texture;
 
 class FrameBuffer : public Singleton< FrameBuffer >
 {
@@ -31,7 +33,8 @@ public:
   bool initialize();
 	
 	void renderToTexture();
-	void renderDebugMesh();
+  
+  Texture* getTexture(RENDER_PASS _pass);
 	
 	void printInfo();
   GLfloat readDepthPixel(GLuint _x, GLuint _y);
@@ -42,11 +45,11 @@ public:
   void displayToWindow();
 
 private:
+  void __deleteAllTextures();
+  
 	void __generateFrameBuffer();
 	
-	void __generateDepthBuffer();
-	
-	void __generateTexture();
+	void __generateTextures();
 	
 	bool __evaluateConfiguration();
   
@@ -59,12 +62,11 @@ private:
 	/* Pointer to GL's frame buffer object */
 	GLuint __frameBufferID;
 	
-	/* Pointer to GL's render buffer object that houses that depth buffer */
-	GLuint __depthBufferID;
-	
 	/* Pointer to the texture that the  be rendered to */
-	GLuint __textureID0;
-	GLuint __textureID1;		
+  std::vector<Texture*> __textures;
+  
+	//GLuint __textureID0;
+	//GLuint __textureID1;		
 };
 
 #endif

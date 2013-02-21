@@ -14,7 +14,7 @@ using namespace std;
 
 Camera::Camera() :
 		__fovy(45.0),
-		__zNear(0.0001),
+		__zNear(0.1),
 		__zFar(1000.0),
 		__eye({0, 0, 0}),
 		__center({0, 0, 0}),
