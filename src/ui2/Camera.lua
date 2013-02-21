@@ -27,15 +27,6 @@ function Camera:__init()
   self.clip_far = 1000
   self.fov_y = math.pi / 4 -- 45 degrees
 
-  -- we use transposed matrices because opengl want column major in memory and torch is row major
-  self.projection_matrix = torch.FloatTensor(4, 4):t()
-  self.model_view_matrix = torch.FloatTensor(4, 4):t()
-  self.normal_matrix = torch.FloatTensor(3,3):t()
-
-  -- these are scratch matrices, so we can reuse them
-  self.rotation_matrix = torch.FloatTensor(4, 4):t()
-  self.translation_matrix = torch.FloatTensor(4, 4):t()
-
   -- intermediate direction vectors
   self.look_dir = torch.Tensor({0,1,0})
   self.up_dir = torch.Tensor({0,0,1})
@@ -46,7 +37,7 @@ function Camera:__init()
 
 end
 
-function Camera:update_projection_matrix()
+function Camera:update_projection_matrix(context)
   local viewport = gl.GetIntegerv(gl.VIEWPORT, 4)
   self.width = viewport[2]
   self.height = viewport[3]
@@ -55,35 +46,26 @@ function Camera:update_projection_matrix()
   log.trace(self.fov_y, aspect)
   local f = 1 / math.tan(self.fov_y / 2)
   
-  self.projection_matrix:eye(4)
-  self.projection_matrix[{1,1}] = f / aspect
-  self.projection_matrix[{2,2}] = f
-  self.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
-  self.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
-  self.projection_matrix[{4,3}] = -1
+  context.projection_matrix:eye(4)
+  context.projection_matrix[{1,1}] = f / aspect
+  context.projection_matrix[{2,2}] = f
+  context.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
+  context.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
+  context.projection_matrix[{4,3}] = -1
 
-  memlog('projection_matrix', self.projection_matrix)
+  -- memlog('projection_matrix', context.projection_matrix)
 end
 
 
-function Camera:update_matrices()
+function Camera:update_matrix(context)
   self:update()
 
-  self.rotation_matrix:eye(4,4)
-  self.rotation_matrix[{1, {1,3}}] = self.right_dir
-  self.rotation_matrix[{2, {1,3}}] = self.up_dir
-  self.rotation_matrix[{3, {1,3}}] = self.look_dir
-  -- memlog('rotation', self.rotation_matrix)
+  context.model_view_matrix:eye(4,4)
+  context.model_view_matrix[{1, {1,3}}] = self.right_dir
+  context.model_view_matrix[{2, {1,3}}] = self.up_dir
+  context.model_view_matrix[{3, {1,3}}] = self.look_dir
 
-  self.translation_matrix:eye(4,4)
-  self.translation_matrix[{{1, 3}, 4}] = -self.eye
-  -- memlog('translation', self.translation_matrix)
-
-  torch.mm(self.model_view_matrix, self.rotation_matrix, self.translation_matrix)
-  -- memlog('model_view', self.model_view_matrix)
-
-  torch.inverse(self.normal_matrix, self.model_view_matrix[{{1, 3}, {1, 3}}])
-  self.normal_matrix = self.normal_matrix:t()
+  context:translate(-self.eye)
 end
 
 function Camera:update()

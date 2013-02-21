@@ -1,9 +1,9 @@
-local ffi = require 'ffi'
 local libui = require 'libui2'
 local gl = require 'ui2.gl'
 local key = require 'ui2.key'
 
 local Shader = require 'ui2.Shader'
+local MatrixStack = require 'ui2.MatrixStack'
 
 local GLWidget = torch.class('GLWidget')
 
@@ -16,22 +16,15 @@ function GLWidget:__init()
 
   self.objects = {}
 
-  self.context = {}
-  self.context.projection_matrix = self.camera.projection_matrix
-  self.context.model_view_matrix = self.camera.model_view_matrix
-  self.context.normal_matrix = self.camera.normal_matrix
-  self.context.model_view_projection_matrix = torch.FloatTensor(4,4):t() -- transposed for opengl's column majorness
+  self.context = MatrixStack.new()
 end
 
 function GLWidget:init(qt_widget)
-  log.info("OpenGL "..ffi.string(gl.GetString(gl.VERSION)).." GLSL "..ffi.string(gl.GetString(gl.SHADING_LANGUAGE_VERSION)))
+  log.info("OpenGL "..gl.GetString(gl.VERSION).." GLSL "..gl.GetString(gl.SHADING_LANGUAGE_VERSION))
 
   self.qt_widget = qt_widget
 
   self.textured_shader = Shader.new('textured') 
-  -- self.shadow_shader = Shader.new('shadow') 
-  -- self.identity_shader = Shader.new('identity') 
-
 end
 
 function GLWidget:update()
@@ -41,7 +34,7 @@ end
 function GLWidget:resize(width, height)
   log.trace('resize', width, height)
   gl.Viewport(0, 0, width, height)
-  self.camera:update_projection_matrix()
+  self.camera:update_projection_matrix(self.context)
 end
 
 function GLWidget:paint()
@@ -65,7 +58,7 @@ function GLWidget:paint()
   gl.check_errors()
 
   -- setup camera
-  self.camera:update_matrices()
+  self.camera:update_matrix(self.context)
 
   -- show objects
   for i, object in ipairs(self.objects) do

@@ -3536,6 +3536,11 @@ gl.clampd  = ffi.typeof('GLclampd[?]')
 gl.char    = ffi.typeof('GLchar[?]')
 gl.const_char_pp = ffi.typeof('const GLchar *[1]')
 
+
+function gl.GetString(name)
+  return ffi.string(gl_lib.glGetString(name))
+end
+
 function gl.GetIntegerv(name, size)
   size = size or 1
   local value = gl.int(size)

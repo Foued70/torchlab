@@ -114,14 +114,12 @@ function Shader:use(context)
   gl.UseProgram(self.program_id)
   gl.check_errors()
 
-  -- log.trace(context.model_view_matrix)
-  context.model_view_projection_matrix:mm(context.projection_matrix, context.model_view_matrix)
-  memlog('model_view_projection_matrix', context.model_view_projection_matrix)
+  local projection_matrix, model_view_matrix, normal_matrix, model_view_projection_matrix = context:for_gl()
 
-  self:set_uniform_matrix('sProjectionMatrix', context.projection_matrix)
-  self:set_uniform_matrix('sModelViewMatrix', context.model_view_matrix)
-  self:set_uniform_matrix('sNormalMatrix',context.normal_matrix)
-  self:set_uniform_matrix('sModelViewProjectionMatrix', context.model_view_projection_matrix)
+  self:set_uniform_matrix('sProjectionMatrix', projection_matrix)
+  self:set_uniform_matrix('sModelViewMatrix', model_view_matrix)
+  self:set_uniform_matrix('sNormalMatrix',normal_matrix)
+  self:set_uniform_matrix('sModelViewProjectionMatrix', model_view_projection_matrix)
 end
 
 function Shader:set_uniform_int(name, value)
