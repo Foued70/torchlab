@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -67,5 +68,7 @@ void explode(const std::string&, char, std::vector< std::string >&);
 void checkGLErrors(const std::string&);
 
 void log(LogType, const std::string&, ...);
+
+//std::string readResourceText(const std::string& _filename);
 
 #endif // UTILS_H

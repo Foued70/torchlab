@@ -93,6 +93,12 @@ public:
 	 * @return Pointer to the found Triangle, or NULL if nothing was found.
 	 */ 
   Triangle* getTriangleByID(unsigned int);
+   
+  inline unsigned int getVerticesSize() { return __vertices.size(); }
+  inline unsigned int getIndicesSize() { return __indices.size(); }
+  inline Vertex readVertex(unsigned int _index) { return __vertices[_index]; }
+  inline IndicesType readIndex(unsigned int _index) { return __indices[_index]; }
+  
 	
 	/**
 	 * Renders the mesh.

@@ -3,7 +3,6 @@ PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
 # make sure a user's CC or CCX variable don't mess up config scripts
 CC=
 CXX=
-	
 
 project_dir = $(abspath ../..)
 $(warning $(project_dir))
@@ -18,3 +17,8 @@ default_cmake_args = \
 	-D CMAKE_C_COMPILER:PATH=$(install_root)/bin/gcc \
 	-D CMAKE_CXX_COMPILER:PATH=$(install_root)/bin/g++ \
 	-D CMAKE_BUILD_TYPE=Release
+
+# set this environment variable so that pkg-config knows where to find
+# our cloudlab installed .pc scripts
+
+pkg_config_path = PKG_CONFIG_PATH=$(install_root)/lib/pkgconfig

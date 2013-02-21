@@ -7,7 +7,7 @@ tar_file=$(build_dir)/deps/gcc-mlion.tar.gz
 install=$(install_root)/bin/gcc
 
 all: $(install)
-	
+
 
 $(install): $(tar_file)
 	cd $(build_dir); tar -xzf $(tar_file)
@@ -19,4 +19,3 @@ $(tar_file):
 	mkdir -p $(build_dir)/deps
 	curl -L -o $(tar_file) $(URL)
 
-	

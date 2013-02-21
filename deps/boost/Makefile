@@ -11,8 +11,8 @@ unpack=$(build_dir)/deps/boost_$(ver_ubar)
 install=$(install_root)/lib/libboost_system.a
 
 all: $(install)
-	
-	
+
+
 $(install): $(unpack)
 	cd $(unpack); ./bootstrap.sh --prefix=$(install_root)
 	sed -i .bak 's^using darwin ;^using darwin : : $(install_root)/bin/g++ ;^g' $(unpack)/project-config.jam
