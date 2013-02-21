@@ -9,6 +9,18 @@ using namespace std;
 static const double PI = 3.1415265359;
 static const double PIdiv180 = PI/180.0;
 
+void memlog(const char* label, sMat16 x) {
+	printf("%s\n", label);
+	printf("%.4f %.4f %.4f %.4f \n", x[0], x[1], x[2], x[3]);
+	printf("%.4f %.4f %.4f %.4f \n", x[4], x[5], x[6], x[7]);
+	printf("%.4f %.4f %.4f %.4f \n", x[8], x[9], x[10], x[11]);
+	printf("%.4f %.4f %.4f %.4f \n\n", x[12], x[13], x[14], x[15]);
+}
+
+void vlog(const char* label, Vector3 x) {
+	printf("%-10s %.4f %.4f %.4f \n", label, x[0], x[1], x[2]);
+}
+
 MatricesManager::MatricesManager() {
 	__modelViewMatrix.loadIdentity();
 	__projectionMatrix.loadIdentity();
@@ -25,20 +37,24 @@ MatricesManager::sLookAt(const Vector3& _eye, const Vector3& _center, const Vect
 	perpUpDir.normalize();
 	Vector3 up = cross(perpUpDir, dir);
 	dir *= -1;
-	
+
 	__modelViewMatrix.loadIdentity();
 	
 	__modelViewMatrix.setRow(0, perpUpDir);
 	__modelViewMatrix.setRow(1, up);
 	__modelViewMatrix.setRow(2, dir);
-	
+	// memlog("rotation", __modelViewMatrix);
+
 	sMat16 translation;
 	translation.loadIdentity();
 	translation[12] = -_eye[0];
 	translation[13] = -_eye[1];
 	translation[14] = -_eye[2];
-	
+	// memlog("translation", translation);
+
 	__modelViewMatrix *= translation;
+
+	// memlog("modelViewMatrix", __modelViewMatrix);
 }
 
 void
@@ -54,6 +70,7 @@ MatricesManager::sPerspective(GLfloat _fovy, GLfloat _aspect, GLfloat _zNear, GL
 	__projectionMatrix[10] = (_zFar + _zNear) / (_zNear - _zFar);
 	__projectionMatrix[14] = (2 * _zFar * _zNear) / (_zNear -_zFar);
 	__projectionMatrix[11] = -1;
+	// memlog("projectionMatrix", __projectionMatrix);
 }
 
 void
@@ -138,6 +155,11 @@ void
 MatricesManager::produceNormalMatrix() {
 	__normalMatrix = __modelViewMatrix.getMinor(3, 3).inversion();
 	__normalMatrix.transpose();
+	// printf("NormalMatrix\n");
+	// printf("%4.0f %4.0f %4.0f \n", __normalMatrix[0], __normalMatrix[3], __normalMatrix[6]);
+	// printf("%4.0f %4.0f %4.0f \n", __normalMatrix[1], __normalMatrix[4], __normalMatrix[7]);
+	// printf("%4.0f %4.0f %4.0f \n\n", __normalMatrix[2], __normalMatrix[5], __normalMatrix[8]);
+
 }
 
 void

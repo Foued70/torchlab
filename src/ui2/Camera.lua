@@ -6,21 +6,40 @@ local Camera = torch.class('Camera')
 local Z_AXIS_POS = torch.Tensor({0,0,1})
 local Z_AXIS_NEG = torch.Tensor({0,0,-1})
 
+local function memlog(label, x)
+  local s = x:storage()
+  p(label)
+  p(("%.4f %.4f %.4f %.4f"):format(s[1], s[2], s[3], s[4]))
+  p(("%.4f %.4f %.4f %.4f"):format(s[5], s[6], s[7], s[8]))
+  p(("%.4f %.4f %.4f %.4f"):format(s[9], s[10], s[11], s[12]))
+  p(("%.4f %.4f %.4f %.4f"):format(s[13], s[14], s[15], s[16]))
+  p('')
+end
+
+local function vlog(label, x)
+  p(("%-10s %.4f %.4f %.4f "):format(label, x[1], x[2], x[3]))
+end
+
 function Camera:__init()
-  self.eye = torch.Tensor(3)
-  self.center = torch.Tensor(3)
+  self.eye = torch.Tensor({0,0,0})
+  self.center = torch.Tensor({0,1,0})
   self.clip_near = 0.0001
   self.clip_far = 1000
-  self.fov_y = 45
+  self.fov_y = math.pi / 4 -- 45 degrees
 
-  self.projection_matrix = torch.FloatTensor(4, 4)
-  self.model_view_matrix = torch.FloatTensor(4, 4)
-  self.normal_matrix = torch.FloatTensor(3,3)
-  self.translation_matrix = torch.FloatTensor(4, 4)
+  -- we use transposed matrices because opengl want column major in memory and torch is row major
+  self.projection_matrix = torch.FloatTensor(4, 4):t()
+  self.model_view_matrix = torch.FloatTensor(4, 4):t()
+  self.normal_matrix = torch.FloatTensor(3,3):t()
 
-  self.look_dir = torch.Tensor(3)
-  self.up_dir = torch.Tensor(3)
-  self.right_dir = torch.Tensor(3)
+  -- these are scratch matrices, so we can reuse them
+  self.rotation_matrix = torch.FloatTensor(4, 4):t()
+  self.translation_matrix = torch.FloatTensor(4, 4):t()
+
+  -- intermediate direction vectors
+  self.look_dir = torch.Tensor({0,1,0})
+  self.up_dir = torch.Tensor({0,0,1})
+  self.right_dir = torch.Tensor({1,0,0})
 
   self.width = 0
   self.height = 0
@@ -31,30 +50,37 @@ function Camera:update_projection_matrix()
   local viewport = gl.GetIntegerv(gl.VIEWPORT, 4)
   self.width = viewport[2]
   self.height = viewport[3]
-  local aspect = viewport[2] / viewport[3]
+  local aspect = self.width / self.height
 
-  local f = 1 / math.tan(self.fov_y * math.pi / 180)
+  log.trace(self.fov_y, aspect)
+  local f = 1 / math.tan(self.fov_y / 2)
   
   self.projection_matrix:eye(4)
   self.projection_matrix[{1,1}] = f / aspect
   self.projection_matrix[{2,2}] = f
   self.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
-  self.projection_matrix[{3,4}] = -1
-  self.projection_matrix[{4,3}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
+  self.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
+  self.projection_matrix[{4,3}] = -1
+
+  memlog('projection_matrix', self.projection_matrix)
 end
+
 
 function Camera:update_matrices()
   self:update()
 
-  self.model_view_matrix:eye(4,4)
-  self.model_view_matrix[{1, {1,3}}] = self.right_dir
-  self.model_view_matrix[{2, {1,3}}] = self.up_dir
-  self.model_view_matrix[{3, {1,3}}] = self.look_dir
+  self.rotation_matrix:eye(4,4)
+  self.rotation_matrix[{1, {1,3}}] = self.right_dir
+  self.rotation_matrix[{2, {1,3}}] = self.up_dir
+  self.rotation_matrix[{3, {1,3}}] = self.look_dir
+  -- memlog('rotation', self.rotation_matrix)
 
   self.translation_matrix:eye(4,4)
-  self.translation_matrix[{4, {1, 3}}] = self.eye
-  
-  self.model_view_matrix = self.model_view_matrix * self.translation_matrix
+  self.translation_matrix[{{1, 3}, 4}] = -self.eye
+  -- memlog('translation', self.translation_matrix)
+
+  torch.mm(self.model_view_matrix, self.rotation_matrix, self.translation_matrix)
+  -- memlog('model_view', self.model_view_matrix)
 
   torch.inverse(self.normal_matrix, self.model_view_matrix[{{1, 3}, {1, 3}}])
   self.normal_matrix = self.normal_matrix:t()
@@ -67,8 +93,7 @@ function Camera:update()
   
   local up
   -- calculate a temporary up
-  if geom.eq(self.look_dir, Z_AXIS_POS) or geom.eq(self.look_dir, Z_AXIS_POS) then
-
+  if geom.eq(self.look_dir, Z_AXIS_POS) or geom.eq(self.look_dir, Z_AXIS_NEG) then
     -- use our last up value but make it horizontal
     self.up_dir[3] = 0
     up = self.up_dir
@@ -87,16 +112,15 @@ end
 -- move eye in camera space
 function Camera:move_eye(x, y, z)
   -- assume we don't need an update here, but maybe we do?
-
-  torch.add(self.eye, self.eye, x, self.look_dir)
-  torch.add(self.eye, self.eye, y, self.right_dir)
-  torch.add(self.eye, self.eye, z, self.up_dir)
+  torch.add(self.eye, self.eye, x, self.right_dir)
+  torch.add(self.eye, self.eye, y, self.up_dir)
+  torch.add(self.eye, self.eye, z, self.look_dir)
   
   -- move the center, but not along the line of sight, for now
   -- the z direction changes the range
   -- __center += forwardDir * _z;
-  torch.add(self.center, self.center, x, self.look_dir)
-  torch.add(self.center, self.center, y, self.right_dir)
+  torch.add(self.center, self.center, x, self.right_dir)
+  torch.add(self.center, self.center, y, self.up_dir)
 end
 
 
@@ -168,6 +192,12 @@ function Camera:set_center(x, y, z)
   self.center[1] = x
   self.center[2] = y
   self.center[3] = z
+end
+
+function Camera:set_up(x, y, z)
+  self.up_dir[1] = x
+  self.up_dir[2] = y
+  self.up_dir[3] = z
 end
 
 return Camera

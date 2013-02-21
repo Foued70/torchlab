@@ -3496,17 +3496,18 @@ typedef void (PFNGLTEXTURESTORAGE3DEXTPROC) (GLuint texture, GLenum target, GLsi
 ]]
 
 
-gl_lib = ffi.load(ffi.os == 'OSX' and 'OpenGL.framework/OpenGL' or 'GL')
+local gl_lib = ffi.load(ffi.os == 'OSX' and 'OpenGL.framework/OpenGL' or 'GL')
 gl = setmetatable({}, {
   __index = function(tbl, name)
     local val
     if name:find('[a-z]') then
       -- lowercase letters indicate a function
-      local func = gl_lib['gl'..name]
-      val = function(...)
-        log.trace_x(3, log.cyan, name, ...)
-        return func(...)
-      end
+      val = gl_lib['gl'..name]
+      -- local func = gl_lib['gl'..name]
+      -- val = function(...)
+      --   log.trace_x(3, log.cyan, name, ...)
+      --   return func(...)
+      -- end
     end
 
     -- must be a constant

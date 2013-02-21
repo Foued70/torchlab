@@ -10,7 +10,8 @@ function Object:__init(obj_data)
   end
 
   local submeshes = {}
-    for _, sub in ipairs(obj_data.submeshes) do
+  for i = 1, obj_data.submeshes:size()[1] do
+    local sub = obj_data.submeshes[i]
     table.insert(submeshes, {start = sub[1], length = sub[2] - sub[1] + 1, material = self.materials[sub[3]]})
   end
 

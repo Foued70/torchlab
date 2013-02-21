@@ -4,7 +4,7 @@ local libui = require 'libui2'
 local Mesh = torch.class('Mesh')
 
 function Mesh:__init(verts, face_indexes, submeshes)
-  self.verts = verts
+  self.verts = verts:float()
   self.face_indexes = face_indexes
   self.submeshes = submeshes
 
@@ -27,9 +27,7 @@ function Mesh:push_to_gl()
   gl.check_errors()
 
   self.face_indexes = self.face_indexes - 1
-  log.trace(self.face_indexes)
   local ptr, size = libui.int_storage_info(self.face_indexes)
-  log.trace(ptr, size)
   gl.BufferData(
       gl.ELEMENT_ARRAY_BUFFER,
       size,
@@ -39,10 +37,8 @@ function Mesh:push_to_gl()
   gl.check_errors()
 
 
-  ptr, size = libui.double_storage_info(self.verts)
+  ptr, size = libui.float_storage_info(self.verts)
   local vert_size = size / self.verts:size()[1] -- bytes per row
-  log.trace(self.verts)
-  log.trace(ptr, size, vert_size)
   gl.BufferData(
       gl.ARRAY_BUFFER,
       size,
@@ -51,11 +47,10 @@ function Mesh:push_to_gl()
   )
   gl.check_errors()
 
-  start = gl.double_ptr(nil)
-  log.trace(start+0, start+4, start+6, start+9)
-  gl.VertexAttribPointer(0, 4, gl.DOUBLE, gl.FALSE, vert_size, start+0) -- position
-  gl.VertexAttribPointer(1, 2, gl.DOUBLE, gl.FALSE, vert_size, start+4) -- uv
-  gl.VertexAttribPointer(2, 3, gl.DOUBLE, gl.FALSE, vert_size, start+6) -- normal
+  start = gl.float_ptr(nil)
+  gl.VertexAttribPointer(0, 4, gl.FLOAT, gl.FALSE, vert_size, start+0) -- position
+  gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, vert_size, start+4) -- uv
+  gl.VertexAttribPointer(2, 3, gl.FLOAT, gl.FALSE, vert_size, start+6) -- normal
   gl.check_errors()
 
   gl.EnableVertexAttribArray(0);
@@ -64,8 +59,8 @@ function Mesh:push_to_gl()
   gl.check_errors()
   
   -- unbind TODO do we need this?
-  -- gl.BindBuffer(gl.ARRAY_BUFFER, 0);
-  -- gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+  gl.BindBuffer(gl.ARRAY_BUFFER, 0);
+  gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
   gl.BindVertexArray(0);
   gl.check_errors()
 
@@ -76,6 +71,8 @@ function Mesh:paint(context)
   if not self.pushed then self:push_to_gl() end
 
   gl.BindVertexArray(self.vao_id)
+  gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.element_buffer_id)
+  gl.BindBuffer(gl.ARRAY_BUFFER, self.vert_buffer_id)
   gl.check_errors()
 
   for i, submesh in ipairs(self.submeshes) do
@@ -86,14 +83,16 @@ function Mesh:paint(context)
 
     gl.DrawElements(
         gl.TRIANGLES,
-        submesh.length,
+        submesh.length * 3,
         gl.UNSIGNED_INT,
-        gl.uint_ptr(nil) + submesh.start - 1
+        gl.uint_ptr(nil) + ((submesh.start - 1) * 3)
     )
     gl.check_errors()
 
   end
 
+  gl.BindBuffer(gl.ARRAY_BUFFER, 0);
+  gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
   gl.BindVertexArray(0)
 end
 
@@ -117,7 +116,7 @@ function Mesh:dump_buffer(buf_type, ptr_type, rows, columns)
 end
 
 function Mesh:dump_buffers()
-  self:dump_buffer(gl.ARRAY_BUFFER, gl.double_ptr, self.verts:size()[1], self.verts:size()[2])
+  self:dump_buffer(gl.ARRAY_BUFFER, gl.float_ptr, self.verts:size()[1], self.verts:size()[2])
   self:dump_buffer(gl.ELEMENT_ARRAY_BUFFER, gl.uint_ptr, self.face_indexes:size()[1], self.face_indexes:size()[2])
 end
 

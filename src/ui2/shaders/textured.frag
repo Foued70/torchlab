@@ -29,6 +29,8 @@ void main () {
 	// }
 	
 
+	sFragColor = vec4(0.4, 0.2, 0.2, 1.0);
 	sFragColor = texture(textureUnit, sVaryingTexCoords.st);
-  sPickingData = uvec3((gl_PrimitiveID+1), objectID, meshID);
+
+  // sPickingData = uvec3((gl_PrimitiveID+1), objectID, meshID);
 }
