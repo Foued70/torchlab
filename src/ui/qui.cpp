@@ -31,7 +31,7 @@ class gui_launcher : public QObject
 
       // Create a GLWidget requesting our format
       scanWidget = new ScanWidget(glFormat);
-      scanWidget->resize(800,600);
+      scanWidget->resize(400,600);
       scanWidget->show();
       return true;
     }
@@ -55,7 +55,7 @@ int libui_create_object(lua_State *L) {
   LuaObject obj = LuaObject(L, 1);
 
   scanWidget->makeCurrent();
-  Scene* scene = scanWidget->engine->getCurrentScene();
+  Scene* scene = scanWidget->scene;
   Object* object = scene->createObject("space");
   printf("load\n");
   object->loadFrom(&obj);

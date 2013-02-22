@@ -15,8 +15,10 @@
 Model=objects/rivercourt_3307_v3.obj
 
 # Path to photos we are aligning poses to. Relative to ui directory. No spaces. No quotes.
+Photo=texture/_DSC5436.jpg
+Photo=texture/_DSC5445.jpg
+Photo=texture/_DSC5526.jpg
 Photo=texture/_DSC6044.jpg
-Photo=texture/_DSC6045.jpg
 
 # Path to desired output folder. Relative to ui directory. No spaces. No quotes.
 Output=poseAlignData/
