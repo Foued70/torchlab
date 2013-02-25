@@ -47,13 +47,22 @@ GLWidget::setTableInt(const char* name, int value) {
 }
 
 void
+GLWidget::setTableBoolean(const char* name, int value) {
+  lua_pushboolean(L, value);
+  lua_setfield(L, -2, name);
+}
+
+void
 GLWidget::pushMouseEvent(QMouseEvent* event) {
-  lua_createtable(L, 0, 8);
+  lua_createtable(L, 0, 9);
   setTableInt("x", event->x());
   setTableInt("y", event->y());
   setTableInt("global_x", event->globalX());
   setTableInt("global_y", event->globalY());
-  setTableInt("button", event->button());
+  setTableInt("buttons", event->buttons());
+  setTableBoolean("left_button", event->buttons() & Qt::LeftButton || event->button() == Qt::LeftButton);
+  setTableBoolean("right_button", event->buttons() & Qt::RightButton || event->button() == Qt::RightButton);
+  setTableBoolean("middle_button", event->buttons() & Qt::MiddleButton || event->button() == Qt::MiddleButton);
 }
 
 void 

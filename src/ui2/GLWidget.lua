@@ -8,9 +8,8 @@ local MatrixStack = require 'ui2.MatrixStack'
 
 local GLWidget = torch.class('GLWidget')
 
-local LEFT_BUTTON = 0x01
-local RIGHT_BUTTON = 0x02
-local MIDDLE_BUTTON = 0x04
+local NAV_MODE = 1
+local FOCUS_MODE = 2
 
 function GLWidget:__init()
   self.initialized = false
@@ -19,6 +18,8 @@ function GLWidget:__init()
   self.camera = require('ui2.Camera').new()
   self.camera:set_eye(2,3,5)
   self.camera:set_center(0,0,1)
+
+  self.mode = NAV_MODE
 
   self.objects = {}
 
@@ -97,6 +98,8 @@ function GLWidget:mouse_press(event)
   -- p('mouse_press', event)
   self.drag_start_x = event.global_x
   self.drag_start_y = event.global_y
+  self.drag_last_x = event.global_x
+  self.drag_last_y = event.global_y
 end
 
 function GLWidget:mouse_release(event)
@@ -108,7 +111,7 @@ function GLWidget:mouse_release(event)
 end
 
 function GLWidget:mouse_click(event)
-  if event.button == RIGHT_BUTTON then
+  if event.right_button then
     rotateMode = false;
     -- FlyTo Behavior
     local z = self.frame_buffer:read_depth_pixel(event.x, event.y)
@@ -128,6 +131,22 @@ end
 
 function GLWidget:mouse_move(event)
   -- p('mouse_move', event)
+  local dx = event.global_x - self.drag_last_x
+  local dy = event.global_y - self.drag_last_y
+
+  if event.right_button then
+    local  rotation_speed = 1;
+    if self.mode == NAV_MODE then
+      self.camera:rotate_center_around_eye(dx*rotation_speed, dy*rotation_speed)
+    else
+      self.camera:rotate_eye_around_center(dx*rotation_speed, dy*rotation_speed)
+    end
+
+    self.drag_last_x = event.global_x
+    self.drag_last_y = event.global_y
+    self:update()
+  end
+
 end
 
 function GLWidget:mouse_wheel(event)
