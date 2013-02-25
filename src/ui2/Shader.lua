@@ -98,17 +98,6 @@ function Shader:load()
   end
 end
 
-local function memlog(label, x)
-  local s = x:storage()
-  p(label)
-  p(("%.4f %.4f %.4f %.4f"):format(s[1], s[2], s[3], s[4]))
-  p(("%.4f %.4f %.4f %.4f"):format(s[5], s[6], s[7], s[8]))
-  p(("%.4f %.4f %.4f %.4f"):format(s[9], s[10], s[11], s[12]))
-  p(("%.4f %.4f %.4f %.4f"):format(s[13], s[14], s[15], s[16]))
-  p('')
-end
-
-
 
 function Shader:use(context)
   gl.UseProgram(self.program_id)

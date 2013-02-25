@@ -43,7 +43,6 @@ function Camera:update_projection_matrix(context)
   self.height = viewport[3]
   local aspect = self.width / self.height
 
-  log.trace(self.fov_y, aspect)
   local f = 1 / math.tan(self.fov_y / 2)
   
   context.projection_matrix:eye(4)
@@ -53,6 +52,7 @@ function Camera:update_projection_matrix(context)
   context.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
   context.projection_matrix[{4,3}] = -1
 
+  self.projection_matrix = context.projection_matrix:double()
   -- memlog('projection_matrix', context.projection_matrix)
 end
 
@@ -66,6 +66,8 @@ function Camera:update_matrix(context)
   context.model_view_matrix[{3, {1,3}}] = self.look_dir
 
   context:translate(-self.eye)
+
+  self.model_view_matrix = context.model_view_matrix:double()
 end
 
 function Camera:update()
@@ -134,7 +136,7 @@ function Camera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
   -- move a back into position
   torch.add(a, a, b)
 
-  self.update();
+  self.update()
 end
 
 
@@ -148,19 +150,23 @@ function Camera:rotate_eye_around_center(x, y)
 end
 
 
-function Camera:camera_to_world(x, y)
+function Camera:to_world(x, y, z)
   local screen_position = torch.Tensor(4)
   screen_position[1] = 2 * x / self.width - 1
   screen_position[2] = 1 - 2 * y / self.height -- invert y
-  screen_position[3] = 2 * FrameBuffer.read_depth_pixel(x, y) - 1
+  screen_position[3] = 2 * z - 1 -- TODO Is this right?
   screen_position[4] = 1
 
-  local inverse_camera_transform = torch.inverse(torch.mm(self.projection_matrix, self.model_view_matrix))
+  screen_position:resize(4,1)
+
+  local mvp_matrix = torch.mm(self.projection_matrix, self.model_view_matrix)
+  local inverse_camera_transform = torch.inverse(mvp_matrix)
     
   local view_position = torch.mm(inverse_camera_transform, screen_position);
+  view_position:resize(4)
   torch.div(view_position, view_position, view_position[4])
-  
-  return view_position[{1,3}]
+
+  return view_position[{{1,3}}]
 
 end
 

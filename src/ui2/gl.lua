@@ -3545,7 +3545,7 @@ function gl.GetIntegerv(name, size)
   size = size or 1
   local value = gl.int(size)
   gl_lib.glGetIntegerv(name, value)
-  
+
   if size == 1 then
     return value[0]
   else
@@ -3605,6 +3605,42 @@ end
 
 function gl.GenBuffer()
   return gl.GenUint(gl_lib.glGenBuffers)
+end
+
+function gl.GenFramebuffer()
+  return gl.GenUint(gl_lib.glGenFramebuffers)
+end
+
+function gl.DeleteUint(func, id)
+  local value = gl.uint(1)
+  value[0] = id
+  func(1, value)
+end
+
+function gl.DeleteTexture(id)
+  gl.DeleteUint(gl.DeleteTextures, id)
+end
+
+function gl.DeleteFramebuffer(id)
+  gl.DeleteUint(gl.DeleteFramebuffers, id)
+end
+
+local frame_buffer_error_map = {
+  [gl.FRAMEBUFFER_UNDEFINED] = 'Frame buffer configuration failed. Frame buffer target set to default framebuffer. Default frame buffer is undefined.',
+  [gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT] = 'Frame buffer configuration failed. Attachment incomplete.',
+  [gl.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT] = 'Frame buffer configuration failed. Frame buffer requires at least one texture attachment.',
+  [gl.FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER] = 'Frame buffer configuration failed. Incomplete draw buffer.',
+  [gl.FRAMEBUFFER_INCOMPLETE_READ_BUFFER] = 'Frame buffer configuration failed. Incomplete read buffer.',
+  [gl.FRAMEBUFFER_UNSUPPORTED] = 'Frame buffer configuration failed. Attached image is of an unsupported format.',
+  [gl.FRAMEBUFFER_INCOMPLETE_MULTISAMPLE] = 'Frame buffer configuration failed. Incomplete multisample.',
+  [gl.FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS] = 'Frame buffer configuration failed. Incomplete layer targets.'
+}
+
+function gl.CheckFramebuffer()
+  local status = gl.CheckFramebufferStatus(gl.FRAMEBUFFER)
+  if status ~= gl.FRAMEBUFFER_COMPLETE then
+    log.error(frame_buffer_error_map[status])
+  end
 end
 
 local err_map = {

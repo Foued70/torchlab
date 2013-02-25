@@ -1,13 +1,19 @@
 local libui = require 'libui2'
 local gl = require 'ui2.gl'
 local key = require 'ui2.key'
+local geom = require 'util.geom'
 
 local Shader = require 'ui2.Shader'
 local MatrixStack = require 'ui2.MatrixStack'
 
 local GLWidget = torch.class('GLWidget')
 
+local LEFT_BUTTON = 0x01
+local RIGHT_BUTTON = 0x02
+local MIDDLE_BUTTON = 0x04
+
 function GLWidget:__init()
+  self.initialized = false
   libui.attach_qt(self)
 
   self.camera = require('ui2.Camera').new()
@@ -17,6 +23,8 @@ function GLWidget:__init()
   self.objects = {}
 
   self.context = MatrixStack.new()
+
+  self.frame_buffer = nil
 end
 
 function GLWidget:init(qt_widget)
@@ -24,7 +32,9 @@ function GLWidget:init(qt_widget)
 
   self.qt_widget = qt_widget
 
-  self.textured_shader = Shader.new('textured') 
+  self.textured_shader = Shader.new('textured')
+
+  self.initialized = true
 end
 
 function GLWidget:update()
@@ -35,25 +45,34 @@ function GLWidget:resize(width, height)
   log.trace('resize', width, height)
   gl.Viewport(0, 0, width, height)
   self.camera:update_projection_matrix(self.context)
+
+  if self.frame_buffer then
+    self.frame_buffer:__gc()
+  end
+
+  self.frame_buffer = require('ui2.FrameBuffer').new(width, height)
 end
 
 function GLWidget:paint()
-  gl.Clear(gl.COLOR_BUFFER_BIT)
-  gl.Clear(gl.DEPTH_BUFFER_BIT)
+  if not self.initialized then return end
+
+  self.frame_buffer:use()
+
+  gl.Clear(gl.COLOR_BUFFER_BIT + gl.DEPTH_BUFFER_BIT)
   gl.ClearColor(0, 0, 0, 0)
   gl.check_errors()
 
   gl.Enable(gl.BLEND)
   gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
   gl.check_errors()
-  
+
   gl.Enable(gl.DEPTH_TEST)
   gl.check_errors()
-  
+
   gl.CullFace(gl.BACK)
   gl.Enable(gl.CULL_FACE)
   gl.check_errors()
-  
+
   gl.Enable(gl.MULTISAMPLE)
   gl.check_errors()
 
@@ -64,18 +83,47 @@ function GLWidget:paint()
   for i, object in ipairs(self.objects) do
     object:paint(self.context)
   end
-  
+
+  self.frame_buffer:display()
+
   gl.Disable(gl.BLEND)
   gl.Disable(gl.DEPTH_TEST)
   gl.check_errors()
+
+  self.frame_buffer:unbind()
 end
 
 function GLWidget:mouse_press(event)
   -- p('mouse_press', event)
+  self.drag_start_x = event.global_x
+  self.drag_start_y = event.global_y
 end
 
 function GLWidget:mouse_release(event)
-  -- p('mouse_release', event)
+  -- redirtect simple clicks
+  if self.drag_start_x == event.global_x and self.drag_start_y == event.global_y then 
+    return self:mouse_click(event)
+  end
+
+end
+
+function GLWidget:mouse_click(event)
+  if event.button == RIGHT_BUTTON then
+    rotateMode = false;
+    -- FlyTo Behavior
+    local z = self.frame_buffer:read_depth_pixel(event.x, event.y)
+    local clicked_pos_world = self.camera:to_world(event.x, event.y, z)
+    local depth = geom.dist(clicked_pos_world, self.camera.eye)
+
+    if depth < self.camera.clip_far then
+      local travel_dir = geom.normalize(clicked_pos_world - self.camera.eye)
+      self.camera.center[{{1,3}}] = clicked_pos_world
+      self.camera.eye[{{1,3}}] = clicked_pos_world - travel_dir
+    end
+
+    self:update()
+  end
+
 end
 
 function GLWidget:mouse_move(event)
