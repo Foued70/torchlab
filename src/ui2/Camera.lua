@@ -123,7 +123,7 @@ function Camera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
     torch.mul(a, Z_AXIS_POS, a:norm())
     -- rotate up for x instead of eye
     geom.rotate_axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
-  elseif z_axis_angle - y_angle > PI then
+  elseif z_axis_angle - y_angle > math.pi then
     -- this would take us past vertical (down), so lock to Z down
     torch.mul(a, Z_AXIS_NEG, a:norm())
     -- rotate up for x instead of eye
@@ -136,17 +136,17 @@ function Camera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
   -- move a back into position
   torch.add(a, a, b)
 
-  self.update()
+  self:update()
 end
 
 
 function Camera:rotate_center_around_eye(x, y)
-  rotate_a_around_b(self.center, self.eye, self.look_dir, x, y, 0.001)
+  self:rotate_a_around_b(self.center, self.eye, self.look_dir, x, y, 0.001)
 end
 
 
 function Camera:rotate_eye_around_center(x, y)
-  rotate_a_around_b(self.eye, self.center, -self.look_dir, x, y, 0.02)
+  self:rotate_a_around_b(self.eye, self.center, -self.look_dir, x, y, 0.02)
 end
 
 

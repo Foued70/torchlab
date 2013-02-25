@@ -224,8 +224,7 @@ function quaternion_from_axis_angle(rot_axis, rot_angle, quat)
   if not quat then 
       quat = torch.Tensor(4)
   end
-
-  quat[{1,3}] = rot_axis * torch.sin(rot_angle / 2)
+  quat[{{1,3}}] = rot_axis * torch.sin(rot_angle / 2)
   quat[4] = torch.cos(rot_angle / 2)
 
   return quat
