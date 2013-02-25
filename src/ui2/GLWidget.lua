@@ -1,37 +1,41 @@
-local ffi = require 'ffi'
 local libui = require 'libui2'
 local gl = require 'ui2.gl'
 local key = require 'ui2.key'
+local geom = require 'util.geom'
 
 local Shader = require 'ui2.Shader'
+local MatrixStack = require 'ui2.MatrixStack'
 
 local GLWidget = torch.class('GLWidget')
 
+local NAV_MODE = 1
+local FOCUS_MODE = 2
+
 function GLWidget:__init()
+  self.initialized = false
   libui.attach_qt(self)
 
   self.camera = require('ui2.Camera').new()
   self.camera:set_eye(2,3,5)
   self.camera:set_center(0,0,1)
 
+  self.mode = NAV_MODE
+
   self.objects = {}
 
-  self.context = {}
-  self.context.projection_matrix = self.camera.projection_matrix
-  self.context.model_view_matrix = self.camera.model_view_matrix
-  self.context.normal_matrix = self.camera.normal_matrix
-  self.context.model_view_projection_matrix = torch.FloatTensor(4,4):t() -- transposed for opengl's column majorness
+  self.context = MatrixStack.new()
+
+  self.frame_buffer = nil
 end
 
 function GLWidget:init(qt_widget)
-  log.info("OpenGL "..ffi.string(gl.GetString(gl.VERSION)).." GLSL "..ffi.string(gl.GetString(gl.SHADING_LANGUAGE_VERSION)))
+  log.info("OpenGL "..gl.GetString(gl.VERSION).." GLSL "..gl.GetString(gl.SHADING_LANGUAGE_VERSION))
 
   self.qt_widget = qt_widget
 
-  self.textured_shader = Shader.new('textured') 
-  -- self.shadow_shader = Shader.new('shadow') 
-  -- self.identity_shader = Shader.new('identity') 
+  self.textured_shader = Shader.new('textured')
 
+  self.initialized = true
 end
 
 function GLWidget:update()
@@ -41,52 +45,108 @@ end
 function GLWidget:resize(width, height)
   log.trace('resize', width, height)
   gl.Viewport(0, 0, width, height)
-  self.camera:update_projection_matrix()
+  self.camera:update_projection_matrix(self.context)
+
+  if self.frame_buffer then
+    self.frame_buffer:__gc()
+  end
+
+  self.frame_buffer = require('ui2.FrameBuffer').new(width, height)
 end
 
 function GLWidget:paint()
-  gl.Clear(gl.COLOR_BUFFER_BIT)
-  gl.Clear(gl.DEPTH_BUFFER_BIT)
+  if not self.initialized then return end
+
+  self.frame_buffer:use()
+
+  gl.Clear(gl.COLOR_BUFFER_BIT + gl.DEPTH_BUFFER_BIT)
   gl.ClearColor(0, 0, 0, 0)
   gl.check_errors()
 
   gl.Enable(gl.BLEND)
   gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
   gl.check_errors()
-  
+
   gl.Enable(gl.DEPTH_TEST)
   gl.check_errors()
-  
+
   gl.CullFace(gl.BACK)
   gl.Enable(gl.CULL_FACE)
   gl.check_errors()
-  
+
   gl.Enable(gl.MULTISAMPLE)
   gl.check_errors()
 
   -- setup camera
-  self.camera:update_matrices()
+  self.camera:update_matrix(self.context)
 
   -- show objects
   for i, object in ipairs(self.objects) do
     object:paint(self.context)
   end
-  
+
+  self.frame_buffer:display()
+
   gl.Disable(gl.BLEND)
   gl.Disable(gl.DEPTH_TEST)
   gl.check_errors()
+
+  self.frame_buffer:unbind()
 end
 
 function GLWidget:mouse_press(event)
   -- p('mouse_press', event)
+  self.drag_start_x = event.global_x
+  self.drag_start_y = event.global_y
+  self.drag_last_x = event.global_x
+  self.drag_last_y = event.global_y
 end
 
 function GLWidget:mouse_release(event)
-  -- p('mouse_release', event)
+  -- redirtect simple clicks
+  if self.drag_start_x == event.global_x and self.drag_start_y == event.global_y then 
+    return self:mouse_click(event)
+  end
+
+end
+
+function GLWidget:mouse_click(event)
+  if event.right_button then
+    rotateMode = false;
+    -- FlyTo Behavior
+    local z = self.frame_buffer:read_depth_pixel(event.x, event.y)
+    local clicked_pos_world = self.camera:to_world(event.x, event.y, z)
+    local depth = geom.dist(clicked_pos_world, self.camera.eye)
+
+    if depth < self.camera.clip_far then
+      local travel_dir = geom.normalize(clicked_pos_world - self.camera.eye)
+      self.camera.center[{{1,3}}] = clicked_pos_world
+      self.camera.eye[{{1,3}}] = clicked_pos_world - travel_dir
+    end
+
+    self:update()
+  end
+
 end
 
 function GLWidget:mouse_move(event)
   -- p('mouse_move', event)
+  local dx = event.global_x - self.drag_last_x
+  local dy = event.global_y - self.drag_last_y
+
+  if event.right_button then
+    local  rotation_speed = 1;
+    if self.mode == NAV_MODE then
+      self.camera:rotate_center_around_eye(dx*rotation_speed, dy*rotation_speed)
+    else
+      self.camera:rotate_eye_around_center(dx*rotation_speed, dy*rotation_speed)
+    end
+
+    self.drag_last_x = event.global_x
+    self.drag_last_y = event.global_y
+    self:update()
+  end
+
 end
 
 function GLWidget:mouse_wheel(event)

@@ -45,6 +45,7 @@ private:
   int callLua(int inCount, int outCount);
   void selfFunction(const char* functionName);
   void setTableInt(const char* name, int value);
+  void setTableBoolean(const char* name, int value);
   void pushMouseEvent(QMouseEvent* event);
 };
 

@@ -7,6 +7,8 @@
 #include <assert.h>
 
 #include "Vectors.h"
+#include "utils.h"
+#include <string>
 
 /*
  * This matrix is a column-order matrix, as OpenGL prefers.
@@ -206,6 +208,12 @@ public:
       }
     }
     return result;
+  }
+  
+  void logAllComponents(const std::string& _name) {
+	  for (int i = 0; i < N; ++i)
+      for(int j = 0; j < N; ++j)
+        log(PARAM, "%s[%d][%d]=%f",_name.c_str(), i, j, at(i, j));
   }	
 };
 

@@ -27,15 +27,6 @@ function Camera:__init()
   self.clip_far = 1000
   self.fov_y = math.pi / 4 -- 45 degrees
 
-  -- we use transposed matrices because opengl want column major in memory and torch is row major
-  self.projection_matrix = torch.FloatTensor(4, 4):t()
-  self.model_view_matrix = torch.FloatTensor(4, 4):t()
-  self.normal_matrix = torch.FloatTensor(3,3):t()
-
-  -- these are scratch matrices, so we can reuse them
-  self.rotation_matrix = torch.FloatTensor(4, 4):t()
-  self.translation_matrix = torch.FloatTensor(4, 4):t()
-
   -- intermediate direction vectors
   self.look_dir = torch.Tensor({0,1,0})
   self.up_dir = torch.Tensor({0,0,1})
@@ -46,44 +37,37 @@ function Camera:__init()
 
 end
 
-function Camera:update_projection_matrix()
+function Camera:update_projection_matrix(context)
   local viewport = gl.GetIntegerv(gl.VIEWPORT, 4)
   self.width = viewport[2]
   self.height = viewport[3]
   local aspect = self.width / self.height
 
-  log.trace(self.fov_y, aspect)
   local f = 1 / math.tan(self.fov_y / 2)
   
-  self.projection_matrix:eye(4)
-  self.projection_matrix[{1,1}] = f / aspect
-  self.projection_matrix[{2,2}] = f
-  self.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
-  self.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
-  self.projection_matrix[{4,3}] = -1
+  context.projection_matrix:eye(4)
+  context.projection_matrix[{1,1}] = f / aspect
+  context.projection_matrix[{2,2}] = f
+  context.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
+  context.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
+  context.projection_matrix[{4,3}] = -1
 
-  memlog('projection_matrix', self.projection_matrix)
+  self.projection_matrix = context.projection_matrix:double()
+  -- memlog('projection_matrix', context.projection_matrix)
 end
 
 
-function Camera:update_matrices()
+function Camera:update_matrix(context)
   self:update()
 
-  self.rotation_matrix:eye(4,4)
-  self.rotation_matrix[{1, {1,3}}] = self.right_dir
-  self.rotation_matrix[{2, {1,3}}] = self.up_dir
-  self.rotation_matrix[{3, {1,3}}] = self.look_dir
-  -- memlog('rotation', self.rotation_matrix)
+  context.model_view_matrix:eye(4,4)
+  context.model_view_matrix[{1, {1,3}}] = self.right_dir
+  context.model_view_matrix[{2, {1,3}}] = self.up_dir
+  context.model_view_matrix[{3, {1,3}}] = self.look_dir
 
-  self.translation_matrix:eye(4,4)
-  self.translation_matrix[{{1, 3}, 4}] = -self.eye
-  -- memlog('translation', self.translation_matrix)
+  context:translate(-self.eye)
 
-  torch.mm(self.model_view_matrix, self.rotation_matrix, self.translation_matrix)
-  -- memlog('model_view', self.model_view_matrix)
-
-  torch.inverse(self.normal_matrix, self.model_view_matrix[{{1, 3}, {1, 3}}])
-  self.normal_matrix = self.normal_matrix:t()
+  self.model_view_matrix = context.model_view_matrix:double()
 end
 
 function Camera:update()
@@ -139,7 +123,7 @@ function Camera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
     torch.mul(a, Z_AXIS_POS, a:norm())
     -- rotate up for x instead of eye
     geom.rotate_axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
-  elseif z_axis_angle - y_angle > PI then
+  elseif z_axis_angle - y_angle > math.pi then
     -- this would take us past vertical (down), so lock to Z down
     torch.mul(a, Z_AXIS_NEG, a:norm())
     -- rotate up for x instead of eye
@@ -152,33 +136,37 @@ function Camera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
   -- move a back into position
   torch.add(a, a, b)
 
-  self.update();
+  self:update()
 end
 
 
 function Camera:rotate_center_around_eye(x, y)
-  rotate_a_around_b(self.center, self.eye, self.look_dir, x, y, 0.001)
+  self:rotate_a_around_b(self.center, self.eye, self.look_dir, x, y, 0.001)
 end
 
 
 function Camera:rotate_eye_around_center(x, y)
-  rotate_a_around_b(self.eye, self.center, -self.look_dir, x, y, 0.02)
+  self:rotate_a_around_b(self.eye, self.center, -self.look_dir, x, y, 0.02)
 end
 
 
-function Camera:camera_to_world(x, y)
+function Camera:to_world(x, y, z)
   local screen_position = torch.Tensor(4)
   screen_position[1] = 2 * x / self.width - 1
   screen_position[2] = 1 - 2 * y / self.height -- invert y
-  screen_position[3] = 2 * FrameBuffer.read_depth_pixel(x, y) - 1
+  screen_position[3] = 2 * z - 1 -- TODO Is this right?
   screen_position[4] = 1
 
-  local inverse_camera_transform = torch.inverse(torch.mm(self.projection_matrix, self.model_view_matrix))
+  screen_position:resize(4,1)
+
+  local mvp_matrix = torch.mm(self.projection_matrix, self.model_view_matrix)
+  local inverse_camera_transform = torch.inverse(mvp_matrix)
     
   local view_position = torch.mm(inverse_camera_transform, screen_position);
+  view_position:resize(4)
   torch.div(view_position, view_position, view_position[4])
-  
-  return view_position[{1,3}]
+
+  return view_position[{{1,3}}]
 
 end
 

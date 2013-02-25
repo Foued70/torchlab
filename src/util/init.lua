@@ -1,7 +1,3 @@
-require 'torch'
-require 'dok'
-require 'paths'
-
 local exports = require "util/util"
 
 exports.geom      = require "util/geom"
@@ -10,7 +6,6 @@ exports.bihtree   = require "util/bihtree"
 exports.interpolate = require "util/interpolate"
 
 exports.depot = require "util/depot"
-exports.pbx  = require "util/pbx"
 exports.obj  = require "util/obj"
 exports.obj2  = require "util/obj2"
 
