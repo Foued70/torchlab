@@ -13,8 +13,8 @@ static const double PIdiv2 = PI/2;
 using namespace std;
 
 Camera::Camera() :
-		__fovy(45.0),
-		__zNear(0.1),
+		__fovy(60.0f),
+		__zNear(0.00001f),
 		__zFar(1000.0),
 		__eye({0, 0, 0}),
 		__center({0, 0, 0}),
@@ -24,8 +24,8 @@ Camera::Camera() :
 }
 
 Camera::Camera(GLfloat _x, GLfloat _y, GLfloat _z) :
-		__fovy(45.0),
-		__zNear(0.0001),
+		__fovy(60.0f),
+		__zNear(0.00001f),
 		__zFar(1000.0),
 		__eye({_x, _y, _z}),
 		__center({0, 0, 0}),
@@ -238,14 +238,25 @@ Camera::cameraToWorld(GLfloat _x, GLfloat _y) const {
   screenPosition.r = (screenPosition.r * 2.0f) - 1.0f;
   screenPosition.g = 1.0f - (screenPosition.g * 2.0f); // Invert Y
   screenPosition.b = (screenPosition.b * 2.0f) - 1.0f;
+  
+  log(PARAM, "screenPosition= %f %f %f", screenPosition.r, screenPosition.g, screenPosition.b);
     
   sMat16 modelViewMatrix = MatricesManager::GetSingleton().getModelViewMatrix();
   sMat16 projectionMatrix = MatricesManager::GetSingleton().getProjectionMatrix();
-  sMat16 inverseCameraTransform = (projectionMatrix * modelViewMatrix).inversion();
+  sMat16 projectionModelViewMatrix = projectionMatrix * modelViewMatrix;
+  sMat16 inverseCameraTransform = projectionModelViewMatrix.inversion();
     
+  modelViewMatrix.logAllComponents("ModelViewMatrix");
+  projectionMatrix.logAllComponents("projectionMatrix");
+  projectionModelViewMatrix.logAllComponents("projectionModelViewMatrix");
+  inverseCameraTransform.logAllComponents("inverseCameraTransform");
   Vector4 viewPosition = inverseCameraTransform * screenPosition;
   
+  log(PARAM, "Camera %f %f to world= %f %f %f", _x, _y, viewPosition.r, viewPosition.g, viewPosition.b );
+  
   viewPosition /= viewPosition.a;
+  
+  log(PARAM, "Camera %f %f to world= %f %f %f", _x, _y, viewPosition.r, viewPosition.g, viewPosition.b );
   
   return Vector3({viewPosition.r, viewPosition.g, viewPosition.b});
 }
