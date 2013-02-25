@@ -25,6 +25,8 @@ function GLWidget:__init()
   self.context = MatrixStack.new()
 
   self.frame_buffer = nil
+  
+  self.animationManager = require('ui2.AnimationManager').new()
 end
 
 function GLWidget:init(qt_widget)
@@ -151,6 +153,24 @@ end
 function GLWidget:add_object(data_obj)
   table.insert(self.objects, require('ui2.Object').new(data_obj))
   self:update()
+end
+
+function GLWidget:flyTo(goal_position)
+  --__flightMode = FREE_FLIGHT;
+  local VIEW_DISTANCE = 8
+  local VIEW_HEIGHT = 2.25
+  local eye_offset_direction = geom.direction(self.camera.eye, goal_position)
+  local eye_position = torch.add(goal_position, torch.mul(eye_offset_direction, VIEW_DISTANCE))
+  
+  --if ( Engine::GetSingleton().raycast(eyePosition, Vector3({eyePosition.x, eyePosition.y, eyePosition.z - 1.0f}), ground) ) {
+  --eyePosition.z = ground.z + viewingHeight;
+  --}
+  
+  
+  self.camera:set_eye(2,3,5)
+  self.camera:set_center(0,0,1)
+  
+  --self.animationManager:updateState()
 end
 
 return GLWidget
