@@ -81,6 +81,8 @@ public:
   Scene* getScene(const string& _sceneName);
   
   Triangle* getTriangleByID(const TriangleID& _id);
+  
+  Vertex* pickVertex(float _x, float _y, unsigned int _searchDistance = 2, float _foundThreshold = 0.3f);
 	
 	/* Access to managers from outside the class */
 	TextureManager*& Textures;

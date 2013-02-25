@@ -6,6 +6,7 @@
 #include "engine/CameraController.h"
 #include "engine/Surface.h"
 #include "engine/Texture.h"
+#include "engine/PoseRefinementDataHandler.h"
 
 #include <QtGui/QMouseEvent>
 #include <QDebug>
@@ -24,17 +25,14 @@ ScanWidget::ScanWidget(const QGLFormat& format, QWidget* parent ) : QGLWidget( n
     clickTimerRMB_Current(0.0),
     rotateMode(true),
     __vertexPointMode(false),
-    __picturePointMode(false),
-    __modelFile(""),
-    __photoFile(""),
-    __outputPath(""),
-    __outputIndex(1)
+    __picturePointMode(false)
 {
   setMouseTracking(false);
   engine = Engine::GetSingletonPtr();
 }
 
 ScanWidget::~ScanWidget() {
+  delete poseRefinementDataHandler;
 }
 
 void 
@@ -47,21 +45,26 @@ void
 ScanWidget::initializeGL() {
   printf("OpenGL %s GLSL %s\n", glGetString(GL_VERSION), glGetString(GL_SHADING_LANGUAGE_VERSION));
   
-  setupSceneFromFile("config/poseAlignConfig.txt");
-  
   engine->init();
   mainScene = engine->createScene("MainScene");
   scene = mainScene;
   postScene = engine->createScene("PostScene");
-  
-  mainModel = mainScene->createObject("mainModel");
-  if (!mainModel -> loadFromObj(__modelFile.c_str())) exit(1);
   
   Camera *sphereCamera = mainScene->createCamera(-20, 0, 7);
   sphereCamera -> lookAt(0, 0, 7);
   
   sphereCameraController = ControllerManager::GetSingleton().createCameraController(sphereCamera);
   sphereCameraController->setZoom(10.0f);
+  
+  poseRefinementDataHandler = new PoseRefinementDataHandler("config/poseAlignConfig.txt");
+  
+  sphereCameraController->setPositionAndRotation( poseRefinementDataHandler->getStartPosition(),
+                                                  Vector3({0.0f, 0.0f, 0.0f}) );                                                
+                                                  
+  mainModel = mainScene->createObject("mainModel");
+  log(PARAM, "modelPath=%s", poseRefinementDataHandler->getModelPath().c_str());
+  if (!mainModel -> loadFromObj(poseRefinementDataHandler->getModelPath().c_str())) exit(1);
+  
         
   /* Light on (7, 3, 0) position */
   Light* light = mainScene->createLight(5, 15, -10);
@@ -91,23 +94,7 @@ void ScanWidget::resizeGL(int w, int h) {
   Object* mainModelVerts = postScene->createObject("mainModelVerts");
   if (!mainModelVerts -> createVertexCloud(mainModel)) exit(1);
   
-  std::vector<Texture*> texturesVector; 
-  texturesVector.push_back(new Texture(__photoFile.c_str(), MODE_INDEXED_MAP));
-  //texturesVector.push_back(FrameBuffer::GetSingleton().getTexture(COLOR_PASS));
-  texturesVector.push_back(FrameBuffer::GetSingleton().getTexture(PICKING_PASS));
-  //texturesVector.push_back(FrameBuffer::GetSingleton().getTexture(DEPTH_PASS));
-      
-  Object* plane = postScene->createObject("screenPlane");
-  if (!plane-> explicitLoad(      "objects/planeNormalized.obj",
-                                  0, //Dont flip the uvs
-                                  "wireframeMat",
-                                  Engine::GetSingleton().wireframeShader, 
-                                  1.0f, 
-                                  0.0f, 
-                                  0.0f,
-                                  &texturesVector[0],
-                                  2) ) exit(1);
-  texturesVector.clear();
+  poseRefinementDataHandler->loadPhotoPlane();
 }
 
 void ScanWidget::paintGL() {
@@ -131,68 +118,20 @@ void ScanWidget::mouseReleaseEvent(QMouseEvent* event) {
   
   if (event->button() == Qt::LeftButton) {
     if (__vertexPointMode) {
-      __selectedVertex = Vector3({0.0, 0.0, 0.0});
-      
-      GLint viewport[4];
-      glGetIntegerv(GL_VIEWPORT, viewport);
-      float windowWidth = viewport[2];
-    	float windowHeight = viewport[3];
-      
-      unsigned int searchDistance = 2;
-      
-      std::vector<Triangle*> foundTriangles;
-      
-      for ( unsigned int x = (((int)mouseX-searchDistance) >= 0) ? ((int)mouseX-searchDistance) : 0; 
-            x < ((int)mouseX+searchDistance) && x < windowWidth;
-            x++ )
-      {
-        for ( unsigned int y = (((int)mouseY-searchDistance) >= 0) ? ((int)mouseY-searchDistance) : 0;
-              y < ((int)mouseY+searchDistance) && y < windowHeight;
-              y++ )
-        {
-          TriangleID pickingData = FrameBuffer::GetSingleton().pickTriangle((GLuint)x, (GLuint)y);
-          if (pickingData.objectID != 0) {
-            Triangle* tempTriangle = engine->getTriangleByID(pickingData);
-            bool triangleExists = false;
-            for (unsigned int t = 0; t < foundTriangles.size(); t++) {
-              if (foundTriangles[t] == tempTriangle) {
-                triangleExists = true;
-                break;
-              }
-            }
-            if (!triangleExists) {
-              foundTriangles.push_back(tempTriangle); 
-            }
-          } 
-        }
+      Vertex* selectedVertex = engine->pickVertex(mouseX, mouseY, 2, 0.3f);
+      if (selectedVertex) {
+        poseRefinementDataHandler->selectVertex(Vector3({ selectedVertex->vertexPosition.x, 
+                                                          selectedVertex->vertexPosition.y, 
+                                                          selectedVertex->vertexPosition.z})); 
       }
-      //Find the closest vertex to click
-      Vector3 clickPosition = mainScene->getActiveCamera()->cameraToWorld(mouseX, mouseY);
-      for (unsigned int t = 0; t < foundTriangles.size(); t++) {
-        for (unsigned int v = 0; v < 3; v++) {
-          Vector3 vertexPosition = Vector3({  foundTriangles[t]->vertices[v]->vertexPosition.x,
-                                              foundTriangles[t]->vertices[v]->vertexPosition.y,
-                                              foundTriangles[t]->vertices[v]->vertexPosition.z  });
-                                              
-          if (t == 0 && v == 0) {
-            __selectedVertex = vertexPosition;
-            continue;
-          }
-          if ( distanceSquared(clickPosition, vertexPosition) < distanceSquared(clickPosition, __selectedVertex) ) {
-            __selectedVertex = vertexPosition;
-          }                          
-        }
-      }
-      log(PARAM, "Vertex Selected! Distance from mouse: %f", distance(clickPosition, __selectedVertex));
-      foundTriangles.clear();   
     }
     else if (__picturePointMode) {
       GLint viewport[4];
       glGetIntegerv(GL_VIEWPORT, viewport);
       float windowWidth = viewport[2];
     	float windowHeight = viewport[3];
-      __selectedPicturePoint = Vector2({mouseX/windowWidth, mouseY/windowHeight});
-      __poseAlignmentData.insert(make_pair(__selectedVertex,__selectedPicturePoint));
+      log(PARAM, "Photo point selected.");
+      poseRefinementDataHandler->selectPhotoPoint(Vector2({mouseX/windowWidth, mouseY/windowHeight}));
     }
     else {
       TriangleID pickingData = FrameBuffer::GetSingleton().pickTriangle((GLuint)mouseX, (GLuint)mouseY);
@@ -304,9 +243,7 @@ void ScanWidget::keyReleaseEvent(QKeyEvent* event) {
       break;
     }
     case Qt::Key_S: {
-      string outputFile;
-      outputFile = __outputPath + string("poseAlignData.txt");
-      savePoseAlignmentData(outputFile.c_str());
+      //poseRefinementDataHandler->save("PoseRefinmentCalibrationData.txt");
     }
     default:
       event->ignore();
@@ -314,62 +251,6 @@ void ScanWidget::keyReleaseEvent(QKeyEvent* event) {
   }
   
   updateGL();
-}
-
-void 
-ScanWidget::setupSceneFromFile(const string& _filename) {
-  fstream configFile(_filename.c_str(), ios::in);
-  string buffer;
-  
-  while (!configFile.eof()) {
-    getline (configFile, buffer);
-    
-		if (buffer[0] == '#')
-			continue;	// comment
-    
-    if (buffer.substr(0, 6) == "Model=") {
-			__modelFile = buffer.substr(6, buffer.length()-6);
-      log(PARAM, "Read model file: %s", __modelFile.c_str());	
-      continue;
-    }
-    
-    if (buffer.substr(0, 6) == "Photo=") {
-			__photoFile = buffer.substr(6, buffer.length()-6);
-      log(PARAM, "Read photo file: %s", __photoFile.c_str());	
-      continue;
-    }
-    
-    if (buffer.substr(0, 7) == "Output=") {
-			__outputPath = buffer.substr(7, buffer.length()-7);
-      log(PARAM, "Read output path: %s", __outputPath.c_str());	
-      continue;
-    }
-    
-    if (__modelFile.length() && __photoFile.length() && __outputPath.length()) {
-      break;
-    }
-  }
-}
-
-void
-ScanWidget::savePoseAlignmentData(const std::string& _filename) {
-  log(PARAM, "Saving pose alignment data to %s", _filename.c_str());
-  
-  ofstream dataFile;
-  dataFile.open (_filename.c_str(), std::ios::out | std::ios::app);
-  if( !dataFile.is_open() ) {
-    dataFile.open(_filename.c_str(), std::ios::in | std::ios::out | std::ios::trunc);
-  }
-  
-  for(auto it = __poseAlignmentData.begin(); it != __poseAlignmentData.end(); it++) {
-    dataFile << "Model=" << __modelFile.c_str() << "\n";
-    dataFile << "Photo=" << __photoFile.c_str() << "\n";
-    dataFile << "Vertex=" << it->first.x << " " << it->first.y << " " << it->first.z << "\n";
-    dataFile << "Picture Coordinate=" << it->second.x << " " << it->second.y << "\n";
-    dataFile << "\n\n";
-  }
-  
-  dataFile.close();
 }
 
 

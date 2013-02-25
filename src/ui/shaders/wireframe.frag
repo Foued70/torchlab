@@ -8,10 +8,11 @@ uniform usampler2D textureMap_1;
 
 void main () {
     vec3 wireframe = vec3( 0.0 );
-    vec2 lineThickness = vec2(1.0/400.0, 1.0/600.0);
+    float lineThickness = 2.0; //Line thickness in pixels
+    vec2 offset = vec2(1.0/400.0, 1.0/600.0);
    
     if (  texture(textureMap_1, sVaryingTexCoords.st) != 
-          texture(textureMap_1, sVaryingTexCoords.st + lineThickness) )
+          texture(textureMap_1, sVaryingTexCoords.st + offset) )
       wireframe += vec3(1.0);
     
     vec2 photoUVs = vec2(sVaryingTexCoords.t, sVaryingTexCoords.s);

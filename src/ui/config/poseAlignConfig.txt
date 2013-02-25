@@ -8,15 +8,20 @@
 # To select a point on the photo: 
 # Hold down "p" and left click on photo
 #
-# To save all vertex and point data to file:
-# Press "s"
-#
+# After 3 Vertices and 3 Photo coordinates have been selected, 
+# the next image in the list will be loaded in to calibrate. 
 #****************************************************************************************
 # Path to model relative to ui directory. No spaces. No quotes.
-Model=objects/dryDragon.obj
+Model=objects/rivercourt_3307_v3.obj
 
-# Path to photo we are aligning pose to. Relative to ui directory. No spaces. No quotes.
+# Path to photos we are aligning poses to. Relative to ui directory. No spaces. No quotes.
+Photo=texture/_DSC5436.jpg
+Photo=texture/_DSC5445.jpg
+Photo=texture/_DSC5526.jpg
 Photo=texture/_DSC6044.jpg
 
 # Path to desired output folder. Relative to ui directory. No spaces. No quotes.
 Output=poseAlignData/
+
+# Start Position X Y Z. Single space between each variable. No space after = sign.
+Position=0.0190107 -0.00364712 -0.00201909

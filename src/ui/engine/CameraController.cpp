@@ -75,12 +75,27 @@ CameraController::setZoom(float _zoom) {
   __pawn->setEyePosition(newEyePosition);
 }
 
+void
+CameraController::setPositionAndRotation(const Vector3& _position, const Vector3& _rotation) {
+  __pawn->setEyePosition(_position);
+  __pawn->setCenterPosition(_position + Vector3({0.0f, -1.0f, 0.0f}));
+  
+  log(PARAM, "in rotation: %f %f %f", _rotation.x, _rotation.y, _rotation.z);
+  log(PARAM, "camera center position was set to: %f %f %f", __pawn->getCenter().x, __pawn->getCenter().y, __pawn->getCenter().z);
+  
+  //TO DO: Currently, x-axis rotation(roll) is not supported. This needs to be availible for pose alignment
+  __pawn->rotateCenterAroundCamera(_rotation.y, _rotation.z);
+  
+  log(PARAM, "camera center position now set to: %f %f %f", __pawn->getCenter().x, __pawn->getCenter().y, __pawn->getCenter().z);
+}
+
 void 
 CameraController::rotate(float _deltaX, float _deltaY) {
-  const float surfaceRotationSpeed = 0.08f;
+  const float rotationSpeed = 0.001;
+  const float surfaceRotationSpeed = rotationSpeed * 1.0f;
   switch(__flightMode) {
     case FREE_FLIGHT:
-      __pawn->rotateCenterAroundCamera(_deltaX, _deltaY);
+      __pawn->rotateCenterAroundCamera(_deltaX*rotationSpeed, _deltaY*rotationSpeed);
       break;
     case SURFACE_FLIGHT:
       __pawn->rotateAroundCenter(_deltaX*surfaceRotationSpeed, _deltaY*-surfaceRotationSpeed);

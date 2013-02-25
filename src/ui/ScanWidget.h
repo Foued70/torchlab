@@ -10,6 +10,7 @@
 class FrameBuffer;
 class CameraController;
 class Object;
+class PoseRefinementDataHandler;
 
 class ScanWidget : public QGLWidget {
   Q_OBJECT // must include this if you use Qt signals/slots
@@ -37,9 +38,6 @@ protected:
   void keyPressEvent(QKeyEvent *event);
   void keyReleaseEvent(QKeyEvent *event);
   
-  void setupSceneFromFile(const std::string& _filename);
-  void savePoseAlignmentData(const std::string& _filename);
-  
 private:
   bool prepareShaderProgram( const QString& vertexShaderPath, const QString& fragmentShaderPath );
   GLuint prepShaderProgram( const QString& vertexShaderPath, const QString& fragmentShaderPath );
@@ -52,6 +50,7 @@ private:
   GLuint m_shader;
 
   CameraController* sphereCameraController;
+  PoseRefinementDataHandler* poseRefinementDataHandler;
 
   int dragStartX;
   int dragStartY;
@@ -61,16 +60,6 @@ private:
   
   bool __vertexPointMode;
   bool __picturePointMode;
-  
-  string __modelFile;
-  string __photoFile;
-  string __outputPath;
-  unsigned int __outputIndex;
-  
-  std::map<Vector3, Vector2> __poseAlignmentData;
-  
-  Vector3 __selectedVertex;
-  Vector2 __selectedPicturePoint;
 };
 
 #endif  /* _SCAN_WIDGET_H */

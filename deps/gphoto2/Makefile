@@ -1,10 +1,10 @@
 include ../Makefile.common
 
 ver        = 2.5.1
-libname    = gphoto2
-dirname    = $(libname)-$(ver)
+
+dirname    = gphoto2-$(ver)
 tarname    = $(dirname).tar.bz2
-url        = http://downloads.sourceforge.net/project/gphoto/$(libname)/$(ver)/$(tarname)
+url        = http://downloads.sourceforge.net/project/gphoto/gphoto/$(ver)/$(tarname)
 
 tar_file   = $(build_dir)/deps/$(tarname)
 unpack     = $(build_dir)/deps/$(dirname)

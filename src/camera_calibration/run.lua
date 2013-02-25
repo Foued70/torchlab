@@ -1,7 +1,3 @@
---[[ 
-]]--
-
-
 require 'image'
 
 local util = require 'util'
@@ -103,17 +99,19 @@ end
 -- :size(2) -- image height
 -- :size(3) -- image width
 
-if images[1]:size(2) > images[1]:size(3) then -- protrait image
+printf("IMAGE:SIZE(2) -- %d", images[1]:size(2))
+printf("IMAGE:SIZE(3) -- %d", images[1]:size(3))
+
+if images[1]:size(2) > images[1]:size(3) then -- portrait image
    -- do nothing
 else -- landscape image
-   images[1] = img_rot(images[1])
-   is_landscape_image = true
+   -- images[1] = img_rot(images[1])
+   -- is_landscape_image = true
 end
 
+-- NOTE: image_w is the short edge, image_h is the long_edge
 camera.image_w  = images[1]:size(3) -- px
 camera.image_h  = images[1]:size(2) -- px
-
-printf("image width x height: %d x %d", camera.image_w, camera.image_h)
 
 -- same as in pose
 camera.center_x = camera.image_w*0.5
@@ -149,10 +147,10 @@ camera.focal_px_y = (camera.sensor_h * 0.5)/(camera.center_y * camera.focal)
 -- r = 1 in radial undistort is at the shorter focal length.
 -- 
 function radial_undistort(x,y,cam)
-   local r = x^2 + y^2 -- * inv_radius
+   local r_squared = x^2 + y^2 -- * inv_radius
 
    -- a*r^2 + b*r^4 + c*r^6
-   local scale = 1 + ((cam.c*r + cam.b)*r + cam.a)*r
+   local scale = 1 + ((cam.c*r_squared + cam.b)*r_squared + cam.a)*r_squared
 
    -- rescale -1,1 to px coords in image space
    return x*scale,y*scale
@@ -161,11 +159,11 @@ end
 function tangential_undistort(x, y, camera)
    local r = x^2 + y^2 -- * inv_radius   -- note: r is radius squared
 
-   -- x_corrected = x + [2 * p1 * y + p2(r + 2 * x^2)]
-   -- y_corrected = y + [p1(r + 2 * y^2) + 2 * p2 * x]
+   -- x_corrected = x + [2 * p1 * x * y + p2(r + 2 * x^2)]
+   -- y_corrected = y + [p1(r + 2 * y^2) + 2 * p2 * x * y]
 
-   local x_corrected = x + (camera.p_two * (r + 2*x^2) + 2 * camera.p_one * y)
-   local y_corrected = y + (camera.p_one * (r + 2*y^2) + 2 * camera.p_two * x)
+   local x_corrected = (camera.p_two * (r + 2*x^2) + 2 * camera.p_one * x * y)
+   local y_corrected = (camera.p_one * (r + 2*y^2) + 2 * camera.p_two * x * y)
 
    return x_corrected, y_corrected
 end
@@ -179,10 +177,13 @@ function make_map (camera,scale) -- FIXME? This function undistorts properly onl
       scale = 1
    end
 
+   -- NOTE: w = short edge, h = long edge
    local w = camera.image_w
    local h = camera.image_h
+   local r_max = 1.2
 
-   local aspect_ratio = w / h
+   local inv_aspect_ratio = h / w
+   local alpha = r_max * inv_aspect_ratio
 
    -- these are if we want to change the resolution of the lookup table.
    local map_h = h*scale
@@ -190,21 +191,21 @@ function make_map (camera,scale) -- FIXME? This function undistorts properly onl
 
    map = torch.Tensor(map_h,map_w,2)
 
-   -- We only need to compute one quadrant and copy to the others
-   -- map of even steps between -1,0 1/2 camera resolution 
-   out_row = torch.linspace(-aspect_ratio, aspect_ratio, map_w)
-   out_col = torch.linspace(-1, 1, map_h) -- assumes that out_col is the short edge
+   out_row = torch.linspace(-r_max, r_max, map_w)
+   out_col = torch.linspace(-alpha, alpha, map_h)
 
    for yi = 1,map_h do
       for xi = 1,map_w do
          local xlin  = out_row[xi]
          local ylin  = out_col[yi]
 
-         local xp,yp = radial_undistort(xlin,ylin,camera)
-         xp, yp = tangential_undistort(xp, yp, camera)
+         local xp_radial, yp_radial = radial_undistort(xlin,ylin,camera)
+         local xp_tan, yp_tan = tangential_undistort(xlin, ylin, camera)
+         local xp = xp_radial + xp_tan
+         local yp = yp_radial + yp_tan
 
-         map[{yi,xi,1}] = (xp + aspect_ratio)/(2*aspect_ratio) * map_w
-         map[{yi,xi,2}] = (yp + 1)/2 * map_h
+         map[{yi,xi,1}] = (xp + 1)/2 * w
+         map[{yi,xi,2}] = (yp + inv_aspect_ratio)/(2 * inv_aspect_ratio)  * h
       end
    end
 
@@ -224,6 +225,8 @@ function remap(img, map)
 
          if (coord[2] > 0 and coord[2] < img:size(2) and coord[1] > 0 and coord[1] < img:size(3)) then
             out[{{}, yi, xi}] = img[{{}, coord[2], coord[1]}]
+         else
+            out[{{}, yi, xi}] = img[{{}, 1, 1}]
          end
       end
    end
@@ -238,5 +241,6 @@ if is_landscape_image then
    -- FIXME Rotate image clockwise
 end
 
-image.display{image={output_image,images[1]}}
--- image.display{image={output_image}}
+-- image.display{image={output_image,images[1]}}
+-- image.display{image = {images[1]}}
+image.display{image={output_image}}
