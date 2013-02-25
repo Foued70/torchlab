@@ -15,17 +15,18 @@ local function format_image(img)
 end
 
 function Material:__init(mtl_data)
+  
+  self.name = mtl_data.name
   self.ambient = mtl_data.ambient
   self.diffuse = mtl_data.diffuse
   self.specular = mtl_data.specular
   self.shininess = mtl_data.shininess
   self.emission = {0,0,0,1} --mtl_data.emission
-  
+
   self.diffuse_tex_img = format_image(mtl_data.diffuse_tex_img)
   self.texture_loaded = not self.diffuse_tex_img -- texture_loaded = false is we have a texture to load
 
   self.shader = require('ui2.Shader').shaders.textured
-
   self.tex_id = nil
 end
 

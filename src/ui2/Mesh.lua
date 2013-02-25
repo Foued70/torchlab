@@ -4,7 +4,7 @@ local libui = require 'libui2'
 local Mesh = torch.class('Mesh')
 
 function Mesh:__init(verts, face_indexes, submeshes)
-  self.verts = verts:float()
+  self.verts = verts
   self.face_indexes = face_indexes
   self.submeshes = submeshes
 
@@ -37,7 +37,7 @@ function Mesh:push_to_gl()
   gl.check_errors()
 
 
-  ptr, size = libui.float_storage_info(self.verts)
+  ptr, size = libui.double_storage_info(self.verts)
   local vert_size = size / self.verts:size()[1] -- bytes per row
   gl.BufferData(
       gl.ARRAY_BUFFER,
@@ -47,10 +47,10 @@ function Mesh:push_to_gl()
   )
   gl.check_errors()
 
-  start = gl.float_ptr(nil)
-  gl.VertexAttribPointer(0, 4, gl.FLOAT, gl.FALSE, vert_size, start+0) -- position
-  gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, vert_size, start+4) -- uv
-  gl.VertexAttribPointer(2, 3, gl.FLOAT, gl.FALSE, vert_size, start+6) -- normal
+  start = gl.double_ptr(nil)
+  gl.VertexAttribPointer(0, 4, gl.DOUBLE, gl.FALSE, vert_size, start+0) -- position
+  gl.VertexAttribPointer(1, 2, gl.DOUBLE, gl.FALSE, vert_size, start+4) -- uv
+  gl.VertexAttribPointer(2, 3, gl.DOUBLE, gl.FALSE, vert_size, start+6) -- normal
   gl.check_errors()
 
   gl.EnableVertexAttribArray(0);
@@ -116,7 +116,7 @@ function Mesh:dump_buffer(buf_type, ptr_type, rows, columns)
 end
 
 function Mesh:dump_buffers()
-  self:dump_buffer(gl.ARRAY_BUFFER, gl.float_ptr, self.verts:size()[1], self.verts:size()[2])
+  self:dump_buffer(gl.ARRAY_BUFFER, gl.double_ptr, self.verts:size()[1], self.verts:size()[2])
   self:dump_buffer(gl.ELEMENT_ARRAY_BUFFER, gl.uint_ptr, self.face_indexes:size()[1], self.face_indexes:size()[2])
 end
 

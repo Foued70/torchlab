@@ -15,6 +15,10 @@ function eq(vec1, vec2)
   return torch.min(torch.eq(vec1,vec2)) == 1
 end
 
+function dist(vec1, vec2)
+  return (vec1 - vec2):norm()
+end
+
 function normalize(vec)
   return torch.div(vec, vec, vec:norm())
 end

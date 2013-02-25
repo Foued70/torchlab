@@ -16,10 +16,17 @@ function Object:__init(obj_data)
   end
 
   self.mesh = require('ui2.Mesh').new(obj_data.unified_verts, obj_data.faces, submeshes)
+
+  self.position = torch.Tensor(3):fill(0)
 end
 
 function Object:paint(context)
+  context:push()
+
+  context:translate(self.position)
   self.mesh:paint(context)
+  
+  context:pop()
 end
 
 
