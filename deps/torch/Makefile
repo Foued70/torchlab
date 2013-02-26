@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-ver=6849c9b06ba373e0fd3617a16cec4fc269297456
+ver=eff29a50c0d9e6a15145fa164a3a9ef8d275fd7b
 
 git_clone=$(build_dir)/deps/torch
 
@@ -8,6 +8,7 @@ install=$(install_root)/bin/torch
 
 packages = \
 	image \
+	xlua \
 	torchffi
 
 pkgs = $(addprefix $(install_root)/share/torch/lua/,$(packages))
@@ -33,7 +34,8 @@ $(install): $(git_clone)
 
 
 $(git_clone):
-	git clone https://github.com/andresy/torch $(git_clone)
+	git clone https://github.com/marcoscoffier/torch $(git_clone)
+#	git clone https://github.com/andresy/torch $(git_clone)
 
 tmp:
 
