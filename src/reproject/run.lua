@@ -102,6 +102,9 @@ function update_imagedata(camera,image)
    camera.center_x = w*0.5
    camera.center_y = h*0.5
 
+   camera.sensor_diag  = 0.5*math.sqrt(camera.sensor_w*camera.sensor_w + 
+                                       camera.sensor_h*camera.sensor_h)
+
    camera.px_per_mm_x = w / camera.sensor_w 
    camera.px_per_mm_y = h / camera.sensor_h 
 
@@ -123,6 +126,9 @@ end
 -- creates an (equidistant) map from a unit sphere to a camera image either:
 -- 
 --  + rectilinear (perspective) : r = f * tan(theta) 
+--  + stereographic             : r = 2 * f * tan(theta/2)
+--  + orthographic              : r = f * sin(theta)
+--  + equisolid                 : r = 2 * f * sin(theta/2)
 --  + thoby (fisheye)           : r = k1 * f * sin(k2*theta)
 --  + eqidistant                : r = f * theta  (for unit sphere f = 1)
 
@@ -138,14 +144,20 @@ function projection_to_sphere (camera, projection,scale,debug)
    local imgh = camera.image_h
    local hlfw = camera.center_x
    local hlfh = camera.center_y
-   local mapw = imgw * scale
-   local maph = imgh * scale
 
    local fovw = camera.fovw
    local fovh = camera.fovh
 
-   local xrow = torch.linspace(-fovw,fovw,mapw)
-   local ycol = torch.linspace(-fovh,fovh,maph)
+   local mapw = imgw * scale
+   local maph = imgh * scale
+   -- map has to be bigger than the input image, pick piover2 as an upper bound.
+   local map_fovw = piover2
+   local map_fovh = piover2 * (imgh / imgw)
+   local max_imgw = hlfw
+   local max_imgh = hlfh
+
+   local xrow = torch.linspace(-map_fovw,map_fovw,mapw)
+   local ycol = torch.linspace(-map_fovh,map_fovh,maph)
    
    -- pythagorean theorem on a unit sphere is cos(c) = cos(a)cos(b)
    local r_map = xrow:repeatTensor(maph,1):cos() -- cos(a)
@@ -157,12 +169,31 @@ function projection_to_sphere (camera, projection,scale,debug)
 
    if (projection == "rectilinear") then
       -- rectilinear : (1/f) * r' = tan(theta) 
-      ratio_map:tan() 
+      ratio_map:tan()
+      max_imgw = camera.focal_px * torch.tan(map_fovw)
+      max_imgh = camera.focal_px * torch.tan(map_fovh)
    elseif (projection == "thoby") then
       -- thoby       : (1/f) * r' = k1 * sin(k2*theta)
       local k1 = 1.47
       local k2 = 0.713
       ratio_map:mul(k2):sin():mul(k1)
+      max_imgw = k1 * camera.focal_px * torch.sin(k2*map_fovw)
+      max_imgh = k1 * camera.focal_px * torch.sin(k2*map_fovh)
+   elseif (projection == "stereographic") then
+      --  + stereographic             : r = 2 * f * tan(theta/2)
+      ratio_map:mul(0.5):tan():mul(2)
+      max_imgw = 2 * camera.focal_px * torch.tan(0.5*map_fovw)
+      max_imgh = 2 * camera.focal_px * torch.tan(0.5*map_fovh)
+   elseif (projection == "orthographic") then
+      --  + orthographic              : r = f * sin(theta)
+      ratio_map:sin()
+      max_imgw = torch.sin(map_fovw)
+      max_imgh = torch.sin(map_fovh)
+   elseif (projection == "equisolid") then
+      --  + equisolid                 : r = 2 * f * sin(theta/2)
+      ratio_map:mul(0.5):sin():mul(2)
+      max_imgw = 2 * camera.focal_px * torch.sin(0.5*map_fovw)
+      max_imgh = 2 * camera.focal_px * torch.sin(0.5*map_fovh)
    else
       print("ERROR don't understand projection")
       return nil
@@ -171,13 +202,14 @@ function projection_to_sphere (camera, projection,scale,debug)
    -- ratio (in unit sphere coordinates)
    ratio_map:cdiv(r_map)           -- ratio = r' / r
 
+   -- *** check this ****
    -- x,y index (map unit sphere to pixel coords)
    -- torch indexes from 1,size_x
    local xval = hlfw - 0.5 
    local yval = hlfh - 0.5 
    -- start with old x and y values centered at zero
-   local xindex = torch.linspace(-xval,xval,mapw)
-   local yindex = torch.linspace(-yval,yval,maph)
+   local xindex = torch.linspace(-max_imgw,max_imgw,mapw)
+   local yindex = torch.linspace(-max_imgh,max_imgh,maph)
 
    local xmap = xindex:repeatTensor(maph,1)
    xmap:cmul(ratio_map):add(hlfw + 0.5)
@@ -224,7 +256,9 @@ function projection_to_sphere (camera, projection,scale,debug)
 
 end
 
+function sphere_to_projection()
 
+end
 
 -- image is 3 x map dims
 -- now map is 1D (this is faster) 
@@ -274,7 +308,7 @@ img = images[1]
 update_imagedata(camera,img)
 
 equimap, max_theta_x, max_theta_y, equimask,equiw,equih  = 
-   projection_to_sphere(camera,"thoby",0.5)
+   projection_to_sphere(camera,"stereographic",0.5)
 
 sys.tic()
 output_image = remap(img,equimap,equiw,equih,equimask)
