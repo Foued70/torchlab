@@ -73,7 +73,7 @@ end
 
 function FrameBuffer:read_depth_pixel(x, y)
   -- OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
-  y = self.height - y - 1 -- TODO Why -1?
+  y = self.height - y
   self:bind()
   gl.PixelStorei(gl.PACK_ALIGNMENT, 1)
 
@@ -84,6 +84,25 @@ function FrameBuffer:read_depth_pixel(x, y)
   self:unbind()
 
   return depth[0]
+end
+
+
+function FrameBuffer:read_pick_pixel(x, y)
+  -- OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
+  y = self.height - y
+  self:bind()
+
+  gl.ReadBuffer(gl.COLOR_ATTACHMENT1)
+  gl.PixelStorei(gl.PACK_ALIGNMENT, 1)
+
+  local pick_pixel = gl.uint(3)
+  gl.ReadPixels(x, y, 1, 1, gl.RGB_INTEGER, gl.UNSIGNED_INT, pick_pixel)
+  
+  gl.ReadBuffer(gl.NONE)
+  self:unbind()
+
+  -- object_id, triangle_id = submesh_start + primitive_id
+  return pick_pixel[0], pick_pixel[1] + pick_pixel[2]
 end
 
 

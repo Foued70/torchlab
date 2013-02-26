@@ -32,5 +32,5 @@ void main () {
 	sFragColor = vec4(0.4, 0.2, 0.2, 1.0);
 	sFragColor = texture(textureUnit, sVaryingTexCoords.st);
 
-  sPickingData = uvec3(objectID, meshID, gl_PrimitiveID);
+  sPickingData = uvec3(objectID, submeshStart, gl_PrimitiveID);
 }

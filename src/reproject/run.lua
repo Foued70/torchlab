@@ -251,21 +251,29 @@ function projection_to_sphere (camera, projection,scale,debug)
       printf(" y map from %d to %d (max: %d)",ymap:min(),ymap:max(),imgh)
       printf("1D map from %d to %d (max: %d)",index_map:min(),index_map:max(),index_map:size(1))
    end
-
-   return index_map,fovw,fovh,mask,mapw,maph
+   sphere_map = {
+      lookup_table = index_map, -- 1D LongTensor for fast lookups
+      mask         = mask,      -- ByteTensor invalid locations marked with 1
+      fovw         = map_fovw,  -- field of view in radians (width)
+      fovh         = map_fovh,  -- field of view in radians (height)
+      width        = mapw,      -- dimensions to display map in 2D. width
+      height       = maph       -- and height.
+   }
+   return sphere_map
 
 end
 
-function sphere_to_projection()
+-- takes a sphere map and 
+function sphere_to_projection(sphere_map, projection)
 
 end
 
 -- image is 3 x map dims
 -- now map is 1D (this is faster) 
-function remap(img, map, map_w, map_h, map_mask)
+function remap(img, map)
    local out = torch.Tensor()
    -- fast 1D remap
-   if (map:nDimension() ~= 1) then
+   if (map.lookup_table:nDimension() ~= 1) then
       print("ERROR map should be 1D Tensor")
       return nil
    end
@@ -279,26 +287,27 @@ function remap(img, map, map_w, map_h, map_mask)
       local imgw = img:size(2)
 
       img:resize(imgh * imgw)
-      out = img[map] -- uses new indexing feature
-      out[map_mask] = 0  -- erase out of bounds
+      out = img[map.lookup_table] -- uses new indexing feature
+      out[map.mask] = 0  -- erase out of bounds
 
       img:resize(imgh,imgw)
-      out:resize(map_h,map_w)
+      out:resize(map.height,map.width)
 
    elseif (ndim == 3) then
       -- n channel (RGB) (n x h x w)
-      out:resize(img:size(1),map:nElement())
+      printf("output image size: %d x %d", img:size(1), map.lookup_table:nElement())
+      out:resize(img:size(1),map.lookup_table:nElement())
       
       for d = 1,img:size(1) do -- loop through channels
          local imgd = img[d]
          imgd:resize(imgd:size(1)*imgd:size(2))
 
-         out[d] = imgd[map]
-         out[d][map_mask] = 0
+         out[d] = imgd[map.lookup_table]
+         out[d][map.mask] = 0
 
       end
 
-      out:resize(img:size(1),map_h,map_w)
+      out:resize(img:size(1),map.height,map.width)
    end
    return out
 end
@@ -307,69 +316,23 @@ end
 img = images[1]
 update_imagedata(camera,img)
 
-equimap, max_theta_x, max_theta_y, equimask,equiw,equih  = 
-   projection_to_sphere(camera,"stereographic",0.5)
+sys.tic()
+map = projection_to_sphere(camera,"thoby")
+printf(" + build look up table: %2.4fs",sys.toc())
 
 sys.tic()
-output_image = remap(img,equimap,equiw,equih,equimask)
-printf("time fast: %2.4fs",sys.toc())
+collectgarbage()
+printf(" + (collect garbage) : %2.4fs",sys.toc())
 
-image.display{image={output_image}}
-image.display(img)
+sys.tic()
+output_image = remap(img,map)
+printf(" + reproject: %2.4fs",sys.toc())
 
-test_slow = false
+sys.tic()
+collectgarbage()
+printf(" + (collect garbage) : %2.4fs",sys.toc())
 
-if test_slow then
-   if (not xmap or not ymap) then
-      print("Error can't test need xmap and ymap which were made local")
-   else
-      function remap_xy(img,xmap,ymap)
-         local out = torch.Tensor(img:size(1),xmap:size(1),xmap:size(2))
-         for yi = 1,xmap:size(1) do
-            for xi = 1,xmap:size(2) do 
-               out[1][yi][xi] = img[1][ymap[yi][xi]][xmap[yi][xi]]
-               out[2][yi][xi] = img[2][ymap[yi][xi]][xmap[yi][xi]]
-               out[3][yi][xi] = img[3][ymap[yi][xi]][xmap[yi][xi]]
-            end
-         end
-         return out
-      end
-      
-      sys.tic()
-      output_image_slow = remap_xy(img,xmap,ymap)
-      printf("time slow: %2.4fs",sys.toc())
-      print("Testing against slow version")
-      img1 = img[1]
-      img1f = img[1]
-      img1f:resize(img1:size(1)*img1:size(2))
-      sqmap = equimap:clone()
-      sqmap:resize(xmap:size(1),xmap:size(2))
-      imgw = img:size(3)
-      err = 0
-      cnt = 0
-      for i = 1,img:size(2),100 do
-         for j = 1,img:size(3),100 do 
-            cnt = cnt + 1
-            local xm = math.floor(xmap[i][j] + 0.5)
-            local ym = math.floor(ymap[i][j] + 0.5)
-            local im = math.floor((ym - 1)*1024 + xm + 0.5)
-            local sq = sqmap[i][j]
-            local em = equimap[(i-1)*1024 + j]
-            local im1 = img1[ym][xm]
-            local im2 = img1f[im]
-            local im3 = img1f[sq]
-            local dif = im - sq
-            if (torch.abs(dif) > 0) then
-               printf("[%3d][%3d] x: %4d y: %4d img: %f",
-                      i,j, xm,ym, im1)
-               printf("   im: %d  sq: %d eq: %d diff: %d img: %f %f",
-                      im, sq, em, im - sq, im2, im3) 
-               printf(" ERRROR: %d",dif)
-               err = err + 1
-            end
-         end    
-      end
-      printf("Err: %d/%d",err,cnt)
-   end
-end
+image.display{image={image.scale(output_image, output_image:size(2)*0.5, output_image:size(3)*0.5)}}
+image.display{image=img}
+
 

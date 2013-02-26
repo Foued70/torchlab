@@ -109,6 +109,26 @@ function Shader:use(context)
   self:set_uniform_matrix('sModelViewMatrix', model_view_matrix)
   self:set_uniform_matrix('sNormalMatrix',normal_matrix)
   self:set_uniform_matrix('sModelViewProjectionMatrix', model_view_projection_matrix)
+
+  self:set_uniform_uint('objectID', context.object_id)
+  self:set_uniform_uint('submeshStart', context.submesh_start)
+end
+
+function Shader:set_uniform_uint(name, value)
+  local loc = gl.GetUniformLocation(self.program_id, name)
+  
+  if type(value) ~= 'table' then 
+    gl.Uniform1ui(loc, value)
+  else
+    local v1, v2, v3, v4 = unpack(value)
+    if     v4 then gl.Uniform4ui(loc, v1, v2, v3, v4)
+    elseif v3 then gl.Uniform3ui(loc, v1, v2, v3)
+    elseif v2 then gl.Uniform2ui(loc, v1, v2)
+    else           gl.Uniform1ui(loc, v1)
+    end
+  end
+
+  gl.check_errors()
 end
 
 function Shader:set_uniform_int(name, value)
