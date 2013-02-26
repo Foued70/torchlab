@@ -3,9 +3,9 @@ local libui = require 'libui2'
 
 local Mesh = torch.class('Mesh')
 
-function Mesh:__init(verts, face_indexes, submeshes)
+function Mesh:__init(verts, faces, submeshes)
   self.verts = verts
-  self.face_indexes = face_indexes
+  self.faces = faces
   self.submeshes = submeshes
 
   self.vao_id = nil
@@ -26,8 +26,7 @@ function Mesh:push_to_gl()
   gl.BindBuffer(gl.ARRAY_BUFFER, self.vert_buffer_id)
   gl.check_errors()
 
-  self.face_indexes = self.face_indexes - 1
-  local ptr, size = libui.int_storage_info(self.face_indexes)
+  local ptr, size = libui.int_storage_info(self.faces - 1)
   gl.BufferData(
       gl.ELEMENT_ARRAY_BUFFER,
       size,
@@ -77,6 +76,7 @@ function Mesh:paint(context)
 
   for i, submesh in ipairs(self.submeshes) do
     local submesh = self.submeshes[i]
+    context.submesh_start = submesh.start
     if (submesh.material) then
       submesh.material:use(context)
     end
@@ -117,7 +117,7 @@ end
 
 function Mesh:dump_buffers()
   self:dump_buffer(gl.ARRAY_BUFFER, gl.double_ptr, self.verts:size()[1], self.verts:size()[2])
-  self:dump_buffer(gl.ELEMENT_ARRAY_BUFFER, gl.uint_ptr, self.face_indexes:size()[1], self.face_indexes:size()[2])
+  self:dump_buffer(gl.ELEMENT_ARRAY_BUFFER, gl.uint_ptr, self.faces:size()[1], self.faces:size()[2])
 end
 
 

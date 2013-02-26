@@ -19,6 +19,10 @@ function dist(vec1, vec2)
   return (vec1 - vec2):norm()
 end
 
+function direction(vec1, vec2)
+  return normalize(vec1 - vec2)
+end
+
 function normalize(vec)
   return torch.div(vec, vec, vec:norm())
 end
