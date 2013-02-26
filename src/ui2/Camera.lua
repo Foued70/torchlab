@@ -158,14 +158,11 @@ function Camera:to_world(x, y, z)
   screen_position[4] = 1
 
   screen_position:resize(4,1)
-
   local mvp_matrix = torch.mm(self.projection_matrix, self.model_view_matrix)
   local inverse_camera_transform = torch.inverse(mvp_matrix)
-    
   local view_position = torch.mm(inverse_camera_transform, screen_position);
   view_position:resize(4)
   torch.div(view_position, view_position, view_position[4])
-
   return view_position[{{1,3}}]
 
 end

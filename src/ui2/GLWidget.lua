@@ -18,6 +18,10 @@ function GLWidget:__init()
   self.camera = require('ui2.Camera').new()
   self.camera:set_eye(2,3,5)
   self.camera:set_center(0,0,1)
+  
+  self.camera_raycaster = require('ui2.Camera').new()
+  self.camera_raycaster:set_eye(0,0,0)
+  self.camera_raycaster:set_center(0,0,1)
 
   self.mode = NAV_MODE
 
@@ -48,6 +52,7 @@ function GLWidget:resize(width, height)
   log.trace('resize', width, height)
   gl.Viewport(0, 0, width, height)
   self.camera:update_projection_matrix(self.context)
+  self.camera_raycaster:update_projection_matrix(self.context)
 
   if self.frame_buffer then
     self.frame_buffer:__gc()
@@ -120,10 +125,8 @@ function GLWidget:mouse_click(event)
     local clicked_pos_world = self.camera:to_world(event.x, event.y, z)
     local depth = geom.dist(clicked_pos_world, self.camera.eye)
 
-    if depth < self.camera.clip_far then
-      local travel_dir = geom.normalize(clicked_pos_world - self.camera.eye)
-      self.camera.center[{{1,3}}] = clicked_pos_world
-      self.camera.eye[{{1,3}}] = clicked_pos_world - travel_dir
+    if depth < self.camera.clip_far - self.camera.clip_near then
+      self:flyTo(clicked_pos_world)
     end
 
     self:update()
@@ -174,20 +177,61 @@ function GLWidget:add_object(data_obj)
   self:update()
 end
 
+function GLWidget:raycast(start, direction)
+  self.camera_raycaster.eye[{{1,3}}] = start
+  torch.add(self.camera_raycaster.center, start, direction)
+  self.camera_raycaster:update()
+  
+  self.frame_buffer:use()
+ 
+  gl.Clear(gl.DEPTH_BUFFER_BIT)
+  gl.ClearColor(0,0,0,0)
+  gl.check_errors()
+ 
+  gl.Enable(gl.DEPTH_TEST)
+  gl.check_errors()
+ 
+  gl.CullFace(gl.BACK)
+  gl.Enable(gl.CULL_FACE)
+  gl.check_errors()
+ 
+  -- setup camera
+  self.camera_raycaster:update_matrix(self.context)
+
+  -- show objects
+  for i, object in ipairs(self.objects) do
+    object:paint(self.context)
+  end
+ 
+  gl.Disable(gl.DEPTH_TEST)
+  gl.check_errors()
+ 
+  self.frame_buffer:unbind()
+  
+  local z = self.frame_buffer:read_depth_pixel(self.camera_raycaster.width*0.5, self.camera_raycaster.height*0.5)
+  local hit_location = self.camera_raycaster:to_world(self.camera_raycaster.width*0.5, self.camera_raycaster.height*0.5, z)
+  local ray_length = geom.dist(hit_location, start)
+  
+  if ray_length >= self.camera.clip_far - self.camera.clip_near then
+    return nil
+  end
+  return hit_location
+end
+
 function GLWidget:flyTo(goal_position)
-  --__flightMode = FREE_FLIGHT;
+  self.mode = NAV_MODE
   local VIEW_DISTANCE = 8
   local VIEW_HEIGHT = 2.25
-  local eye_offset_direction = geom.direction(self.camera.eye, goal_position)
-  local eye_position = torch.add(goal_position, torch.mul(eye_offset_direction, VIEW_DISTANCE))
+  local eye_offset_direction = geom.direction(goal_position, self.camera.eye)
+  local eye_position = goal_position - torch.mul(eye_offset_direction, VIEW_DISTANCE)
   
-  --if ( Engine::GetSingleton().raycast(eyePosition, Vector3({eyePosition.x, eyePosition.y, eyePosition.z - 1.0f}), ground) ) {
-  --eyePosition.z = ground.z + viewingHeight;
-  --}
+  local hit_location = self:raycast(eye_position, torch.Tensor({0,0,-1}))
+  if not hit_location == nil then
+    eye_position[3] = hit_location[3] + VIEW_HEIGHT
+  end
   
-  
-  self.camera:set_eye(2,3,5)
-  self.camera:set_center(0,0,1)
+  self.camera.center[{{1,3}}] = goal_position
+  self.camera.eye[{{1,3}}] = eye_position
   
   --self.animationManager:updateState()
 end

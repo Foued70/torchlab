@@ -20,7 +20,7 @@ function dist(vec1, vec2)
 end
 
 function direction(vec1, vec2)
-  return normalize(vec2 - vec1)
+  return normalize(vec1 - vec2)
 end
 
 function normalize(vec)
