@@ -120,7 +120,8 @@ end
 
 function GLWidget:mouse_click(event)
   if event.right_button then
-    rotateMode = false;
+    self.mode = NAV_MODE
+    rotateMode = false
     -- FlyTo Behavior
     local z = self.frame_buffer:read_depth_pixel(event.x, event.y)
     local clicked_pos_world = self.camera:to_world(event.x, event.y, z)
@@ -128,10 +129,11 @@ function GLWidget:mouse_click(event)
 
     if depth < self.camera.clip_far - self.camera.clip_near then
       -- TODO: animate
-      self:flyTo(clicked_pos_world)
+      self:fly_to(clicked_pos_world)
     end
 
   elseif event.left_button then
+    self.mode = FOCUS_MODE
     local object_id, triangle_index = self.frame_buffer:read_pick_pixel(event.x, event.y)
     local object = self.objects[object_id]
     local verts, center, normal = object:get_triangle(triangle_index)
@@ -231,12 +233,11 @@ function GLWidget:raycast(start, direction)
   return hit_location
 end
 
-function GLWidget:flyTo(goal_position)
-  self.mode = NAV_MODE
+function GLWidget:fly_to(goal_position)
   local VIEW_DISTANCE = 8
   local VIEW_HEIGHT = 2.25
   local eye_offset_direction = geom.direction(goal_position, self.camera.eye)
-  local eye_position = goal_position - torch.mul(eye_offset_direction, VIEW_DISTANCE)
+  local eye_position = goal_position - eye_offset_direction * VIEW_DISTANCE
   
   local hit_location = self:raycast(eye_position, torch.Tensor({0,0,-1}))
   if not hit_location == nil then
