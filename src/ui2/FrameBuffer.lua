@@ -53,7 +53,6 @@ end
 function FrameBuffer:display()
   gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 
-  gl.Clear(gl.COLOR_BUFFER_BIT + gl.DEPTH_BUFFER_BIT) -- TODO: is this needed if we'e copying the whole buffer?
   gl.BindFramebuffer(gl.READ_FRAMEBUFFER, self.frame_buffer_id)
   gl.ReadBuffer(gl.COLOR_ATTACHMENT0)
   gl.check_errors()
@@ -67,36 +66,42 @@ function FrameBuffer:display()
 
   gl.check_errors()
 
-  self.unbind() -- TODO: are we even bound here?
+  self.unbind() -- TODO: are we even bound here? 
+                -- We are. 
+                -- before unbinding, our draw buffer is set to 0 (default framebuffer)
+                -- before unbinding, our read buffer is set to self.frame_buffer_id
+                -- after unbinding, both draw and read are set to 0. gl.FRAMEBUFFER means gl.DRAW_FRAMEBUFFER and gl.READ_FRAMEBUFFER
 end
 
 
 function FrameBuffer:read_depth_pixel(x, y)
   -- OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
-  y = self.height - y
+  local read_x = math.floor(x)
+  local read_y = math.floor(self.height-y)
   self:bind()
   gl.PixelStorei(gl.PACK_ALIGNMENT, 1)
 
   local depth = gl.float(1)
-  gl.ReadPixels( x, y, 1, 1, gl.DEPTH_COMPONENT, gl.FLOAT, depth)
+  gl.ReadPixels( read_x, read_y, 1, 1, gl.DEPTH_COMPONENT, gl.FLOAT, depth)
   
   gl.ReadBuffer(gl.NONE)
   self:unbind()
-
+  log.trace(depth[0])
   return depth[0]
 end
 
 
 function FrameBuffer:read_pick_pixel(x, y)
-  -- OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.
-  y = self.height - y
+  -- OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.  
+  local read_x = math.floor(x)
+  local read_y = math.floor(self.height-y)
   self:bind()
 
   gl.ReadBuffer(gl.COLOR_ATTACHMENT1)
   gl.PixelStorei(gl.PACK_ALIGNMENT, 1)
 
   local pick_pixel = gl.uint(3)
-  gl.ReadPixels(x, y, 1, 1, gl.RGB_INTEGER, gl.UNSIGNED_INT, pick_pixel)
+  gl.ReadPixels(read_x, read_y, 1, 1, gl.RGB_INTEGER, gl.UNSIGNED_INT, pick_pixel)
   
   gl.ReadBuffer(gl.NONE)
   self:unbind()

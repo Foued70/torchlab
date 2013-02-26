@@ -22,14 +22,13 @@ function GLWidget:__init()
   self.camera_raycaster = require('ui2.Camera').new()
   self.camera_raycaster:set_eye(0,0,0)
   self.camera_raycaster:set_center(0,0,1)
+  self.camera_raycaster:update()
 
   self.mode = NAV_MODE
 
   self.objects = {}
 
   self.context = MatrixStack.new()
-
-  self.frame_buffer = nil
   
   self.animationManager = require('ui2.AnimationManager').new()
 end
@@ -52,19 +51,13 @@ function GLWidget:resize(width, height)
   self.camera:update_projection_matrix(self.context)
   self.camera_raycaster:update_projection_matrix(self.context)
 
-  if self.frame_buffer then
-    self.frame_buffer:__gc()
-  end
-
-  self.frame_buffer = require('ui2.FrameBuffer').new(width, height)
-
   self.initialized = true
 end
 
 function GLWidget:paint()
   if not self.initialized then return end
 
-  self.frame_buffer:use()
+  self.camera.frame_buffer:use()
 
   gl.Clear(gl.COLOR_BUFFER_BIT + gl.DEPTH_BUFFER_BIT)
   gl.ClearColor(0, 0, 0, 0)
@@ -93,13 +86,13 @@ function GLWidget:paint()
     object:paint(self.context)
   end
 
-  self.frame_buffer:display()
+  self.camera.frame_buffer:display()
 
   gl.Disable(gl.BLEND)
   gl.Disable(gl.DEPTH_TEST)
   gl.check_errors()
 
-  self.frame_buffer:unbind()
+  self.camera.frame_buffer:unbind()
 end
 
 function GLWidget:mouse_press(event)
@@ -123,18 +116,14 @@ function GLWidget:mouse_click(event)
     self.mode = NAV_MODE
     rotateMode = false
     -- FlyTo Behavior
-    local z = self.frame_buffer:read_depth_pixel(event.x, event.y)
-    local clicked_pos_world = self.camera:to_world(event.x, event.y, z)
-    local depth = geom.dist(clicked_pos_world, self.camera.eye)
-
-    if depth < self.camera.clip_far - self.camera.clip_near then
-      -- TODO: animate
+    local clicked_pos_world = self.camera:pixel_to_world(event.x, event.y)
+    if clicked_pos_world ~= nil then
       self:fly_to(clicked_pos_world)
     end
-
+    
   elseif event.left_button then
     self.mode = FOCUS_MODE
-    local object_id, triangle_index = self.frame_buffer:read_pick_pixel(event.x, event.y)
+    local object_id, triangle_index = self.camera.frame_buffer:read_pick_pixel(event.x, event.y)
     local object = self.objects[object_id]
     local verts, center, normal = object:get_triangle(triangle_index)
 
@@ -197,41 +186,41 @@ function GLWidget:raycast(start, direction)
   torch.add(self.camera_raycaster.center, start, direction)
   self.camera_raycaster:update()
   
-  self.frame_buffer:use()
- 
+  log.trace(self.camera_raycaster.eye)
+  log.trace(self.camera_raycaster.center)
+  
+  self.camera_raycaster.frame_buffer:use()
+
   gl.Clear(gl.DEPTH_BUFFER_BIT)
-  gl.ClearColor(0,0,0,0)
+  gl.ClearColor(0, 0, 0, 0)
   gl.check_errors()
- 
+
   gl.Enable(gl.DEPTH_TEST)
   gl.check_errors()
- 
+
   gl.CullFace(gl.BACK)
   gl.Enable(gl.CULL_FACE)
   gl.check_errors()
- 
+
   -- setup camera
   self.camera_raycaster:update_matrix(self.context)
 
   -- show objects
   for i, object in ipairs(self.objects) do
+    self.context.object_id = i
     object:paint(self.context)
   end
- 
+
   gl.Disable(gl.DEPTH_TEST)
   gl.check_errors()
- 
-  self.frame_buffer:unbind()
+
+  self.camera_raycaster.frame_buffer:unbind()
   
-  local z = self.frame_buffer:read_depth_pixel(self.camera_raycaster.width*0.5, self.camera_raycaster.height*0.5)
-  local hit_location = self.camera_raycaster:to_world(self.camera_raycaster.width*0.5, self.camera_raycaster.height*0.5, z)
-  local ray_length = geom.dist(hit_location, start)
-  
-  if ray_length >= self.camera.clip_far - self.camera.clip_near then
-    return nil
-  end
+  local hit_location = self.camera_raycaster:pixel_to_world(self.camera_raycaster.width*0.5, self.camera_raycaster.height*0.5)
+  log.trace(hit_location)
   return hit_location
 end
+
 
 function GLWidget:fly_to(goal_position)
   local VIEW_DISTANCE = 8
@@ -239,9 +228,13 @@ function GLWidget:fly_to(goal_position)
   local eye_offset_direction = geom.direction(goal_position, self.camera.eye)
   local eye_position = goal_position - eye_offset_direction * VIEW_DISTANCE
   
-  local hit_location = self:raycast(eye_position, torch.Tensor({0,0,-1}))
-  if not hit_location == nil then
+  --TODO: {0,-0.01, -1} idealy would be {0,0,-1} to raycast straight down. 
+  -- Without this slight tilt raycast always returns nil. An issue with the up vector? camera matrix?
+  local hit_location = self:raycast(eye_position, torch.Tensor({0,0.01,-1}))
+  log.trace(hit_location)
+  if hit_location ~= nil then
     eye_position[3] = hit_location[3] + VIEW_HEIGHT
+    log.trace(eye_position)
   end
   
   self.camera.center[{{1,3}}] = goal_position

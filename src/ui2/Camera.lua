@@ -34,7 +34,8 @@ function Camera:__init()
 
   self.width = 0
   self.height = 0
-
+  
+  self.frame_buffer = nil
 end
 
 function Camera:update_projection_matrix(context)
@@ -54,8 +55,15 @@ function Camera:update_projection_matrix(context)
 
   self.projection_matrix = context.projection_matrix:double()
   -- memlog('projection_matrix', context.projection_matrix)
+  self:rebuild_buffers()
 end
 
+function Camera:rebuild_buffers()
+  if self.frame_buffer then
+    self.frame_buffer:__gc()
+  end
+  self.frame_buffer = require('ui2.FrameBuffer').new(self.width, self.height)
+end
 
 function Camera:update_matrix(context)
   self:update()
@@ -152,22 +160,30 @@ function Camera:rotate_eye_around_center(x, y)
   self:rotate_a_around_b(self.eye, self.center, -self.look_dir, x, y, 0.02)
 end
 
-
-function Camera:to_world(x, y, z)
-  local screen_position = torch.Tensor(4)
-  screen_position[1] = 2 * x / self.width - 1
-  screen_position[2] = 1 - 2 * y / self.height -- invert y
-  screen_position[3] = 2 * z - 1 -- TODO Is this right?
-  screen_position[4] = 1
-
+function Camera:screen_to_world(screen_position)  
   screen_position:resize(4,1)
   local mvp_matrix = torch.mm(self.projection_matrix, self.model_view_matrix)
   local inverse_camera_transform = torch.inverse(mvp_matrix)
   local view_position = torch.mm(inverse_camera_transform, screen_position);
+  screen_position:resize(4)
   view_position:resize(4)
   torch.div(view_position, view_position, view_position[4])
   return view_position[{{1,3}}]
+end
 
+function Camera:pixel_to_world(x, y)
+  local z = self.frame_buffer:read_depth_pixel(x, y)
+  if z >= 1 then
+    return nil
+  end
+  
+  local screen_position = torch.Tensor(4)
+  screen_position[1] = 2 * x / self.width - 1
+  screen_position[2] = 1 - 2 * y / self.height -- invert y
+  screen_position[3] = 2 * z - 1
+  screen_position[4] = 1
+    
+  return self:screen_to_world(screen_position)
 end
 
 function Camera:set_eye(x, y, z)
