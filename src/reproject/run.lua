@@ -207,20 +207,20 @@ function projection_to_sphere (camera, projection,scale,debug)
    -- torch indexes from 1,size_x
    local xval = hlfw - 0.5 
    local yval = hlfh - 0.5 
+
    -- start with old x and y values centered at zero
    local xindex = torch.linspace(-max_imgw,max_imgw,mapw)
    local yindex = torch.linspace(-max_imgh,max_imgh,maph)
 
    local xmap = xindex:repeatTensor(maph,1)
    xmap:cmul(ratio_map):add(hlfw + 0.5)
-   local mask = xmap:gt(1) + xmap:lt(imgw)
 
-   -- ymap is offset by 1 to multiply by stride
    local ymap = yindex:repeatTensor(mapw,1):t():contiguous()
    ymap:cmul(ratio_map):add(hlfh + 0.5)
 
+   -- make mask for out of bounds values
+   local mask = xmap:gt(1) + xmap:lt(imgw)
    mask = mask + ymap:gt(1) + ymap:lt(imgh)
-
    -- reset mask to 0 and 1 (valid parts of mask must pass all 4 tests)
    mask[mask:ne(4)] = 1
    mask[mask:eq(4)] = 0
@@ -244,8 +244,9 @@ function projection_to_sphere (camera, projection,scale,debug)
    outmap[mask] = 1 
 
    local index_map = outmap:long() -- round (+0.5 above) and floor
-
-   index_map:resize(index_map:size(1)*index_map:size(2))
+   
+   -- make 1D
+   index_map:resize(index_map:nElement())
    if debug then
       printf(" x map from %d to %d (max: %d)",xmap:min(),xmap:max(),imgw)
       printf(" y map from %d to %d (max: %d)",ymap:min(),ymap:max(),imgh)
