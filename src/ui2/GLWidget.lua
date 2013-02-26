@@ -161,6 +161,9 @@ end
 
 function GLWidget:mouse_wheel(event)
   -- p('mouse_wheel', event)
+  local move_units = event.delta / 120
+  self.camera:move_eye(0, 0, move_units)
+  self:update()
 end
 
 function GLWidget:key_press(event)

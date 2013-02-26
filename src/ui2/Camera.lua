@@ -97,8 +97,12 @@ function Camera:move_eye(x, y, z)
   -- assume we don't need an update here, but maybe we do?
   torch.add(self.eye, self.eye, x, self.right_dir)
   torch.add(self.eye, self.eye, y, self.up_dir)
-  torch.add(self.eye, self.eye, z, self.look_dir)
-  
+
+  -- don't let eye move past center
+  if self:eye_dist() - z > 0 then
+    torch.add(self.eye, self.eye, z, self.look_dir)
+  end
+
   -- move the center, but not along the line of sight, for now
   -- the z direction changes the range
   -- __center += forwardDir * _z;
@@ -185,6 +189,10 @@ function Camera:set_up(x, y, z)
   self.up_dir[1] = x
   self.up_dir[2] = y
   self.up_dir[3] = z
+end
+
+function Camera:eye_dist()
+  return geom.dist(self.eye, self.center)
 end
 
 return Camera
