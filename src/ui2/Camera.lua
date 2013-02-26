@@ -63,7 +63,7 @@ function Camera:update_matrix(context)
   context.model_view_matrix:eye(4,4)
   context.model_view_matrix[{1, {1,3}}] = self.right_dir
   context.model_view_matrix[{2, {1,3}}] = self.up_dir
-  context.model_view_matrix[{3, {1,3}}] = self.look_dir
+  context.model_view_matrix[{3, {1,3}}] = -self.look_dir
 
   context:translate(-self.eye)
 
@@ -90,7 +90,6 @@ function Camera:update()
   geom.normalize(self.right_dir)
 
   torch.cross(self.up_dir, self.right_dir, self.look_dir)
-  torch.mul(self.look_dir, self.look_dir, -1)
 end
 
 -- move eye in camera space
@@ -117,9 +116,9 @@ function Camera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
   
   -- Rotate around a horizontal axis (y rotation)
   local z_axis_angle = math.acos(torch.dot(unit_a, Z_AXIS_POS))
-  
+
   if z_axis_angle - y_angle < 0 then
-    -- this would take us past vertical, so lock to Z up
+    -- this would take us past vertical (up), so lock to Z up
     torch.mul(a, Z_AXIS_POS, a:norm())
     -- rotate up for x instead of eye
     geom.rotate_axis_angle(self.up_dir, Z_AXIS_POS, x_angle);

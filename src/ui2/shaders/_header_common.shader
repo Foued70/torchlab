@@ -23,7 +23,8 @@ struct sLightModelParameters {
 };
 
 uniform uint objectID;
-uniform uint meshID;
+uniform uint submeshStart;
+
 uniform vec4 sDefColor;
 uniform mat4 sModelViewMatrix;
 uniform mat4 sProjectionMatrix;

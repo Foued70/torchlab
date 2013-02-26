@@ -1,7 +1,14 @@
-setfenv(1, setmetatable({}, {__index = _G}))
+local ObjectData = torch.class('ObjectData')
 
-local torch = require 'torch'
 require 'image' -- fucking image global
+local geom = require 'util.geom'
+
+function ObjectData:__init(filename)
+  if filename then
+    self:load(filename)
+    self:add_derived_data()
+  end
+end
 
 local _t = sys.clock()
 local function tic(msg)
@@ -12,7 +19,7 @@ local function tic(msg)
   end
 end
 
-function get_counts(filename)
+local function get_counts(filename)
   local n_faces = 0;
   local n_tmp_verts = 0;
   local n_tmp_uvs = 0;
@@ -30,10 +37,11 @@ function get_counts(filename)
 end
 
 
-function add_derived_data(obj)
-  local verts = obj.verts
-  local faces = obj.faces
-  local n_faces = #faces
+function ObjectData:add_derived_data()
+  tic()
+  local verts = self.verts
+  local faces = self.faces
+  local n_faces = faces:size(1)
 
   local face_verts    = torch.Tensor(n_faces, 3, 3)
   local face_normals  = torch.Tensor(n_faces,3)
@@ -51,7 +59,7 @@ function add_derived_data(obj)
       fverts[j] = verts[ {face[j],{1,3}} ]
     end
 
-    -- b) compute object centers
+    -- b) compute face centers
     centers[fid] = fverts:mean(1):squeeze()
 
     -- c) compute plane normal and face_center_dists distance from origin for plane eq.
@@ -65,12 +73,13 @@ function add_derived_data(obj)
 
   end
 
-  obj.face_verts         = face_verts
-  obj.face_normals       = face_normals
-  obj.face_center_dists  = face_center_dists
-  obj.face_centers       = centers
-  obj.bbox               = bbox
+  self.face_verts         = face_verts
+  self.face_normals       = face_normals
+  self.face_center_dists  = face_center_dists
+  self.face_centers       = centers
+  self.bbox               = bbox
 
+  tic('derive')
 end
 
 local function parse_color(line)
@@ -78,11 +87,11 @@ local function parse_color(line)
   return {tonumber(r), tonumber(g), tonumber(b), 1}
 end
 
-function trim(s)
+local function trim(s)
   return s:match'^%s*(.*%S)' or ''
 end
 
-function load_materials(pathname, filename)
+local function load_materials(pathname, filename)
   filename = paths.concat(pathname, filename)
   local materials = {}
   local mtl_name_index_map = {}
@@ -119,7 +128,7 @@ end
 
 
 
-function load(filename)
+function ObjectData:load(filename)
   tic()
   local n_faces, n_tmp_verts, n_tmp_uvs = get_counts(filename);
   tic('counts')
@@ -202,17 +211,14 @@ function load(filename)
   tic('trim')
 
 
-  local obj = {}
-  obj.unified_verts      = trim_verts
-  obj.verts              = trim_verts:narrow(2, 1, 4)
-  obj.uvs                = trim_verts:narrow(2, 5, 2)
-  obj.faces              = faces
-  obj.submeshes          = torch.IntTensor(submeshes)
-  obj.materials          = materials
-
-  return obj
+  self.unified_verts      = trim_verts
+  self.verts              = trim_verts:narrow(2, 1, 4)
+  self.uvs                = trim_verts:narrow(2, 5, 2)
+  self.faces              = faces
+  self.submeshes          = torch.IntTensor(submeshes)
+  self.materials          = materials
 end
 
 
 
-return (getfenv())
+return ObjectData

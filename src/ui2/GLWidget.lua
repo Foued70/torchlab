@@ -34,8 +34,6 @@ function GLWidget:init(qt_widget)
   self.qt_widget = qt_widget
 
   self.textured_shader = Shader.new('textured')
-
-  self.initialized = true
 end
 
 function GLWidget:update()
@@ -52,6 +50,8 @@ function GLWidget:resize(width, height)
   end
 
   self.frame_buffer = require('ui2.FrameBuffer').new(width, height)
+
+  self.initialized = true
 end
 
 function GLWidget:paint()
@@ -82,6 +82,7 @@ function GLWidget:paint()
 
   -- show objects
   for i, object in ipairs(self.objects) do
+    self.context.object_id = i
     object:paint(self.context)
   end
 
@@ -120,13 +121,22 @@ function GLWidget:mouse_click(event)
 
     if depth < self.camera.clip_far then
       local travel_dir = geom.normalize(clicked_pos_world - self.camera.eye)
+      -- TODO: animate
       self.camera.center[{{1,3}}] = clicked_pos_world
       self.camera.eye[{{1,3}}] = clicked_pos_world - travel_dir
     end
 
-    self:update()
+  elseif event.left_button then
+    local object_id, triangle_index = self.frame_buffer:read_pick_pixel(event.x, event.y)
+    local object = self.objects[object_id]
+    local verts, center, normal = object:get_triangle(triangle_index)
+
+    -- todo: animate
+    self.camera.center[{{1,3}}] = center
+    self.camera.eye[{{1,3}}] = center + (normal * 5)
   end
 
+  self:update()
 end
 
 function GLWidget:mouse_move(event)
