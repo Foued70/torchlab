@@ -93,6 +93,12 @@ function GLWidget:paint()
   gl.check_errors()
 
   self.camera.frame_buffer:unbind()
+
+
+  if self.animationManager:needsAnimating() == true then
+    self.animationManager:tick_all()
+    self:update()
+  end
 end
 
 function GLWidget:mouse_press(event)
@@ -186,9 +192,6 @@ function GLWidget:raycast(start, direction)
   torch.add(self.camera_raycaster.center, start, direction)
   self.camera_raycaster:update()
   
-  log.trace(self.camera_raycaster.eye)
-  log.trace(self.camera_raycaster.center)
-  
   self.camera_raycaster.frame_buffer:use()
 
   gl.Clear(gl.DEPTH_BUFFER_BIT)
@@ -217,7 +220,6 @@ function GLWidget:raycast(start, direction)
   self.camera_raycaster.frame_buffer:unbind()
   
   local hit_location = self.camera_raycaster:pixel_to_world(self.camera_raycaster.width*0.5, self.camera_raycaster.height*0.5)
-  log.trace(hit_location)
   return hit_location
 end
 
@@ -231,16 +233,13 @@ function GLWidget:fly_to(goal_position)
   --TODO: {0,-0.01, -1} idealy would be {0,0,-1} to raycast straight down. 
   -- Without this slight tilt raycast always returns nil. An issue with the up vector? camera matrix?
   local hit_location = self:raycast(eye_position, torch.Tensor({0,0.01,-1}))
-  log.trace(hit_location)
   if hit_location ~= nil then
     eye_position[3] = hit_location[3] + VIEW_HEIGHT
-    log.trace(eye_position)
   end
-  
-  self.camera.center[{{1,3}}] = goal_position
-  self.camera.eye[{{1,3}}] = eye_position
-  
-  --self.animationManager:updateState()
+
+  self.animationManager:add(self.camera.center, goal_position, 0.5, BEZIER_START_BEHAVIORS.FAST, BEZIER_END_BEHAVIORS.SLOW)
+  self.animationManager:add(self.camera.eye, eye_position, 0.5, BEZIER_START_BEHAVIORS.FAST, BEZIER_END_BEHAVIORS.SLOW)
+  self:update()
 end
 
 return GLWidget
