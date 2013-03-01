@@ -1,12 +1,16 @@
 /*
  * This file contains code to identify the camera distortion parameters
  * using OpenCV's camera calibration functions.
+ *
+ * It saves the calibration data as a Lua source file that can be read
+ * directly in Lua using dofile([filepath])
  */
 
 #include <opencv2/core/core.hpp>
 #include <opencv/cv.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <iostream>
+#include <fstream>
 #include <dirent.h>
 #include <string>
 #include <sstream>
@@ -24,32 +28,134 @@ struct userOptions {
 	int calibrationFlags = 0;
 };
 
-struct userInput {
+class UserInput {
+public:
+	UserInput(const string& _directory, int _horizontalCorners, int _verticalCorners);
+	UserInput();
+	~UserInput();
+	
+	// Setters and Getters
+	string getImagesDirectory();
+	void setImagesDirectory(const string& _imagesDirectory);
+	
+	void setHorizontalCornersCount(int count);
+	void setVerticalCornersCount(int count);
+	int getHorizontalCornersCount();
+	int getVerticalCornersCount();
+	int getNumberOfSquares();
+	Size getPatternSize();
+	
+	void setIntrinsicFx(int fx);
+	void setIntrinsicFy(int fy);
+	void setIntrinsicCx(int cx);
+	void setIntrinsicCy(int cy);
+	int getIntrinsicFx();
+	int getIntrinsicFy();
+	int getIntrinsicCx();
+	int getIntrinsicCy();
+	
+private:
 	string imagesDirectory;
-	
-	int numberOfHorizontalCorners;
-	int numberOfVerticalCorners;
-	
-	// Intrinsic matrix parameters
-	int fx;
-	int fy;
-	int cx;
-	int cy;
+	int horizontalCornersCount;
+	int verticalCornersCount;
+	int intrinsic_fx;
+	int intrinsic_fy;
+	int intrinsic_cx;
+	int intrinsic_cy;
 };
 
-void promptAndSaveCalibrationOptions(userOptions &userOptions, userInput &userInput) {
+
+UserInput::UserInput() {
+	imagesDirectory = "";
+	horizontalCornersCount = -1;
+	verticalCornersCount = -1;
+}
+
+void UserInput::setImagesDirectory(const string& _imagesDirectory) {
+	imagesDirectory = _imagesDirectory;
+}
+
+string UserInput::getImagesDirectory() {
+	return imagesDirectory;
+}
+
+void UserInput::setHorizontalCornersCount(int count) {
+	horizontalCornersCount = count;
+}
+
+void UserInput::setVerticalCornersCount(int count) {
+	verticalCornersCount = count;
+}
+
+int UserInput::getHorizontalCornersCount() {
+	return horizontalCornersCount;
+}
+
+int UserInput::getVerticalCornersCount() {
+	return verticalCornersCount;
+}
+
+int UserInput::getNumberOfSquares() {
+	return horizontalCornersCount * verticalCornersCount;
+}
+
+Size UserInput::getPatternSize() {
+	return Size(horizontalCornersCount, verticalCornersCount);
+}
+
+void UserInput::setIntrinsicFx(int fx) {
+	intrinsic_fx = fx;
+}
+
+void UserInput::setIntrinsicFy(int fy) {
+	intrinsic_fy = fy;
+}
+
+void UserInput::setIntrinsicCx(int cx) {
+	intrinsic_cx = cx;
+}
+
+void UserInput::setIntrinsicCy(int cy) {
+	intrinsic_cy = cy;
+}
+
+int UserInput::getIntrinsicFx() {
+	return intrinsic_fx;
+}
+
+int UserInput::getIntrinsicFy() {
+	return intrinsic_fy;
+}
+
+int UserInput::getIntrinsicCx() {
+	return intrinsic_cx;
+}
+
+int UserInput::getIntrinsicCy() {
+	return intrinsic_cy;
+}
+
+
+void promptAndSaveCalibrationOptions(userOptions& userOptions, UserInput* userInput) {
+	string stringInput;
+	int intInput;
+	
 	cout << "Please specify directory with calibration images \n";
 	cout << "(Remember to specify directory path with terminal '/' character): \n";
-	cin >> userInput.imagesDirectory;
+	cin >> stringInput;
+	userInput->setImagesDirectory(stringInput);
+	
 	
 	cout << "Enable visual verification of detected chessboard pattern? (Y/N) \n";
 	cin >> userOptions.enableChessboardPatternVerification;
 	
 	cout << "Enter number of horizontal corners: \n";
-	cin >> userInput.numberOfHorizontalCorners;
+	cin >> intInput;
+	userInput->setHorizontalCornersCount(intInput);
 	
 	cout << "Enter number of vertical corners: \n";
-	cin >> userInput.numberOfVerticalCorners;
+	cin >> intInput;
+	userInput->setVerticalCornersCount(intInput);
 	
 	cout << "Use rational model? (Y/N) \n";
 	cin >> userOptions.useRationalModel;
@@ -68,16 +174,20 @@ void promptAndSaveCalibrationOptions(userOptions &userOptions, userInput &userIn
 		cout << "Please provide intrinsic matrix data information. \n";
 		
 		cout << "fx? \n";
-		cin >> userInput.fx;
+		cin >> intInput;
+		userInput->setIntrinsicFx(intInput);
 		
 		cout << "fy? \n";
-		cin >> userInput.fy;
+		cin >> intInput;
+		userInput->setIntrinsicFy(intInput);
 		
 		cout << "cx? \n";
-		cin >> userInput.cx;
+		cin >> intInput;
+		userInput->setIntrinsicCx(intInput);
 		
 		cout << "cy? \n";
-		cin >> userInput.cy;
+		cin >> intInput;
+		userInput->setIntrinsicCy(intInput);
 	}
 	
 	if (userOptions.provideIntrinsicMatrixData == "Y" || userOptions.provideIntrinsicMatrixData == "y") {
@@ -100,17 +210,12 @@ void promptAndSaveCalibrationOptions(userOptions &userOptions, userInput &userIn
 int main(int argc, char** argv)
 {
 	userOptions userOptions;
-	userInput userInput;
+	UserInput* userInput = new UserInput();
 	
 	promptAndSaveCalibrationOptions(userOptions, userInput);
-
-	int numberOfSquares = userInput.numberOfHorizontalCorners * userInput.numberOfVerticalCorners;
-	Size pattern_size = Size(userInput.numberOfHorizontalCorners, userInput.numberOfVerticalCorners);
 	
 	vector<vector<Point3f>> object_points;
 	vector<vector<Point2f>> image_points;
-	
-	vector<Point2f> corners;
 	
 	Mat image;
 	Mat gray_image;
@@ -118,14 +223,14 @@ int main(int argc, char** argv)
 	vector<Point3f> obj;
 	
 	// Create list of coordinates for chessboard corners
-	for (int j = 0; j < numberOfSquares; j++) {
-		obj.push_back(Point3f(j/userInput.numberOfHorizontalCorners, j%userInput.numberOfHorizontalCorners, 0.0f));
+	for (int j = 0; j < userInput->getNumberOfSquares(); j++) {
+		obj.push_back(Point3f(j/(userInput->getHorizontalCornersCount()), j%(userInput->getHorizontalCornersCount()), 0.0f));
 	}
 	
 	// Open calibration images directory
 	DIR *pdir = NULL;
 	struct dirent *pent = NULL;
-	pdir = opendir(userInput.imagesDirectory.c_str());
+	pdir = opendir(userInput->getImagesDirectory().c_str());
 	
 	if (pdir == NULL) {
 		printf("\nERROR: Calibration images directory appears to be incorrect");
@@ -140,7 +245,7 @@ int main(int argc, char** argv)
 		}
 		
 		stringstream imagePath;
-		imagePath << userInput.imagesDirectory.c_str() << pent->d_name;
+		imagePath << userInput->getImagesDirectory().c_str() << pent->d_name;
 		
 		image = imread(imagePath.str().c_str(), CV_LOAD_IMAGE_UNCHANGED);
 		cout << imagePath.str() << "\n";
@@ -151,15 +256,14 @@ int main(int argc, char** argv)
 		
 		cvtColor(image, gray_image, CV_BGR2GRAY);
 
-		bool found = findChessboardCorners(gray_image, pattern_size, corners, CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_FILTER_QUADS);
+		vector<Point2f> corners;
+		bool found = findChessboardCorners(gray_image, userInput->getPatternSize(), corners, CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_FILTER_QUADS);
 
 		if (found) {
 			cornerSubPix(gray_image, corners, Size(11, 11), Size(-1, -1), TermCriteria(CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 30, 0.1));
-			drawChessboardCorners(gray_image, pattern_size, corners, found);
+			drawChessboardCorners(gray_image, userInput->getPatternSize(), corners, found);
 			image_points.push_back(corners);
 			object_points.push_back(obj);
-			
-			cout << ".\n";
 		} else {
 			printf("ERROR: Cannot detect chessboard pattern for %s", imagePath.str().c_str());
 		}
@@ -176,7 +280,7 @@ int main(int argc, char** argv)
 	
 	Mat intrinsic;	// camera matrix
 	if (userOptions.provideIntrinsicMatrixData == "Y" || userOptions.provideIntrinsicMatrixData == "y") {
-		intrinsic = (Mat_<double>(3,3) << userInput.fx, 0, userInput.cx, 0, userInput.fy, userInput.cy, 0, 0, 1);
+		intrinsic = (Mat_<double>(3,3) << userInput->getIntrinsicFx(), 0, userInput->getIntrinsicCx(), 0, userInput->getIntrinsicFy(), userInput->getIntrinsicCy(), 0, 0, 1);
 	} else {
 		intrinsic = Mat(3, 3, CV_32FC1);
 	}
@@ -186,12 +290,35 @@ int main(int argc, char** argv)
 	vector<Mat> tvecs;			// translation vectors
 
 	calibrateCamera(object_points, image_points, image.size(), intrinsic, distCoeffs, rvecs, tvecs, userOptions.calibrationFlags);
+
+	stringstream output;
 	
-	cout << "\nIntrinsic matrix: \n";
-	cout << intrinsic;
-	cout << "\n";
-	cout << "\nDistortion vector (k_1, k_2, p_1, p_2, k3): \n";
-	cout << distCoeffs;
+	output << "calibrationData = { ";
+	output << "fx = " << intrinsic.at<double>(0, 0) << ", ";
+	output << "fy = " << intrinsic.at<double>(1, 1) << ", ";
+	output << "cx = " << intrinsic.at<double>(0, 2) << ", ";
+	output << "cy = " << intrinsic.at<double>(1, 2) << ", ";
+	output << "k1 = " << distCoeffs.at<double>(0, 0) << ", ";
+	output << "k2 = " << distCoeffs.at<double>(0, 1) << ", ";
+	output << "p1 = " << distCoeffs.at<double>(0, 2) << ", ";
+	output << "p2 = " << distCoeffs.at<double>(0, 3) << ", ";
+	output << "k3 = " << distCoeffs.at<double>(0, 4) << ", ";
+	
+	if (distCoeffs.size().width > 5) { // Calibration using rational model will give additional parameters
+		output << "k4 = " << distCoeffs.at<double>(0, 5) << ", ";
+		output << "k5 = " << distCoeffs.at<double>(0, 6) << ", ";
+		output << "k6 = " << distCoeffs.at<double>(0,7);
+	}
+	
+	output << "} \n";
+
+	printf("\n");
+	cout << output.str();
+	
+	ofstream outputFile;
+	outputFile.open("/Users/ming/Desktop/calibrationData");
+	outputFile << output.str();
+	outputFile.close();
 	
 	Mat undistorted_image;
 	undistort(image, undistorted_image, intrinsic, distCoeffs);
