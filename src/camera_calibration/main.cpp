@@ -207,6 +207,39 @@ void promptAndSaveCalibrationOptions(userOptions& userOptions, UserInput* userIn
 	}
 }
 
+void saveCornerPoints(vector<vector<Point2f>> image_points) {
+	ofstream cornerPointsFile;
+	cornerPointsFile.open("/Users/ming/Desktop/cornerPoints");
+	
+	int numberOfImages = (int)image_points.size();
+	int numberOfCorners = (int)image_points[0].size();
+	cornerPointsFile << "-- The code below saves the checkerboard corner points identified by OpenCV \n";
+	cornerPointsFile << "-- in a Torch tensor with the dimensions: \n";
+	cornerPointsFile << "-- [number of images used in calibration] x [number of corners in checkerboard pattern] x [2 (corresponding to the x and y pixel positions] \n";
+	cornerPointsFile << "\n";
+	
+	cornerPointsFile << "cornerPoints = torch.Tensor(";
+	
+	cornerPointsFile << "{";
+	for (int i = 0; i < numberOfImages; i++) {
+		cornerPointsFile << "{";
+		
+		for (int j = 0; j < numberOfCorners; j++) {
+			cornerPointsFile << "{";
+			cornerPointsFile << image_points[i][j].x << "," << image_points[i][j].y;
+			cornerPointsFile << "}";
+			cornerPointsFile << ",";
+		}
+		
+		cornerPointsFile << "}";
+		cornerPointsFile << ",";
+	}
+	cornerPointsFile << "}";
+	cornerPointsFile << ");";
+	
+	cornerPointsFile.close();
+}
+
 int main(int argc, char** argv)
 {
 	userOptions userOptions;
@@ -215,7 +248,7 @@ int main(int argc, char** argv)
 	promptAndSaveCalibrationOptions(userOptions, userInput);
 	
 	vector<vector<Point3f>> object_points;
-	vector<vector<Point2f>> image_points;
+	vector<vector<Point2f>> image_points; // list of corner points
 	
 	Mat image;
 	Mat gray_image;
@@ -226,7 +259,7 @@ int main(int argc, char** argv)
 	for (int j = 0; j < userInput->getNumberOfSquares(); j++) {
 		obj.push_back(Point3f(j/(userInput->getHorizontalCornersCount()), j%(userInput->getHorizontalCornersCount()), 0.0f));
 	}
-	
+
 	// Open calibration images directory
 	DIR *pdir = NULL;
 	struct dirent *pent = NULL;
@@ -290,7 +323,7 @@ int main(int argc, char** argv)
 	vector<Mat> tvecs;			// translation vectors
 
 	calibrateCamera(object_points, image_points, image.size(), intrinsic, distCoeffs, rvecs, tvecs, userOptions.calibrationFlags);
-
+	
 	stringstream output;
 	
 	output << "calibrationData = { ";
@@ -319,6 +352,8 @@ int main(int argc, char** argv)
 	outputFile.open("/Users/ming/Desktop/calibrationData");
 	outputFile << output.str();
 	outputFile.close();
+	
+	saveCornerPoints(image_points);
 	
 	Mat undistorted_image;
 	undistort(image, undistorted_image, intrinsic, distCoeffs);
