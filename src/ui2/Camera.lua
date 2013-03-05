@@ -20,7 +20,9 @@ local function vlog(label, x)
   p(("%-10s %.4f %.4f %.4f "):format(label, x[1], x[2], x[3]))
 end
 
-function Camera:__init()
+function Camera:__init(widget, name)
+  self.widget = widget
+  self.name = name
   self.eye = torch.Tensor({0,0,0})
   self.center = torch.Tensor({0,1,0})
   self.clip_near = 0.0001
@@ -62,7 +64,7 @@ function Camera:rebuild_buffers()
   if self.frame_buffer then
     self.frame_buffer:__gc()
   end
-  self.frame_buffer = require('ui2.FrameBuffer').new(self.width, self.height)
+  self.frame_buffer = require('ui2.FrameBuffer').new(self.widget, self.name..'_frame_buffer', self.width, self.height)
 end
 
 function Camera:update_matrix(context)

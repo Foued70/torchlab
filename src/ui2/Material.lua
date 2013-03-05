@@ -14,8 +14,8 @@ local function format_image(img)
   return img:contiguous()
 end
 
-function Material:__init(mtl_data)
-  
+function Material:__init(widget, mtl_data)
+  self.widget = widget
   self.name = mtl_data.name
   self.ambient = mtl_data.ambient
   self.diffuse = mtl_data.diffuse
@@ -23,45 +23,20 @@ function Material:__init(mtl_data)
   self.shininess = mtl_data.shininess
   self.emission = {0,0,0,1} --mtl_data.emission
 
-  self.diffuse_tex_img = format_image(mtl_data.diffuse_tex_img)
-  self.texture_loaded = not self.diffuse_tex_img -- texture_loaded = false is we have a texture to load
-
   self.shader = require('ui2.Shader').shaders.textured
-  self.tex_id = nil
+  self.textures = {}
+
+  if mtl_data.diffuse_tex_path then
+    self:attach_texture(mtl_data.diffuse_tex_path, 0)
+  end
 end
 
-function Material:load_texture()
-  local img_data_ptr, img_data_size = libui.byte_storage_info(self.diffuse_tex_img)
-  local width = self.diffuse_tex_img:size()[2]
-  local height = self.diffuse_tex_img:size()[1]
+function Material:set_shader(shader)
+  self.shader = shader
+end
 
-  self.tex_id = gl.GenTexture()
-  gl.check_errors()
-
-  gl.BindTexture(gl.TEXTURE_2D, self.tex_id)
-  gl.check_errors()
-
-  gl.TexImage2D(
-      gl.TEXTURE_2D, 
-      0, -- level
-      gl.RGB, -- internalFormat
-      width, height, 
-      0, -- border
-      gl.RGB, -- format 
-      gl.UNSIGNED_BYTE, -- type
-      img_data_ptr
-  )
-  gl.check_errors()
-
-  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.check_errors()
-
-  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_BORDER)
-  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_BORDER)
-  gl.check_errors()
-
-  self.texture_loaded = true
+function Material:attach_texture(texture_name, texture_slot)
+  self.textures[texture_slot] = texture_name
 end
 
 function Material:use(context)
@@ -72,18 +47,26 @@ function Material:use(context)
   self.shader:set_uniform_float('sFrontMaterial.shininess', self.shininess)
   self.shader:set_uniform_float('sFrontMaterial.emission', self.emission)
 
-  self:set_texture()
+  self:set_textures()
 end
 
-function Material:set_texture()
-  if not self.texture_loaded then self:load_texture() end
-  if not self.tex_id then return end
+function Material:set_textures()
+  for slot,name in pairs(self.textures) do
+    gl.ActiveTexture(gl.TEXTURE0 + slot)
+    if self.widget.texture_manager.textures[name] == nil then
+      if name:sub(name:len()-3, name:len()-3) == '.' then -- name is a path as it ends in a file extension
+        self.widget.texture_manager.textures[name] = self.widget.texture_manager:create_from_image(name)
+      else
+        log.trace('Texture '..name..' does not exist! Cannot bind nil texture to slot '..slot)
+        return false
+      end
+    end
+    gl.BindTexture(gl.TEXTURE_2D, self.widget.texture_manager.textures[name])
+    gl.check_errors()
 
-  gl.ActiveTexture(gl.TEXTURE0)
-  gl.BindTexture(gl.TEXTURE_2D, self.tex_id)
-  gl.check_errors()
-
-  self.shader:set_uniform_int('textureUnit', 0)
+    self.shader:set_uniform_int('textureUnit'..slot, slot)
+  end
+  return true
 end
 
 return Material
