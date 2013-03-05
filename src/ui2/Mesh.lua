@@ -66,6 +66,33 @@ function Mesh:push_to_gl()
   self.pushed = true
 end
 
+function Mesh:override_materials(material)
+  self.default_materials = {}
+  for i = 1, #self.submeshes do
+    self.default_materials[i] = self.submeshes[i].material
+    self.submeshes[i].material = material
+  end
+end
+
+function Mesh:restore_materials()
+  if #self.default_materials < 1 then
+    return
+  end
+  
+  for i = 1, #self.submeshes do
+    self.submeshes[i].material = self.default_materials[i]
+  end
+end
+
+function Mesh:apply_material_to_all_(material)
+  log.trace(self.submeshes)
+  for i = 1, #self.submeshes do
+    log.trace('start= ' .. self.submeshes[i].start)
+    log.trace('length= ' .. self.submeshes[i].length)
+    log.trace('material= ' .. self.submeshes[i].material.name)
+  end
+end
+
 function Mesh:paint(context)
   if not self.pushed then self:push_to_gl() end
 

@@ -119,7 +119,6 @@ local function load_materials(pathname, filename)
       mtl.illumType = tonumber(line:sub(7))
     elseif line:match('^map_Kd ') then
       mtl.diffuse_tex_path = paths.concat(pathname, trim(line:sub(8)))
-      mtl.diffuse_tex_img = image.load(mtl.diffuse_tex_path, nil, 'byte')
     end
   end
 

@@ -9,6 +9,16 @@ local function read(filename)
   return io.read("*all")
 end
 
+local function file_exists(filename)
+  local file = io.open(CLOUDLAB_SRC..'/ui2/shaders/'..filename)
+  if file ~= nil then
+    io.close(file)
+    return true
+  else
+    return false
+  end
+end
+
 local function setShaderSource(shader_id, source)
   local source_ptr = gl.char(#source + 1)
   ffi.copy(source_ptr, source)
@@ -32,6 +42,15 @@ function Shader:__init(name)
   self.name = name
 
   self.vert_shader_id = gl.CreateShader(gl.VERTEX_SHADER)
+  gl.check_errors()
+
+  self.use_geom_shader = file_exists(self.name..'.geom')
+
+  if self.use_geom_shader then
+    self.geom_shader_id = gl.CreateShader(gl.GEOMETRY_SHADER)
+    gl.check_errors()
+  end
+
   self.frag_shader_id = gl.CreateShader(gl.FRAGMENT_SHADER)
   gl.check_errors()
   self.program_id = 0
@@ -46,11 +65,19 @@ function Shader:__gc()
   log.trace('Destroying shader: ', self.name)
 
   gl.DetachShader(self.program_id, self.vert_shader_id)
+
+  if self.use_geom_shader then
+    gl.DetachShader(self.program_id, self.geom_shader_id)
+  end
+
   gl.DetachShader(self.program_id, self.frag_shader_id)
 
   gl.DeleteProgram(self.program_id)
 
   gl.DeleteShader(self.vert_shader_id)
+  if self.type == SHADER_TYPE.GEOMETRY then
+    gl.DeleteShader(self.geom_shader_id)
+  end
   gl.DeleteShader(self.frag_shader_id)
   gl.check_errors()
 end
@@ -60,12 +87,18 @@ function Shader:load()
   local header_vert = read('_header_vert.shader')
   local header_frag = read('_header_frag.shader')
 
-  -- local vert_code = read(self.name..'.vert')
-  -- local frag_code = read(self.name..'.frag')
+  local vert_code = nil
+  local frag_code = nil
 
-  local vert_code = header_common..header_vert..read(self.name..'.vert')
-  local frag_code = header_common..header_frag..read(self.name..'.frag')
-
+  if self.use_geom_shader then 
+  -- Can't use the header files in a geometry shader. vertex out params, cant go directly to frag in. geom must pass vars through
+    vert_code = header_common..read(self.name..'.vert')
+    frag_code = header_common..read(self.name..'.frag')
+  else
+    vert_code = header_common..header_vert..read(self.name..'.vert')
+    frag_code = header_common..header_frag..read(self.name..'.frag')
+  end
+  
   setShaderSource(self.vert_shader_id, vert_code)
   setShaderSource(self.frag_shader_id, frag_code)
 
@@ -78,12 +111,28 @@ function Shader:load()
   gl.AttachShader(self.program_id, self.frag_shader_id)
   gl.check_errors()
 
+  if self.use_geom_shader then
+    local header_geom = read('_header_geom.shader')
+    local geom_code = header_common..header_geom..read(self.name..'.geom')
+
+    setShaderSource(self.geom_shader_id, geom_code)
+    gl.check_errors()
+
+    gl.AttachShader(self.program_id, self.geom_shader_id)
+    gl.check_errors()
+  end
+
   gl.BindAttribLocation(self.program_id, 0, 'sVertex')
+  gl.check_errors()
   gl.BindAttribLocation(self.program_id, 1, 'sTexCoords')
+  gl.check_errors()
   gl.BindAttribLocation(self.program_id, 2, 'sNormal')
+  gl.check_errors()
 
   gl.BindFragDataLocation(self.program_id, 0, 'sFragColor')
+  gl.check_errors()
   gl.BindFragDataLocation(self.program_id, 1, 'sPickingData')
+  gl.check_errors()
 
   gl.LinkProgram(self.program_id)
   gl.check_errors()
