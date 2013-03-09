@@ -165,6 +165,42 @@ function update_imagedata(camera,image)
 
 end
 
+
+-- FIXME the undistort functions need to be rewritten to generate the
+-- lookup tables and
+
+-- -- Standard lens correction (pinhole + water)
+
+-- -- distortion = 1 + a*r^2 + b*r^4 + c*r^6
+-- -- xcorr = x * distortion
+-- -- ycorr = y * distortion
+
+
+-- -- 
+-- -- r = 1 in radial undistort is at the shorter focal length.
+-- -- 
+-- function radial_undistort(x,y,cam)
+--    local r_squared = x^2 + y^2 -- * inv_radius
+
+--    -- a*r^2 + b*r^4 + c*r^6
+--    local scale = 1 + ((cam.c*r_squared + cam.b)*r_squared + cam.a)*r_squared
+
+--    -- rescale -1,1 to px coords in image space
+--    return x*scale,y*scale
+-- end
+
+-- function tangential_undistort(x, y, camera)
+--    local r = x^2 + y^2 -- * inv_radius   -- note: r is radius squared
+
+--    -- x_corrected = x + [2 * p1 * x * y + p2(r + 2 * x^2)]
+--    -- y_corrected = y + [p1(r + 2 * y^2) + 2 * p2 * x * y]
+
+--    local x_corrected = (camera.p_two * (r + 2*x^2) + 2 * camera.p_one * x * y)
+--    local y_corrected = (camera.p_one * (r + 2*y^2) + 2 * camera.p_two * x * y)
+
+--    return x_corrected, y_corrected
+end
+
 -- Maps a camera image to a unit cartesian sphere.
 --
 -- Lens types:
@@ -182,10 +218,10 @@ function camera_to_sphere (camera,scale,debug)
       scale = 1
    end
 
-
    -- +++++
    -- (0).a image dimensions
    -- +++++
+
    local imgw = camera.image_w
    local imgh = camera.image_h
    local hlfw = camera.center_x
@@ -197,6 +233,7 @@ function camera_to_sphere (camera,scale,debug)
    -- +++++
    -- (0).b find dimension of the map
    -- +++++
+
    local mapw = imgw * scale
 
    if (projection == "rectilinear") then
@@ -226,6 +263,7 @@ function camera_to_sphere (camera,scale,debug)
    -- +++++
    -- (1) create map of diagonal angles from optical center
    -- +++++
+
    -- create horizontal and vertical angles (equirectangular)
    local xrow = torch.linspace(-map_fovw,map_fovw,mapw)
    local ycol = torch.linspace(-map_fovh,map_fovh,maph)
@@ -238,6 +276,7 @@ function camera_to_sphere (camera,scale,debug)
    -- +++++
    -- (2) find the ratio r' / r for each entry in map
    -- +++++
+
    local rprime_map = r_map:clone() -- copy
 
    if (projection == "rectilinear") then
@@ -430,5 +469,3 @@ printf(" + (collect garbage) : %2.4fs",sys.toc())
 
 image.display{image={image.scale(output_image, output_image:size(2)*0.5, output_image:size(3)*0.5)}}
 image.display{image=img}
-
-
