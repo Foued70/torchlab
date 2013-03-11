@@ -10,7 +10,7 @@ local pp = {}
 
 function pp.start()
   widget = qtuiloader.load(paths.dirname(paths.thisfile())..'/pp.ui')
-  qt.connect(btnImgFolder, 'clicked()', loadFolder)
+  qt.connect(widget.btnImgFolder, 'clicked()', loadFolder)
   widget:show()
 end
 
