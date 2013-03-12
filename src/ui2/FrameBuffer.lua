@@ -1,48 +1,47 @@
 local gl = require 'ui2.gl'
 local libui = require 'libui2'
+local Material = require 'ui2.Material'
 
 local FrameBuffer = torch.class('FrameBuffer')
 
-
-function FrameBuffer:__init(width, height)
+function FrameBuffer:__init(widget, name, width, height)
+  self.widget = widget
+  self.name = name
   self.width = width
   self.height = height
   self.frame_buffer_id = gl.GenFramebuffer()
   self:bind()
 
-  self.color_tex_id = self:generate_texture(gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, gl.COLOR_ATTACHMENT0)
-  self.picking_tex_id = self:generate_texture(gl.RGB32UI, gl.RGB_INTEGER, gl.UNSIGNED_INT, gl.COLOR_ATTACHMENT1)
-  self.depth_tex_id = self:generate_texture(gl.DEPTH_COMPONENT32, gl.DEPTH_COMPONENT, gl.FLOAT, gl.DEPTH_ATTACHMENT)
+  local pass_name_color = self.name..'_pass_color'
+  self.widget.texture_manager:create_blank(pass_name_color, gl.RGBA, self.width, self.height, gl.RGBA, gl.UNSIGNED_BYTE)
+  self:attach_texture(gl.COLOR_ATTACHMENT0, self.widget.texture_manager.textures[pass_name_color])
+
+  local pass_name_picking = self.name..'_pass_picking'
+  self.widget.texture_manager:create_blank(pass_name_picking, gl.RGB32UI, self.width, self.height, gl.RGB_INTEGER, gl.UNSIGNED_INT)
+  self:attach_texture(gl.COLOR_ATTACHMENT1, self.widget.texture_manager.textures[pass_name_picking])
+
+  local pass_name_depth = self.name..'_pass_depth'
+  self.widget.texture_manager:create_blank(pass_name_depth, gl.DEPTH_COMPONENT32, self.width, self.height, gl.DEPTH_COMPONENT, gl.FLOAT)
+  self:attach_texture(gl.DEPTH_ATTACHMENT, self.widget.texture_manager.textures[pass_name_depth])
+
   gl.CheckFramebuffer()
 
   self.attachments = gl.enum(2)
   self.attachments[0] = gl.COLOR_ATTACHMENT0
   self.attachments[1] = gl.COLOR_ATTACHMENT1
+
+  log.trace("FrameBuffer Constructed.")
 end
 
 function FrameBuffer:__gc()
-  gl.DeleteTexture(self.depth_tex_id)
-  gl.DeleteTexture(self.picking_tex_id)
-  gl.DeleteTexture(self.depth_tex_id)
-  gl.DeleteFrameBuffer(self.frame_buffer_id)
+  self.widget.texture_manager:delete_texture(self.name..'_pass_color')
+  self.widget.texture_manager:delete_texture(self.name..'_pass_picking')
+  self.widget.texture_manager:delete_texture(self.name..'_pass_depth')
+  gl.DeleteFramebuffer(self.frame_buffer_id)
 end
 
-
-function FrameBuffer:generate_texture(pixel_format_internal, pixel_format, value_type, attachement)
-  local id = gl.GenTexture()
-  gl.BindTexture(gl.TEXTURE_2D, id)
-
-  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-
-  gl.TexImage2D(gl.TEXTURE_2D, 0, pixel_format_internal, self.width, self.height, 0, pixel_format, value_type, nil) -- Can I put nil here?
-  gl.BindTexture(gl.TEXTURE_2D, 0)
-
-  gl.FramebufferTexture2D( gl.FRAMEBUFFER, attachement, gl.TEXTURE_2D, id, 0)
-
-  return id
+function FrameBuffer:attach_texture(attachment, id)
+  gl.FramebufferTexture2D( gl.FRAMEBUFFER, attachment, gl.TEXTURE_2D, id, 0)
 end
 
 function FrameBuffer:use()
@@ -86,7 +85,6 @@ function FrameBuffer:read_depth_pixel(x, y)
   
   gl.ReadBuffer(gl.NONE)
   self:unbind()
-  log.trace(depth[0])
   return depth[0]
 end
 

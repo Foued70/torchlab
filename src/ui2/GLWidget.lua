@@ -15,11 +15,11 @@ function GLWidget:__init()
   self.initialized = false
   libui.attach_qt(self)
 
-  self.camera = require('ui2.Camera').new()
+  self.camera = require('ui2.Camera').new(self, 'main_camera')
   self.camera:set_eye(2,3,5)
   self.camera:set_center(0,0,1)
   
-  self.camera_raycaster = require('ui2.Camera').new()
+  self.camera_raycaster = require('ui2.Camera').new(self, 'raycaster_camera')
   self.camera_raycaster:set_eye(0,0,0)
   self.camera_raycaster:set_center(0,0,1)
   self.camera_raycaster:update()
@@ -29,8 +29,9 @@ function GLWidget:__init()
   self.objects = {}
 
   self.context = MatrixStack.new()
-  
-  self.animationManager = require('ui2.AnimationManager').new()
+
+  self.texture_manager = require('ui2.TextureManager').new()
+  self.animation_manager = require('ui2.AnimationManager').new()
 end
 
 function GLWidget:init(qt_widget)
@@ -39,6 +40,7 @@ function GLWidget:init(qt_widget)
   self.qt_widget = qt_widget
 
   self.textured_shader = Shader.new('textured')
+  self.vertex_highlight_shader = Shader.new('vertex_highlight')
 end
 
 function GLWidget:update()
@@ -93,6 +95,12 @@ function GLWidget:paint()
   gl.check_errors()
 
   self.camera.frame_buffer:unbind()
+
+
+  if self.animation_manager:needsAnimating() == true then
+    self.animation_manager:tick_all()
+    self:update()
+  end
 end
 
 function GLWidget:mouse_press(event)
@@ -172,12 +180,27 @@ function GLWidget:key_press(event)
     self.camera:move_eye(0,0.3,0)
   elseif event.key == key.Down then
     self.camera:move_eye(0,-0.3,0)
+    --For debugging. Lets you spawn a model with tab. 
+    --z switches the shader and materials to vertex_highlight
+    --x switches the shader and materials back to their default: textured 
+  --[[
+  elseif event.key == key.Tab then
+    local o = require('util.obj2').new('objs/dryDragon.obj')
+    self:add_object(o)
+    self.m = require('ui2.Material').new(self, {name='vertex_highlight_mat', ambient={0,0,0,1}, diffuse={0,0,0,1}, specular={0,0,0,1}, shininess={0,0,0,1}, emission={0,0,0,1}})
+    self.m:set_shader(self.vertex_highlight_shader)
+    self.m:attach_texture('main_camera_frame_buffer_pass_depth', 0)
+  elseif event.key == key.Z then
+    self.objects[1].mesh:override_materials(self.m)
+  elseif event.key == key.X then
+    self.objects[1].mesh:restore_materials()
+    ]]--
   end
   self:update()
 end
 
 function GLWidget:add_object(data_obj)
-  table.insert(self.objects, require('ui2.Object').new(data_obj))
+  table.insert(self.objects, require('ui2.Object').new(self, data_obj))
   self:update()
 end
 
@@ -185,9 +208,6 @@ function GLWidget:raycast(start, direction)
   self.camera_raycaster.eye[{{1,3}}] = start
   torch.add(self.camera_raycaster.center, start, direction)
   self.camera_raycaster:update()
-  
-  log.trace(self.camera_raycaster.eye)
-  log.trace(self.camera_raycaster.center)
   
   self.camera_raycaster.frame_buffer:use()
 
@@ -217,7 +237,6 @@ function GLWidget:raycast(start, direction)
   self.camera_raycaster.frame_buffer:unbind()
   
   local hit_location = self.camera_raycaster:pixel_to_world(self.camera_raycaster.width*0.5, self.camera_raycaster.height*0.5)
-  log.trace(hit_location)
   return hit_location
 end
 
@@ -231,16 +250,13 @@ function GLWidget:fly_to(goal_position)
   --TODO: {0,-0.01, -1} idealy would be {0,0,-1} to raycast straight down. 
   -- Without this slight tilt raycast always returns nil. An issue with the up vector? camera matrix?
   local hit_location = self:raycast(eye_position, torch.Tensor({0,0.01,-1}))
-  log.trace(hit_location)
   if hit_location ~= nil then
     eye_position[3] = hit_location[3] + VIEW_HEIGHT
-    log.trace(eye_position)
   end
-  
-  self.camera.center[{{1,3}}] = goal_position
-  self.camera.eye[{{1,3}}] = eye_position
-  
-  --self.animationManager:updateState()
+
+  self.animation_manager:add(self.camera.center, goal_position, 0.5, BEZIER_START_BEHAVIORS.FAST, BEZIER_END_BEHAVIORS.SLOW)
+  self.animation_manager:add(self.camera.eye, eye_position, 0.5, BEZIER_START_BEHAVIORS.FAST, BEZIER_END_BEHAVIORS.SLOW)
+  self:update()
 end
 
 return GLWidget

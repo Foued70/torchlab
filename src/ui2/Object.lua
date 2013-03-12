@@ -2,17 +2,18 @@ local gl = require 'ui2.gl'
 
 local Object = torch.class('Object')
 
-function Object:__init(obj_data)
+function Object:__init(widget, obj_data)
+  self.widget = widget;
   self.obj_data = obj_data
-  self.mesh = Object.create_mesh(obj_data)
+  self.mesh = Object.create_mesh(widget, obj_data)
 
   self.position = torch.Tensor(3):fill(0)
 end
 
-function Object.create_mesh(obj_data)
+function Object.create_mesh(widget, obj_data)
   local materials = {}
   for _, mtl_data in ipairs(obj_data.materials) do
-    local material = require('ui2.Material').new(mtl_data)
+    local material = require('ui2.Material').new(widget, mtl_data)
     table.insert(materials, material)
   end
 

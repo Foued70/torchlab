@@ -44,7 +44,7 @@ int libui2_attach_qt(lua_State* L) {
 
 int libui2_update_gl(lua_State* L) {
   GLWidget* glWidget = (GLWidget*)lua_touserdata(L, 1);
-  glWidget->updateGL();
+  glWidget->update();
 
   return 0;
 }
