@@ -15,9 +15,10 @@ all:$(install)
 
 
 $(install): $(unpack)
-	cd $(unpack); $(install_root)/bin/gcc -o $(install_root)/bin/dcraw -O4 dcraw.c \
+	cd $(unpack); $(install_root)/bin/gcc -o $(install_root)/bin/dcraw \
+			   -I$(install_root)/include -L$(install_root)/lib dcraw.c\
 	                   -Wall -Wno-unused-result -Wno-array-bounds \
-	                   -lm -ljasper -ljpeg -llcms -DNODEPS
+	                   -lm -ljpeg -llcms -ljasper
 
 $(unpack): $(tar_file)
 	cd $(build_dir)/deps; tar -xzf $(tar_file)
