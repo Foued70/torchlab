@@ -1,15 +1,17 @@
-local qt = require 'qt'
-local paths = require 'paths'
-local qtuiloader = require 'qtuiloader'
+require('qt')
+require ('qtgui')
+local qtuiloader = require('qtuiloader')
+local paths = require('paths')
 
 
 local function loadFolder() 
+  local folderName = qt.QFileDialog.getExistingDirectory()
 end
 
 local pp = {}
 
 function pp.start()
-  widget = qtuiloader.load(paths.dirname(paths.thisfile())..'/pp.ui')
+  local widget = qtuiloader.load(paths.dirname(paths.thisfile())..'/pp.ui')
   qt.connect(widget.btnImgFolder, 'clicked()', loadFolder)
   widget:show()
 end
