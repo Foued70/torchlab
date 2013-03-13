@@ -1,9 +1,11 @@
 require('qt')
-require('qtuiloader')
+require ('qtgui')
+local qtuiloader = require('qtuiloader')
 local paths = require('paths')
 
 
 local function loadFolder() 
+  local folderName = qt.QFileDialog.getExistingDirectory()
 end
 
 local pp = {}
