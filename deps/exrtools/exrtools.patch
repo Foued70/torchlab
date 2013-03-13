@@ -1,0 +1,99 @@
+diff -rupN exrtools-0-1.4/src/exroutput.c exrtools-0.4/src/exroutput.c
+--- exrtools-0-1.4/src/exroutput.c	2003-12-08 10:29:19.000000000 -0500
++++ exrtools-0.4/src/exroutput.c	2013-03-08 20:03:21.000000000 -0500
+@@ -58,6 +58,8 @@ exroutput_t *exroutput_new( const char *
+         free( exroutput );
+         return 0;
+     }
++    
++    fprintf(stderr, "main 1: width is: %d --- height is %d\n", width, height);
+ 
+     ImfHeaderSetDataWindow( header, 0, 0, width - 1, height - 1 );
+     ImfHeaderSetDisplayWindow( header, 0, 0, width - 1, height - 1 );
+diff -rupN exrtools-0-1.4/src/pngoutput.c exrtools-0.4/src/pngoutput.c
+--- exrtools-0-1.4/src/pngoutput.c	2003-12-08 12:33:27.000000000 -0500
++++ exrtools-0.4/src/pngoutput.c	2013-03-12 14:50:00.000000000 -0400
+@@ -28,6 +28,7 @@
+ #include <string.h>
+ #include <png.h>
+ #include "pngoutput.h"
++#include <zlib.h>
+ 
+ struct pngoutput_s
+ {
+diff -rupN exrtools-0-1.4/src/ppmtoexr.c exrtools-0.4/src/ppmtoexr.c
+--- exrtools-0-1.4/src/ppmtoexr.c	2003-12-16 22:22:13.000000000 -0500
++++ exrtools-0.4/src/ppmtoexr.c	2013-03-12 15:11:00.000000000 -0400
+@@ -66,7 +66,7 @@ int main( int argc, char **argv )
+     }
+     fgets( ppmline, sizeof( ppmline ), ppm );
+     if( ppmline[ 0 ] != 'P' || ppmline[ 1 ] != '6' ) {
+-        fprintf( stderr, "ppmtoexr: %s is not a valid ppm file.\n", argv[ 1 ] );
++        fprintf( stderr, "ppmtoexr: %s is not a valid ppm file: %s, %s.\n", argv[ 1 ], ppmline[0], ppmline[1]);
+         fclose( ppm );
+         return 1;
+     }
+@@ -82,10 +82,17 @@ int main( int argc, char **argv )
+     while( ppmline[ 0 ] == '#' ) {
+         fgets( ppmline, sizeof( ppmline ), ppm );
+     }
++    
++    int wtmp = width;
++    
+     sscanf( ppmline, "%d\n", &maxval );
++    
++    width = wtmp;
++    
+     maxvald = ((double) maxval);
++    
+     if( !maxval ) {
+-        fprintf( stderr, "ppmtoexr: %s is not a valid ppm file.\n", argv[ 1 ] );
++        fprintf( stderr, "ppmtoexr: %s is not a valid ppm file, %d.\n", argv[ 1 ], maxval );
+         fclose( ppm );
+         return 1;
+     }
+@@ -114,7 +121,7 @@ int main( int argc, char **argv )
+             return 1;
+         }
+     }
+-
++    
+     exrout = exroutput_new( argv[ 2 ], width, height );
+     if( !exrout ) {
+         fprintf( stderr, "ppmtoexr: Cannot open %s\n", argv[ 2 ] );
+diff -rupN exrtools-0-1.4/src/exrnormalize.c exrtools-0.4/src/exrnormalize.c
+--- exrtools-0-1.4/src/exrnormalize.c   2003-12-16 22:22:13.000000000 -0500
++++ exrtools-0.4/src/exrnormalize.c 2013-03-12 15:11:00.000000000 -0400
+@@ -27,7 +27,7 @@
+ #include <stdint.h>
+ #include <string.h>
+ #include <limits.h>
+-#include <values.h>
++#include <float.h>
+ #include "exrinput.h"
+ #include "exroutput.h"
+
+diff -rupN exrtools-0-1.4/src/exrpptm.c exrtools-0.4/src/exrpptm.c
+--- exrtools-0-1.4/src/exrpptm.c   2003-12-16 22:22:13.000000000 -0500
++++ exrtools-0.4/src/exrpptm.c 2013-03-12 15:11:00.000000000 -0400
+@@ -32,7 +32,7 @@
+ #include <stdlib.h>
+ #include <stdint.h>
+ #include <limits.h>
+-#include <values.h>
++#include <float.h>
+ #include <getopt.h>
+ #include "exrinput.h"
+ #include "exroutput.h"
+diff -rupN exrtools-0-1.4/src/exrstats.c exrtools-0.4/src/exrstats.c
+--- exrtools-0-1.4/src/exrstats.c   2003-12-16 22:22:13.000000000 -0500
++++ exrtools-0.4/src/exrstats.c 2013-03-12 15:11:00.000000000 -0400
+@@ -24,7 +24,7 @@
+ 
+ #include <math.h>
+ #include <limits.h>
+-#include <values.h>
++#include <float.h>
+ #include <stdio.h>
+ #include "exrinput.h"
+ 

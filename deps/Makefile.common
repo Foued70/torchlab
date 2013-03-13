@@ -5,7 +5,6 @@ CC=
 CXX=
 
 project_dir = $(abspath ../..)
-$(warning $(project_dir))
 
 CLOUDLAB_INSTALL_ROOT ?= $(project_dir)/build/usr/local
 install_root = $(CLOUDLAB_INSTALL_ROOT)
