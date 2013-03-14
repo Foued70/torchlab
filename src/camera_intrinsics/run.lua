@@ -86,27 +86,30 @@ nikon_D5100_w10p5mm = {
    -- copied from exif info
    sensor_w = 23.6, -- mm
    sensor_h = 15.6, -- mm
-   focal    = 10.5, -- mm
+
+   -- from http://michel.thoby.free.fr/Blur_Panorama/Nikkor10-5mm_or_Sigma8mm/Sigma_or_Nikkor/Comparison_Short_Version_Eng.html
+
+   -- From my own experimental measurement, the mapping function of
+   -- the Nikkor 10,5mm AF DX f/2.8 is R = 1.47 x f x sin (0.713 x
+   -- Omega). The measured focal length is f = 10.58mm. This may be
+   -- the farthest from the theoretical formula amongst all
+   -- commercially available circular fisheye lenses that have been
+   -- tested so far. It is therefore nearly abusive to put it in the
+   -- so-called Equi-Solid Angle projection class.
+
+   focal    = 10.58, -- mm
 
    type = "thoby",
-
-   -- computed with opencv
-   a        = -0.3889126043367629,
-   b        =  0.1473722957858515,
-   c        = -0.02577248837247648,
-   p_one    =  0.001583298478238885,
-   p_two    =  0.01061379290496793
 }
 
 camera = nikon_D5100_w10p5mm
 
-
 -- add image data to camera
 
-function update_imagedata(camera,image)
+function update_imagedata(camera,img)
 
-   local w = image:size(3)
-   local h = image:size(2)
+   local w = img:size(3)
+   local h = img:size(2)
 
 
    -- offset to optical center of image (px)
@@ -124,87 +127,113 @@ function update_imagedata(camera,image)
    local dx = cx / hfocal_px -- (px / px ==> dimensionless)
    local dy = cy / vfocal_px
 
-   -- maximum radius (in px) (equivalent to fov) which we want to
-   -- project from camera (default is the diagonal)
-   local max_trad = math.sqrt(dx*dx + dy*dy) -- diag in px / mm
+   -- maximum distance in normalized image coordinates which we want
+   -- to project from camera (default is the diagonal).  Note this is
+   -- on the image plane therefore the normal euclidean pythagorean
+   -- theorem works.
+   local max_diagonal_normalized = math.sqrt(dx*dx + dy*dy)
 
-   -- not sure if we need this
+   -- crop_radius allow's us to look at a region inside image
+   -- boundaries such as when the image circle is less than the sensor
+   -- width or height.
    if not camera.crop_radius then
-      camera.crop_radius = math.sqrt(w*w + h*h)
+      camera.crop_radius = math.sqrt(cx*cx + cy*cy)
    end
 
-   local trad = camera.crop_radius / vfocal_px
+   -- I don't understand why we divide by the vertical fov (in most
+   -- cases we have square pixels, aspect ratio is 1).
+   local diagonal_normalized   = camera.crop_radius / vfocal_px
+   local horizontal_normalized = dx
+   local vertical_normalized   = dy
 
-   printf("trad: %f max_trad: %f",trad,max_trad)
+   printf("normalized : diag: %f max: %f h: %f v: %f",
+          diagonal_normalized, max_diagonal_normalized,
+          horizontal_normalized, vertical_normalized)
 
-   if ((trad == 0) or (trad > max_trad)) then
-      trad = max_trad
+   if ((diagonal_normalized == 0) or
+       (diagonal_normalized > max_diagonal_normalized)) then
+      diagonal_normalized = max_diagonal_normalized
    end
 
-   local tfov = 0
+   local dfov = 0
+   -- horizontal and diagonal fov's are useful for our lookup table
+   local hfov = 0
+   local vfov = 0
+
+   -- we don't have most of these types of lenses but it is easy
+   -- enough to put here.  Perhaps we will include a universal model
+   -- as per Scaramuzza's calibration.
 
    if (camera.type == "rectilinear") then
-      tfov = torch.atan2(trad) -- diag in rad
-   elseif (camera.type == "thoby") then
-      -- thoby : theta = asin((r/f)/(k1 * f))/k2 
-      tfov = torch.asin(trad/k1)/k2
-   else
-      print("don't understand camera lens model requested")
-   end
+      dfov = torch.atan(diagonal_normalized)   -- diag in rad
+      hfov = torch.atan(horizontal_normalized) -- horz in rad
+      vfov = torch.atan(vertical_normalized)   -- vert in rad
 
+   elseif (camera.type == "thoby") then
+      -- thoby : theta = asin((r/f)/(k1 * f))/k2
+      dfov = torch.asin(diagonal_normalized/k1)/k2
+      hfov = torch.asin(horizontal_normalized/k1)/k2
+      vfov = torch.asin(vertical_normalized/k1)/k2
+
+   elseif (camera.type == "equal_angle") then
+      dfov = diagonal_normalized
+      hfov = horizontal_normalized
+      vfov = vertical_normalized
+
+   elseif (camera.type =="equal_area") then
+      if( diagonal_normalized <= 2 ) then
+         dfov = 2 * torch.asin( 0.5 * diagonal_normalized )
+         hfov = 2 * torch.asin( 0.5 * horizontal_normalized )
+         vfov = 2 * torch.asin( 0.5 * vertical_normalized )
+      end
+      if( dfov == 0 ) then
+         error( "equal-area FOV too large" )
+      end
+
+   elseif (camera.type == "stereographic") then
+      dfov = 2 * atan( 0.5 * diagonal_normalized );
+      hfov = 2 * atan( 0.5 * horizontal_normalized );
+      vfov = 2 * atan( 0.5 * vertical_normalized );
+
+   elseif (camera.type == "orthographic") then
+      if( diagonal_normalized <= 1 ) then
+         dfov = torch.asin( diagonal_normalized )
+         hfov = torch.asin( horizontal_normalized )
+         vfov = torch.asin( vertical_normalized )
+      end
+      if( dfov == 0 ) then
+         error( "orthographic FOV too large" );
+      end;
+
+   else
+      error("don't understand camera lens model requested")
+   end
 
    camera.image_w  = w -- px
    camera.image_h  = h -- px
 
    camera.center_x = cx -- px
    camera.center_y = cy -- px
+   camera.hfocal_px = hfocal_px
+   camera.vfocal_px = vfocal_px
 
-   camera.fov = tfov
+   camera.fov  = dfov
+   camera.hfov = hfov
+   camera.vfov = vfov
+
+   camera.diagonal_normalized   = diagonal_normalized
+   camera.horizontal_normalized = horizontal_normalized
+   camera.vertical_normalized   = vertical_normalized
+
 
    return camera
 
 end
 
-
--- FIXME the undistort functions need to be rewritten to generate the
--- lookup tables and
-
--- -- Standard lens correction (pinhole + water)
-
--- -- distortion = 1 + a*r^2 + b*r^4 + c*r^6
--- -- xcorr = x * distortion
--- -- ycorr = y * distortion
-
-
--- -- 
--- -- r = 1 in radial undistort is at the shorter focal length.
--- -- 
--- function radial_undistort(x,y,cam)
---    local r_squared = x^2 + y^2 -- * inv_radius
-
---    -- a*r^2 + b*r^4 + c*r^6
---    local scale = 1 + ((cam.c*r_squared + cam.b)*r_squared + cam.a)*r_squared
-
---    -- rescale -1,1 to px coords in image space
---    return x*scale,y*scale
--- end
-
--- function tangential_undistort(x, y, camera)
---    local r = x^2 + y^2 -- * inv_radius   -- note: r is radius squared
-
---    -- x_corrected = x + [2 * p1 * x * y + p2(r + 2 * x^2)]
---    -- y_corrected = y + [p1(r + 2 * y^2) + 2 * p2 * x * y]
-
---    local x_corrected = (camera.p_two * (r + 2*x^2) + 2 * camera.p_one * x * y)
---    local y_corrected = (camera.p_one * (r + 2*y^2) + 2 * camera.p_two * x * y)
-
---    return x_corrected, y_corrected
-end
-
 -- Maps a camera image to a unit cartesian sphere.
 --
 -- Lens types:
--- 
+--
 --  + rectilinear (perspective) : r = f * tan(theta)
 --  + stereographic             : r = 2 * f * tan(theta/2)
 --  + orthographic              : r = f * sin(theta)
@@ -218,10 +247,11 @@ function camera_to_sphere (camera,scale,debug)
       scale = 1
    end
 
+   local projection = camera.type
+
    -- +++++
    -- (0).a image dimensions
    -- +++++
-
    local imgw = camera.image_w
    local imgh = camera.image_h
    local hlfw = camera.center_x
@@ -229,109 +259,83 @@ function camera_to_sphere (camera,scale,debug)
 
    local proj = camera.projection
    local fov  = camera.fov
+   local hfov = camera.hfov
+   local vfov = camera.vfov
 
    -- +++++
    -- (0).b find dimension of the map
    -- +++++
-
    local mapw = imgw * scale
-
-   if (projection == "rectilinear") then
-      -- rectilinear : theta = r' = tan(theta)
-      max_diag = camera.focal_px * torch.tan(fov)
-   elseif (projection == "thoby") then
-      -- thoby       : (1/f) * r' = k1 * sin(k2*theta)
-      max_diag = k1 * camera.focal_px * torch.sin(k2*fov)
-   elseif (projection == "stereographic") then
-      --  + stereographic             : r = 2 * f * tan(theta/2)
-      max_diag = 2 * camera.focal_px * torch.tan(0.5*fov)
-   elseif (projection == "orthographic") then
-      --  + orthographic              : r = f * sin(theta)
-      max_diag = torch.sin(fov)
-   elseif (projection == "equisolid") then
-      --  + equisolid                 : r = 2 * f * sin(theta/2)
-      max_diag = 2 * camera.focal_px * torch.sin(0.5*fov)
-   else
-      print("ERROR don't understand projection")
-      return nil
-   end
-
    local maph = imgh * scale
+
    local max_imgw = hlfw
    local max_imgh = hlfh
 
    -- +++++
    -- (1) create map of diagonal angles from optical center
    -- +++++
-
    -- create horizontal and vertical angles (equirectangular)
-   local xrow = torch.linspace(-map_fovw,map_fovw,mapw)
-   local ycol = torch.linspace(-map_fovh,map_fovh,maph)
+   -- x,y lookup in spherical map from -radians,radians at resolution
+   xrow = torch.linspace(-hfov,hfov,mapw)
+   ycol = torch.linspace(-vfov,vfov,maph)
 
+   -- local tempx = xrow:clone():cos():resize(1,mapw):expand(maph,mapw) -- cos(a)
+   -- local tempy = yrow:clone():cos():resize(maph,1):expand(maph,mapw) -- cos(b)
    -- pythagorean theorem on a unit sphere is cos(c) = cos(a)cos(b)
-   local r_map = xrow:repeatTensor(maph,1):cos() -- cos(a)
-   r_map:cmul(ycol:repeatTensor(mapw,1):t():cos()) -- * cos(b)
-   r_map:acos() -- c = arccos(cos(a)cos(b)
+   -- local theta_map = torch.Tensor(maph,mapw)
+   -- theta_map:cmul(tempx,tempy)
+   -- theta_map:acos() -- c = arccos(cos(a)cos(b)
+   xsqr = xrow:clone():cmul(xrow):resize(1,mapw):expand(maph,mapw) -- x^2
+   ysqr = ycol:clone():cmul(ycol):resize(maph,1):expand(maph,mapw) -- 
+
+   theta_map = torch.add(xsqr,ysqr)
+   theta_map:sqrt()
 
    -- +++++
-   -- (2) find the ratio r' / r for each entry in map
+   -- (2) replace theta for each entry in map with r
    -- +++++
-
-   local rprime_map = r_map:clone() -- copy
+   r_map = theta_map:clone() -- copy
 
    if (projection == "rectilinear") then
       -- rectilinear : (1/f) * r' = tan(theta)
-      rprime_map:tan()
+      r_map:tan()
    elseif (projection == "thoby") then
       -- thoby       : (1/f) * r' = k1 * sin(k2*theta)
-      rprime_map:mul(k2):sin():mul(k1)
+      r_map:mul(k2):sin():mul(k1)
    elseif (projection == "stereographic") then
       --  + stereographic             : r = 2 * f * tan(theta/2)
-      rprime_map:mul(0.5):tan():mul(2)
+      r_map:mul(0.5):tan():mul(2)
    elseif (projection == "orthographic") then
       --  + orthographic              : r = f * sin(theta)
-      rprime_map:sin()
+      r_map:sin()
    elseif (projection == "equisolid") then
       --  + equisolid                 : r = 2 * f * sin(theta/2)
-      rprime_map:mul(0.5):sin():mul(2)
+      r_map:mul(0.5):sin():mul(2)
    else
       print("ERROR don't understand projection")
       return nil
    end
 
-   -- ratio (dimensions cancel so we can just use unit sphere coordinates)
-   local ratio_map = rprime_map:clone()
-   ratio_map:cdiv(r_map)           -- ratio = r' / r
 
    -- +++++
-   -- (3) x,y index (map unit sphere to pixel coords)
+   -- (3) x,y index (map unit sphere to normlized pixel coords)
    -- +++++
 
-   -- **** check this **
-   -- we assume that the ratio of r' to r corresponds to x' to x and y' to y
+   -- try simplistic map from Hugin lens correction which seems
+   -- completely wrong to me.
 
-   -- torch indexes from 1,size_x
-   local xval = hlfw - 0.5
-   local yval = hlfh - 0.5
+   -- make the ratio (new divided by old)
+   r_map:cdiv(r_map,theta_map)
 
-   -- start with old x and y values centered at zero
-   local xindex = torch.linspace(-max_imgw,max_imgw,mapw)
-   local yindex = torch.linspace(-max_imgh,max_imgh,maph)
+   xmap = xrow:repeatTensor(maph,1)
+   xmap:cmul(r_map):mul(camera.hfocal_px):add(camera.center_x)
+   ymap = ycol:repeatTensor(mapw,1):t():contiguous() 
+   ymap:cmul(r_map):mul(camera.vfocal_px):add(camera.center_y)
 
-   local xmap = xindex:repeatTensor(maph,1)
-   xmap:cmul(ratio_map)
-
-   -- NEW we need to use pythagorean theorem to find y
-   --   (cf. white board proof w/ MLC [MS])
-   -- y = math.sqrt(r^2 - x^2)
-
-   -- reuse rprime_map as the r' values are there.
-   ymap = rprime_map:mul(camera.focal_px)
-   ymap:mul(camera.focal_px):pow(2):add(-1,torch.pow(xmap,2)):sqrt()
-
-   -- recenter the maps to image coordinates
-   ymap:add(hlfh + 0.5)
-   xmap:add(hlfw + 0.5)
+   -- know r, the diagonal, in normalized
+   -- coordinates.  x and y are scaled by this ratio and the ratio x
+   -- to y so use euclidean pythagorean theorem to get x and y in
+   -- normalized image coordinates for each location.
 
    -- +++++++
    -- (4) make mask for out of bounds values
@@ -357,11 +361,10 @@ function camera_to_sphere (camera,scale,debug)
    -- to map (1,1) ::  y = 0  * stride + x = 1 ==> 1
    -- to map (2,1) ::  y = 1  * stride + x = 1 ==> stride + 1 etc.
 
-   outmap:mul(imgw):add(xmap + 0.5)
+   outmap:add(xmap + 0.5)
 
    -- remove spurious out of bounds from output
    outmap[mask] = 1
-
    local index_map = outmap:long() -- round (+0.5 above) and floor
 
    -- make 1D
@@ -380,9 +383,9 @@ function camera_to_sphere (camera,scale,debug)
    sphere_map = {
       lookup_table     = index_map, -- 1D LongTensor for fast lookups
       mask             = mask,      -- ByteTensor invalid locations marked with 1
-      radial_distance  = r_map,     -- map of distances from optical center (theta)
-      fov_width        = map_fovw,  -- field of view in radians (width)
-      fov_height       = map_fovh,  -- field of view in radians (height)
+      radial_distance  = theta_map, -- map of distances from optical center (theta)
+      fov_width        = fovw,      -- field of view in radians (width)
+      fov_height       = fovh,      -- field of view in radians (height)
       width            = mapw,      -- dimensions to display map in 2D. width
       height           = maph       -- and height.
    }
@@ -452,7 +455,7 @@ img = images[1]
 update_imagedata(camera,img)
 
 sys.tic()
-map = projection_to_sphere(camera,"thoby")
+map = camera_to_sphere(camera)
 printf(" + build look up table: %2.4fs",sys.toc())
 
 sys.tic()
@@ -469,3 +472,5 @@ printf(" + (collect garbage) : %2.4fs",sys.toc())
 
 image.display{image={image.scale(output_image, output_image:size(2)*0.5, output_image:size(3)*0.5)}}
 image.display{image=img}
+
+
