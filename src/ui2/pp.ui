@@ -56,14 +56,14 @@
    <item>
     <layout class="QGridLayout" name="gridLayout">
      <item row="0" column="0">
-      <widget class="QPushButton" name="btnImgFolder">
+      <widget class="QPushButton" name="btnPicsFolder">
        <property name="text">
-        <string>Set Img Folder</string>
+        <string>Set Pics Folder</string>
        </property>
       </widget>
      </item>
      <item row="0" column="1">
-      <widget class="QLabel" name="labelImgFolder">
+      <widget class="QLabel" name="labelPicsFolder">
        <property name="text">
         <string/>
        </property>
@@ -105,7 +105,7 @@
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QLabel" name="labelImgCurrent">
+      <widget class="QLabel" name="labelPicCurrent">
        <property name="text">
         <string/>
        </property>
@@ -156,10 +156,10 @@
     </layout>
    </item>
   </layout>
-  <zorder>btnImgFolder</zorder>
+  <zorder>btnPicsFolder</zorder>
   <zorder>btnPoseFile</zorder>
   <zorder>scrollArea</zorder>
-  <zorder>labelImgFolder</zorder>
+  <zorder>labelPicsFolder</zorder>
   <zorder>labelPoseFile</zorder>
   <zorder>labelSweep</zorder>
   <zorder>labelImage</zorder>
@@ -168,7 +168,7 @@
   <zorder>btnNext</zorder>
   <zorder>btnPrev</zorder>
   <zorder>labelSweepCurrent</zorder>
-  <zorder>labelImgCurrent</zorder>
+  <zorder>labelPicCurrent</zorder>
   <zorder>poseOrigText</zorder>
   <zorder>newPoseText</zorder>
   <zorder></zorder>
