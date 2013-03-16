@@ -4,8 +4,12 @@ require 'torch'
 
 local qtuiloader = require('qtuiloader')
 local paths = require('paths')
+local fs = require('util/fs')
 
 local Pose = torch.class('Pose') -- simplified Pose, maybe should use the Pose in util?
+local Sweep = torch.class('Sweep')
+local Pic = torch.class('Pic')
+local PosePicker = torch.class('PosePicker')
 
 function Pose:__init(poseStr)
   local poseVals = torch.Tensor(1, 11)
@@ -29,28 +33,24 @@ function Pose:__init(poseStr)
   self.degree_per_px_y = poseVals:select(2,11)
 end
 
-local Sweep = torch.class('Sweep')
-
-function Sweep:__init(folder)
+function Sweep:__init(folder)  
   self.path = folder
   self.name = paths.basename(folder)
   self.pics = {}
-  for f in paths.files(folder) do
-    table.insert(self.pics, Pic.new(folder..f))
+  
+  for i, f in ipairs(fs.files_only(folder, ".jpg", ".png")) do
+    table.insert(self.pics, Pic.new(f))
   end
 end
-
-local Pic = torch.class('Pic')
   
-function Pic:__init(file)
-  self.path = file
-  self.name = paths.basename(file)
+function Pic:__init(filePath)
+  self.path = filePath
+  self.name = paths.basename(filePath)
 end
 
-local PosePicker = torch.class('PosePicker')
-function PosePicker:__init()
-  self.sweeps = {}
+function PosePicker:__init()  
   self.poses = {}
+  self:resetSweeps()
   
   self.ui = qtuiloader.load(paths.dirname(paths.thisfile())..'/pp.ui')  
   qt.connect(self.ui.btnPicsFolder, 'clicked()', function() self.loadFolder(self) end)
@@ -62,19 +62,37 @@ end
 
 function PosePicker:loadFolder() 
   self.picsFolder = qt.QFileDialog.getExistingDirectory(self.ui, "Select Folder"):tostring()
-
-  if not self.picsFolder or string.len(self.picsFolder) == 0 then return end
-  self.ui.labelPicsFolder:setText(self.picsFolder)  
-  self:savePoseData()
-  self.sweeps = {} 
+  
+  if not self.picsFolder or string.len(self.picsFolder) == 0 or not paths.dirp(self.picsFolder) then 
+    self.ui.labelPicsFolder:setText("could not load folder")
+    return 
+  end
+  
+  self.ui.labelPicsFolder:setText(paths.basename(self.picsFolder))
+  self:resetSweeps()
+  
+  local picsDirs = fs.dirs_only(self.picsFolder)
+  if picsDirs and #picsDirs > 0 then
+    for i, v in ipairs(picsDirs) do
+      table.insert(self.sweeps, Sweep.new(v))
+    end
+  else
+    table.insert(self.sweeps, Sweep.new(self.picsFolder))
+  end
+  self.lastSweepIdx = #self.sweeps
+  self.lastPicIdx = #self.sweeps[self.lastSweepIdx].pics
+  self:updateCurrPic()
 end
 
 function PosePicker:loadPoseFile()
-  local poseFile = qt.QFileDialog.getOpenFileName(self.ui, "Select Pose File", '', "Text Files (*.txt)")  
-  self.ui.labelPoseFile:setText(poseFile)
-
-  poseFile = poseFile:tostring()  
-  if not poseFile or string.len(poseFile) == 0 then return end
+  local poseFile = qt.QFileDialog.getOpenFileName(self.ui, "Select Pose File", '', "Text Files (*.txt)"):tostring()  
+  
+  if not poseFile or string.len(poseFile) == 0 or not paths.filep(poseFile) then
+    self.ui.labelPoseFile:setText("could not load pose file")
+    return
+  end
+  
+  self.ui.labelPoseFile:setText(paths.basename(poseFile))
 
   local f, err = io.open(poseFile, "r")
   if err then self.ui.labelPoseFile:setText(err) return end
@@ -85,27 +103,82 @@ function PosePicker:loadPoseFile()
     table.insert(self.poses, Pose.new(line))
   end
   f:close()
+  
+  self:updateCurrPic()
 end
 
 function PosePicker:savePoseData()
-  if #self.sweeps == 0 then p('no sweeps') return end
+  if not self.sweeps or #self.sweeps == 0 then p('no sweeps') return end
   if not paths.dirp(self.picsFolder) then p('invalid folder to write to') return end
   
   local f, err = io.open(self.picsFolder..'poses.txt', 'w')
   if err then p('error opening file', err) return end
     
   for i, sweep in ipairs(self.sweeps) do
-    -- write the pic path and pic pose 
+    -- TODO: write the pic path and pic pose 
   end
   f:close()
 end
 
+function PosePicker:resetSweeps()
+  self:savePoseData()
+  self.sweeps = {}
+  self.currSweepIdx = 1
+  self.currPicIdx = 1
+  self.lastSweepIdx = 1
+  self.lastPicIdx = 1
+end
+
+function PosePicker:defaultPicPose(i)
+  if #self.poses >= i then 
+    return self.poses[i]
+  else
+    return self.poses[1]  
+  end
+end
+
+function PosePicker:updateCurrPic()
+  -- next and prev btns
+  self.ui.btnNext:setDisabled(self.currSweepIdx == self.lastSweepIdx and self.currPicIdx == self.lastPicIdx)
+  self.ui.btnPrev:setDisabled(self.currPicIdx == 1 and self.currSweepIdx == 1)
+  
+  -- sweep and pic labels that indicate which sweep and which pic we're on  
+  self.ui.labelCurrSweep:setText(string.format("%s %d/%d", self.sweeps[self.currSweepIdx].name, self.currSweepIdx, self.lastSweepIdx))
+  local currSweepPics = self.sweeps[self.currSweepIdx].pics
+  self.ui.labelCurrPic:setText(string.format("%s %d/%d", currSweepPics[self.currPicIdx].name, self.currPicIdx, #currSweepPics))
+
+  -- update the orig pose label
+  local defaultPose = self:defaultPicPose(self.currSweepIdx)
+  if defaultPose then
+    self.ui.poseOrigText:setText(string.format("%s", defaultPose.name))
+  end
+    
+  -- update the gl widget sandwich with the current pic the pic's pose
+  local currPic = self.sweeps[self.currSweepIdx].pics[self.currPicIdx]    
+  if not currPic.pose then currPic.pose = defaultPose end
+  
+  
+end
+
 function PosePicker:next()
-  p('next')
+  if self.currPicIdx == #self.sweeps[self.currSweepIdx].pics then
+    self.currSweepIdx = self.currSweepIdx+1
+    self.currPicIdx = 1
+  else
+    self.currPicIdx = self.currPicIdx+1
+  end
+  
+  self:updateCurrPic()
 end
 
 function PosePicker:prev()
-  p('prev')
+  if self.currPicIdx == 1 then
+    self.currSweepIdx = self.currSweepIdx-1
+    self.currPicIdx = #self.sweeps[self.currSweepIdx].pics
+  else
+    self.currPicIdx = self.currPicIdx-1
+  end
+  self:updateCurrPic()
 end
 
 

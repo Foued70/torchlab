@@ -91,7 +91,7 @@
       </widget>
      </item>
      <item row="2" column="1">
-      <widget class="QLabel" name="labelSweepCurrent">
+      <widget class="QLabel" name="labelCurrSweep">
        <property name="text">
         <string/>
        </property>
@@ -105,14 +105,14 @@
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QLabel" name="labelPicCurrent">
+      <widget class="QLabel" name="labelCurrPic">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
      <item row="4" column="0">
-      <widget class="QLabel" name="labelPoseOrig">
+      <widget class="QLabel" name="labelOrigPose">
        <property name="text">
         <string>Original Pose</string>
        </property>
@@ -141,6 +141,9 @@
      </item>
      <item row="6" column="0">
       <widget class="QPushButton" name="btnPrev">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="text">
         <string>Prev</string>
        </property>
@@ -148,6 +151,9 @@
      </item>
      <item row="6" column="1">
       <widget class="QPushButton" name="btnNext">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="text">
         <string>Next</string>
        </property>
@@ -163,12 +169,12 @@
   <zorder>labelPoseFile</zorder>
   <zorder>labelSweep</zorder>
   <zorder>labelImage</zorder>
-  <zorder>labelPoseOrig</zorder>
+  <zorder>labelOrigPose</zorder>
   <zorder>labelNewPose</zorder>
   <zorder>btnNext</zorder>
   <zorder>btnPrev</zorder>
-  <zorder>labelSweepCurrent</zorder>
-  <zorder>labelPicCurrent</zorder>
+  <zorder>labelCurrSweep</zorder>
+  <zorder>labelCurrPic</zorder>
   <zorder>poseOrigText</zorder>
   <zorder>newPoseText</zorder>
   <zorder></zorder>
