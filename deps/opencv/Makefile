@@ -2,7 +2,8 @@ include ../Makefile.common
 
 ver=2.4.4
 
-url=http://downloads.sourceforge.net/project/opencvlibrary/opencv-unix/$(ver)/OpenCV-$(ver)-beta.tar.bz2
+#url=http://downloads.sourceforge.net/project/opencvlibrary/opencv-unix/$(ver)/OpenCV-$(ver)-beta.tar.bz2
+url=http://downloads.sourceforge.net/project/opencvlibrary/opencv-unix/$(ver)/OpenCV-$(ver)a.tar.bz2
 
 tar_file=$(build_dir)/deps/OpenCV-$(ver)-beta.tar.bz2
 unpack=$(build_dir)/deps/OpenCV-$(ver)
@@ -11,7 +12,7 @@ install=$(install_root)/lib/libopencv_core.$(ver).dylib
 
 args = $(default_cmake_args) \
 	-DBUILD_opencv_highgui:BOOL=OFF \
-	-DBUILD_opencv_video:BOOL=OFF \
+	-DBUILD_opencv_video:BOOL=ON \
 	-DBUILD_opencv_java:BOOL=OFF
 
 all: $(install)

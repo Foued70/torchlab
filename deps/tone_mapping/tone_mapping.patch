@@ -1,0 +1,979 @@
+Binary files tone_mapping/.DS_Store and TONE_MAPPING_new/.DS_Store differ
+diff -ruPN tone_mapping/Makefile TONE_MAPPING_new/Makefile
+--- tone_mapping/Makefile	2006-06-05 15:58:52.000000000 -0400
++++ TONE_MAPPING_new/Makefile	2013-03-14 11:44:06.000000000 -0400
+@@ -24,8 +24,8 @@
+ 
+ 
+ # OpenEXR section. You may need to change EXR_INCDIR and EXR_LIBDIR.
+-EXR_INCDIR = -I/usr/include/OpenEXR
+-EXR_LIBDIR = 
++EXR_INCDIR = -I/Users/lihui815/cloudlab/build/usr/local/include/OpenEXR
++EXR_LIBDIR = -L/Users/lihui815/cloudlab/build/usr/local/lib
+ EXR_LIBS   = $(EXR_LIBDIR) -lIlmImf -lImath -lHalf -lIex -lz
+ 
+ # FFTW section. You may need to change FFTW_INCDIR and FFTW_LIBDIR.
+@@ -47,7 +47,7 @@
+ LIBDIR	  = 
+ LIBS      = $(LIBDIR) $(EXR_LIBS) $(FFTW_LIBS) -lm
+ OBJECTS   = tone_mapping.o fft_3D/fft_3D.o
+-TARGET    = tone_mapping
++TARGET    = /Users/lihui815/cloudlab/build/usr/local/bin/tone_mapping
+ 
+ 
+ # Command section
+Binary files tone_mapping/fft_3D/.DS_Store and TONE_MAPPING_new/fft_3D/.DS_Store differ
+diff -ruPN tone_mapping/fft_3D/support_3D.cpp TONE_MAPPING_new/fft_3D/support_3D.cpp
+--- tone_mapping/fft_3D/support_3D.cpp	2006-01-31 18:35:23.000000000 -0500
++++ TONE_MAPPING_new/fft_3D/support_3D.cpp	2013-03-06 12:07:30.000000000 -0500
+@@ -26,6 +26,8 @@
+   \endverbatim
+ */
+ 
++#include "string.h"
++#include "cstdlib"
+ #include "support_3D.h"
+ 
+ namespace FFT{
+diff -ruPN tone_mapping/include/linear_bf.h TONE_MAPPING_new/include/linear_bf.h
+--- tone_mapping/include/linear_bf.h	2006-01-31 18:34:34.000000000 -0500
++++ TONE_MAPPING_new/include/linear_bf.h	2013-03-14 10:47:57.000000000 -0400
+@@ -48,12 +48,10 @@
+ 
+   template <typename Array>
+   void linear_BF(const Array&    input,
+-		 const Array&    base,
+ 		 const real_type space_sigma,
+ 		 const real_type range_sigma,
+ 		 const real_type space_sampling,
+ 		 const real_type range_sampling,
+-		 const bool      early_division,
+ 		 Array* const    result);
+ 
+   template <typename Array>
+diff -ruPN tone_mapping/include/msg_stream.h TONE_MAPPING_new/include/msg_stream.h
+--- tone_mapping/include/msg_stream.h	2005-11-30 19:22:33.000000000 -0500
++++ TONE_MAPPING_new/include/msg_stream.h	2013-03-06 12:04:19.000000000 -0500
+@@ -219,7 +219,8 @@
+   w.out->flush();
+   
+   if (w.is_fatal){
+-    exit(1);
++    /*exit(1);*/
++      return w;
+   }
+ 
+   w.output_header = true;
+diff -ruPN tone_mapping/include/tone_map.h TONE_MAPPING_new/include/tone_map.h
+--- tone_mapping/include/tone_map.h	1969-12-31 19:00:00.000000000 -0500
++++ TONE_MAPPING_new/include/tone_map.h	2013-03-07 12:00:55.000000000 -0500
+@@ -0,0 +1,298 @@
++/*! \file
++  \verbatim
++  
++    Copyright (c) 2006, Sylvain Paris and Frédo Durand
++
++    Permission is hereby granted, free of charge, to any person
++    obtaining a copy of this software and associated documentation
++    files (the "Software"), to deal in the Software without
++    restriction, including without limitation the rights to use, copy,
++    modify, merge, publish, distribute, sublicense, and/or sell copies
++    of the Software, and to permit persons to whom the Software is
++    furnished to do so, subject to the following conditions:
++
++    The above copyright notice and this permission notice shall be
++    included in all copies or substantial portions of the Software.
++
++    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++    DEALINGS IN THE SOFTWARE.
++
++  \endverbatim
++*/
++
++#include <cmath>
++
++#include <algorithm>
++#include <fstream>
++#include <iostream>
++#include <sstream>
++
++#include "load_EXR.h"
++#include "linear_bf.h"
++
++
++using namespace std;
++
++    
++    typedef Image_file::EXR::image_type image_type;
++    typedef image_type::channel_type    channel_type;
++    
++    /* Attributes */
++    
++    image_type input_RGBA;
++    double width, height, contrast;
++    
++    const double space_sigma_mult = 0.02;
++    const double range_sigma_mult = 0.4;
++
++    inline double log_function(const double x){
++
++        static const double inv_log_base = 1.0 / log(10.0);
++  
++        return log(x) * inv_log_base;
++    }
++
++
++    inline double exp_function(const double x){
++
++        return pow(10.0,x);
++    }
++    
++    inline double get_min_value(){
++        
++        channel_type intensity_channel(width,height);
++        channel_type log_intensity_channel(width,height);
++        
++        for(channel_type::iterator
++            i     = intensity_channel.begin(),
++            i_end = intensity_channel.end(),
++            r     = input_RGBA[image_type::RED].begin(),
++            g     = input_RGBA[image_type::GREEN].begin(),
++            b     = input_RGBA[image_type::BLUE].begin(),
++            l     = log_intensity_channel.begin();
++            i != i_end;
++            i++,r++,g++,b++,l++){
++            
++            // The input value are not gamma-corrected. We do not need to worry about that.
++            
++            *i = ((20.0*(*r) + 40.0*(*g) + 1.0*(*b)) / 61.0);
++            *l = log_function(*i);
++        }
++        
++        double min_value = *min_element(filtered_log_intensity_channel.begin(),
++                                        filtered_log_intensity_channel.end());
++        return min_value;
++    }
++    
++    inline double get_max_value(){
++        
++        channel_type intensity_channel(width,height);
++        channel_type log_intensity_channel(width,height);
++        
++        for(channel_type::iterator
++            i     = intensity_channel.begin(),
++            i_end = intensity_channel.end(),
++            r     = input_RGBA[image_type::RED].begin(),
++            g     = input_RGBA[image_type::GREEN].begin(),
++            b     = input_RGBA[image_type::BLUE].begin(),
++            l     = log_intensity_channel.begin();
++            i != i_end;
++            i++,r++,g++,b++,l++){
++            
++            // The input value are not gamma-corrected. We do not need to worry about that.
++            
++            *i = ((20.0*(*r) + 40.0*(*g) + 1.0*(*b)) / 61.0);
++            *l = log_function(*i);
++        }
++        
++        double max_value = *max_element(filtered_log_intensity_channel.begin(),
++                                        filtered_log_intensity_channel.end());
++        return max_value;
++    }
++
++    inline double get_gamma(double max_val, double, min_val){
++        
++        const double gamma = log_function(contrast) /  (max_value - min_value);
++        return gamma;
++    }
++
++    inline double get_scale_factor(double max_val, double gamma){
++        
++        double scale_factor = 1.0 / exp_function(max_value * gamma);
++        
++        return scale_factor
++    }
++    
++    inline void load_image(char* input_EXR, char* output_PPM, char* input_contrast){
++        
++        cout<<"Load the input image '"<<argv[1]<<"'... "<<flush;
++        
++        Image_file::EXR::load(input_EXR,&input_RGBA);
++        
++        istringstream contrast_in(input_contrast);
++        contrast_in>>contrast;
++        
++        width  = input_RGBA.width();
++        height = input_RGBA.height();
++        
++        cout<<"Done"<<endl;
++    }
++
++    inline int process_image(char* output_ppm, double gamma, double scale_factor){
++    
++        cout<<"Compute the log-intensity channel... "<<flush;
++    
++        channel_type intensity_channel(width,height);
++        channel_type log_intensity_channel(width,height);
++    
++        for(channel_type::iterator
++            i     = intensity_channel.begin(),
++            i_end = intensity_channel.end(),
++            r     = input_RGBA[image_type::RED].begin(),
++            g     = input_RGBA[image_type::GREEN].begin(),
++            b     = input_RGBA[image_type::BLUE].begin(),
++            l     = log_intensity_channel.begin();
++            i != i_end;
++            i++,r++,g++,b++,l++){
++        
++            // The input value are not gamma-corrected. We do not need to worry about that.
++        
++            *i = ((20.0*(*r) + 40.0*(*g) + 1.0*(*b)) / 61.0);
++            *l = log_function(*i);
++        }
++    
++        cout<<"Done"<<endl;
++    
++    
++        // ##############################################################
++    
++    
++        cout<<"Filter the log-intensity channel... "<<flush;
++    
++        channel_type filtered_log_intensity_channel(width,height);
++    
++        FFT::Support_3D::set_fftw_flags(FFTW_ESTIMATE); // parameter for FFTW
++    
++        const double space_sigma = space_sigma_mult * min(width,height);
++        const double range_sigma = range_sigma_mult;
++    
++        Image_filter::linear_BF(log_intensity_channel,
++                            space_sigma,
++                            range_sigma,
++                            &filtered_log_intensity_channel);
++    
++        cout<<"Done"<<endl;
++    
++    
++        // ##############################################################
++    
++    
++        cout<<"Compute the detail channel... "<<flush;
++    
++        channel_type detail_channel(width,height);
++    
++        for(channel_type::iterator
++            l     = log_intensity_channel.begin(),
++            l_end = log_intensity_channel.end(),
++            f     = filtered_log_intensity_channel.begin(),
++            d     = detail_channel.begin();
++            l != l_end;
++            l++,f++,d++){
++        
++                *d = (*l) - (*f);
++        }
++    
++        cout<<"Done"<<endl;
++    
++    
++        // ##############################################################
++        
++        channel_type new_intensity_channel(width,height);
++    
++        for(channel_type::iterator
++            f     = filtered_log_intensity_channel.begin(),
++            f_end = filtered_log_intensity_channel.end(),
++            d     = detail_channel.begin(),
++            n     = new_intensity_channel.begin();
++            f != f_end;
++            f++,d++,n++){
++        
++                *n = exp_function((*f) * gamma + (*d));
++        }
++    
++        cout<<"Done"<<endl;
++    
++    
++        // ##############################################################
++    
++    
++        cout<<"Recompose the color image... "<<flush;
++    
++        image_type output_RGBA = input_RGBA;
++    
++        for(channel_type::iterator
++            n     = new_intensity_channel.begin(),
++            n_end = new_intensity_channel.end(),
++            i     = intensity_channel.begin(),
++            r     = output_RGBA[image_type::RED].begin(),
++            g     = output_RGBA[image_type::GREEN].begin(),
++            b     = output_RGBA[image_type::BLUE].begin();
++            n != n_end;
++            n++,i++,r++,g++,b++){
++        
++                const double ratio = (*n) / (*i);
++        
++                *r *= ratio;
++                *g *= ratio;
++                *b *= ratio;
++        
++        }
++    
++        cout<<"Done"<<endl;
++    
++    
++        // ##############################################################
++    
++    
++        cout<<"Write the output image '"<<output_ppm<<"'... "<<flush;
++    
++        ofstream ppm_out(output_ppm,ios::binary);
++    
++        ppm_out<<"P6";
++        ppm_out<<' ';
++        ppm_out<<width;
++        ppm_out<<' ';
++        ppm_out<<height;
++        ppm_out<<' ';
++        ppm_out<<"255";
++        ppm_out<<'\n';
++    
++        for(unsigned y=0;y<height;y++){
++        
++            const unsigned ry = height - y - 1; // We flip the vertical axis.
++        
++            for(unsigned x=0;x<width;x++){
++            
++                // The following lines corresponds to values *without* gamma-correction.
++                const char r = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*0.5* (scale_factor*output_RGBA[image_type::RED](x,ry) + pow(scale_factor*output_RGBA[image_type::RED](x,ry),1.0/2.2))));
++                const char g = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*0.5* (scale_factor*output_RGBA[image_type::GREEN](x,ry) + pow(scale_factor*output_RGBA[image_type::GREEN](x,ry),1.0/2.2))));
++                const char b = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*0.5* (scale_factor*output_RGBA[image_type::BLUE](x,ry) + pow(scale_factor*output_RGBA[image_type::BLUE](x,ry),1.0/2.2))));
++            
++                ppm_out<<r<<g<<b;
++            }
++        }
++    
++        ppm_out.flush();
++        ppm_out.close();
++    
++        cout<<"Done"<<endl;
++
++    
++    
++}
+diff -ruPN tone_mapping/tone_mapping.cpp TONE_MAPPING_new/tone_mapping.cpp
+--- tone_mapping/tone_mapping.cpp	2006-02-16 18:11:40.000000000 -0500
++++ TONE_MAPPING_new/tone_mapping.cpp	2013-03-13 10:56:40.000000000 -0400
+@@ -1,30 +1,30 @@
+ /*! \file
+-  \verbatim
+-  
+-    Copyright (c) 2006, Sylvain Paris and Frédo Durand
+-
+-    Permission is hereby granted, free of charge, to any person
+-    obtaining a copy of this software and associated documentation
+-    files (the "Software"), to deal in the Software without
+-    restriction, including without limitation the rights to use, copy,
+-    modify, merge, publish, distribute, sublicense, and/or sell copies
+-    of the Software, and to permit persons to whom the Software is
+-    furnished to do so, subject to the following conditions:
+-
+-    The above copyright notice and this permission notice shall be
+-    included in all copies or substantial portions of the Software.
+-
+-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+-    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+-    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+-    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+-    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+-    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+-    DEALINGS IN THE SOFTWARE.
+-
+-  \endverbatim
+-*/
++ \verbatim
++ 
++ Copyright (c) 2006, Sylvain Paris and Frédo Durand
++ 
++ Permission is hereby granted, free of charge, to any person
++ obtaining a copy of this software and associated documentation
++ files (the "Software"), to deal in the Software without
++ restriction, including without limitation the rights to use, copy,
++ modify, merge, publish, distribute, sublicense, and/or sell copies
++ of the Software, and to permit persons to whom the Software is
++ furnished to do so, subject to the following conditions:
++ 
++ The above copyright notice and this permission notice shall be
++ included in all copies or substantial portions of the Software.
++ 
++ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++ EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++ DEALINGS IN THE SOFTWARE.
++ 
++ \endverbatim
++ */
+ 
+ #include <cmath>
+ 
+@@ -37,224 +37,353 @@
+ #include "linear_bf.h"
+ 
+ 
+-using namespace std; 
++using namespace std;
+ 
+ 
+ typedef Image_file::EXR::image_type image_type;
+ typedef image_type::channel_type    channel_type;
+ 
+-
++struct tone_map_struct{
++    int width;
++    int height;
++    image_type input_RGBA;
++    channel_type filtered_log_intensity_channel;
++    channel_type log_intensity_channel;
++    channel_type intensity_channel;
++};
++
++
++int numPics;
++double contrast;
++
++const double space_sigma_mult = 0.02;
++const double range_sigma_mult = 0.4;
++const double detail_boost = 2.0;
++const double backlight_boost = 0.5;
+ 
+ inline double log_function(const double x){
+-
+-  static const double inv_log_base = 1.0 / log(10.0);
+-  
+-  return log(x) * inv_log_base;
++    
++    static const double inv_log_base = 1.0 / log(10.0);
++    
++    return log(x) * inv_log_base;
+ }
+ 
+ 
+ inline double exp_function(const double x){
+-
+-  return pow(10.0,x);
++    
++    return pow(10.0,x);
+ }
+ 
++inline double get_min_value(channel_type fflic){
++    
++    double min_value = *min_element(fflic.begin(), fflic.end());
++    return min_value;
++}
+ 
++inline double get_max_value(channel_type fflic){
++    
++    double max_value = *max_element(fflic.begin(), fflic.end());
++    return max_value;
++}
+ 
+-int main(int argc,char** argv){
+-
+-  if (argc!=4){
+-    cerr<<"error: wrong arguments"<<endl;
+-    cerr<<"usage: "<<argv[0]<<" input.exr output.ppm contrast"<<endl;
+-    cerr<<"\nadvice:"<<endl;
+-    cerr<<"meaningful values for the contrast are between 5.0 and 200.0.\n50.0 always gives satisfying results."<<endl;
+-    exit(1);
+-  }
+-
+-
+-  // ##############################################################
+-
+-  
+-  cout<<"Load the input image '"<<argv[1]<<"'... "<<flush;
+-
+-  image_type input_RGBA;
+-  Image_file::EXR::load(argv[1],&input_RGBA);
+-
+-  const unsigned width  = input_RGBA.width();
+-  const unsigned height = input_RGBA.height();
++inline double get_mean_value(channel_type fflic){
++    double total_value = 0.0;
++    double numCells = 0.0;
++    for(channel_type::iterator
++        f     = fflic.begin(),
++        f_end = fflic.end();
++        f != f_end;
++        f++){
++        
++        // The input value are not gamma-corrected. We do not need to worry about that.
++        numCells++;
++        total_value += exp(*f);
++    }
++    
++    double mean_value = total_value/numCells;
++    
++}
+ 
+-  double contrast;
+-  istringstream contrast_in(argv[3]);
+-  contrast_in>>contrast;
+-  
+-  cout<<"Done"<<endl;
++inline double get_gamma(double max_value, double min_value){
++    
++    const double gamma = log_function(contrast) /  (max_value - min_value);
++    return gamma;
++}
+ 
++inline double get_gamma_lo(double mean_value, double min_value){
++    
++    const double gamma = log_function(contrast) /  (2*(mean_value - min_value));
++    return gamma;
++}
+ 
+-  // ##############################################################
++inline double get_gamma_hi(double mean_value, double max_value){
++    
++    const double gamma = log_function(contrast) /  (2*(max_value - mean_value));
++    return gamma;
++}
+ 
+-  
+-  cout<<"Compute the log-intensity channel... "<<flush;
++inline double get_scale_factor(double max_value, double gamma){
++    
++    double scale_factor = 1.0 / exp_function(max_value * gamma);
++    
++    return scale_factor;
++}
+ 
+-  channel_type intensity_channel(width,height);
+-  channel_type log_intensity_channel(width,height);
++inline double get_scale_factor_hilo(double max_value, double mean_value, double gamma_hi, double gamma_lo){
++    
++    double scale_factor = 1.0 / exp_function(mean_value * gamma_lo + (max_value-mean_value) * gamma_hi);
++    
++    return scale_factor;
++}
+ 
+-  for(channel_type::iterator
+-	i     = intensity_channel.begin(),
+-	i_end = intensity_channel.end(),
+-	r     = input_RGBA[image_type::RED].begin(),
+-	g     = input_RGBA[image_type::GREEN].begin(),
+-	b     = input_RGBA[image_type::BLUE].begin(),
+-	l     = log_intensity_channel.begin();
+-      i != i_end;
+-      i++,r++,g++,b++,l++){
++inline void load_image(char* input_EXR, struct tone_map_struct* input_tonemap){
++    
++    cout<<"Load the input image '"<<input_EXR<<"'... "<<flush;
++    image_type input_RGBA;
++    
++    Image_file::EXR::load(input_EXR,&(input_RGBA));
++    
++    int width = input_RGBA.width();
++    int height = input_RGBA.height();
++    
++    cout<<"Done"<<endl;
++    
++    // ##############################################################
++    
++    cout<<"Compute the log-intensity channel... "<<flush;
++    
++    channel_type intensity_channel(width,height);
++    channel_type log_intensity_channel(width,height);
++    
++    for(channel_type::iterator
++        i     = intensity_channel.begin(),
++        i_end = intensity_channel.end(),
++        r     = input_RGBA[image_type::RED].begin(),
++        g     = input_RGBA[image_type::GREEN].begin(),
++        b     = input_RGBA[image_type::BLUE].begin(),
++        l     = log_intensity_channel.begin();
++        i != i_end;
++        i++,r++,g++,b++,l++){
++        
++        // The input value are not gamma-corrected. We do not need to worry about that.
++        
++        *i = ((20.0*(*r) + 40.0*(*g) + 1.0*(*b)) / 61.0);
++        *l = log_function(*i);
++    }
++    
++    cout<<"Done"<<endl;
++    
++    // ##############################################################
++    
++    cout<<"Filter the log-intensity channel... "<<flush;
++    
++    channel_type filtered_log_intensity_channel(width,height);
++    
++    FFT::Support_3D::set_fftw_flags(FFTW_ESTIMATE); // parameter for FFTW
++    
++    const double space_sigma = space_sigma_mult * min(width,height);
++    const double range_sigma = range_sigma_mult;
++    
++    Image_filter::linear_BF(log_intensity_channel,
++                            space_sigma,
++                            range_sigma,
++                            &filtered_log_intensity_channel);
++    
++    cout<<"Done"<<endl;
++    
++    input_tonemap->width  = width;
++    input_tonemap->height = height;
++    input_tonemap->intensity_channel = intensity_channel;
++    input_tonemap->log_intensity_channel = log_intensity_channel;
++    input_tonemap->filtered_log_intensity_channel = filtered_log_intensity_channel;
++    input_tonemap->input_RGBA = input_RGBA;
++    
++}
+ 
+-    // The input value are not gamma-corrected. We do not need to worry about that.
+-       
+-    *i = ((20.0*(*r) + 40.0*(*g) + 1.0*(*b)) / 61.0);
+-    *l = log_function(*i);
+-  }
+- 
+-  cout<<"Done"<<endl;
++inline int process_image_new(char* output_ppm, double mean_val, double gamma_hi, double gamma_lo, double scale_factor, struct tone_map_struct input_tonemap){
++    
++    cout<<"Compute the detail channel... "<<flush;
++    
++    int width = input_tonemap.width;
++    int height = input_tonemap.height;
++    channel_type lic = input_tonemap.log_intensity_channel;
++    channel_type flic = input_tonemap.filtered_log_intensity_channel;
++    channel_type ic = input_tonemap.intensity_channel;
++    image_type input_RGBA = input_tonemap.input_RGBA;
++    
++    channel_type detail_channel(width,height);
++    
++    for(channel_type::iterator
++        l     = lic.begin(),
++        l_end = lic.end(),
++        f     = flic.begin(),
++        d     = detail_channel.begin();
++        l != l_end;
++        l++,f++,d++){
++        
++        *d = ((*l) - (*f)); //boosted?
++    }
++    
++    cout<<"Done"<<endl;
++    
++    
++    // ##############################################################
++    
++    cout<<"Compute the new intensity channel... "<<flush;
++    
++    channel_type new_intensity_channel(width,height);
++    channel_type nlic(width,height);
++    
++    for(channel_type::iterator
++        f     = flic.begin(),
++        f_end = flic.end(),
++        d     = detail_channel.begin(),
++        nl    = nlic.begin(),
++        n     = new_intensity_channel.begin();
++        f != f_end;
++        f++,d++,n++,nl++){
++        
++        if(*f<mean_val){
++            *nl = (*f) * gamma_lo;
++            *n = exp_function(*nl*1 + (*d)*1 +detail_boost*(*d)*(*d)*(*d));// boosted?
++        } else {
++            *nl = (mean_val) * gamma_lo + (*f-mean_val) * gamma_hi;
++            *n = exp_function(*nl*1 + (*d)*1 + detail_boost*(*d)*(*d)*(*d));
++        }
++        //*n = exp_function((*f) * gamma + (*d));
++    }
++    
++    cout<<"Done"<<endl;
++    
++    
++    // ##############################################################
++    
++    
++    cout<<"Recompose the color image... "<<flush;
++    
++    image_type output_RGBA = input_RGBA;
++    
++    for(channel_type::iterator
++        n     = new_intensity_channel.begin(),
++        n_end = new_intensity_channel.end(),
++        i     = ic.begin(),
++        r     = output_RGBA[image_type::RED].begin(),
++        g     = output_RGBA[image_type::GREEN].begin(),
++        b     = output_RGBA[image_type::BLUE].begin();
++        n != n_end;
++        n++,i++,r++,g++,b++){
++        
++        const double ratio = (*n) / (*i);
++        
++        *r *= ratio;
++        *g *= ratio;
++        *b *= ratio;
++        
++    }
++    
++    cout<<"Done"<<endl;
++    
++    
++    // ##############################################################
++    
++    
++    cout<<"Write the output image '"<<output_ppm<<"'... "<<flush;
++    
++    ofstream ppm_out(output_ppm,ios::binary);
++    
++    ppm_out<<"P6";
++    ppm_out<<' ';
++    ppm_out<<width;
++    ppm_out<<' ';
++    ppm_out<<height;
++    ppm_out<<' ';
++    ppm_out<<"255";
++    ppm_out<<'\n';
++    
++    for(unsigned y=0;y<height;y++){
++        
++        const unsigned ry = height - y - 1; // We flip the vertical axis.
++        
++        for(unsigned x=0;x<width;x++){
++            
++            const char r = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*(0.5*scale_factor*output_RGBA[image_type::RED](x,ry) + 0.5*pow(scale_factor*output_RGBA[image_type::RED](x,ry),1.0/2.2))));
++            const char g = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*(0.5*scale_factor*output_RGBA[image_type::GREEN](x,ry) + 0.5*pow(scale_factor*output_RGBA[image_type::GREEN](x,ry),1.0/2.2))));
++            const char b = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*(0.5*scale_factor*output_RGBA[image_type::BLUE](x,ry) + 0.5*pow(scale_factor*output_RGBA[image_type::BLUE](x,ry),1.0/2.2))));
++            
++            ppm_out<<r<<g<<b;
++        }
++    }
++    
++    ppm_out.flush();
++    ppm_out.close();
++    
++    cout<<"Done"<<endl;
++    
++}
+ 
+ 
+-  // ##############################################################
+-  
+-  
+-  cout<<"Filter the log-intensity channel... "<<flush;
+-
+-  channel_type filtered_log_intensity_channel(width,height);
+-
+-  FFT::Support_3D::set_fftw_flags(FFTW_ESTIMATE); // parameter for FFTW
+-
+-  const double space_sigma = 0.02 * min(width,height);
+-  const double range_sigma = 0.4;
+-  
+-  Image_filter::linear_BF(log_intensity_channel,
+-			  space_sigma,
+-			  range_sigma,
+-			  &filtered_log_intensity_channel);
+-  
+-  cout<<"Done"<<endl;
+-
+-
+-  // ##############################################################
+-  
+-  
+-  cout<<"Compute the detail channel... "<<flush;
+-
+-  channel_type detail_channel(width,height);
+-
+-  for(channel_type::iterator
+-	l     = log_intensity_channel.begin(),
+-	l_end = log_intensity_channel.end(),
+-	f     = filtered_log_intensity_channel.begin(),
+-	d     = detail_channel.begin();
+-      l != l_end;
+-      l++,f++,d++){
+-
+-    *d = (*l) - (*f);
+-  }
+-
+-  cout<<"Done"<<endl;
+-
+-
+-  // ##############################################################
+-
+-  
+-  cout<<"Compute the new intensity channel... "<<flush;
+-
+-  const double max_value = *max_element(filtered_log_intensity_channel.begin(),
+-					filtered_log_intensity_channel.end());
+-  
+-  const double min_value = *min_element(filtered_log_intensity_channel.begin(),
+-					filtered_log_intensity_channel.end());
+-
+-  const double gamma = log_function(contrast) /  (max_value - min_value);
+-
+-  channel_type new_intensity_channel(width,height);
+-
+-  for(channel_type::iterator
+-	f     = filtered_log_intensity_channel.begin(),
+-	f_end = filtered_log_intensity_channel.end(),
+-	d     = detail_channel.begin(),
+-	n     = new_intensity_channel.begin();      
+-      f != f_end;
+-      f++,d++,n++){
+-
+-    *n = exp_function((*f) * gamma + (*d));
+-  }
+-  
+-  cout<<"Done"<<endl;
+-
+-  
+-  // ##############################################################
+-
+-  
+-  cout<<"Recompose the color image... "<<flush;
+-
+-  image_type output_RGBA = input_RGBA;
+-
+-  for(channel_type::iterator
+-	n     = new_intensity_channel.begin(),
+-	n_end = new_intensity_channel.end(),
+-	i     = intensity_channel.begin(),
+-	r     = output_RGBA[image_type::RED].begin(),
+-	g     = output_RGBA[image_type::GREEN].begin(),
+-	b     = output_RGBA[image_type::BLUE].begin();
+-      n != n_end;
+-      n++,i++,r++,g++,b++){
+-
+-    const double ratio = (*n) / (*i);
+-    
+-    *r *= ratio;
+-    *g *= ratio;
+-    *b *= ratio;
+-
+-  }
+-
+-  cout<<"Done"<<endl;
+-  
+-
+-  // ##############################################################
+-  
+-  
+-  cout<<"Write the output image '"<<argv[2]<<"'... "<<flush;
+-
+-  // Scale factor to ensure that the base spans [0;1].
+-  const double scale_factor = 1.0 / exp_function(max_value * gamma);
+-  
+-  ofstream ppm_out(argv[2],ios::binary);
+-
+-  ppm_out<<"P6";
+-  ppm_out<<' ';
+-  ppm_out<<width;
+-  ppm_out<<' ';
+-  ppm_out<<height;
+-  ppm_out<<' ';
+-  ppm_out<<"255";
+-  ppm_out<<'\n';
+-  
+-  for(unsigned y=0;y<height;y++){
+-
+-    const unsigned ry = height - y - 1; // We flip the vertical axis.
+-    
+-    for(unsigned x=0;x<width;x++){
+-
+-      // The following lines corresponds to values *without* gamma-correction.
+-//       const char r = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*scale_factor*output_RGBA[image_type::RED](x,ry)));
+-//       const char g = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*scale_factor*output_RGBA[image_type::GREEN](x,ry)));
+-//       const char b = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*scale_factor*output_RGBA[image_type::BLUE](x,ry)));
+-      
+-      // The following lines corresponds to values *with* gamma-correction.
+-      const char r = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*pow(scale_factor*output_RGBA[image_type::RED](x,ry),1.0/2.2)));
+-      const char g = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*pow(scale_factor*output_RGBA[image_type::GREEN](x,ry),1.0/2.2)));
+-      const char b = static_cast<char>(Math_tools::clamp(0.0,255.0,255.0*pow(scale_factor*output_RGBA[image_type::BLUE](x,ry),1.0/2.2)));
+-      
+-      ppm_out<<r<<g<<b;
++int main(int argc, char** argv){
++    if ((argc - 2) % 2 !=0){
++        cerr<<"error: wrong arguments"<<endl;
++        cerr<<"usage: "<<argv[0]<<" input_1.exr output_1.ppm input_2.exr output_2.exr ... contrast"<<endl;
++        cerr<<"\nadvice:"<<endl;
++        cerr<<"meaningful values for the contrast are between 5.0 and 200.0.\n50.0 always gives satisfying results."<<endl;
++        exit(1);
+     }
+-  }
+-  
+-  ppm_out.flush();
+-  ppm_out.close();
+-  
+-  cout<<"Done"<<endl;
+-}
++    
++    numPics = (argc-2)/2;
++    
++    istringstream contrast_in(argv[argc-1]);
++    contrast_in>>contrast;
++    
++    struct tone_map_struct tone_map_curr;
++    
++    double max_val = 0;
++    double min_val = 0;
++    double total_val=0;
++    double mean_val = 0;
++    
++    int j;
++    for ( j= 0; j < numPics; j ++){
++        
++        load_image(argv[2*j+1], (&tone_map_curr));
++        
++        channel_type fflic = tone_map_curr.filtered_log_intensity_channel;
++        double max_val_tmp = get_max_value(fflic);
++        double min_val_tmp = get_min_value(fflic);
++        
++        if (max_val_tmp > max_val) {
++            max_val = max_val_tmp;
++        }
++        if (min_val_tmp < min_val) {
++            min_val = min_val_tmp;
++        }
++        total_val += get_mean_value(fflic);
++    }
++    
++    mean_val = log(total_val/(numPics));
++    mean_val = mean_val - backlight_boost*(mean_val - min_val);
++    double gamma = get_gamma(max_val, min_val);
++    double gamma_lo = get_gamma_lo(mean_val, min_val);
++    double gamma_hi = get_gamma_hi(mean_val, max_val);
++    double scale_factor = get_scale_factor_hilo(max_val, mean_val, gamma_hi, gamma_lo);
++    
++    cout<<"TOTAL min, mean, max, gamma, gamma_lo, gamma_hi ";
++    cout<<min_val;
++    cout<<" ";
++    cout<<mean_val;
++    cout<<" ";
++    cout<<max_val;
++    cout<<endl;
++    cout<<gamma;
++    cout<<" ";
++    cout<<gamma_lo;
++    cout<<" ";
++    cout<<gamma_hi;
++    cout<<endl;
++    
++    for ( j= 0; j < numPics; j ++){
++        load_image(argv[2*j+1], (&tone_map_curr));
++        process_image_new(argv[2*j+2], mean_val, gamma_hi, gamma_lo, scale_factor, tone_map_curr);
++    }
++}
+\ No newline at end of file
