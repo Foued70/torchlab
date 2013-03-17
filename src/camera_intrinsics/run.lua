@@ -13,6 +13,9 @@ local d2r = pi / 180
 local k1 = 1.47
 local k2 = 0.713
 
+-- treat angles with spherical geometry 
+local noneuclidean = false
+
 -- image.rotate does not do what we want
 function img_rot (img)
    return  image.vflip(img:transpose(2,3))
@@ -99,7 +102,7 @@ nikon_D5100_w10p5mm = {
 
    focal    = 10.58, -- mm
 
-   type = "thoby",
+   type = "thoby"
 }
 
 camera = nikon_D5100_w10p5mm
@@ -108,83 +111,83 @@ camera = nikon_D5100_w10p5mm
 
 function update_imagedata(camera,img)
 
-   local w = img:size(3)
-   local h = img:size(2)
+   local imgw = img:size(3)
+   local imgh = img:size(2)
+   
+   local camw = 0
+   local camh = 0
 
-
+   -- handle vertical images
+   if imgw > imgh then
+      camw = camera.sensor_w
+      camh = camera.sensor_h
+   else
+      camh = camera.sensor_w
+      camw = camera.sensor_h
+   end
+  
    -- offset to optical center of image (px)
-   local cx = (w + 1) * 0.5
-   local cy = (h + 1) * 0.5
-
+   local cx = (imgw + 1) * 0.5
+   local cy = (imgh + 1) * 0.5
 
    -- horizontal and vertical resolution (px / mm)
-   local hres = w / camera.sensor_w -- px/mm
-   local vres = h / camera.sensor_h -- px/mm
+   local hres = imgw / camw -- px/mm
+   local vres = imgh / camh -- px/mm
 
+   local aspect_ratio = camw / camh
+
+   -- focal length in pixels
    local hfocal_px = camera.focal * hres
    local vfocal_px = camera.focal * vres
 
-   local dx = cx / hfocal_px -- (px / px ==> dimensionless)
-   local dy = cy / vfocal_px
+   -- normalized coordinates (px / px ==> dimensionless)
+   local horizontal_normalized = cx / hfocal_px 
+   local vertical_normalized   = cy / vfocal_px
 
    -- maximum distance in normalized image coordinates which we want
    -- to project from camera (default is the diagonal).  Note this is
    -- on the image plane therefore the normal euclidean pythagorean
    -- theorem works.
-   local max_diagonal_normalized = math.sqrt(dx*dx + dy*dy)
+   local diagonal_normalized = 
+      math.sqrt(horizontal_normalized*horizontal_normalized + 
+                vertical_normalized*vertical_normalized)
 
-   -- crop_radius allow's us to look at a region inside image
-   -- boundaries such as when the image circle is less than the sensor
-   -- width or height.
-   if not camera.crop_radius then
-      camera.crop_radius = math.sqrt(cx*cx + cy*cy)
+   -- Currently unused, crop_radius would allow us to look at a region
+   -- inside image boundaries such as when the image circle is less
+   -- than the sensor width or height.
+   if camera.crop_radius then
+      -- I don't understand why we divide by the vertical fov (in most
+      -- cases we have square pixels, aspect ratio is 1).
+      diagonal_normalized   = camera.crop_radius / vfocal_px
    end
 
-   -- I don't understand why we divide by the vertical fov (in most
-   -- cases we have square pixels, aspect ratio is 1).
-   local diagonal_normalized   = camera.crop_radius / vfocal_px
-   local horizontal_normalized = dx
-   local vertical_normalized   = dy
-
-   printf("normalized : diag: %f max: %f h: %f v: %f",
-          diagonal_normalized, max_diagonal_normalized,
+   printf(" -- normalized : diag: %f h: %f v: %f",
+          diagonal_normalized, 
           horizontal_normalized, vertical_normalized)
 
-   if ((diagonal_normalized == 0) or
-       (diagonal_normalized > max_diagonal_normalized)) then
-      diagonal_normalized = max_diagonal_normalized
-   end
-
    local dfov = 0
-   -- horizontal and diagonal fov's are useful for our lookup table
-   local hfov = 0
-   local vfov = 0
 
-   -- we don't have most of these types of lenses but it is easy
+   -- We don't have most of these types of lenses but it is easy
    -- enough to put here.  Perhaps we will include a universal model
    -- as per Scaramuzza's calibration.
 
    if (camera.type == "rectilinear") then
       dfov = torch.atan(diagonal_normalized)   -- diag in rad
-      hfov = torch.atan(horizontal_normalized) -- horz in rad
-      vfov = torch.atan(vertical_normalized)   -- vert in rad
 
    elseif (camera.type == "thoby") then
+      print(" -- using lens type: thoby")
       -- thoby : theta = asin((r/f)/(k1 * f))/k2
-      dfov = torch.asin(diagonal_normalized/k1)/k2
-      hfov = torch.asin(horizontal_normalized/k1)/k2
-      vfov = torch.asin(vertical_normalized/k1)/k2
-
+      if (diagonal_normalized > k1) then 
+         error("diagonal too large for thoby")
+      else
+         dfov = torch.asin(diagonal_normalized/k1)/k2
+      end
    elseif (camera.type == "equal_angle") then
       dfov = diagonal_normalized
-      hfov = horizontal_normalized
-      vfov = vertical_normalized
 
    elseif (camera.type =="equal_area") then
       if( diagonal_normalized <= 2 ) then
          dfov = 2 * torch.asin( 0.5 * diagonal_normalized )
-         hfov = 2 * torch.asin( 0.5 * horizontal_normalized )
-         vfov = 2 * torch.asin( 0.5 * vertical_normalized )
       end
       if( dfov == 0 ) then
          error( "equal-area FOV too large" )
@@ -192,14 +195,10 @@ function update_imagedata(camera,img)
 
    elseif (camera.type == "stereographic") then
       dfov = 2 * atan( 0.5 * diagonal_normalized );
-      hfov = 2 * atan( 0.5 * horizontal_normalized );
-      vfov = 2 * atan( 0.5 * vertical_normalized );
 
    elseif (camera.type == "orthographic") then
       if( diagonal_normalized <= 1 ) then
          dfov = torch.asin( diagonal_normalized )
-         hfov = torch.asin( horizontal_normalized )
-         vfov = torch.asin( vertical_normalized )
       end
       if( dfov == 0 ) then
          error( "orthographic FOV too large" );
@@ -209,8 +208,19 @@ function update_imagedata(camera,img)
       error("don't understand camera lens model requested")
    end
 
-   camera.image_w  = w -- px
-   camera.image_h  = h -- px
+   -- horizontal and diagonal fov's are useful for size of our lookup
+   -- table.  Using normal (euclidean) pythagorean theorem to compute
+   -- w and h from the aspect ratio and the diagonal which doesn't
+   -- feel right but gives the expected result as opposed to the
+   -- non-euclidean cos(c) = cos(a)cos(b)
+   local vfov = dfov/math.sqrt(aspect_ratio*aspect_ratio + 1)
+   local hfov = aspect_ratio*vfov
+
+   printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f", 
+      dfov*r2d, hfov*r2d,vfov*r2d)
+   camera.image_w      = imgw -- px
+   camera.image_h      = imgh -- px
+   camera.aspect_ratio = aspect_ratio
 
    camera.center_x = cx -- px
    camera.center_y = cy -- px
@@ -266,7 +276,7 @@ function camera_to_sphere (camera,scale,debug)
    -- (0).b find dimension of the map
    -- +++++
    local mapw = imgw * scale
-   local maph = imgh * scale
+   local maph = mapw * (vfov/hfov)
 
    local max_imgw = hlfw
    local max_imgh = hlfh
@@ -274,22 +284,33 @@ function camera_to_sphere (camera,scale,debug)
    -- +++++
    -- (1) create map of diagonal angles from optical center
    -- +++++
-   -- create horizontal and vertical angles (equirectangular)
-   -- x,y lookup in spherical map from -radians,radians at resolution
-   xrow = torch.linspace(-hfov,hfov,mapw)
-   ycol = torch.linspace(-vfov,vfov,maph)
 
-   -- local tempx = xrow:clone():cos():resize(1,mapw):expand(maph,mapw) -- cos(a)
-   -- local tempy = yrow:clone():cos():resize(maph,1):expand(maph,mapw) -- cos(b)
-   -- pythagorean theorem on a unit sphere is cos(c) = cos(a)cos(b)
-   -- local theta_map = torch.Tensor(maph,mapw)
-   -- theta_map:cmul(tempx,tempy)
-   -- theta_map:acos() -- c = arccos(cos(a)cos(b)
-   xsqr = xrow:clone():cmul(xrow):resize(1,mapw):expand(maph,mapw) -- x^2
-   ysqr = ycol:clone():cmul(ycol):resize(maph,1):expand(maph,mapw) -- 
+   -- create horizontal (lambda) and vertical angles (phi)
+   -- (equirectangular) x,y lookup in spherical map from
+   -- -radians,radians at resolution mapw and maph
+   lambda = torch.linspace(-hfov,hfov,mapw)
+   phi    = torch.linspace(-vfov,vfov,maph)
 
-   theta_map = torch.add(xsqr,ysqr)
-   theta_map:sqrt()
+   if noneuclidean then
+      -- non-euclidean pythagorean
+      local cosx = lambda:clone():cos():resize(1,mapw):expand(maph,mapw)
+      local cosy = phi:clone():cos():resize(maph,1):expand(maph,mapw)
+      -- pythagorean theorem on a unit sphere is cos(c) = cos(a)cos(b)
+      -- c = arccos(cos(a)cos(b))
+      theta_map = torch.cmul(cosx,cosy):acos()
+      cosx = nil
+      cosy = nil
+      collectgarbage() -- not such a big deal as we are using expand
+   else
+      -- normal pythagorean theorem
+      local xsqr = lambda:clone():cmul(lambda):resize(1,mapw):expand(maph,mapw) 
+      local ysqr = phi:clone():cmul(phi):resize(maph,1):expand(maph,mapw)
+      theta_map = torch.add(xsqr,ysqr)
+      theta_map:sqrt()
+      xsqr = nil
+      ysqr = nil
+      collectgarbage() -- not such a big deal as we are using expand
+   end
 
    -- +++++
    -- (2) replace theta for each entry in map with r
@@ -323,15 +344,14 @@ function camera_to_sphere (camera,scale,debug)
 
    -- try simplistic map from Hugin lens correction which seems
    -- completely wrong to me.
-
    -- make the ratio (new divided by old)
    r_map:cdiv(r_map,theta_map)
-
-   xmap = xrow:repeatTensor(maph,1)
+   
+   xmap = lambda:repeatTensor(maph,1)
    xmap:cmul(r_map):mul(camera.hfocal_px):add(camera.center_x)
-   ymap = ycol:repeatTensor(mapw,1):t():contiguous() 
+   ymap = phi:repeatTensor(mapw,1):t():contiguous() 
    ymap:cmul(r_map):mul(camera.vfocal_px):add(camera.center_y)
-
+   
    -- know r, the diagonal, in normalized
    -- coordinates.  x and y are scaled by this ratio and the ratio x
    -- to y so use euclidean pythagorean theorem to get x and y in
@@ -340,15 +360,14 @@ function camera_to_sphere (camera,scale,debug)
    -- +++++++
    -- (4) make mask for out of bounds values
    -- +++++++
-   local mask = xmap:gt(1) + xmap:lt(imgw+1)  -- out of bound in xmap
-   mask = mask + ymap:gt(1) + ymap:lt(imgh+1) -- out of bound in ymap
+   local mask = xmap:ge(1) + xmap:lt(imgw)  -- out of bound in xmap
+   mask = mask + ymap:ge(1) + ymap:lt(imgh) -- out of bound in ymap
    -- reset mask to 0 and 1 (valid parts of mask must pass all 4
    -- tests).  We need the mask to reset bad pixels so the 1s are the
    -- out of bound pixels we want to replace
-   mask[mask:ne(4)] = 1
-   mask[mask:eq(4)] = 0
+   mask[mask:ne(4)] = 1  -- out of bounds
+   mask[mask:eq(4)] = 0  -- in bounds
    printf("Masking %d/%d lookups (out of bounds)", mask:sum(),mask:nElement())
-
 
    -- +++++++
    -- (5) convert the x and y index into a single 1D offset (y * stride + x)
@@ -357,18 +376,24 @@ function camera_to_sphere (camera,scale,debug)
    -- CAREFUL must floor before multiplying by stride or does not make sense.
    -- -0.5 then floor is equivalient to adding 0.5 -> floor -> -1 before multiply by stride.
    local outmap = ymap:clone():add(-0.5):floor()
+
    -- ymap -1 so that multiply by stride makes sense (imgw is the stride)
    -- to map (1,1) ::  y = 0  * stride + x = 1 ==> 1
    -- to map (2,1) ::  y = 1  * stride + x = 1 ==> stride + 1 etc.
 
-   outmap:add(xmap + 0.5)
-
+   outmap:mul(imgw):add(xmap + 0.5)
    -- remove spurious out of bounds from output
    outmap[mask] = 1
    local index_map = outmap:long() -- round (+0.5 above) and floor
-
    -- make 1D
    index_map:resize(index_map:nElement())
+
+   -- only needed if we reuse the xmap and ymap
+   xmap = xmap:floor()
+   xmap[mask] = 1
+   ymap = ymap:floor()
+   ymap[mask] = 1
+
 
    if debug then
       printf(" x map from %d to %d (max: %d)",xmap:min(),xmap:max(),imgw)
@@ -470,7 +495,7 @@ sys.tic()
 collectgarbage()
 printf(" + (collect garbage) : %2.4fs",sys.toc())
 
-image.display{image={image.scale(output_image, output_image:size(2)*0.5, output_image:size(3)*0.5)}}
-image.display{image=img}
+image.display{image={image.scale(output_image, output_image:size(3)*0.2, output_image:size(2)*0.2)}}
+--image.display{image=img}
 
 
