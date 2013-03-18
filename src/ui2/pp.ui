@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Widget</string>
+   <string>Pose Picker</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <item>
@@ -83,63 +83,83 @@
        </property>
       </widget>
      </item>
-     <item row="2" column="0">
+     <item row="2" column="0" colspan="2">
+      <widget class="QFrame" name="frame">
+       <property name="frameShape">
+        <enum>QFrame::HLine</enum>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Sunken</enum>
+       </property>
+      </widget>
+     </item>     
+     <item row="3" column="0">
       <widget class="QLabel" name="labelSweep">
        <property name="text">
         <string>Sweep</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1">
+     <item row="3" column="1">
       <widget class="QLabel" name="labelCurrSweep">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="3" column="0">
+     <item row="4" column="0">
       <widget class="QLabel" name="labelImage">
        <property name="text">
         <string>Image</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
+     <item row="4" column="1">
       <widget class="QLabel" name="labelCurrPic">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="4" column="0">
+     <item row="5" column="0" colspan="2">
+      <widget class="QFrame" name="frame_2">
+       <property name="frameShape">
+        <enum>QFrame::HLine</enum>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Sunken</enum>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0">
       <widget class="QLabel" name="labelOrigPose">
        <property name="text">
         <string>Original Pose</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="1">
+     <item row="6" column="1">
       <widget class="QLabel" name="poseOrigText">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="5" column="0">
+     <item row="7" column="0">
       <widget class="QLabel" name="labelNewPose">
        <property name="text">
         <string>New Pose</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
-      <widget class="QLabel" name="newPoseText">
+     <item row="7" column="1">
+      <widget class="QLabel" name="poseNewText">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="6" column="0">
+     <item row="8" column="0">
       <widget class="QPushButton" name="btnPrev">
        <property name="enabled">
         <bool>false</bool>
@@ -149,7 +169,7 @@
        </property>
       </widget>
      </item>
-     <item row="6" column="1">
+     <item row="8" column="1">
       <widget class="QPushButton" name="btnNext">
        <property name="enabled">
         <bool>false</bool>
@@ -176,7 +196,7 @@
   <zorder>labelCurrSweep</zorder>
   <zorder>labelCurrPic</zorder>
   <zorder>poseOrigText</zorder>
-  <zorder>newPoseText</zorder>
+  <zorder>poseNewtext</zorder>
   <zorder></zorder>
   <zorder>btnNext</zorder>
  </widget>

@@ -1,5 +1,6 @@
 require 'qt'
 require 'qtgui'
+require 'qtwidget'
 
 local qtuiloader = require('qtuiloader')
 local paths = require('paths')
@@ -166,7 +167,7 @@ function PosePicker:updateGui()
     self.ui.poseOrigText:setText(self:formatPose(defaultPose))
   end
     
-  -- update the gl widget sandwich with the current pic the pic's pose  
+  -- TODO: update the gl widget sandwich with the current pic the pic's pose    
   self:updatePoseText()
 end
 
