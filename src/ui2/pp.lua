@@ -1,12 +1,12 @@
 require 'qt'
 require 'qtgui'
-require 'torch'
+require 'qtwidget'
 
 local qtuiloader = require('qtuiloader')
 local paths = require('paths')
 local fs = require('util/fs')
 
-local Pose = torch.class('Pose') -- simplified Pose, maybe should use the Pose in util?
+local Pose = torch.class('Pose') -- simplified Pose class, maybe should use the Pose in util?
 local Sweep = torch.class('Sweep')
 local Pic = torch.class('Pic')
 local PosePicker = torch.class('PosePicker')
@@ -81,7 +81,7 @@ function PosePicker:loadFolder()
   end
   self.lastSweepIdx = #self.sweeps
   self.lastPicIdx = #self.sweeps[self.lastSweepIdx].pics
-  self:updateCurrPic()
+  self:updateGui()
 end
 
 function PosePicker:loadPoseFile()
@@ -91,6 +91,11 @@ function PosePicker:loadPoseFile()
     self.ui.labelPoseFile:setText("could not load pose file")
     return
   end
+  
+  -- guess the obj file based on the pose file
+  local objFiles = fs.files_only(paths.dirname(poseFile), ".obj")
+  if objFiles and #objFiles > 0 then self.objFile = objFiles[1] end  
+  if not self.objFile then self.ui.labelPoseFile:setText("could not load obj file using pose path") return end
   
   self.ui.labelPoseFile:setText(paths.basename(poseFile))
 
@@ -104,7 +109,7 @@ function PosePicker:loadPoseFile()
   end
   f:close()
   
-  self:updateCurrPic()
+  self:updateGui()
 end
 
 function PosePicker:savePoseData()
@@ -137,48 +142,85 @@ function PosePicker:defaultPicPose(i)
   end
 end
 
-function PosePicker:updateCurrPic()
-  -- next and prev btns
+function PosePicker:updateGui()
+  -- enabled state of next and prev btns
   self.ui.btnNext:setDisabled(self.currSweepIdx == self.lastSweepIdx and self.currPicIdx == self.lastPicIdx)
   self.ui.btnPrev:setDisabled(self.currPicIdx == 1 and self.currSweepIdx == 1)
   
+  -- set the currSweep and currPic vars
+  self.currSweep = self.sweeps[self.currSweepIdx]
+  if self.currSweep and #self.currSweep.pics > 0 then
+    self.currPic = self.currSweep.pics[self.currPicIdx]
+  end
+  
   -- sweep and pic labels that indicate which sweep and which pic we're on  
-  self.ui.labelCurrSweep:setText(string.format("%s %d/%d", self.sweeps[self.currSweepIdx].name, self.currSweepIdx, self.lastSweepIdx))
-  local currSweepPics = self.sweeps[self.currSweepIdx].pics
-  self.ui.labelCurrPic:setText(string.format("%s %d/%d", currSweepPics[self.currPicIdx].name, self.currPicIdx, #currSweepPics))
+  if self.currSweep then
+    self.ui.labelCurrSweep:setText(string.format("%s %d/%d", self.currSweep.name, self.currSweepIdx, self.lastSweepIdx))  
+    if self.currPic then
+      self.ui.labelCurrPic:setText(string.format("%s %d/%d", self.currPic.name, self.currPicIdx, #self.currSweep.pics))
+    end
+  end
 
   -- update the orig pose label
   local defaultPose = self:defaultPicPose(self.currSweepIdx)
   if defaultPose then
-    self.ui.poseOrigText:setText(string.format("%s", defaultPose.name))
+    self.ui.poseOrigText:setText(self:formatPose(defaultPose))
   end
     
-  -- update the gl widget sandwich with the current pic the pic's pose
-  local currPic = self.sweeps[self.currSweepIdx].pics[self.currPicIdx]    
-  if not currPic.pose then currPic.pose = defaultPose end
+  -- TODO: update the gl widget sandwich with the current pic the pic's pose    
+  self:updatePoseText()
+end
+
+function PosePicker:updatePoseText()
+  if self.currPic and self.currPic.pose then
+    self.ui.poseNewText:setText(self:formatPose(self.currPic.pose))    
+  end
+end
+
+function PosePicker:formatPose(pose)  
+  return string.format("Name: %s \nQuat: %f, %f, %f, %f \nXYZ: %f, %f, %f \nUV: %f, %f \nDegrees: %f, %f", pose.name, pose.quat[1][1], pose.quat[1][2], pose.quat[1][3], pose.quat[1][4], pose.xyz[1][1], pose.xyz[1][2], pose.xyz[1][3], pose.center_u[1], pose.center_v[1], pose.degree_per_px_x[1], pose.degree_per_px_y[1])
+end
+
+function PosePicker:calcPicPose()
+  -- TODO: pass a table of correspondences to method in __ (?) and set currPic.pose to returned Pose table
   
+  -- update the pose of pics in the current sweep that are after the current pic if they don't have a pose yet
+  self:propagatePicPose()
+  self:updatePoseText()
+end
+
+
+function PosePicker:propagatePicPose()
+  -- this hasn't been tested...
+  if not self.currPic and self.currPic.pose then return end
   
+  -- only adjusts the pose of pics in the currSweep but could also adjust later sweep's pics' pose 
+  -- as a mod of the default pose from poseFile
+  for i=self.currPicIdx, #self.currSweep.pics, 1 do
+    local pic = self.currSweep.pics[i]
+    if not pic.pose then pic.pose = self.currPic.pose end
+  end
 end
 
 function PosePicker:next()
-  if self.currPicIdx == #self.sweeps[self.currSweepIdx].pics then
+  if self.currPicIdx == #self.currSweep.pics then
     self.currSweepIdx = self.currSweepIdx+1
     self.currPicIdx = 1
   else
     self.currPicIdx = self.currPicIdx+1
   end
   
-  self:updateCurrPic()
+  self:updateGui()
 end
 
 function PosePicker:prev()
   if self.currPicIdx == 1 then
     self.currSweepIdx = self.currSweepIdx-1
-    self.currPicIdx = #self.sweeps[self.currSweepIdx].pics
+    self.currPicIdx = #self.currSweep.pics
   else
     self.currPicIdx = self.currPicIdx-1
   end
-  self:updateCurrPic()
+  self:updateGui()
 end
 
 
