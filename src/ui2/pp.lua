@@ -75,7 +75,7 @@ function PosePicker:loadFolder()
   local sweepsDirs = fs.dirs_only(self.picsFolder, config.sweep_folder_prefix)
   if sweepsDirs and #sweepsDirs > 0 then
     for i, v in ipairs(sweepsDirs) do
-      local picsDir = paths.concat(sweepsDirs, config.processed_pics_folder)
+      local picsDir = paths.concat(v, config.processed_pics_folder)
       if paths.dirp(picsDir) then 
         table.insert(self.sweeps, Sweep.new(picsDir))
       end
