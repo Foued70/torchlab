@@ -13,7 +13,7 @@ function FrameBuffer:__init(widget, name, width, height)
   self:bind()
 
   local pass_name_color = self.name..'_pass_color'
-  self.widget.texture_manager:create_blank(pass_name_color, gl.RGBA, self.width, self.height, gl.RGBA, gl.UNSIGNED_BYTE)
+  self.widget.texture_manager:create_blank(pass_name_color, gl.RGBA, self.width, self.height, gl.RGBA, gl.FLOAT)
   self:attach_texture(gl.COLOR_ATTACHMENT0, self.widget.texture_manager.textures[pass_name_color])
 
   local pass_name_picking = self.name..'_pass_picking'
@@ -88,6 +88,70 @@ function FrameBuffer:read_depth_pixel(x, y)
   return depth[0]
 end
 
+function FrameBuffer:get_depth_image()
+  self:bind()
+  gl.PixelStorei(gl.PACK_ALIGNMENT, 1)
+  gl.check_errors()
+
+  local depth_image = torch.FloatTensor(self.height, self.width)
+  local img_data_ptr, img_data_size = libui.float_storage_info(depth_image)
+
+  gl.ReadPixels(0,0, self.width, self.height, gl.DEPTH_COMPONENT, gl.FLOAT, img_data_ptr)
+  gl.check_errors()
+
+  gl.ReadBuffer(gl.NONE)
+  self:unbind()
+  gl.check_errors()
+
+  return image.vflip(depth_image)
+end
+
+function FrameBuffer:get_color_image()
+  local num_channels = 4
+
+  local color_image = torch.FloatTensor(self.height, self.width, num_channels)
+  local img_data_ptr, img_data_size = libui.float_storage_info(color_image)
+
+  local color_id = self.widget.texture_manager.textures[self.name..'_pass_color']
+  gl.BindTexture(gl.TEXTURE_2D, color_id)
+  gl.check_errors()
+  gl.GetTexImage(gl.TEXTURE_2D, 0, gl.RGBA, gl.FLOAT, img_data_ptr)
+  gl.check_errors()
+  gl.BindTexture(gl.TEXTURE_2D, 0)
+  gl.check_errors()
+
+  -- img is y,x,color from GL
+  color_image = color_image:transpose(1,3)
+  -- img is color, x, y
+  color_image = color_image:transpose(2,3)
+  -- img is color,y,x for torch + QImage
+
+  return image.vflip(color_image)
+end
+
+function FrameBuffer:get_picking_image()
+  local num_channels = 3
+
+  local picking_image = torch.FloatTensor(self.height, self.width, num_channels)
+  local img_data_ptr, img_data_size = libui.float_storage_info(picking_image)
+
+  local picking_id = self.widget.texture_manager.textures[self.name..'_pass_picking']
+  log.trace("picking id=", picking_id)
+  gl.BindTexture(gl.TEXTURE_2D, picking_id)
+  gl.check_errors()
+  gl.GetTexImage(gl.TEXTURE_2D, 0, gl.RGB_INTEGER, gl.UNSIGNED_INT, img_data_ptr)
+  gl.check_errors()
+  gl.BindTexture(gl.TEXTURE_2D, 0)
+  gl.check_errors()
+
+  -- img is y,x,color from GL
+  picking_image = picking_image:transpose(1,3)
+  -- img is color, x, y
+  picking_image = picking_image:transpose(2,3)
+  -- img is color,y,x for torch + QImage
+
+  return image.vflip(picking_image)
+end
 
 function FrameBuffer:read_pick_pixel(x, y)
   -- OpenGL saves its framebuffer pixels upsidedown. Need to flip y to get intended data.  

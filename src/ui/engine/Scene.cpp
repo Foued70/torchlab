@@ -60,6 +60,7 @@ Scene::createObject(const string &_name, Object *_parent) {
 		_parent -> addChild(newObject);
 	
 	__objectList.push_back(newObject);
+	log(PARAM, "Gonna return new object");
 	return newObject;
 }
 
