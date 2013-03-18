@@ -40,7 +40,6 @@ Shader.shaders = {}
 
 function Shader:__init(name)
   self.name = name
-
   self.vert_shader_id = gl.CreateShader(gl.VERTEX_SHADER)
   gl.check_errors()
 
@@ -161,6 +160,9 @@ function Shader:use(context)
 
   self:set_uniform_uint('objectID', context.object_id)
   self:set_uniform_uint('submeshStart', context.submesh_start)
+
+  self:set_uniform_uint('screenWidth', context.screen_width)
+  self:set_uniform_uint('screenHeight', context.screen_height)
 end
 
 function Shader:set_uniform_uint(name, value)

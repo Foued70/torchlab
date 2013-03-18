@@ -49,6 +49,20 @@ int libui2_update_gl(lua_State* L) {
   return 0;
 }
 
+int libui2_make_current(lua_State* L) {
+  GLWidget* glWidget = (GLWidget*)lua_touserdata(L, 1);
+  glWidget->makeCurrent();
+
+  return 0;
+}
+
+int libui2_hide_widget(lua_State* L) {
+  GLWidget* glWidget = (GLWidget*)lua_touserdata(L, 1);
+  glWidget->hide();
+
+  return 0;
+}
+
 int libui2_int_storage_info(lua_State* L) {
   THIntTensor* tensor = (THIntTensor*)luaT_checkudata(L, 1, "torch.IntTensor");
   lua_pushlightuserdata(L, tensor->storage->data);
@@ -83,6 +97,8 @@ static const luaL_reg libui2_init[] =
   // {"display", libui2_display},
   {"attach_qt", libui2_attach_qt},
   {"update_gl", libui2_update_gl},
+  {"make_current", libui2_make_current},
+  {"hide_widget", libui2_hide_widget},
   {"int_storage_info", libui2_int_storage_info},
   {"byte_storage_info", libui2_byte_storage_info},
   {"double_storage_info", libui2_double_storage_info},

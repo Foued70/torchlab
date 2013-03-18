@@ -74,6 +74,8 @@ ScanWidget::initializeGL() {
   TimeManager& timer = TimeManager::GetSingleton();
   TimeManager::logTime();
   timer.logDeltaTime();
+
+  log(PARAM, "Init complete");
 }
 
 void ScanWidget::resizeGL(int w, int h) {
@@ -81,20 +83,26 @@ void ScanWidget::resizeGL(int w, int h) {
   
   //Lock width to aspect ration of photograph
   //TO DO: Stop this from being hard coded. Only apply this lock when registering 3D to background photographs
+  log(PARAM, "resizing");
   float windowWidth = 400.0;
   float windowHeight = 600.0;
   glViewport(0, 0, windowWidth, windowHeight);
   
   mainScene->getActiveCamera()->setProjection();
   engine->regenerateFrameBuffer();
-  
+  log(PARAM, "regenerated framebuffer");
   postScene->deleteObject("screenPlane");
   postScene->deleteObject("mainModelVerts");
-  
+  log(PARAM, "deleting objects");
   Object* mainModelVerts = postScene->createObject("mainModelVerts");
-  if (!mainModelVerts -> createVertexCloud(mainModel)) exit(1);
-  
+  log(PARAM, "created mainModelVerts");
+  if (!mainModelVerts -> createVertexCloud(mainModel)) {
+    log(PARAM, "well shit"); 
+    exit(1);
+  }
+  log(PARAM, "didn't exit");  
   poseRefinementDataHandler->loadPhotoPlane();
+  log(PARAM, "finished resizing");
 }
 
 void ScanWidget::paintGL() {
