@@ -58,8 +58,8 @@ function SweepCamera:image_loaded()
   return not (self.image_data == nil)
 end
 
-function SweepCamera:load_image_from_file(image_path)
-  local image_data = image.load(image_path)
+function SweepCamera:load_image()
+  local image_data = image.load(self.image_path)
   image_data = image_data:transpose(2,3)
   image_data = image.vflip(image_data)
   image_data = image_data:contiguous()

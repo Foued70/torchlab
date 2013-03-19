@@ -14,12 +14,8 @@ function Pose:__init(pose_string)
     end
   end
   
-  self.quat = pose_values:narrow(2,1,4)
-  self.xyz = pose_values:narrow(2,5,3)
-  self.center_u = pose_values:select(2,8)
-  self.center_v = pose_values:select(2,9) 
-  self.degree_per_px_x = pose_values:select(2,10)
-  self.degree_per_px_y = pose_values:select(2,11)
+  self.rotation = pose_values:narrow(2,1,4)
+  self.position = pose_values:narrow(2,5,3)
 end
 
 return Pose

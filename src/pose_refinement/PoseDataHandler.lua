@@ -6,7 +6,7 @@ function read_pose_data(pose_file_path)
     return
   end
 
-  local file, errors = io.open(poseFile, 'r')
+  local file, errors = io.open(pose_file_path, 'r')
   if errors then 
     log.trace("Error(s) reading pose data:", errors)
     return
