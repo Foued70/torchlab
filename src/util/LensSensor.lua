@@ -1,3 +1,4 @@
+local projection = require "util.projection"
 
 local pi = math.pi
 local piover2 = math.pi * 0.5
@@ -8,8 +9,6 @@ local d2r = pi / 180
 local k1 = 1.47
 local k2 = 0.713
 
--- treat angles with spherical geometry 
-local noneuclidean = false
 
 -- stores fixed information about lens+sensors which we glean from spec sheets and elsewhere.
 local LensSensor = torch.class("LensSensor")
@@ -211,143 +210,97 @@ end
 --  + thoby (fisheye)           : r = k1 * f * sin(k2*theta)
 --  + equal_angle (eqidistant)  : r = f * theta  (for unit sphere f = 1)
 
-function LensSensor:to_sphere (scale,debug)
+function LensSensor:to_projection (proj_type,scale,debug)
+
+   if not proj_type then 
+      proj_type = "sphere"
+   end
 
    if not scale then
       scale = 1
    end
 
-   local projection = self.type
+   local lens_type = self.type
 
    -- +++++
    -- (0).a image dimensions
    -- +++++
    local imgw = self.image_w
    local imgh = self.image_h
-   local hlfw = self.center_x
-   local hlfh = self.center_y
 
-   local proj = self.projection
    local fov  = self.fov
    local hfov = self.hfov
    local vfov = self.vfov
 
    -- +++++
-   -- (0).b find dimension of the map
-   -- +++++
-   local mapw = imgw * scale
-   local maph = mapw * (vfov/hfov)
-
-   local max_imgw = hlfw
-   local max_imgh = hlfh
-
-   -- +++++
    -- (1) create map of diagonal angles from optical center
    -- +++++
+   local theta_map, lambda, phi = projection.make_diagonal(hfov,vfov,imgw*scale)
 
-   -- create horizontal (lambda) and vertical angles (phi)
-   -- (equirectangular) x,y lookup in spherical map from
-   -- -radians,radians at resolution mapw and maph
-   local lambda = torch.linspace(-hfov,hfov,mapw)
-   local phi    = torch.linspace(-vfov,vfov,maph)
-
-   if noneuclidean then
-      -- non-euclidean pythagorean
-      local cosx = lambda:clone():cos():resize(1,mapw):expand(maph,mapw)
-      local cosy = phi:clone():cos():resize(maph,1):expand(maph,mapw)
-      -- pythagorean theorem on a unit sphere is cos(c) = cos(a)cos(b)
-      -- c = arccos(cos(a)cos(b))
-      theta_map = torch.cmul(cosx,cosy):acos()
-      cosx = nil
-      cosy = nil
-      collectgarbage() -- not such a big deal as we are using expand
-   else
-      -- normal pythagorean theorem
-      local xsqr = lambda:clone():cmul(lambda):resize(1,mapw):expand(maph,mapw) 
-      local ysqr = phi:clone():cmul(phi):resize(maph,1):expand(maph,mapw)
-      theta_map = torch.add(xsqr,ysqr)
-      theta_map:sqrt()
-      xsqr = nil
-      ysqr = nil
-      collectgarbage() -- not such a big deal as we are using expand
-   end
+   local mapw = lambda:size(1)
+   local maph = phi:size(1)
 
    -- +++++
    -- (2) replace theta for each entry in map with r
    -- +++++
    local r_map = theta_map:clone() -- copy
 
-   if (projection == "rectilinear") then
+   if (lens_type == "rectilinear") then
       -- rectilinear : (1/f) * r' = tan(theta)
       r_map:tan()
-   elseif (projection == "thoby") then
+   elseif (lens_type == "thoby") then
       -- thoby       : (1/f) * r' = k1 * sin(k2*theta)
       r_map:mul(k2):sin():mul(k1)
-   elseif (projection == "stereographic") then
+   elseif (lens_type == "stereographic") then
       --  + stereographic             : r = 2 * f * tan(theta/2)
       r_map:mul(0.5):tan():mul(2)
-   elseif (projection == "orthographic") then
+   elseif (lens_type == "orthographic") then
       --  + orthographic              : r = f * sin(theta)
       r_map:sin()
-   elseif (projection == "equisolid") then
+   elseif (lens_type == "equisolid") then
       --  + equisolid                 : r = 2 * f * sin(theta/2)
       r_map:mul(0.5):sin():mul(2)
    else
-      print("ERROR don't understand projection")
+      print("ERROR don't understand lens_type")
       return nil
    end
 
-
+   printf("rmap: max: %f min: %f", r_map:max(), r_map:min())
+   -- +++++
+   -- (2b) reproject to another projection type
+   -- +++++
+   if (proj_type == "rectilinear") then 
+      r_map:atan()
+   else
+      print(" - Projecting to sphere")
+      -- do nothing
+   end
    -- +++++
    -- (3) x,y index (map unit sphere to normlized pixel coords)
    -- +++++
-
-   -- try simplistic map from Hugin lens correction which seems
-   -- completely wrong to me.
+   printf("rmap: max: %f min: %f", r_map:max(), r_map:min())
    -- make the ratio (new divided by old)
    r_map:cdiv(r_map,theta_map)
    
+   -- x and y are scaled by this ratio. 
    local xmap = lambda:repeatTensor(maph,1)
    xmap:cmul(r_map):mul(self.hfocal_px):add(self.center_x)
    
    local ymap = phi:repeatTensor(mapw,1):t():contiguous() 
    ymap:cmul(r_map):mul(self.vfocal_px):add(self.center_y)
    
-   -- know r, the diagonal, in normalized
-   -- coordinates.  x and y are scaled by this ratio and the ratio x
-   -- to y so use euclidean pythagorean theorem to get x and y in
-   -- normalized image coordinates for each location.
-
    -- +++++++
    -- (4) make mask for out of bounds values
    -- +++++++
-   local mask = xmap:ge(1) + xmap:lt(imgw)  -- out of bound in xmap
-   mask = mask + ymap:ge(1) + ymap:lt(imgh) -- out of bound in ymap
-   -- reset mask to 0 and 1 (valid parts of mask must pass all 4
-   -- tests).  We need the mask to reset bad pixels so the 1s are the
-   -- out of bound pixels we want to replace
-   mask[mask:ne(4)] = 1  -- out of bounds
-   mask[mask:eq(4)] = 0  -- in bounds
+ 
+   local mask = projection.make_mask(xmap,ymap,imgw,imgh)
    printf("Masking %d/%d lookups (out of bounds)", mask:sum(),mask:nElement())
 
    -- +++++++
    -- (5) convert the x and y index into a single 1D offset (y * stride + x)
    -- +++++++
-
-   -- CAREFUL must floor before multiplying by stride or does not make sense.
-   -- -0.5 then floor is equivalient to adding 0.5 -> floor -> -1 before multiply by stride.
-   local outmap = ymap:clone():add(-0.5):floor()
-
-   -- ymap -1 so that multiply by stride makes sense (imgw is the stride)
-   -- to map (1,1) ::  y = 0  * stride + x = 1 ==> 1
-   -- to map (2,1) ::  y = 1  * stride + x = 1 ==> stride + 1 etc.
-
-   outmap:mul(imgw):add(xmap + 0.5)
-   -- remove spurious out of bounds from output
-   outmap[mask] = 1
-   local index_map = outmap:long() -- round (+0.5 above) and floor
-   -- make 1D
-   index_map:resize(index_map:nElement())
+   
+   local index_map = projection.make_index(xmap,ymap,mask)
 
    -- only needed if we reuse the xmap and ymap
    xmap = xmap:floor()
@@ -372,14 +325,15 @@ function LensSensor:to_sphere (scale,debug)
       lookup_y         = ymap,      -- 2D lookup for y
       mask             = mask,      -- ByteTensor invalid locations marked with 1
       radial_distance  = theta_map, -- map of distances from optical center (theta)
-      fov_width        = fovw,      -- field of view in radians (width)
-      fov_height       = fovh,      -- field of view in radians (height)
-      width            = mapw,      -- dimensions to display map in 2D. width
-      height           = maph       -- and height.
+      fov_width        = lambda,    -- horizontal distance from optical center in radians (width)
+      fov_height       = phi,       -- vertical distance from optical center in radians (height)
+      height           = maph,      -- height of the output map
+      width            = mapw       -- width of the output map
    }
 
    return sphere_map
 
 end
+
 
 return LensSensor
