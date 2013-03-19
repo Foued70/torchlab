@@ -4,9 +4,8 @@ local SweepCamera = require('SweepCamera')
 
 local Sweep = torch.class('Sweep')
 
-function Sweep:__init(lens, position, rotation, image_paths)
-  self.postion = position
-  self.rotation = rotation
+function Sweep:__init(lens, pose, image_paths)
+  self.pose = pose
   self.cameras = {}
 
   self:init_cameras(lens, image_paths)
@@ -37,8 +36,8 @@ function Sweep:init_cameras(lens, image_paths)
 end
 
 function Sweep:calculate_camera_world(camera_number)
-  local position = self.position + self.cameras[camera_number].offset_position
-  local rotation = torch.Tensor(1,4):copy(self.rotation)
+  local position = self.pose.position + self.cameras[camera_number].offset_position
+  local rotation = torch.Tensor(1,4):copy(self.pose.rotation)
 
   --Accumulate all the camera's rotations up to the camera in question
   for i = 1, camera_number do
