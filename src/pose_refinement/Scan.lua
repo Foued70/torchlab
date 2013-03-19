@@ -11,7 +11,7 @@ local MODEL_FILE_EXTENSION = '.obj'
 
 -- scan_path is a .lua file or a dir 
 -- pose_file is a .txt file or nil
-
+-- pose_file is optional, if not included, will try to use scan_path to find model and pose
 function Scan:__init(scan_path, pose_file)
   if scan_path and paths.filep(scan_path) and fs.extname(scan_path) == '.lua' then
     self:init_from_file(scan_path)
@@ -28,7 +28,16 @@ function Scan:__init(scan_path, pose_file)
   end  
 end
 
--- pass the model's filepath or pose filepath or nothing
+function Scan:init_from_file(lua_file)
+  local scan = torch.load(lua_file)
+  self.path = paths.dirname(lua_file)
+  self.sweeps = scan.sweeps
+  self.poses = scan.poses
+  self.lenses = scan.lenses
+  self.model_path = scan.model_path    
+end
+
+-- file_path is model's filepath or pose's filepath or nil
 function Scan:set_model_file(file_path)
   -- 1. if there's a file_path and it has the right extension, use it. 
   -- 2. if file_path has wrong extension, look in that folder. 
@@ -51,13 +60,13 @@ function Scan:set_model_file(file_path)
   if model_files and #model_files > 0 then
     self.model_file = model_files[1]
   else
-    log.trace('No model file found', model_file) 
+    log.trace('No model file found') 
   end
 end
 
 function Scan:load_model_data()
   if self.model_file ~= nil then
-    self.model_data = require('util.obj2').new(paths.concat(self.scan_path, self.model_file))
+    self.model_data = require('util.obj2').new(paths.concat(self.path, self.model_file))
     return true
   end
 
@@ -72,15 +81,6 @@ end
 
 function Scan:create_lens(lens)
   table.insert(self.lenses, lens)
-end
-
-function Scan:init_from_file(scan_path)
-  local scan = torch.load(scan_path)
-  self.path = paths.dirname(scan_path)
-  self.sweeps = scan.sweeps
-  self.poses = scan.poses
-  self.lenses = scan.lenses
-  self.model_path = scan.model_path    
 end
 
 function Scan:set_sweeps()
