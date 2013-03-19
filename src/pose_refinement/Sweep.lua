@@ -7,9 +7,8 @@ local SweepCamera = require('SweepCamera')
 local Sweep = torch.class('Sweep')
 
 
-function Sweep:__init(lens, sweep_dir)
+function Sweep:__init(sweep_dir)
   self.path = sweep_dir -- keep track of the sweep_dir; maybe use relative path instead? 
-  self.lens = lens
   self:set_cameras()
 end
 
@@ -33,8 +32,8 @@ function Sweep:set_pose(pose)
   local forward_vector = torch.Tensor({{0,1,0}})
 
   for i, camera in ipairs(self.cameras) do
-   local offset_position = torch.Tensor(1,3):fill(0)
-   local offset_rotation = torch.Tensor(1,4)
+   local offset_position = torch.Tensor(3):fill(0)
+   local offset_rotation = torch.Tensor(4)
 
    --For now, assume the 1st shot has no offset rotation. It's global rotation == sweep.rotation
    if i == 1 then

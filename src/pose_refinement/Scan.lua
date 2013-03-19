@@ -16,13 +16,9 @@ function Scan:__init(scan_path, pose_file)
   
   if paths.filep(scan_path) and fs.extname(scan_path) == '.lua' then
     self:init_from_file(scan_path)
-  elseif paths.dirp(scan_path) then
-    self.lenses = {}  
-
-    self:create_lens(config.lens)
-    self.sweep_lens = 1    
-    
+  elseif paths.dirp(scan_path) then    
     self.path = scan_path
+    self.camera_id = 'nikon_D800E_w18mm' -- hardcoded for now, can figure it from exif data maybe?
     self:set_sweeps()
     self:set_poses(pose_file) 
     self:set_model_file(pose_file)
@@ -36,10 +32,13 @@ function Scan:init_from_file(lua_file)
   self.path = paths.dirname(lua_file)
   self.sweeps = scan.sweeps
   self.poses = scan.poses
-  self.lenses = scan.lenses
-  self.model_path = scan.model_path    
+  self.model_path = scan.model_path
+  self.camera_id = scan.camera_id
+  self.camera_settings = scan.camera_settings
 end
 
+function Scan:set_camera_id()
+end
 -- file_path: any file path (optional)
 function Scan:set_model_file(file_path)
   -- if there's a file_path and it has the right extension, use it. 
@@ -82,22 +81,36 @@ function Scan:flush_model_data()
   collectgarbage()
 end
 
-function Scan:create_lens(lens)
-  table.insert(self.lenses, lens)
-end
-
 function Scan:set_sweeps()  
   local sweeps_dirs = fs.dirs_only(self.path, config.sweep_folder_prefix)
   if not sweeps_dirs or #sweeps_dirs == 0 then log.trace('no sweeps dirs') return end
-  self.sweeps = {}  
+  self.sweeps = {}    
   for i, v in ipairs(sweeps_dirs) do
     -- make a sweep for the img dir even if there are no imgs in it b.c. assumption is that sweep idx = pose idx
-    table.insert(self.sweeps, Sweep.new(self.sweep_lens, v))
+    table.insert(self.sweeps, Sweep.new(v))
   end
   
-  self:init_sweeps_poses()
+  self:init_camera_settings()
+  self:init_sweeps_poses()    
 end
 
+function Scan:init_camera_settings()
+  self.camera_settings = {}
+  for i, sweep in ipairs(self.sweeps) do
+    if sweep.cameras and #sweep.cameras > 0 and sweep.cameras[1].image_path then
+     -- FocalLength
+     -- FNumber
+     -- ExposureTime
+     -- ISOSpeedRatings
+     -- Make
+     -- Model
+     -- WhiteBalance
+     -- XResolution
+     -- ApertureValue
+     -- ShutterSpeedValue
+    end    
+  end
+end
 
 function Scan:set_poses(pose_file)
   -- guess the pose file based on scan path if pose file path not provided or isn't a file
