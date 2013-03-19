@@ -90,26 +90,7 @@ function Scan:set_sweeps()
     table.insert(self.sweeps, Sweep.new(v))
   end
   
-  self:init_camera_settings()
   self:init_sweeps_poses()    
-end
-
-function Scan:init_camera_settings()
-  self.camera_settings = {}
-  for i, sweep in ipairs(self.sweeps) do
-    if sweep.cameras and #sweep.cameras > 0 and sweep.cameras[1].image_path then
-     -- FocalLength
-     -- FNumber
-     -- ExposureTime
-     -- ISOSpeedRatings
-     -- Make
-     -- Model
-     -- WhiteBalance
-     -- XResolution
-     -- ApertureValue
-     -- ShutterSpeedValue
-    end    
-  end
 end
 
 function Scan:set_poses(pose_file)
