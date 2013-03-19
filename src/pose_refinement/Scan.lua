@@ -9,13 +9,14 @@ local Scan = torch.class('Scan')
 
 local MODEL_FILE_EXTENSION = '.obj'
 
--- scan_path is a .lua file or a dir 
--- pose_file is a .txt file or nil
--- pose_file is optional, if not included, will try to use scan_path to find model and pose
+-- scan_path: either a .lua file or a dir (required).
+-- pose_file: .txt file (optional). When nil, will try to use scan_path to find model and pose.
 function Scan:__init(scan_path, pose_file)
-  if scan_path and paths.filep(scan_path) and fs.extname(scan_path) == '.lua' then
+  if not scan_path then error('arg #1 invalid, cannot be nil') end
+  
+  if paths.filep(scan_path) and fs.extname(scan_path) == '.lua' then
     self:init_from_file(scan_path)
-  else
+  elseif paths.dirp(scan_path) then
     self.lenses = {}  
 
     self:create_lens(config.lens)
@@ -23,8 +24,10 @@ function Scan:__init(scan_path, pose_file)
     
     self.path = scan_path
     self:set_sweeps()
-    self:set_poses(pose_file)
+    self:set_poses(pose_file) 
     self:set_model_file(pose_file)
+  else
+    error('arg #1 must be valid directory or lua file')
   end  
 end
 
@@ -37,36 +40,36 @@ function Scan:init_from_file(lua_file)
   self.model_path = scan.model_path    
 end
 
--- file_path is model's filepath or pose's filepath or nil
+-- file_path: any file path (optional)
 function Scan:set_model_file(file_path)
-  -- 1. if there's a file_path and it has the right extension, use it. 
-  -- 2. if file_path has wrong extension, look in that folder. 
-  -- 3. if no file_path and scan has a path, try looking there for the model file
-  
-  local model_dir = self.path
-  
+  -- if there's a file_path and it has the right extension, use it. 
+  -- otherwise try looking in the file_path's folder, then in scan_path folder
+    
   if file_path and paths.filep(file_path) then
     if fs.extname(file_path) == MODEL_FILE_EXTENSION then 
       self.model_file = file_path
       return
     else
-      model_dir = paths.dirname(file_path)
+      local model_files = fs.files_only(paths.dirname(file_path), MODEL_FILE_EXTENSION)
+      if model_files and #model_files > 0 then
+        self.model_file = model_files[1]
+        return
+      end
     end
   end
   
-  if not model_dir then log.trace('No directory to look for model') return end
-  
-  local model_files = fs.files_only(model_dir, MODEL_FILE_EXTENSION)
+  local model_files = fs.files_only(self.path, MODEL_FILE_EXTENSION)
   if model_files and #model_files > 0 then
     self.model_file = model_files[1]
-  else
-    log.trace('No model file found') 
+    return 
   end
+  
+  log.trace("no model file found")
 end
 
 function Scan:load_model_data()
   if self.model_file ~= nil then
-    self.model_data = require('util.obj2').new(paths.concat(self.path, self.model_file))
+    self.model_data = require('util.obj2').new(self.model_file)
     return true
   end
 
@@ -83,8 +86,7 @@ function Scan:create_lens(lens)
   table.insert(self.lenses, lens)
 end
 
-function Scan:set_sweeps()
-  if not self.path or not paths.dirp(self.path) then log.trace('no scan path') return end  
+function Scan:set_sweeps()  
   local sweeps_dirs = fs.dirs_only(self.path, config.sweep_folder_prefix)
   if not sweeps_dirs or #sweeps_dirs == 0 then log.trace('no sweeps dirs') return end
   self.sweeps = {}  
@@ -98,17 +100,17 @@ end
 
 
 function Scan:set_poses(pose_file)
-  -- guess the pose file based on scan path if pose file path not provided
+  -- guess the pose file based on scan path if pose file path not provided or isn't a file
   if not pose_file or not paths.filep(pose_file) then
-    if self.path and paths.dirp(self.path) then
-      local txt_files = fs.files_only(self.path, '.txt')
-      pose_file = txt_files[1]
+    local txt_files = fs.files_only(self.path, '.txt')
+    if txt_files and #txt_files > 0 then 
+      pose_file = txt_files[1] 
     else
-      log.trace('no pose file')
+      log.trace('no pose file found')
       return
     end
   end
-
+  
   local f, err = io.open(pose_file, "r")
   if err then log.trace('error opening pose file', err) return end
   
@@ -138,7 +140,7 @@ function Scan:get_pose(idx)
   return self:get_pose(idx-1)  
 end
 
--- optional file_path to save in a certain location or with certain file name.
+-- file_path: save in a certain location or with certain file name (optional)
 function Scan:save(file_path)  
   -- don't save the model data
   self:flush_model_data()
