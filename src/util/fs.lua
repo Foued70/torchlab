@@ -8,12 +8,12 @@ local function dirCheck(fname, prefix, show_hidden)
   return true
 end
 
-function fs.dirs_only(dirPath, prefix, show_hidden)  
-  if not paths.dirp(dirPath) then return end
+function fs.dirs_only(dir_path, prefix, show_hidden)  
+  if not dir_path or not paths.dirp(dir_path) then return end
   local dirs = {}
-  for f in paths.files(dirPath) do
+  for f in paths.files(dir_path) do
     if dirCheck(f, prefix, show_hidden) then
-      local dir = paths.concat(dirPath, f)      
+      local dir = paths.concat(dir_path, f)      
       if paths.dirp(dir) then table.insert(dirs, dir) end      
     end
   end
@@ -21,16 +21,16 @@ function fs.dirs_only(dirPath, prefix, show_hidden)
   return dirs
 end
 
-function fs.files_only(dirPath, ...)
-  if not paths.dirp(dirPath) then return end
+function fs.files_only(dir_path, ...)
+  if not paths.dirp(dir_path) then return end
   
   local files = {}
-  for f in paths.files(dirPath) do
-    local filePath = paths.concat(dirPath, f)
-    if paths.filep(filePath) then
+  for f in paths.files(dir_path) do
+    local file_path = paths.concat(dir_path, f)
+    if paths.filep(file_path) then
       local typeMatch = false
       
-      local ext = fs.extname(filePath)  
+      local ext = fs.extname(file_path)  
       for i, v in ipairs{...} do
         if v == ext then
           typeMatch = true
@@ -38,15 +38,15 @@ function fs.files_only(dirPath, ...)
         end
       end
       
-      if typeMatch or #{...} == 0 then table.insert(files, filePath) end
+      if typeMatch or #{...} == 0 then table.insert(files, file_path) end
     end
   end
   
   return files
 end
 
-function fs.extname(filePath)
-  return filePath:match("%..+$")
+function fs.extname(file_path)
+  return file_path:match("%..+$")
 end
 
 return fs

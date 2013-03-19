@@ -5,11 +5,7 @@ local SweepCamera = torch.class('SweepCamera')
 
 local REQUIRED_CALIBRATION_PAIRS = 3
 
-function SweepCamera:__init(lens, offset_position, offset_rotation, image_path)
-  self.lens = lens
-
-  self.offset_position = offset_position
-  self.offset_rotation = offset_rotation
+function SweepCamera:__init(image_path)
 
   self.calibration_pairs = torch.Tensor(REQUIRED_CALIBRATION_PAIRS,5)
   self.pairs_calibrated = 0
