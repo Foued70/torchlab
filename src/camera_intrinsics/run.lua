@@ -49,23 +49,16 @@ if not images then
    end
 end
 
--- takes a sphere map and a projection type creates a new map
-function sphere_to_projection(sphere_map, projection)
-   local thetas = sphere_map.radial_distance:clone()
-   if (projection == "rectangular") then
-      -- R = f * tan(theta)
-      thetas:tan()
-   end
-end
-
-
-
 img = images[1]
 
 mylens  = LensSensor.new("nikon_D5100_w10p5mm",img)
 
 sys.tic()
-map = mylens:to_sphere()
+rmap = mylens:to_projection("rectilinear")
+printf(" + build look up table: %2.4fs",sys.toc())
+
+sys.tic()
+smap = mylens:to_projection()
 printf(" + build look up table: %2.4fs",sys.toc())
 
 sys.tic()
@@ -73,14 +66,25 @@ collectgarbage()
 printf(" + (collect garbage) : %2.4fs",sys.toc())
 
 sys.tic()
-output_image = projection.remap(img,map)
+routput_image = projection.remap(img,rmap)
+printf(" + reproject: %2.4fs",sys.toc())
+
+sys.tic()
+soutput_image = projection.remap(img,smap)
 printf(" + reproject: %2.4fs",sys.toc())
 
 sys.tic()
 collectgarbage()
 printf(" + (collect garbage) : %2.4fs",sys.toc())
 
-image.display{image={image.scale(output_image, output_image:size(3)*0.2, output_image:size(2)*0.2)}}
---image.display{image=img}
+rimg_scale = image.scale(routput_image, 
+                         routput_image:size(3)*0.2, 
+                         routput_image:size(2)*0.2)
+
+simg_scale = image.scale(soutput_image, 
+                         soutput_image:size(3)*0.2, 
+                         soutput_image:size(2)*0.2)
+
+image.display{image={rimg_scale,simg_scale}}
 
 
