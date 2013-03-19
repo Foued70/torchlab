@@ -3535,6 +3535,8 @@ gl.clampf  = ffi.typeof('GLclampf[?]')
 gl.clampd  = ffi.typeof('GLclampd[?]')
 gl.char    = ffi.typeof('GLchar[?]')
 gl.const_char_pp = ffi.typeof('const GLchar *[1]')
+gl.ubyte   = ffi.typeof('GLubyte[?]')
+gl.byte    = ffi.typeof('GLbyte[?]')
 
 
 function gl.GetString(name)

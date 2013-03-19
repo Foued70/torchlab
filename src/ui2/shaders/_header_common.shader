@@ -25,6 +25,9 @@ struct sLightModelParameters {
 uniform uint objectID;
 uniform uint submeshStart;
 
+uniform uint screenWidth;
+uniform uint screenHeight;
+
 uniform vec4 sDefColor;
 uniform mat4 sModelViewMatrix;
 uniform mat4 sProjectionMatrix;

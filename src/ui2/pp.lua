@@ -5,6 +5,7 @@ require 'qtwidget'
 local qtuiloader = require('qtuiloader')
 local paths = require('paths')
 local fs = require('util/fs')
+local config = require('pp_config')
 
 local Pose = torch.class('Pose') -- simplified Pose class, maybe should use the Pose in util?
 local Sweep = torch.class('Sweep')
@@ -38,7 +39,7 @@ function Sweep:__init(folder)
   self.name = paths.basename(folder)
   self.pics = {}
   
-  for i, f in ipairs(fs.files_only(folder, ".jpg", ".png")) do
+  for i, f in ipairs(fs.files_only(folder, unpack(config.pic_extensions)) do
     table.insert(self.pics, Pic.new(f))
   end
 end
@@ -71,16 +72,19 @@ function PosePicker:loadFolder()
   self.ui.labelPicsFolder:setText(paths.basename(self.picsFolder))
   self:resetSweeps()
   
-  local picsDirs = fs.dirs_only(self.picsFolder)
-  if picsDirs and #picsDirs > 0 then
-    for i, v in ipairs(picsDirs) do
-      table.insert(self.sweeps, Sweep.new(v))
-    end
-  else
-    table.insert(self.sweeps, Sweep.new(self.picsFolder))
+  local sweepsDirs = fs.dirs_only(self.picsFolder, config.sweep_folder_prefix)
+  if sweepsDirs and #sweepsDirs > 0 then
+    for i, v in ipairs(sweepsDirs) do
+      local picsDir = paths.concat(v, config.processed_pics_folder)
+      if paths.dirp(picsDir) then 
+        table.insert(self.sweeps, Sweep.new(picsDir))
+      end
+    end  
+    
+    self.lastSweepIdx = #self.sweeps
+    self.lastPicIdx = #self.sweeps[self.lastSweepIdx].pics
   end
-  self.lastSweepIdx = #self.sweeps
-  self.lastPicIdx = #self.sweeps[self.lastSweepIdx].pics
+  
   self:updateGui()
 end
 

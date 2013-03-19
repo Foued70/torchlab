@@ -30,6 +30,10 @@ function MatrixStack:translate(translation)
   self.model_view_matrix:mm(self.model_view_matrix:clone(), self.translation_matrix)
 end
 
+function MatrixStack:set_projection(projection_matix)
+  self.projection_matrix:copy(projection_matix:float())
+end
+
 function MatrixStack:for_gl()
   -- extract normal matrix
   torch.inverse(self.normal_matrix, self.model_view_matrix[{{1, 3}, {1, 3}}])

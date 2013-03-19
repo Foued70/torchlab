@@ -1,17 +1,18 @@
 local paths = require "paths"
 local fs = {} 
 
-local function dirCheck(fname, include_hidden)
+local function dirCheck(fname, prefix, show_hidden)
   if fname == '.' or fname == '..' then return end
-  if not include_hidden and fname:find("^%..+") then return end
+  if prefix and not fname:find("^"..prefix) then return end
+  if not show_hidden and fname:find("^%..+") then return end
   return true
 end
 
-function fs.dirs_only(dirPath, include_hidden)
+function fs.dirs_only(dirPath, prefix, show_hidden)  
   if not paths.dirp(dirPath) then return end
   local dirs = {}
   for f in paths.files(dirPath) do
-    if dirCheck(f, include_hidden) then
+    if dirCheck(f, prefix, show_hidden) then
       local dir = paths.concat(dirPath, f)      
       if paths.dirp(dir) then table.insert(dirs, dir) end      
     end
