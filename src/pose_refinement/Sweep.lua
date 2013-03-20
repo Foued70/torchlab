@@ -7,9 +7,8 @@ local SweepCamera = require('SweepCamera')
 local Sweep = torch.class('Sweep')
 
 
-function Sweep:__init(lens, sweep_dir)
+function Sweep:__init(sweep_dir)
   self.path = sweep_dir -- keep track of the sweep_dir; maybe use relative path instead? 
-  self.lens = lens
   self:set_cameras()
 end
 
