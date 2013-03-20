@@ -23,7 +23,7 @@ LensSensor.default = {
       sensor_h = 24.0, -- mm
       focal    = 18, -- mm
 
-      type = "rectilinear",
+      lens_type = "rectilinear",
       
    },
 
@@ -47,26 +47,26 @@ LensSensor.default = {
       
       focal    = 10.58, -- mm
 
-      type = "thoby"
+      lens_type = "thoby"
    }
 }
 
 -- combine image and lens data into a single object
 
-function LensSensor:__init(lenstype,img)
+function LensSensor:__init(lens_sensor,img)
 
-   if not lenstype then
+   if not lens_sensor then
       error("Pass lens + sensor type as first arg")
    end
-   if type(lenstype) == "string" then
-      lenstype = self.default[lenstype]
+   if type(lens_sensor) == "string" then
+      lens_sensor = self.default[lens_sensor]
    end
-   if (not lenstype) or (type(lenstype) ~= "table") then
-      error("LensType not recognized")
+   if (not lens_sensor) or (type(lens_sensor) ~= "table") then
+      error("LensSensorType not recognized")
    end
 
-   -- copy static data from lenstype
-   for key, val in pairs(lenstype) do
+   -- copy static data from lens_sensor
+   for key, val in pairs(lens_sensor) do
       self[key] = val
    end
 
@@ -124,56 +124,9 @@ function LensSensor:__init(lenstype,img)
           diagonal_normalized, 
           horizontal_normalized, vertical_normalized)
 
-   local dfov = 0
+   local dfov = projection.compute_diagonal_fov(diagonal_normalized,self.lens_type)
 
-   -- We don't have most of these types of lenses but it is easy
-   -- enough to put here.  Perhaps we will include a universal model
-   -- as per Scaramuzza's calibration.
-
-   if (self.type == "rectilinear") then
-      dfov = torch.atan(diagonal_normalized)   -- diag in rad
-
-   elseif (self.type == "thoby") then
-      print(" -- using lens type: thoby")
-      -- thoby : theta = asin((r/f)/(k1 * f))/k2
-      if (diagonal_normalized > k1) then 
-         error("diagonal too large for thoby")
-      else
-         dfov = torch.asin(diagonal_normalized/k1)/k2
-      end
-   elseif (self.type == "equal_angle") then
-      dfov = diagonal_normalized
-
-   elseif (self.type =="equal_area") then
-      if( diagonal_normalized <= 2 ) then
-         dfov = 2 * torch.asin( 0.5 * diagonal_normalized )
-      end
-      if( dfov == 0 ) then
-         error( "equal-area FOV too large" )
-      end
-
-   elseif (self.type == "stereographic") then
-      dfov = 2 * atan( 0.5 * diagonal_normalized );
-
-   elseif (self.type == "orthographic") then
-      if( diagonal_normalized <= 1 ) then
-         dfov = torch.asin( diagonal_normalized )
-      end
-      if( dfov == 0 ) then
-         error( "orthographic FOV too large" );
-      end;
-
-   else
-      error("don't understand self lens model requested")
-   end
-
-   -- horizontal and diagonal fov's are useful for size of our lookup
-   -- table.  Using normal (euclidean) pythagorean theorem to compute
-   -- w and h from the aspect ratio and the diagonal which doesn't
-   -- feel right but gives the expected result as opposed to the
-   -- non-euclidean cos(c) = cos(a)cos(b)
-   local vfov = dfov/math.sqrt(aspect_ratio*aspect_ratio + 1)
-   local hfov = aspect_ratio*vfov
+   local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
 
    printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f", 
       dfov*r2d, hfov*r2d,vfov*r2d)
@@ -220,7 +173,7 @@ function LensSensor:to_projection (proj_type,scale,debug)
       scale = 1
    end
 
-   local lens_type = self.type
+   local lens_type = self.lens_type
 
    -- +++++
    -- (0).a image dimensions
@@ -233,13 +186,40 @@ function LensSensor:to_projection (proj_type,scale,debug)
    local vfov = self.vfov
 
    -- +++++
+   -- find dimension of the map
+   -- +++++
+   local mapw = math.floor(imgw * scale)
+   local maph = math.floor(mapw * (vfov/hfov))
+
+   -- +++++
    -- (1) create map of diagonal angles from optical center
    -- +++++
-   local theta_map, lambda, phi = projection.make_diagonal(hfov,vfov,imgw*scale)
-
-   local mapw = lambda:size(1)
-   local maph = phi:size(1)
-
+   local lambda,phi,theta_map, output_map
+   if (proj_type == "rectilinear") then
+      -- limit the fov to roughly 120 degrees
+      if fov > 1 then 
+         fov = 1 
+         vfov,hfov = projection.derive_hw(fov,self.aspect_ratio)
+      end
+      -- set up size of the output table
+      local drange = torch.tan(fov)
+      local vrange,hrange = projection.derive_hw(drange,self.aspect_ratio)
+      -- equal steps in normalized coordinates
+      lambda   = torch.linspace(-hrange,hrange,mapw)
+      phi      = torch.linspace(-vrange,vrange,maph)
+      output_map = projection.make_map_of_diag_dist(lambda,phi)
+      theta_map = output_map:clone():atan()
+   else
+      lambda = torch.linspace(-hfov,hfov,mapw)
+      phi    = torch.linspace(-vfov,vfov,maph)
+      -- default is to project to sphere
+      -- create horizontal (lambda) and vertical angles (phi) x,y lookup
+      --  in spherical map from -radians,radians at resolution mapw and
+      --  maph.  Equal steps in angles.
+      output_map = projection.make_map_of_diag_dist(lambda,phi)
+      theta_map  = output_map
+   end
+   
    -- +++++
    -- (2) replace theta for each entry in map with r
    -- +++++
@@ -265,22 +245,11 @@ function LensSensor:to_projection (proj_type,scale,debug)
       return nil
    end
 
-   printf("rmap: max: %f min: %f", r_map:max(), r_map:min())
-   -- +++++
-   -- (2b) reproject to another projection type
-   -- +++++
-   if (proj_type == "rectilinear") then 
-      r_map:atan()
-   else
-      print(" - Projecting to sphere")
-      -- do nothing
-   end
    -- +++++
    -- (3) x,y index (map unit sphere to normlized pixel coords)
    -- +++++
-   printf("rmap: max: %f min: %f", r_map:max(), r_map:min())
    -- make the ratio (new divided by old)
-   r_map:cdiv(r_map,theta_map)
+   r_map:cdiv(r_map,output_map)
    
    -- x and y are scaled by this ratio. 
    local xmap = lambda:repeatTensor(maph,1)
@@ -302,33 +271,19 @@ function LensSensor:to_projection (proj_type,scale,debug)
    
    local index_map = projection.make_index(xmap,ymap,mask)
 
-   -- only needed if we reuse the xmap and ymap
-   xmap = xmap:floor()
-   xmap[mask] = 1
-   ymap = ymap:floor()
-   ymap[mask] = 1
-
-
-   if debug then
-      printf(" x map from %d to %d (max: %d)",xmap:min(),xmap:max(),imgw)
-      printf(" y map from %d to %d (max: %d)",ymap:min(),ymap:max(),imgh)
-      printf("1D map from %d to %d (max: %d)",index_map:min(),index_map:max(),index_map:size(1))
-   end
-
    -- +++++++
    -- (6) output sphere object
    -- +++++++
 
    sphere_map = {
       lookup_table     = index_map, -- 1D LongTensor for fast lookups
-      lookup_x         = xmap,      -- 2D lookup for x
-      lookup_y         = ymap,      -- 2D lookup for y
       mask             = mask,      -- ByteTensor invalid locations marked with 1
       radial_distance  = theta_map, -- map of distances from optical center (theta)
-      fov_width        = lambda,    -- horizontal distance from optical center in radians (width)
-      fov_height       = phi,       -- vertical distance from optical center in radians (height)
       height           = maph,      -- height of the output map
-      width            = mapw       -- width of the output map
+      width            = mapw,      -- width of the output map
+      dfov             = fov,       -- diagonal field of view
+      hfov             = hfov,      -- horizontal field of view
+      vfov             = vfov       -- vertical field of view
    }
 
    return sphere_map

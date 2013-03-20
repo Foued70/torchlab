@@ -1,5 +1,9 @@
 setfenv(1, setmetatable({}, {__index = _G}))
 
+-- thoby constants
+local k1 = 1.47
+local k2 = 0.713
+
 -- image is 3 x map dims
 -- now map is 1D (this is faster)
 function remap(img, map)
@@ -47,21 +51,65 @@ function remap(img, map)
    return out
 end
 
--- compute angles using spherical geometry 
-local noneuclidean = false
+function compute_diagonal_fov(diagonal_normalized,lens_type)
+   -- We don't have most of these types of lenses but it is easy
+   -- enough to put here.  Perhaps we will include a universal model
+   -- as per Scaramuzza's calibration.
 
-function make_diagonal(hfov,vfov,mapw)
-   -- +++++
-   -- find dimension of the map
-   -- +++++
-   local maph = mapw * (vfov/hfov)
+   if (lens_type == "rectilinear") then
+      dfov = torch.atan(diagonal_normalized)   -- diag in rad
 
-   -- create horizontal (lambda) and vertical angles (phi)
-   -- (equirectangular) x,y lookup in spherical map from
-   -- -radians,radians at resolution mapw and maph
-   local lambda = torch.linspace(-hfov,hfov,mapw)
-   local phi    = torch.linspace(-vfov,vfov,maph)
+   elseif (lens_type == "thoby") then
+      print(" -- using lens type: thoby")
+      -- thoby : theta = asin((r/f)/(k1 * f))/k2
+      if (diagonal_normalized > k1) then 
+         error("diagonal too large for thoby")
+      else
+         dfov = torch.asin(diagonal_normalized/k1)/k2
+      end
+   elseif (lens_type == "equal_angle") then
+      dfov = diagonal_normalized
 
+   elseif (lens_type =="equal_area") then
+      if( diagonal_normalized <= 2 ) then
+         dfov = 2 * torch.asin( 0.5 * diagonal_normalized )
+      end
+      if( dfov == 0 ) then
+         error( "equal-area FOV too large" )
+      end
+
+   elseif (lens_type == "stereographic") then
+      dfov = 2 * atan( 0.5 * diagonal_normalized );
+
+   elseif (lens_type == "orthographic") then
+      if( diagonal_normalized <= 1 ) then
+         dfov = torch.asin( diagonal_normalized )
+      end
+      if( dfov == 0 ) then
+         error( "orthographic FOV too large" );
+      end;
+
+   else
+      error("don't understand self lens model requested")
+   end
+   return dfov
+end
+
+function derive_hw(diag,aspect_ratio)
+   -- horizontal and diagonal fov's are useful for size of our lookup
+   -- table.  Using normal (euclidean) pythagorean theorem to compute
+   -- w and h from the aspect ratio and the diagonal which doesn't
+   -- feel right but gives the expected result as opposed to the
+   -- non-euclidean cos(c) = cos(a)cos(b)
+   local h = diag/math.sqrt(aspect_ratio*aspect_ratio + 1)
+   local w = aspect_ratio*h
+   return h,w
+end
+
+
+function make_map_of_diag_dist(lambda,phi,noneuclidean)
+   local mapw = lambda:size(1)
+   local maph = phi:size(1)
    local theta
    if noneuclidean then
       -- non-euclidean pythagorean
@@ -72,7 +120,6 @@ function make_diagonal(hfov,vfov,mapw)
       theta = torch.cmul(cosx,cosy):acos()
       cosx = nil
       cosy = nil
-      collectgarbage() -- not such a big deal as we are using expand
    else
       -- normal pythagorean theorem
       local xsqr = lambda:clone():cmul(lambda):resize(1,mapw):expand(maph,mapw) 
@@ -81,9 +128,8 @@ function make_diagonal(hfov,vfov,mapw)
       theta:sqrt()
       xsqr = nil
       ysqr = nil
-      collectgarbage() -- not such a big deal as we are using expand
    end
-   return theta, lambda, phi
+   return theta
 end
 
 -- make mask for out of bounds values
