@@ -41,11 +41,11 @@ end
 
 function Material:use(context)
   self.shader:use(context)
-  self.shader:set_uniform_float('sFrontMaterial.ambient', self.ambient)
-  self.shader:set_uniform_float('sFrontMaterial.diffuse', self.diffuse)
-  self.shader:set_uniform_float('sFrontMaterial.specular', self.specular)
-  self.shader:set_uniform_float('sFrontMaterial.shininess', self.shininess)
-  self.shader:set_uniform_float('sFrontMaterial.emission', self.emission)
+  self.shader:set_uniform_float('sFrontMaterial.ambient', self.ambient or 0)
+  self.shader:set_uniform_float('sFrontMaterial.diffuse', self.diffuse or 0)
+  self.shader:set_uniform_float('sFrontMaterial.specular', self.specular or 0)
+  self.shader:set_uniform_float('sFrontMaterial.shininess', self.shininess or 0)
+  self.shader:set_uniform_float('sFrontMaterial.emission', self.emission or 0)
 
   self:set_textures()
 end

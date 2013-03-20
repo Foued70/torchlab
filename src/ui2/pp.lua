@@ -39,7 +39,7 @@ function Sweep:__init(folder)
   self.name = paths.basename(folder)
   self.pics = {}
   
-  for i, f in ipairs(fs.files_only(folder, unpack(config.pic_extensions)) do
+  for i, f in ipairs(fs.files_only(folder, unpack(config.pic_extensions))) do
     table.insert(self.pics, Pic.new(f))
   end
 end
@@ -54,6 +54,7 @@ function PosePicker:__init()
   self:resetSweeps()
   
   self.ui = qtuiloader.load(paths.dirname(paths.thisfile())..'/pp.ui')  
+  -- self.painter = qt.QtLuaPainter(self.ui.scrollArea)
   qt.connect(self.ui.btnPicsFolder, 'clicked()', function() self.loadFolder(self) end)
   qt.connect(self.ui.btnPoseFile, 'clicked()', function() self.loadPoseFile(self) end)
   qt.connect(self.ui.btnNext, 'clicked()', function() self.next(self) end)
@@ -72,7 +73,7 @@ function PosePicker:loadFolder()
   self.ui.labelPicsFolder:setText(paths.basename(self.picsFolder))
   self:resetSweeps()
   
-  local sweepsDirs = fs.dirs_only(self.picsFolder, config.sweep_folder_prefix)
+  local sweepsDirs = fs.dirs_only(self.picsFolder, config.sweep_folder_prefix)  
   if sweepsDirs and #sweepsDirs > 0 then
     for i, v in ipairs(sweepsDirs) do
       local picsDir = paths.concat(v, config.processed_pics_folder)
@@ -80,7 +81,9 @@ function PosePicker:loadFolder()
         table.insert(self.sweeps, Sweep.new(picsDir))
       end
     end  
-    
+  end
+  
+  if self.sweeps and #self.sweeps > 0 then
     self.lastSweepIdx = #self.sweeps
     self.lastPicIdx = #self.sweeps[self.lastSweepIdx].pics
   end
@@ -171,7 +174,11 @@ function PosePicker:updateGui()
     self.ui.poseOrigText:setText(self:formatPose(defaultPose))
   end
     
-  -- TODO: update the gl widget sandwich with the current pic the pic's pose    
+  -- TODO: replace static image loading with gl widget sandwich
+  if self.currPic then        
+    -- self.painter:image(0, 0, qt.QImage(self.currPic.path))
+  end
+  
   self:updatePoseText()
 end
 
