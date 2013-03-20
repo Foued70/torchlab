@@ -2,7 +2,7 @@ require 'torch'
 
 local paths = require 'paths'
 local config = require 'config'
-local Pose = require 'Pose'
+local Pose = require 'PoseSlim'
 local fs = require 'util/fs'
 local Sweep = require 'Sweep'
 local Scan = torch.class('Scan')
@@ -23,6 +23,7 @@ function Scan:__init(scan_path, pose_file)
     
     self.path = scan_path
     self:set_sweeps()
+    log.trace("pose_file", pose_file)
     self:set_poses(pose_file)
     self:set_model_file(pose_file)
   end  
@@ -66,7 +67,7 @@ end
 
 function Scan:load_model_data()
   if self.model_file ~= nil then
-    self.model_data = require('util.obj2').new(paths.concat(self.path, self.model_file))
+    self.model_data = require('util').obj2.new(paths.concat(self.path, self.model_file))
     return true
   end
 

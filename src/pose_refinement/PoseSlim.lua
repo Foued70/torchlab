@@ -1,6 +1,6 @@
-local Pose = torch.class('Pose')
+local PoseSlim = torch.class('PoseSlim')
 
-function Pose:__init(pose_string)
+function PoseSlim:__init(pose_string)
   local pose_values = torch.Tensor(1, 11)
   local k = 1
   local first_value = true
@@ -14,8 +14,8 @@ function Pose:__init(pose_string)
     end
   end
   
-  self.rotation = pose_values:narrow(2,1,4)
-  self.position = pose_values:narrow(2,5,3)
+  self.rotation = torch.Tensor(4):copy(pose_values:narrow(2,1,4))
+  self.position = torch.Tensor(3):copy(pose_values:narrow(2,5,3))
 end
 
-return Pose
+return PoseSlim

@@ -1,6 +1,10 @@
 require 'torch'
 require 'image'
 
+local util = require "util" -- need printf
+local LensSensor = require "util.LensSensor"
+local projection = require "util.projection"
+
 local SweepCamera = torch.class('SweepCamera')
 
 local REQUIRED_CALIBRATION_PAIRS = 3
@@ -55,12 +59,24 @@ function SweepCamera:image_loaded()
 end
 
 function SweepCamera:load_image()
-  local image_data = image.load(self.image_path)
-  image_data = image_data:transpose(2,3)
-  image_data = image.vflip(image_data)
-  image_data = image_data:contiguous()
+  log.trace("Loading image from path:", "\""..self.image_path.."\"", "at:", sys.clock())
+  local image_native = image.load(self.image_path)
+  
+  --TODO:Get Lens Projections Working!
+  --[[
+  local lens = LensSensor.new("nikon_D5100_w10p5mm",image_native)
+  local rectilinear_map = lens:to_projection("rectilinear")
+  self.image_data = projection.remap(image_native,rectilinear_map)
+  ]]--
+
+  self.image_data = image_native
+  self.image_data = self.image_data:transpose(2,3)
+  self.image_data = image.vflip(self.image_data)
+  self.image_data = self.image_data:contiguous()
+  lens = nil
+  rectilinear_map = nil
   collectgarbage()
-  return image_data
+  log.trace("Completed image load at:", sys.clock())
 end
 
 function SweepCamera:flush_image()

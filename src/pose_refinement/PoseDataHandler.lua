@@ -1,4 +1,4 @@
-local Pose = require('Pose')
+local Pose = require('PoseSlim')
 
 function read_pose_data(pose_file_path)
   if not pose_file_path or string.len(pose_file_path) == 0 or not paths.filep(pose_file_path) then

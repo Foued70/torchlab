@@ -5,6 +5,7 @@ require 'qtuiloader'
 require 'qtwidget'
 require 'qt'
 
+local geom = require 'util.geom'
 local config = require 'ui2/pp_config'
 local Scan = require 'Scan'
 
@@ -24,7 +25,7 @@ function PoseRefinementUi:__init()
   self.description = paths.thisfile('pose_refinement.ui')
 
   self.widget = qtuiloader.load(self.description)
-  self.painter = qt.QtLuaPainter(self.widget.frame)
+  self.painter = qt.QtLuaPainter(self.widget.calibration_view)
 
   self.layers = {}
   self.magnifier = nil
@@ -65,12 +66,15 @@ function PoseRefinementUi:init_event_handling()
   qt.connect(self.listener, 'sigMouseMove(int,int,QByteArray,QByteArray)',
     function(x, y, keyboard_modifier, keys)
       if self.mouse_left_down == true then
-        self:update_magnifier(3.0, 1, x-6, y-6, 200, 200)
+        self:update_magnifier(1.0, 1, x-self.widget.calibration_view.x, y-self.widget.calibration_view.y, 100, 100)
       end
     end )
 
   qt.connect(self.widget.button_scan_folder, 'clicked()', function() self:set_scan_folder() end)
   qt.connect(self.widget.button_pose_file, 'clicked()', function() self:set_pose_file() end)
+  qt.connect(self.widget.button_init_calibration, 'clicked()', function() self:init_calibration() end)
+  qt.connect(self.widget.button_previous, 'clicked()', function() self:previous_camera() end)
+  qt.connect(self.widget.button_next, 'clicked()', function() self:next_camera() end)
 end
 
 function PoseRefinementUi:set_scan_folder()
@@ -108,27 +112,30 @@ function PoseRefinementUi:init_calibration()
   end
 
   log.trace("Loading scan at", sys.clock())
-  self.scan = Scan.new(config, self.scan_folder, self.pose_file)
+  self.scan = Scan.new(self.scan_folder, self.pose_file)
   log.trace("Completed scan load at", sys.clock())
 
   log.trace("Loading model data at", sys.clock())
   self.scan:load_model_data()
+  log.trace("Completed model load at", sys.clock())
 
+  collectgarbage()
   self.gl_viewport = require('ui2.GLWidget').new()
   while self.gl_viewport.initialized ~= true do
     os.execute("sleep " .. tonumber(1))
   end
+  collectgarbage()
+
+  require('libui2').make_current(self.gl_viewport.qt_widget)
+  require('libui2').hide_widget(self.gl_viewport.qt_widget)
 
   self.current_sweep = 1
   self.current_camera = 1
   self:update_photo_pass()
 
-  self.scan.sweeps[current_sweep].cameras[current_camera]:load_image()
-  self:calculate_viewport_size(self.scan.sweeps[current_sweep].cameras[current_camera].image_data)
+  self:calculate_viewport_size(self.scan.sweeps[self.current_sweep].cameras[self.current_camera].image_data)
 
-  require('libui2').make_current(self.gl_viewport.qt_widget)
-
-  local model_object = self.gl_viewport.renderer:add_object(self.scan.model_data)
+  self.model_object = self.gl_viewport.renderer:add_object(self.scan.model_data)
 
   self.gl_viewport.renderer:create_camera('pose_camera', self.viewport_width, self.viewport_height)
   self.gl_viewport.renderer:activate_camera('pose_camera')
@@ -138,26 +145,82 @@ function PoseRefinementUi:init_calibration()
   self.gl_viewport.renderer:create_camera('wireframe_camera', self.viewport_width, self.viewport_height)
   self.gl_viewport.renderer:activate_camera('wireframe_camera')
 
-  local billboard_data = require('util.obj2').new('../ui2/objs/planeNormalized.obj')
+  local billboard_data = require('util').obj2.new('../ui2/objs/planeNormalized.obj')
   local billboard_object = self.gl_viewport.renderer:add_object(billboard_data)
   local wireframe_mat_data = {name='wireframe_mat', ambient={0,0,0,1}, diffuse={0,0,0,1}, specular={0,0,0,1}, shininess={0,0,0,1}, emission={0,0,0,1}}
   local wireframe_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.wireframe, {'pose_camera_frame_buffer_pass_picking'})
   billboard_object.mesh:override_materials(wireframe_mat)
 
-  local vertex_highlight_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.vertex_highlight, {'pose_camera_frame_buffer_pass_depth'})
+  self.vertex_highlight_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.vertex_highlight, {'pose_camera_frame_buffer_pass_depth'})
 
-  self.gl_viewport.renderer:create_camera('vertex_highlight_camera', math.floor(image_width), math.floor(image_height))
+  self.gl_viewport.renderer:create_camera('vertex_highlight_camera', self.viewport_width, self.viewport_height)
 
   self:update_viewport_passes()
 end
 
+function PoseRefinementUi:previous_camera()
+  if self.current_camera > 1 then
+    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:flush_image()
+    self.current_camera = self.current_camera - 1 
+    self:update_photo_pass()
+    self:update_viewport_passes()
+  elseif self.current_sweep > 1 then
+    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:flush_image()
+    self.current_sweep = self.current_sweep - 1
+    self.current_camera = #self.scan.sweeps[self.current_sweep].cameras
+    self:update_photo_pass()
+    self:update_viewport_passes()
+  end
+end
+
+function PoseRefinementUi:next_camera()
+  if #self.scan.sweeps[self.current_sweep].cameras >= (self.current_camera+1) then
+    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:flush_image()
+    self.current_camera = self.current_camera + 1 
+    self:update_photo_pass()
+    self:update_viewport_passes()
+  elseif #self.scan.sweeps > self.current_sweep then
+    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:flush_image()
+    self.current_sweep = self.current_sweep + 1
+    self.current_camera = 1
+    self:update_photo_pass()
+    self:update_viewport_passes()
+  end
+end
+
 function PoseRefinementUi:update_photo_pass()
-  local photo_qt = qt.QImage.fromTensor(self.scan.sweeps[current_sweep].cameras[current_camera].image_data)
+  collectgarbage()
+  if self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:image_loaded() == false then
+    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:load_image()
+  end
+
+  local photo_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].cameras[self.current_camera].image_data)
   self:attach_image(1, 'dslr_photo', 'SourceOver', photo_qt)
+  self.widget:update()
 end
 
 function PoseRefinementUi:update_viewport_passes()
+  --Set GL camera to match current SweepCamera
+  local camera_position = nil
+  local camera_rotation = nil
+
+  camera_position, camera_rotation = self.scan.sweeps[self.current_sweep]:calculate_camera_world(self.current_camera)
+
+  local forward_vector = torch.Tensor({0,1,0})
+  local look_direction = geom.rotate_by_quat(forward_vector, camera_rotation)
+  local camera_eye = camera_position
+  local camera_center = camera_eye + look_direction
+
+  log.trace("camera_eye=", camera_eye)
+  log.trace("camera_center=", camera_center)
+
+  self.gl_viewport.renderer.cameras.pose_camera.eye:copy(camera_eye)
+  self.gl_viewport.renderer.cameras.pose_camera.center:copy(camera_center)
+  self.gl_viewport.renderer.cameras.vertex_highlight_camera.eye:copy(camera_eye)
+  self.gl_viewport.renderer.cameras.vertex_highlight_camera.center:copy(camera_center)
+
   --Standard Render of Model
+  self.model_object.mesh:restore_materials()
   self.gl_viewport.renderer:activate_scene('viewport_scene')
   self.gl_viewport.renderer:activate_camera('pose_camera')
   self.gl_viewport.renderer:render()
@@ -170,7 +233,7 @@ function PoseRefinementUi:update_viewport_passes()
   --Vertex Highlighting Render of Model
   self.gl_viewport.renderer:activate_camera('vertex_highlight_camera')
   self.gl_viewport.renderer:activate_scene('viewport_scene')
-  interior_object.mesh:override_materials(vertex_highlight_mat)
+  self.model_object.mesh:override_materials(self.vertex_highlight_mat)
   self.gl_viewport.renderer:render()
 
   --Convert Passes to QImages
@@ -182,12 +245,18 @@ function PoseRefinementUi:update_viewport_passes()
 
   self:attach_image(2, 'wireframe', 'SourceOver', wireframe_image_qt)
   self:attach_image(3, 'vertices', 'SourceOver', vertex_highlight_image_qt)
+
+  self.widget:update()
 end
 
 function PoseRefinementUi:calculate_viewport_size(image)
   -- TODO: get ui's window size
-  local window_width = self.widget.calibration_view.Width
-  local window_height = self.widget.calibration_view.Height
+  p("self.widget")
+  p(self.widget)
+  p("self.widget.calibration_view")
+  p(self.widget.calibration_view)
+  local window_width = self.widget.calibration_view.width
+  local window_height = self.widget.calibration_view.height
   local window_aspect = window_width / window_height
 
   local image_width   = image:size()[3]
@@ -245,12 +314,27 @@ function PoseRefinementUi:draw_image_layers()
     self.painter:initmatrix()
 
     --Fit image inside painter
-    local width = layer_data.image:rect():totable().width
-    local height = layer_data.image:rect():totable().height
-    local desired_width = self.painter.width
-    local desired_height = self.painter.height
-    local scale_x = desired_width / width  
-    local scale_y = desired_height / height
+    local painter_width = self.painter.width
+    local painter_height = self.painter.height
+    local painter_aspect = painter_width / painter_height
+
+    local layer_width = layer_data.image:rect():totable().width
+    local layer_height = layer_data.image:rect():totable().height
+    local layer_aspect = layer_width / layer_height
+
+    local final_width = nil
+    local final_height = nil
+
+    if layer_aspect > painter_aspect then 
+      final_height = math.floor(layer_height * (painter_width/layer_width))
+      final_width = painter_width
+    else
+      final_width = math.floor(layer_width * (painter_height/layer_height))
+      final_height = painter_height
+    end
+
+    local scale_x = final_width / layer_width  
+    local scale_y = final_height / layer_height
 
     self.painter:scale(scale_x, scale_y)
 
@@ -276,7 +360,7 @@ function PoseRefinementUi:draw_magnifier()
                       self.magnifier.start_y, 
                       self.magnifier.width, 
                       self.magnifier.height, 
-                      self.images[self.magnifier.layer].image, 
+                      self.layers[self.magnifier.layer].image, 
                       self.magnifier.source_start_x,
                       self.magnifier.source_start_y,
                       self.magnifier.source_width,
