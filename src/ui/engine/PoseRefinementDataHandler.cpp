@@ -186,14 +186,23 @@ PoseRefinementDataHandler::selectPhotoPoint(const Vector2& _photoPoint) {
 
 void 
 PoseRefinementDataHandler::loadPhotoPlane() {
+  log(PARAM, "Might load a photo plane");
   Scene* postScene = Engine::GetSingleton().getScene("PostScene");
+  log(PARAM, "Got scene");
   if (__photoPlane) {
+    log(PARAM, "deleting old photoPlane");
     postScene->deleteObject("photoPlane");
+    log(PARAM, "deleted old photoPlane");
   }
-  std::vector<Texture*> texturesVector; 
+  log(PARAM, "Texture?");
+  std::vector<Texture*> texturesVector;
+  log(PARAM, "Texture");
+  log(PARAM, "workingPhotoIndex = %d", workingPhotoIndex);
+  log(PARAM, "__photoFiles.size() = %d", __photoFiles.size());
+  log(PARAM, "Creating texture from file: %s", __photoFiles[workingPhotoIndex].c_str()); 
   texturesVector.push_back(new Texture(__photoFiles[workingPhotoIndex].c_str(), MODE_INDEXED_MAP));
   texturesVector.push_back(FrameBuffer::GetSingleton().getTexture(PICKING_PASS));
-      
+  log(PARAM, "About to create photoPlane");
   __photoPlane = postScene->createObject("photoPlane");
   if (!__photoPlane-> explicitLoad( "objects/planeNormalized.obj",
                                     0, //Dont flip the uvs
@@ -203,7 +212,11 @@ PoseRefinementDataHandler::loadPhotoPlane() {
                                     0.0f, 
                                     0.0f,
                                     &texturesVector[0],
-                                    2) ) exit(1);
+                                    2) ) 
+  {
+    log(PARAM, "Failed to create photoPlane. Crashing...");
+    exit(1);
+  }
   texturesVector.clear();
 }
 

@@ -1,6 +1,7 @@
 .DS_Store
 src/cache
 src/assets
+src/output
 build
 
 # Compiled Object files

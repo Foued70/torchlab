@@ -75,13 +75,14 @@ function Mesh:override_materials(material)
 end
 
 function Mesh:restore_materials()
-  if #self.default_materials < 1 then
+  if self.default_materials == nil then
     return
   end
   
   for i = 1, #self.submeshes do
     self.submeshes[i].material = self.default_materials[i]
   end
+  self.default_materials = nil
 end
 
 function Mesh:apply_material_to_all_(material)

@@ -15,9 +15,10 @@ all:$(install)
 
 
 $(install): $(unpack)
-	cd $(unpack); $(install_root)/bin/gcc -O4 -march=native -I$(install_root)/include -o $(install_root)/bin/dcraw dcraw.c \
+	cd $(unpack); $(install_root)/bin/gcc -o $(install_root)/bin/dcraw \
+			   -I$(install_root)/include -L$(install_root)/lib dcraw.c\
 	                   -Wall -Wno-unused-result -Wno-array-bounds \
-	                   -lm -ljasper -ljpeg -llcms -DNODEPS
+	                   -lm -ljpeg -llcms -ljasper
 
 $(unpack): $(tar_file)
 	cd $(build_dir)/deps; tar -xzf $(tar_file)

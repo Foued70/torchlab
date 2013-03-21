@@ -3,11 +3,11 @@ require 'sys'
 require 'paths'
 require 'math'
 
-local util = require 'util/util'
+local util = require 'util.util'
 
-local intersect = require 'util/intersect'
+local intersect = require 'util.intersect'
 
-local Ray = require 'util/Ray'
+local Ray = require 'util.Ray'
 
 local bihtree = {}
 

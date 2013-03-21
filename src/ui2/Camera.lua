@@ -34,30 +34,37 @@ function Camera:__init(widget, name)
   self.up_dir = torch.Tensor({0,0,1})
   self.right_dir = torch.Tensor({1,0,0})
 
+  self.projection_matrix = torch.Tensor(4,4):t()
+
+  self.frame_buffer = nil
+
   self.width = 0
   self.height = 0
-  
-  self.frame_buffer = nil
 end
 
-function Camera:update_projection_matrix(context)
-  local viewport = gl.GetIntegerv(gl.VIEWPORT, 4)
-  self.width = viewport[2]
-  self.height = viewport[3]
+function Camera:resize(width, height)
+  self.width = width
+  self.height = height
+
+  self:update_projection_matrix()
+  self:rebuild_buffers()
+  log.trace(self.name, " resized to:", self.width, self.height)
+end
+
+function Camera:update_projection_matrix()
   local aspect = self.width / self.height
 
   local f = 1 / math.tan(self.fov_y / 2)
   
-  context.projection_matrix:eye(4)
-  context.projection_matrix[{1,1}] = f / aspect
-  context.projection_matrix[{2,2}] = f
-  context.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
-  context.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
-  context.projection_matrix[{4,3}] = -1
+  self.projection_matrix:eye(4)
+  self.projection_matrix[{1,1}] = f / aspect
+  self.projection_matrix[{2,2}] = f
+  self.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
+  self.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
+  self.projection_matrix[{4,3}] = -1
 
-  self.projection_matrix = context.projection_matrix:double()
+  --self.projection_matrix = context.projection_matrix:double()
   -- memlog('projection_matrix', context.projection_matrix)
-  self:rebuild_buffers()
 end
 
 function Camera:rebuild_buffers()
@@ -76,6 +83,8 @@ function Camera:update_matrix(context)
   context.model_view_matrix[{3, {1,3}}] = -self.look_dir
 
   context:translate(-self.eye)
+
+  context:set_projection(self.projection_matrix)
 
   self.model_view_matrix = context.model_view_matrix:double()
 end
@@ -152,7 +161,6 @@ function Camera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
   self:update()
 end
 
-
 function Camera:rotate_center_around_eye(x, y)
   self:rotate_a_around_b(self.center, self.eye, self.look_dir, x, y, 0.001)
 end
@@ -171,6 +179,18 @@ function Camera:screen_to_world(screen_position)
   view_position:resize(4)
   torch.div(view_position, view_position, view_position[4])
   return view_position[{{1,3}}]
+end
+
+function Camera:world_to_screen(world_position)
+  world_position_matrix = torch.Tensor(4,1)
+  world_position_matrix[1] = world_position[1]
+  world_position_matrix[2] = world_position[2]
+  world_position_matrix[3] = world_position[3]
+  world_position_matrix[4] = 1
+  local mvp_matrix = torch.mm(self.projection_matrix, self.model_view_matrix)
+  local screen_position = torch.mm(mvp_matrix, world_position_matrix);
+  screen_position:resize(4)
+  return screen_position[{{1,3}}]
 end
 
 function Camera:pixel_to_world(x, y)

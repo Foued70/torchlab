@@ -1,5 +1,5 @@
-local geom = require 'util/geom'
-local Ray  = require 'util/Ray'
+local geom = require 'util.geom'
+local Ray  = require 'util.Ray'
 
 local intersect = {}
 
