@@ -52,19 +52,19 @@ img = images[1]
 mylens  = LensSensor.new("nikon_D5100_w10p5mm",img)
 
 sys.tic()
-rmap = mylens:to_projection("rectilinear")
+rmap = mylens:make_projection_map("rectilinear")
 printf(" + (rectilinear) build look up table: %2.4fs",sys.toc())
 
 sys.tic()
-cmap = mylens:to_projection("cylindrical")
+cmap = mylens:make_projection_map("cylindrical")
 printf(" + (cylindrical) build look up table: %2.4fs",sys.toc())
 
 sys.tic()
-vmap = mylens:to_projection("cylindrical_vert")
+vmap = mylens:make_projection_map("cylindrical_vert")
 printf(" + (cylindrical vert) build look up table: %2.4fs",sys.toc())
 
 sys.tic()
-smap = mylens:to_projection()
+smap = mylens:make_projection_map()
 printf(" + (spherical) build look up table: %2.4fs",sys.toc())
 
 sys.tic()

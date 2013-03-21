@@ -106,8 +106,9 @@ function derive_hw(diag,aspect_ratio)
    return h,w
 end
 
-
-function make_map_of_diag_dist(lambda,phi,noneuclidean)
+-- given an xrange and a yrange (lambda, phi) compute the 2D map of
+-- diagonal distances these x and y values cover.
+function make_pythagorean_map (lambda,phi,noneuclidean)
    local mapw = lambda:size(1)
    local maph = phi:size(1)
    local theta
@@ -130,6 +131,94 @@ function make_map_of_diag_dist(lambda,phi,noneuclidean)
       ysqr = nil
    end
    return theta
+end
+
+-- based on final projection type create a map of angles which need to
+-- be looked up in the original image.
+function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
+   printf("fov: %f hfov: %f vfov: %f mapw: %d maph: %d",fov,hfov,vfov,mapw,maph)
+   local lambda,phi,theta_map, output_map
+   if (proj_type == "rectilinear") then
+      -- limit the fov to roughly 120 degrees
+      if fov > 1 then
+         fov = 1
+         vfov,hfov = derive_hw(fov,aspect_ratio)
+      end
+      -- set up size of the output table
+      local drange = torch.tan(fov)
+      local vrange,hrange = derive_hw(drange,aspect_ratio)
+      -- equal steps in normalized coordinates
+      lambda   = torch.linspace(-hrange,hrange,mapw)
+      phi      = torch.linspace(-vrange,vrange,maph)
+      output_map = make_pythagorean_map(lambda,phi)
+      theta_map = output_map:clone():atan()
+   elseif (proj_type == "cylindrical") then
+      -- limit the vfov to roughly 120 degrees
+      if vfov > 1 then
+         vfov = 1
+         maph = mapw * (vfov / hfov)
+      end
+      -- set up size of the output table
+      local vrange = torch.tan(vfov)
+      local hrange = hfov
+      -- equal steps in normalized coordinates
+      lambda   = torch.linspace(-hrange,hrange,mapw)
+      phi      = torch.linspace(-vrange,vrange,maph)
+      output_map = make_pythagorean_map(lambda,phi)
+      lambda:atan()
+      theta_map = make_pythagorean_map(lambda,phi)
+   elseif (proj_type == "cylindrical_vert") then
+      -- limit the hfov to roughly 120 degrees
+      if hfov > 1 then
+         hfov = 1
+         mapw = maph * (hfov/vfov)
+      end
+      -- set up size of the output table
+      local vrange = vfov
+      local hrange = torch.tan(hfov)
+      -- equal steps in normalized coordinates
+      lambda   = torch.linspace(-hrange,hrange,mapw)
+      phi      = torch.linspace(-vrange,vrange,maph)
+      output_map = make_pythagorean_map(lambda,phi)
+      phi:atan()
+      theta_map = make_pythagorean_map(lambda,phi)
+   else
+      lambda = torch.linspace(-hfov,hfov,mapw)
+      phi    = torch.linspace(-vfov,vfov,maph)
+      -- default is to project to sphere
+      -- create horizontal (lambda) and vertical angles (phi) x,y lookup
+      --  in spherical map from -radians,radians at resolution mapw and
+      --  maph.  Equal steps in angles.
+      output_map = make_pythagorean_map(lambda,phi)
+      theta_map  = output_map
+   end
+   return lambda, phi, theta_map, output_map, mapw, maph
+
+end
+
+function sphere_to_camera(theta_map,lens_type)
+   local r_map = theta_map:clone() -- copy
+
+   if (lens_type == "rectilinear") then
+      -- rectilinear : (1/f) * r' = tan(theta)
+      r_map:tan()
+   elseif (lens_type == "thoby") then
+      -- thoby       : (1/f) * r' = k1 * sin(k2*theta)
+      r_map:mul(k2):sin():mul(k1)
+   elseif (lens_type == "stereographic") then
+      --  + stereographic             : r = 2 * f * tan(theta/2)
+      r_map:mul(0.5):tan():mul(2)
+   elseif (lens_type == "orthographic") then
+      --  + orthographic              : r = f * sin(theta)
+      r_map:sin()
+   elseif (lens_type == "equisolid") then
+      --  + equisolid                 : r = 2 * f * sin(theta/2)
+      r_map:mul(0.5):sin():mul(2)
+   else
+      print("ERROR don't understand lens_type")
+      return nil
+   end
+   return r_map
 end
 
 -- make mask for out of bounds values
