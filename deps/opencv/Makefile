@@ -1,5 +1,11 @@
 include ../Makefile.common
 
+default_cmake_args = \
+	-D CMAKE_INSTALL_PREFIX:PATH=$(install_root) \
+	-D CMAKE_C_COMPILER:PATH=/usr/bin/gcc \
+	-D CMAKE_CXX_COMPILER:PATH=/usr/bin/g++ \
+	-D CMAKE_BUILD_TYPE=Release
+
 ver=2.4.4
 
 #url=http://downloads.sourceforge.net/project/opencvlibrary/opencv-unix/$(ver)/OpenCV-$(ver)-beta.tar.bz2
@@ -11,7 +17,7 @@ unpack=$(build_dir)/deps/OpenCV-$(ver)
 install=$(install_root)/lib/libopencv_core.$(ver).dylib
 
 args = $(default_cmake_args) \
-	-DBUILD_opencv_highgui:BOOL=OFF \
+	-DBUILD_opencv_highgui:BOOL=ON \
 	-DBUILD_opencv_video:BOOL=ON \
 	-DBUILD_opencv_java:BOOL=OFF
 
