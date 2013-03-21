@@ -25,7 +25,7 @@ function Renderer:__init(parent, width, height)
 end
 
 function Renderer:init(viewport_width, viewport_height)
-  self:create_camera('viewport_camera', viewport_width, viewport_height, torch.Tensor({2,3,5}), torch.Tensor({0,1,0}))
+  self:create_camera('viewport_camera', viewport_width, viewport_height, (math.pi/4), torch.Tensor({2,3,5}), torch.Tensor({0,1,0}))
   self:activate_camera('viewport_camera')
 
   self:create_camera('raycast_camera', viewport_width, viewport_height)  
@@ -88,8 +88,9 @@ function Renderer:render()
   end
 end
 
-function Renderer:create_camera(name, width, height, eye, center)
+function Renderer:create_camera(name, width, height, fov_y, eye, center)
   local camera = require('ui2.Camera').new(self, name)
+  if fov_y then camera.fov_y = fov_y end
   local eye_position = eye or torch.Tensor({0,0,0})
   local center_position = center or torch.Tensor({0,1,0})
 
@@ -199,6 +200,32 @@ function Renderer:raycast(start, direction)
   
   local hit_location = self.cameras.raycast_camera:pixel_to_world(self.cameras.raycast_camera.width*0.5, self.cameras.raycast_camera.height*0.5)
   return hit_location
+end
+
+function Renderer:pick_vertex(screen_position, selection_radius)
+  local pixel_coord_x = math.floor(self.cameras.viewport_camera.frame_buffer.width * ((screen_position[1]+1)*0.5))
+  local pixel_coord_y = math.floor(self.cameras.viewport_camera.frame_buffer.height * ((screen_position[2]+1)*0.5))
+  log.trace("screen_position")
+  log.trace(screen_position)
+  log.trace("pixel_coord_x")
+  log.trace(pixel_coord_x)
+  log.trace("pixel_coord_y")
+  log.trace(pixel_coord_y)
+  local object_id, triangle_index = self.cameras.viewport_camera.frame_buffer:read_pick_pixel(pixel_coord_x, pixel_coord_y)
+  log.trace()
+  local object = self.scenes.viewport_scene[object_id]
+  local verts, center, normal = object:get_triangle(triangle_index)
+
+  local selection = nil
+  for i, vertex in ipairs(verts) do
+    local vertex_screen_space = self.cameras.viewport_camera:world_to_screen(vertex)
+    local offset = vertex_screen_space - screen_position
+    if math.sqrt((offset[1]*offset[1])+(offset[2]*offset[2])) <= selection_radius then
+      selection = vertex
+      break
+    end
+  end
+  return selection
 end
 
 return Renderer

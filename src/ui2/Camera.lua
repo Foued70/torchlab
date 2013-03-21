@@ -181,6 +181,18 @@ function Camera:screen_to_world(screen_position)
   return view_position[{{1,3}}]
 end
 
+function Camera:world_to_screen(world_position)
+  world_position_matrix = torch.Tensor(4,1)
+  world_position_matrix[1] = world_position[1]
+  world_position_matrix[2] = world_position[2]
+  world_position_matrix[3] = world_position[3]
+  world_position_matrix[4] = 1
+  local mvp_matrix = torch.mm(self.projection_matrix, self.model_view_matrix)
+  local screen_position = torch.mm(mvp_matrix, world_position_matrix);
+  screen_position:resize(4)
+  return screen_position[{{1,3}}]
+end
+
 function Camera:pixel_to_world(x, y)
   local z = self.frame_buffer:read_depth_pixel(x, y)
   if z >= 1 then

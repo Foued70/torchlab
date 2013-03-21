@@ -1,21 +1,21 @@
-local exports = require "util/util"
+local exports = require "util.util"
 
-exports.geom        = require "util/geom"
-exports.intersect   = require "util/intersect"
-exports.bihtree     = require "util/bihtree"
-exports.interpolate = require "util/interpolate"
-exports.projection  = require "util/projection"
+exports.geom        = require "util.geom"
+exports.intersect   = require "util.intersect"
+exports.bihtree     = require "util.bihtree"
+exports.interpolate = require "util.interpolate"
+exports.projection  = require "util.projection"
 
-exports.depot = require "util/depot"
-exports.obj   = require "util/obj"
-exports.obj2  = require "util/obj2"
+exports.depot = require "util.depot"
+exports.obj   = require "util.obj"
+exports.obj2  = require "util.obj2"
 
 -- classes
-exports.Ray   = require "util/Ray"
-exports.Pose  = require "util/Pose"
-exports.Poses = require "util/Poses"
+exports.Ray   = require "util.Ray"
+exports.Pose  = require "util.Pose"
+exports.Poses = require "util.Poses"
 
-require "util/global"
+require "util.global"
 
 function exports.run_tests()
    local util_test = require "util/test/util-test"

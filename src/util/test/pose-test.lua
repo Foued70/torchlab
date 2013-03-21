@@ -180,7 +180,7 @@ function test.compute_dirs_offbyone(poses,pi,scale)
 end
 
 function test.compute_dirs_deep(poses)
-   local Ray = require 'util/Ray'
+   local Ray = require 'util.Ray'
    print("Testing compute directions")
    if not poses then
       poses = test.data.poses

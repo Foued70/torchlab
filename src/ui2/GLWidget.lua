@@ -77,7 +77,7 @@ function GLWidget:mouse_click(event)
   elseif event.right_button then
     self.mode = FOCUS_MODE
     local object_id, triangle_index = self.renderer.cameras.viewport_camera.frame_buffer:read_pick_pixel(event.x, event.y)
-    local object = self.renderer.active_scene[object_id]
+    local object = self.renderer.viewport_scene[object_id]
     local verts, center, normal = object:get_triangle(triangle_index)
 
     -- todo: animate

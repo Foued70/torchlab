@@ -10,7 +10,6 @@ local SweepCamera = torch.class('SweepCamera')
 local REQUIRED_CALIBRATION_PAIRS = 3
 
 function SweepCamera:__init(image_path)
-
   self.calibration_pairs = torch.Tensor(REQUIRED_CALIBRATION_PAIRS,5)
   self.pairs_calibrated = 0
   self.vertex_set = false
@@ -19,6 +18,9 @@ function SweepCamera:__init(image_path)
 
   self.image_path = image_path
   self.image_data = nil
+
+  self.lens = nil
+  self.rectilinear_lut = nil
 end
 
 function SweepCamera:add_vertex(x, y, z)
@@ -63,18 +65,16 @@ function SweepCamera:load_image()
   local image_native = image.load(self.image_path)
   
   --TODO:Get Lens Projections Working!
-  --[[
-  local lens = LensSensor.new("nikon_D5100_w10p5mm",image_native)
-  local rectilinear_map = lens:to_projection("rectilinear")
-  self.image_data = projection.remap(image_native,rectilinear_map)
-  ]]--
-
-  self.image_data = image_native
-  self.image_data = self.image_data:transpose(2,3)
-  self.image_data = image.vflip(self.image_data)
-  self.image_data = self.image_data:contiguous()
+  self.lens = LensSensor.new("nikon_D5100_w10p5mm",image_native)
+  self.rectilinear_lut = self.lens:to_projection("rectilinear")
+  self.image_data = projection.remap(image_native,self.rectilinear_lut)
   lens = nil
   rectilinear_map = nil
+  
+  --self.image_data = image_native
+  --self.image_data = self.image_data:transpose(2,3)
+  --self.image_data = image.vflip(self.image_data)
+  --self.image_data = self.image_data:contiguous()
   collectgarbage()
   log.trace("Completed image load at:", sys.clock())
 end
