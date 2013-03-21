@@ -152,7 +152,8 @@ function LensSensor:__init(lens_sensor,img)
 
 end
 
--- Maps a camera image + lens to a unit sphere (azimuth and elevation).
+-- Maps a camera image + lens to a unit sphere (azimuth and elevation)
+-- or through sphere to other projections.
 --
 -- Lens types:
 --
@@ -162,7 +163,13 @@ end
 --  + equal_area (equisolid)    : r = 2 * f * sin(theta/2)
 --  + thoby (fisheye)           : r = k1 * f * sin(k2*theta)
 --  + equal_angle (eqidistant)  : r = f * theta  (for unit sphere f = 1)
-
+-- 
+-- Proj types: 
+-- 
+--  + sphere
+--  + rectilinear
+--  + cylindrical
+--  + cylindrical_vert
 function LensSensor:to_projection (proj_type,scale,debug)
 
    if not proj_type then 
@@ -184,6 +191,7 @@ function LensSensor:to_projection (proj_type,scale,debug)
    local fov  = self.fov
    local hfov = self.hfov
    local vfov = self.vfov
+   local aspect_ratio = self.aspect_ratio
 
    -- +++++
    -- find dimension of the map
@@ -199,16 +207,46 @@ function LensSensor:to_projection (proj_type,scale,debug)
       -- limit the fov to roughly 120 degrees
       if fov > 1 then 
          fov = 1 
-         vfov,hfov = projection.derive_hw(fov,self.aspect_ratio)
+         vfov,hfov = projection.derive_hw(fov,aspect_ratio)
       end
       -- set up size of the output table
       local drange = torch.tan(fov)
-      local vrange,hrange = projection.derive_hw(drange,self.aspect_ratio)
+      local vrange,hrange = projection.derive_hw(drange,aspect_ratio)
       -- equal steps in normalized coordinates
       lambda   = torch.linspace(-hrange,hrange,mapw)
       phi      = torch.linspace(-vrange,vrange,maph)
       output_map = projection.make_map_of_diag_dist(lambda,phi)
       theta_map = output_map:clone():atan()
+   elseif (proj_type == "cylindrical") then
+      -- limit the vfov to roughly 120 degrees
+      if vfov > 1 then 
+         vfov = 1 
+         maph = mapw * (vfov / hfov)
+      end
+      -- set up size of the output table
+      local vrange = torch.tan(vfov)
+      local hrange = hfov
+      -- equal steps in normalized coordinates
+      lambda   = torch.linspace(-hrange,hrange,mapw)
+      phi      = torch.linspace(-vrange,vrange,maph)
+      output_map = projection.make_map_of_diag_dist(lambda,phi)
+      lambda:atan()
+      theta_map = projection.make_map_of_diag_dist(lambda,phi)
+   elseif (proj_type == "cylindrical_vert") then
+      -- limit the hfov to roughly 120 degrees
+      if hfov > 1 then 
+         hfov = 1 
+         mapw = maph * (hfov/vfov)
+      end
+      -- set up size of the output table
+      local vrange = vfov
+      local hrange = torch.tan(hfov)
+      -- equal steps in normalized coordinates
+      lambda   = torch.linspace(-hrange,hrange,mapw)
+      phi      = torch.linspace(-vrange,vrange,maph)
+      output_map = projection.make_map_of_diag_dist(lambda,phi)
+      phi:atan()
+      theta_map = projection.make_map_of_diag_dist(lambda,phi)
    else
       lambda = torch.linspace(-hfov,hfov,mapw)
       phi    = torch.linspace(-vfov,vfov,maph)

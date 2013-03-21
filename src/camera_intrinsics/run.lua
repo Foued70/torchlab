@@ -55,11 +55,19 @@ mylens  = LensSensor.new("nikon_D5100_w10p5mm",img)
 
 sys.tic()
 rmap = mylens:to_projection("rectilinear")
-printf(" + build look up table: %2.4fs",sys.toc())
+printf(" + (rectilinear) build look up table: %2.4fs",sys.toc())
+
+sys.tic()
+cmap = mylens:to_projection("cylindrical")
+printf(" + (cylindrical) build look up table: %2.4fs",sys.toc())
+
+sys.tic()
+vmap = mylens:to_projection("cylindrical_vert")
+printf(" + (cylindrical vert) build look up table: %2.4fs",sys.toc())
 
 sys.tic()
 smap = mylens:to_projection()
-printf(" + build look up table: %2.4fs",sys.toc())
+printf(" + (spherical) build look up table: %2.4fs",sys.toc())
 
 sys.tic()
 collectgarbage()
@@ -67,11 +75,19 @@ printf(" + (collect garbage) : %2.4fs",sys.toc())
 
 sys.tic()
 routput_image = projection.remap(img,rmap)
-printf(" + reproject: %2.4fs",sys.toc())
+printf(" + (rectilinear) reproject: %2.4fs",sys.toc())
+
+sys.tic()
+coutput_image = projection.remap(img,cmap)
+printf(" + (cylinder) reproject: %2.4fs",sys.toc())
+
+sys.tic()
+voutput_image = projection.remap(img,vmap)
+printf(" + (cylinder vert) reproject: %2.4fs",sys.toc())
 
 sys.tic()
 soutput_image = projection.remap(img,smap)
-printf(" + reproject: %2.4fs",sys.toc())
+printf(" + (spherical ) reproject: %2.4fs",sys.toc())
 
 sys.tic()
 collectgarbage()
@@ -81,10 +97,20 @@ rimg_scale = image.scale(routput_image,
                          routput_image:size(3)*0.2, 
                          routput_image:size(2)*0.2)
 
+cimg_scale = image.scale(coutput_image, 
+                         coutput_image:size(3)*0.2, 
+                         coutput_image:size(2)*0.2)
+
+vimg_scale = image.scale(voutput_image, 
+                         voutput_image:size(3)*0.2, 
+                         voutput_image:size(2)*0.2)
+
 simg_scale = image.scale(soutput_image, 
                          soutput_image:size(3)*0.2, 
                          soutput_image:size(2)*0.2)
 
 image.display{image={rimg_scale,simg_scale}}
+image.display(cimg_scale)
+image.display(vimg_scale)
 
 
