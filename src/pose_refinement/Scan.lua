@@ -3,7 +3,7 @@ require 'torch'
 local paths = require 'paths'
 local config = require 'config'
 local Pose = require 'PoseSlim'
-local fs = require 'util/fs'
+local fs = require 'util.fs'
 local Sweep = require 'Sweep'
 local Scan = torch.class('Scan')
 
@@ -71,7 +71,7 @@ end
 
 function Scan:load_model_data()
   if self.model_file ~= nil then
-    self.model_data = require('util').obj2.new(self.model_file)
+    self.model_data = require('util.obj2').new(self.model_file)
     return true
   end
 

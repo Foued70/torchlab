@@ -8,8 +8,8 @@ out vec3 vertexPositionScreenSpace;
 
 void main() {
 
-    float vertexSizeX = 40.0 * (1.0/float(screenWidth));
-    float vertexSizeY = 40.0 * (1.0/float(screenHeight));
+    float vertexSizeX = 20.0 * (1.0/float(screenWidth));
+    float vertexSizeY = 20.0 * (1.0/float(screenHeight));
 
     for(int i = 0; i < gl_in.length(); i++)
     {

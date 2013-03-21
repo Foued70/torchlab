@@ -36,6 +36,9 @@ function Sweep:set_pose(pose)
     local offset_position = torch.Tensor(3):fill(0)
     local offset_rotation = torch.Tensor(4)
 
+    --offset it up a bit, need to measure this to get a better rough estimate
+    offset_position[3] = 1/5
+
     --The dlsr is aligned 90 degrees off from the matterport. TODO: move to config file
     if i == 1 then
       geom.quaternion_from_axis_angle(rotation_axis, (math.pi*0.5), offset_rotation)
@@ -59,7 +62,7 @@ function Sweep:calculate_camera_world(camera_number)
 
   --Accumulate all the camera's rotations up to the camera in question
   for i = 1, camera_number do
-    rotation = geom.quat_product(rotation, self.cameras[camera_number].offset_rotation, rotation)
+    rotation = geom.quat_product(rotation, self.cameras[camera_number].offset_rotation)
   end
 
   return position, rotation

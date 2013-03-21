@@ -61,6 +61,7 @@ function PoseRefinementUi:init_event_handling()
       self.mouse_left_down = false
       self.widget.mouseTracking = false
       self.magnifier = nil
+      p(self.gl_viewport.renderer:pick_vertex(torch.Tensor({x/self.widget.calibration_view.x,y/self.widget.calibration_view.y}), (1/400)))
     end )
 
   qt.connect(self.listener, 'sigMouseMove(int,int,QByteArray,QByteArray)',
@@ -134,18 +135,19 @@ function PoseRefinementUi:init_calibration()
   self:update_photo_pass()
 
   self:calculate_viewport_size(self.scan.sweeps[self.current_sweep].cameras[self.current_camera].image_data)
-
+  local fov_y = self.scan.sweeps[self.current_sweep].cameras[self.current_camera].lens.vfov
+  log.trace("Field of view y=", fov_y) 
   self.model_object = self.gl_viewport.renderer:add_object(self.scan.model_data)
 
-  self.gl_viewport.renderer:create_camera('pose_camera', self.viewport_width, self.viewport_height)
+  self.gl_viewport.renderer:create_camera('pose_camera', self.viewport_width, self.viewport_height, fov_y)
   self.gl_viewport.renderer:activate_camera('pose_camera')
 
   self.gl_viewport.renderer:create_scene('wireframe_scene')
   self.gl_viewport.renderer:activate_scene('wireframe_scene')
-  self.gl_viewport.renderer:create_camera('wireframe_camera', self.viewport_width, self.viewport_height)
+  self.gl_viewport.renderer:create_camera('wireframe_camera', self.viewport_width, self.viewport_height, fov_y)
   self.gl_viewport.renderer:activate_camera('wireframe_camera')
 
-  local billboard_data = require('util').obj2.new('../ui2/objs/planeNormalized.obj')
+  local billboard_data = require('util.obj2').new('../ui2/objs/planeNormalized.obj')
   local billboard_object = self.gl_viewport.renderer:add_object(billboard_data)
   local wireframe_mat_data = {name='wireframe_mat', ambient={0,0,0,1}, diffuse={0,0,0,1}, specular={0,0,0,1}, shininess={0,0,0,1}, emission={0,0,0,1}}
   local wireframe_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.wireframe, {'pose_camera_frame_buffer_pass_picking'})
@@ -153,7 +155,7 @@ function PoseRefinementUi:init_calibration()
 
   self.vertex_highlight_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.vertex_highlight, {'pose_camera_frame_buffer_pass_depth'})
 
-  self.gl_viewport.renderer:create_camera('vertex_highlight_camera', self.viewport_width, self.viewport_height)
+  self.gl_viewport.renderer:create_camera('vertex_highlight_camera', self.viewport_width, self.viewport_height, fov_y)
 
   self:update_viewport_passes()
 end
@@ -213,6 +215,8 @@ function PoseRefinementUi:update_viewport_passes()
 
   log.trace("camera_eye=", camera_eye)
   log.trace("camera_center=", camera_center)
+  log.trace("look_direction=", look_direction)
+  log.trace("look_direction magnitude=", geom.dist(look_direction, torch.Tensor(3):fill(0)))
 
   self.gl_viewport.renderer.cameras.pose_camera.eye:copy(camera_eye)
   self.gl_viewport.renderer.cameras.pose_camera.center:copy(camera_center)
