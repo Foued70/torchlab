@@ -1,4 +1,4 @@
-local geom = require "util/geom"
+local geom = require "util.geom"
 
 local r2d = 180 / math.pi
 local d2r = math.pi / 180

@@ -3,7 +3,7 @@ require 'torch'
 local paths = require 'paths'
 local config = require 'config'
 local Pose = require 'PoseSlim'
-local fs = require 'util/fs'
+local fs = require 'util.fs'
 local Sweep = require 'Sweep'
 local Scan = torch.class('Scan')
 
