@@ -35,7 +35,7 @@ $(install): $(git_clone)
 
 
 $(git_clone):
-	git clone https://github.com/marcoscoffier/torch $(git_clone)
+	git clone https://github.com/floored/torch $(git_clone)
 #	git clone https://github.com/andresy/torch $(git_clone)
 
 tmp:
