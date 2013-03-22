@@ -142,10 +142,10 @@ function Scan:save(file_path)
   -- don't save the model data
   self:flush_model_data()
   
-  -- don't save the image data in a SweepCamera
+  -- don't save the image data in a Photo
   for i, sweep in ipairs(self.sweeps) do
-    for j, sweep_cam in ipairs(sweep.cameras) do 
-      sweep_cam:flush_image()
+    for j, photo in ipairs(sweep.photos) do 
+      photo:flush_image()
     end
   end
   
