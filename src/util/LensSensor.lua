@@ -29,6 +29,11 @@ function LensSensor:__init(lens_sensor,img)
       self[key] = val
    end
 
+   -- FIXME clean this up. Special case for calibration
+   if (self.lens_type == "scaramuzza") then 
+      -- revert to normalized coordinates
+      self.invpol:mul(1/(self.focal * self.cal_height / self.sensor_h))
+   end
    if img then
       self:add_image(img)
    else
@@ -40,7 +45,8 @@ function LensSensor:__init(lens_sensor,img)
       local horz_norm, vert_norm = projection.derive_hw(diag_norm,aspect_ratio)
       printf(" -- normalized : diag: %f h: %f v: %f", diag_norm, horz_norm, vert_norm)
 
-      local dfov = projection.compute_diagonal_fov(diagonal_normalized,self.lens_type)
+      local dfov = 
+         projection.compute_diagonal_fov(diagonal_normalized,self.lens_type)
 
       local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
 
@@ -205,8 +211,9 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    -- +++++
    -- (2) replace theta for each entry in map with r
    -- +++++
-   local r_map = projection.sphere_to_camera(theta_map, lens_type)
-
+   local r_map = 
+      projection.sphere_to_camera(theta_map, lens_type, self.invpol)
+   printf("r_map: max: %f min: %f", r_map:max(), r_map:min())
    -- +++++ 
    -- (3) make the ratio (new divided by old) by which we scale the
    --     pixel offsets (in normalized coordinates) in the output

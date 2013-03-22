@@ -59,7 +59,7 @@ function compute_diagonal_fov(diagonal_normalized,lens_type)
    if (lens_type == "rectilinear") then
       dfov = torch.atan(diagonal_normalized)   -- diag in rad
 
-   elseif (lens_type == "thoby") then
+   elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
       print(" -- using lens type: thoby")
       -- thoby : theta = asin((r/f)/(k1 * f))/k2
       if (diagonal_normalized > k1) then 
@@ -140,8 +140,8 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
    local lambda,phi,theta_map, output_map
    if (proj_type == "rectilinear") then
       -- limit the fov to roughly 120 degrees
-      if fov > 1 then
-         fov = 1
+      if fov > 1.4 then
+         fov = 1.4
          vfov,hfov = derive_hw(fov,aspect_ratio)
       end
       -- set up size of the output table
@@ -196,7 +196,7 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
 
 end
 
-function sphere_to_camera(theta_map,lens_type)
+function sphere_to_camera(theta_map,lens_type,params)
    local r_map = theta_map:clone() -- copy
 
    if (lens_type == "rectilinear") then
@@ -214,6 +214,13 @@ function sphere_to_camera(theta_map,lens_type)
    elseif (lens_type == "equisolid") then
       --  + equisolid                 : r = 2 * f * sin(theta/2)
       r_map:mul(0.5):sin():mul(2)
+   elseif (lens_type == "scaramuzza") then
+      local theta_pow = theta_map:clone()
+      r_map:fill(params[1]) -- rho = invpol[0]
+      for i = 2,params:size(1) do 
+         r_map:add(theta_pow * params[i]) -- coefficients of inverse poly.
+         theta_pow:cmul(theta_pow)        -- powers of theta
+      end
    else
       print("ERROR don't understand lens_type")
       return nil
