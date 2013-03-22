@@ -23,7 +23,7 @@ void main() {
 
         vec2 animatedVertexSize = vertexSize;
         if (vertexSelected[i] > 0.5) {
-          animatedVertexSize *= vec2(5.0);
+          animatedVertexSize *= vec2(3.0);
         }
 
         // Bottom right corner

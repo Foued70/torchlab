@@ -63,7 +63,7 @@ function Photo:load_image()
 
   --TODO: Move Lens out of here to proper place in sweep
   self.lens = LensSensor.new("nikon_D5100_w10p5mm",image_native)
-  self.rectilinear_lut = self.lens:to_projection("rectilinear")
+  self.rectilinear_lut = self.lens:make_projection_map("rectilinear")
   self.image_data = projection.remap(image_native,self.rectilinear_lut)
   lens = nil
   rectilinear_map = nil

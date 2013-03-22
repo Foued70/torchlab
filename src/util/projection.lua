@@ -140,8 +140,8 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
    local lambda,phi,theta_map, output_map
    if (proj_type == "rectilinear") then
       -- limit the fov to roughly 120 degrees
-      if fov > 1.4 then
-         fov = 1.4
+      if fov > 1 then
+         fov = 1
          vfov,hfov = derive_hw(fov,aspect_ratio)
       end
       -- set up size of the output table
