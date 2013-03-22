@@ -5,51 +5,10 @@ local piover2 = math.pi * 0.5
 local r2d = 180 / pi
 local d2r = pi / 180
 
--- thoby constants
-local k1 = 1.47
-local k2 = 0.713
-
-
 -- stores fixed information about lens+sensors which we glean from spec sheets and elsewhere.
 local LensSensor = torch.class("LensSensor")
 
-LensSensor.default = {
-   nikon_D800E_w18mm = {
-
-      name     = "Nikon D800E with 18mm",
-      
-      -- copied from exif info
-      sensor_w = 35.9, -- mm
-      sensor_h = 24.0, -- mm
-      focal    = 18, -- mm
-
-      lens_type = "rectilinear",
-      
-   },
-
-   nikon_D5100_w10p5mm = {
-      
-      name     = "Nikon D5100 with 10.5mm",
-      
-      -- copied from exif info
-      sensor_w = 23.6, -- mm
-      sensor_h = 15.6, -- mm
-      
-      -- from http://michel.thoby.free.fr/Blur_Panorama/Nikkor10-5mm_or_Sigma8mm/Sigma_or_Nikkor/Comparison_Short_Version_Eng.html
-      
-      -- From my own experimental measurement, the mapping function of
-      -- the Nikkor 10,5mm AF DX f/2.8 is R = 1.47 x f x sin (0.713 x
-      -- Omega). The measured focal length is f = 10.58mm. This may be
-      -- the farthest from the theoretical formula amongst all
-      -- commercially available circular fisheye lenses that have been
-      -- tested so far. It is therefore nearly abusive to put it in the
-      -- so-called Equi-Solid Angle projection class.
-      
-      focal    = 10.58, -- mm
-
-      lens_type = "thoby"
-   }
-}
+LensSensor.default_lens_sensor = require "util.lens_sensor_types"
 
 -- combine image and lens data into a single object
 
@@ -59,7 +18,7 @@ function LensSensor:__init(lens_sensor,img)
       error("Pass lens + sensor type as first arg")
    end
    if type(lens_sensor) == "string" then
-      lens_sensor = self.default[lens_sensor]
+      lens_sensor = self.default_lens_sensor[lens_sensor]
    end
    if (not lens_sensor) or (type(lens_sensor) ~= "table") then
       error("LensSensorType not recognized")
@@ -70,9 +29,52 @@ function LensSensor:__init(lens_sensor,img)
       self[key] = val
    end
 
+   -- FIXME clean this up. Special case for calibration
+   if (self.lens_type == "scaramuzza") then 
+      -- revert to normalized coordinates
+      self.invpol:mul(1/(self.focal * self.cal_height / self.sensor_h))
+   end
+   if img then
+      self:add_image(img)
+   else
+      -- compute some values off sensor data
+      local w = self.sensor_w
+      local h = self.sensor_h
+      local aspect_ratio = w/h
+      local diag_norm = math.sqrt(w*w + h*h) / (2 * self.focal)
+      local horz_norm, vert_norm = projection.derive_hw(diag_norm,aspect_ratio)
+      printf(" -- normalized : diag: %f h: %f v: %f", diag_norm, horz_norm, vert_norm)
+
+      local dfov = 
+         projection.compute_diagonal_fov(diagonal_normalized,self.lens_type)
+
+      local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
+
+      printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
+         dfov*r2d, hfov*r2d,vfov*r2d)
+      self.aspect_ratio = aspect_ratio
+
+      self.fov  = dfov
+      self.hfov = hfov
+      self.vfov = vfov
+
+      self.diagonal_normalized   = diag_norm
+      self.horizontal_normalized = horz_norm
+      self.vertical_normalized   = vert_norm
+
+   end
+
+   return self
+
+end
+
+function LensSensor:add_image(img)
+
+   -- recompute almost everything based on the image pixels as this is
+   -- better than basing measurements on spec sheets.
    local imgw = img:size(3)
    local imgh = img:size(2)
-   
+
    local camw = 0
    local camh = 0
 
@@ -84,7 +86,7 @@ function LensSensor:__init(lens_sensor,img)
       camh = self.sensor_w
       camw = self.sensor_h
    end
-  
+
    -- offset to optical center of image (px)
    local cx = (imgw + 1) * 0.5
    local cy = (imgh + 1) * 0.5
@@ -100,60 +102,59 @@ function LensSensor:__init(lens_sensor,img)
    local vfocal_px = self.focal * vres
 
    -- normalized coordinates (px / px ==> dimensionless)
-   local horizontal_normalized = cx / hfocal_px 
+   local horizontal_normalized = cx / hfocal_px
    local vertical_normalized   = cy / vfocal_px
 
    -- maximum distance in normalized image coordinates which we want
    -- to project from self (default is the diagonal).  Note this is
    -- on the image plane therefore the normal euclidean pythagorean
    -- theorem works.
-   local diagonal_normalized = 
-      math.sqrt(horizontal_normalized*horizontal_normalized + 
+   local diagonal_normalized =
+      math.sqrt(horizontal_normalized*horizontal_normalized +
                 vertical_normalized*vertical_normalized)
 
-   -- Currently unused, crop_radius would allow us to look at a region
-   -- inside image boundaries such as when the image circle is less
-   -- than the sensor width or height.
-   if self.crop_radius then
-      -- I don't understand why we divide by the vertical fov (in most
-      -- cases we have square pixels, aspect ratio is 1).
-      diagonal_normalized   = self.crop_radius / vfocal_px
-   end
+      -- Currently unused, crop_radius would allow us to look at a region
+      -- inside image boundaries such as when the image circle is less
+      -- than the sensor width or height.
+      if self.crop_radius then
+         -- I don't understand why we divide by the vertical fov (in most
+         -- cases we have square pixels, aspect ratio is 1).
+         diagonal_normalized   = self.crop_radius / vfocal_px
+      end
 
-   printf(" -- normalized : diag: %f h: %f v: %f",
-          diagonal_normalized, 
-          horizontal_normalized, vertical_normalized)
+      printf(" -- normalized : diag: %f h: %f v: %f",
+         diagonal_normalized,
+         horizontal_normalized, vertical_normalized)
 
-   local dfov = projection.compute_diagonal_fov(diagonal_normalized,self.lens_type)
+      local dfov = projection.compute_diagonal_fov(diagonal_normalized,self.lens_type)
 
-   local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
+      local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
 
-   printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f", 
-      dfov*r2d, hfov*r2d,vfov*r2d)
-   self.image_w      = imgw -- px
-   self.image_h      = imgh -- px
-   self.aspect_ratio = aspect_ratio
+      printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
+         dfov*r2d, hfov*r2d,vfov*r2d)
+      self.image_w      = imgw -- px
+      self.image_h      = imgh -- px
+      self.aspect_ratio = aspect_ratio
 
-   self.center_x = cx -- px
-   self.center_y = cy -- px
-   self.hfocal_px = hfocal_px
-   self.vfocal_px = vfocal_px
+      self.center_x = cx -- px
+      self.center_y = cy -- px
+      self.hfocal_px = hfocal_px
+      self.vfocal_px = vfocal_px
 
-   self.fov  = dfov
-   self.hfov = hfov
-   self.vfov = vfov
+      self.fov  = dfov
+      self.hfov = hfov
+      self.vfov = vfov
 
-   self.diagonal_normalized   = diagonal_normalized
-   self.horizontal_normalized = horizontal_normalized
-   self.vertical_normalized   = vertical_normalized
-
-
-   return self
-
+      self.diagonal_normalized   = diagonal_normalized
+      self.horizontal_normalized = horizontal_normalized
+      self.vertical_normalized   = vertical_normalized
 end
 
 -- Maps a camera image + lens to a unit sphere (azimuth and elevation)
 -- or through sphere to other projections.
+--
+-- Output is a map structure with a lookup table which can be used to
+-- generate the projection from the original image.
 --
 -- Lens types:
 --
@@ -163,16 +164,16 @@ end
 --  + equal_area (equisolid)    : r = 2 * f * sin(theta/2)
 --  + thoby (fisheye)           : r = k1 * f * sin(k2*theta)
 --  + equal_angle (eqidistant)  : r = f * theta  (for unit sphere f = 1)
--- 
--- Proj types: 
--- 
+--
+-- Projection types:
+--
 --  + sphere
 --  + rectilinear
 --  + cylindrical
 --  + cylindrical_vert
-function LensSensor:to_projection (proj_type,scale,debug)
+function LensSensor:make_projection_map (proj_type,scale,debug)
 
-   if not proj_type then 
+   if not proj_type then
       proj_type = "sphere"
    end
 
@@ -202,118 +203,53 @@ function LensSensor:to_projection (proj_type,scale,debug)
    -- +++++
    -- (1) create map of diagonal angles from optical center
    -- +++++
-   local lambda,phi,theta_map, output_map
-   if (proj_type == "rectilinear") then
-      -- limit the fov to roughly 120 degrees
-      if fov > 1 then 
-         fov = 1 
-         vfov,hfov = projection.derive_hw(fov,aspect_ratio)
-      end
-      -- set up size of the output table
-      local drange = torch.tan(fov)
-      local vrange,hrange = projection.derive_hw(drange,aspect_ratio)
-      -- equal steps in normalized coordinates
-      lambda   = torch.linspace(-hrange,hrange,mapw)
-      phi      = torch.linspace(-vrange,vrange,maph)
-      output_map = projection.make_map_of_diag_dist(lambda,phi)
-      theta_map = output_map:clone():atan()
-   elseif (proj_type == "cylindrical") then
-      -- limit the vfov to roughly 120 degrees
-      if vfov > 1 then 
-         vfov = 1 
-         maph = mapw * (vfov / hfov)
-      end
-      -- set up size of the output table
-      local vrange = torch.tan(vfov)
-      local hrange = hfov
-      -- equal steps in normalized coordinates
-      lambda   = torch.linspace(-hrange,hrange,mapw)
-      phi      = torch.linspace(-vrange,vrange,maph)
-      output_map = projection.make_map_of_diag_dist(lambda,phi)
-      lambda:atan()
-      theta_map = projection.make_map_of_diag_dist(lambda,phi)
-   elseif (proj_type == "cylindrical_vert") then
-      -- limit the hfov to roughly 120 degrees
-      if hfov > 1 then 
-         hfov = 1 
-         mapw = maph * (hfov/vfov)
-      end
-      -- set up size of the output table
-      local vrange = vfov
-      local hrange = torch.tan(hfov)
-      -- equal steps in normalized coordinates
-      lambda   = torch.linspace(-hrange,hrange,mapw)
-      phi      = torch.linspace(-vrange,vrange,maph)
-      output_map = projection.make_map_of_diag_dist(lambda,phi)
-      phi:atan()
-      theta_map = projection.make_map_of_diag_dist(lambda,phi)
-   else
-      lambda = torch.linspace(-hfov,hfov,mapw)
-      phi    = torch.linspace(-vfov,vfov,maph)
-      -- default is to project to sphere
-      -- create horizontal (lambda) and vertical angles (phi) x,y lookup
-      --  in spherical map from -radians,radians at resolution mapw and
-      --  maph.  Equal steps in angles.
-      output_map = projection.make_map_of_diag_dist(lambda,phi)
-      theta_map  = output_map
-   end
-   
+   local lambda, phi, theta_map, output_map, mapw, maph = 
+      projection.projection_to_sphere(fov,hfov,vfov,
+                                      mapw,maph,aspect_ratio,
+                                      proj_type)
+
    -- +++++
    -- (2) replace theta for each entry in map with r
    -- +++++
-   local r_map = theta_map:clone() -- copy
-
-   if (lens_type == "rectilinear") then
-      -- rectilinear : (1/f) * r' = tan(theta)
-      r_map:tan()
-   elseif (lens_type == "thoby") then
-      -- thoby       : (1/f) * r' = k1 * sin(k2*theta)
-      r_map:mul(k2):sin():mul(k1)
-   elseif (lens_type == "stereographic") then
-      --  + stereographic             : r = 2 * f * tan(theta/2)
-      r_map:mul(0.5):tan():mul(2)
-   elseif (lens_type == "orthographic") then
-      --  + orthographic              : r = f * sin(theta)
-      r_map:sin()
-   elseif (lens_type == "equisolid") then
-      --  + equisolid                 : r = 2 * f * sin(theta/2)
-      r_map:mul(0.5):sin():mul(2)
-   else
-      print("ERROR don't understand lens_type")
-      return nil
-   end
-
+   local r_map = 
+      projection.sphere_to_camera(theta_map, lens_type, self.invpol)
+   printf("r_map: max: %f min: %f", r_map:max(), r_map:min())
+   -- +++++ 
+   -- (3) make the ratio (new divided by old) by which we scale the
+   --     pixel offsets (in normalized coordinates) in the output
+   --     image to coordinates in the original image. 
    -- +++++
-   -- (3) x,y index (map unit sphere to normlized pixel coords)
-   -- +++++
-   -- make the ratio (new divided by old)
+   -- 
    r_map:cdiv(r_map,output_map)
-   
-   -- x and y are scaled by this ratio. 
+
+   -- +++++ 
+   -- (4) create map of x and y indices into the original image for
+   --     each location in the output image. 
+   -- +++++
    local xmap = lambda:repeatTensor(maph,1)
    xmap:cmul(r_map):mul(self.hfocal_px):add(self.center_x)
-   
-   local ymap = phi:repeatTensor(mapw,1):t():contiguous() 
+
+   local ymap = phi:repeatTensor(mapw,1):t():contiguous()
    ymap:cmul(r_map):mul(self.vfocal_px):add(self.center_y)
-   
+
    -- +++++++
-   -- (4) make mask for out of bounds values
+   -- (5) make mask for out of bounds values
    -- +++++++
- 
+
    local mask = projection.make_mask(xmap,ymap,imgw,imgh)
    printf("Masking %d/%d lookups (out of bounds)", mask:sum(),mask:nElement())
 
    -- +++++++
-   -- (5) convert the x and y index into a single 1D offset (y * stride + x)
+   -- (6) convert the x and y index into a single 1D offset (y * stride + x)
    -- +++++++
-   
+
    local index_map = projection.make_index(xmap,ymap,mask)
 
    -- +++++++
-   -- (6) output sphere object
+   -- (7) output map object
    -- +++++++
 
-   sphere_map = {
+   projection_map = {
       lookup_table     = index_map, -- 1D LongTensor for fast lookups
       mask             = mask,      -- ByteTensor invalid locations marked with 1
       radial_distance  = theta_map, -- map of distances from optical center (theta)
@@ -324,7 +260,7 @@ function LensSensor:to_projection (proj_type,scale,debug)
       vfov             = vfov       -- vertical field of view
    }
 
-   return sphere_map
+   return projection_map
 
 end
 
