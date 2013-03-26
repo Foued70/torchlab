@@ -28,7 +28,7 @@ function Renderer:init(viewport_width, viewport_height)
   self:create_camera('viewport_camera', viewport_width, viewport_height, (math.pi/4), torch.Tensor({2,3,5}), torch.Tensor({0,1,0}))
   self:activate_camera('viewport_camera')
 
-  self:create_camera('raycast_camera', viewport_width, viewport_height)  
+  self:create_camera('raycast_camera', viewport_width, viewport_height, (math.pi/4))  
   self:create_shaders()
 
   self:create_scene('viewport_scene')

@@ -77,7 +77,7 @@ function GLWidget:mouse_click(event)
   elseif event.right_button then
     self.mode = FOCUS_MODE
     local object_id, triangle_index = self.renderer.cameras.viewport_camera.frame_buffer:read_pick_pixel(event.x, event.y)
-    local object = self.renderer.viewport_scene[object_id]
+    local object = self.renderer.scenes.viewport_scene[object_id]
     local verts, center, normal = object:get_triangle(triangle_index)
 
     -- todo: animate
@@ -118,13 +118,13 @@ end
 function GLWidget:key_press(event)
   -- p('key_press', event)
   if event.key == key.Left then
-    self.camera:move_eye(-0.3,0,0)
+    self.renderer.cameras.viewport_camera:move_eye(-0.3,0,0)
   elseif event.key == key.Right then
-    self.camera:move_eye(0.3,0,0)
+    self.renderer.cameras.viewport_camera:move_eye(0.3,0,0)
   elseif event.key == key.Up then
-    self.camera:move_eye(0,0.3,0)
+    self.renderer.cameras.viewport_camera:move_eye(0,0.3,0)
   elseif event.key == key.Down then
-    self.camera:move_eye(0,-0.3,0)
+    self.renderer.cameras.viewport_camera:move_eye(0,-0.3,0)
   end
   self:update()
 end

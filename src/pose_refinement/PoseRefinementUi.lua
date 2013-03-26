@@ -54,6 +54,7 @@ function PoseRefinementUi:init_event_handling()
       if self.gl_viewport ~= nil then self:paint() end
     end )
 
+  
   qt.connect(self.listener, 'sigMousePress(int,int,QByteArray,QByteArray,QByteArray)',
     function(x, y, mouse_button, keyboard_modifier, keys)
       self.widget.mouseTracking = true
@@ -281,6 +282,24 @@ function PoseRefinementUi:set_pose_file()
   return true
 end
 
+function PoseRefinementUi:create_debug_camera_meshes(sweep_number)
+  local debug_model_data = require('util.obj2').new('../ui2/objs/debug_forward_pointer.obj')
+
+  for i = 1, #self.scan.sweeps[sweep_number].photos do
+    local camera_position = nil
+    local camera_rotation = nil
+
+    local debug_camera = self.gl_viewport.renderer:add_object(debug_model_data)
+    log.trace("Building debug camera number", i)
+    camera_position, camera_rotation = self.scan.sweeps[sweep_number]:calculate_camera_world(i)
+    log.trace("Camera",i,"position", camera_position)
+    log.trace("Camera",i,"rotation", camera_rotation)
+
+    debug_camera.position:copy(camera_position)
+    debug_camera.rotation:copy(camera_rotation)
+  end
+end
+
 function PoseRefinementUi:init_calibration()
   if (self.scan_folder == nil) then
     log.trace("Failed to start calibration. No scan folder set.")
@@ -339,6 +358,14 @@ function PoseRefinementUi:init_calibration()
 
   self:update_viewport_passes()
   self:update_ui_info()
+
+  --[[
+  self.gl_viewport.renderer:activate_camera('viewport_camera')
+  self.gl_viewport.renderer:activate_scene('viewport_scene')
+  self:create_debug_camera_meshes(1)
+  self.model_object.mesh:restore_materials()
+  self.gl_viewport:update()
+  --]]
 end
 
 function PoseRefinementUi:update_photo_pass()
