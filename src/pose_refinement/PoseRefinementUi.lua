@@ -15,12 +15,13 @@ function PoseRefinementUi:__init()
   self.gl_viewport = nil
   self.viewport_width = nil
   self.viewport_height = nil
+  self.highlighted_vertex = nil
 
   self.scan_folder = nil
   self.pose_file = nil 
   self.scan = nil
   self.current_sweep = nil
-  self.current_camera = nil
+  self.current_photo = nil
 
   self.description = paths.thisfile('pose_refinement.ui')
 
@@ -32,6 +33,9 @@ function PoseRefinementUi:__init()
 
   self.widget.mouseTracking = false
   self.mouse_left_down = false
+  self.mouse_left_start = torch.Tensor(2)
+  self.mouse_left_end = torch.Tensor(2)
+  self.mouse_right_down = false
   
   self.listener = qt.QtLuaListener(self.widget)
   self:init_event_handling()
@@ -47,27 +51,50 @@ function PoseRefinementUi:init_event_handling()
 
   qt.connect(self.listener, 'sigPaint()',
     function()
-      self:paint()
+      if self.gl_viewport ~= nil then self:paint() end
     end )
 
+  
   qt.connect(self.listener, 'sigMousePress(int,int,QByteArray,QByteArray,QByteArray)',
     function(x, y, mouse_button, keyboard_modifier, keys)
-      self.mouse_left_down = true
       self.widget.mouseTracking = true
+      if mouse_button == 'LeftButton' then
+        if self.gl_viewport ~= nil then
+          self:mouse_to_viewport_screenspace(x, y, self.mouse_left_start)
+          self.mouse_left_end:copy(self.mouse_left_start)
+        end
+        self.mouse_left_down = true
+      elseif mouse_button == 'RightButton' then
+        self.mouse_right_down = true
+      end
     end )
 
   qt.connect(self.listener, 'sigMouseRelease(int,int,QByteArray,QByteArray,QByteArray)',
     function(x, y, mouse_button, keyboard_modifier, keys)
-      self.mouse_left_down = false
       self.widget.mouseTracking = false
-      self.magnifier = nil
-      p(self.gl_viewport.renderer:pick_vertex(torch.Tensor({x/self.widget.calibration_view.x,y/self.widget.calibration_view.y}), (1/400)))
+      if mouse_button == 'LeftButton' then
+        if self.gl_viewport ~= nil then
+          self:mouse_to_viewport_screenspace(x, y, self.mouse_left_end)
+          self:drag_select_vertex()
+        end
+        self.mouse_left_down = false
+      elseif mouse_button == 'RightButton' then
+        if self.gl_viewport ~= nil then
+          self:select_image_coordinate(x,y)
+        end
+        self.highlighted_vertex = nil
+        self.mouse_right_down = false
+        self.magnifier = nil
+        self.widget:update()
+      end
     end )
 
   qt.connect(self.listener, 'sigMouseMove(int,int,QByteArray,QByteArray)',
     function(x, y, keyboard_modifier, keys)
       if self.mouse_left_down == true then
-        self:update_magnifier(1.0, 1, x-self.widget.calibration_view.x, y-self.widget.calibration_view.y, 100, 100)
+        self:mouse_to_viewport_screenspace(x, y, self.mouse_left_end)
+      elseif self.mouse_right_down == true then
+        self:update_magnifier(1.0, 1, x-self.widget.calibration_view.x, y-self.widget.calibration_view.y, 200, 200)
       end
     end )
 
@@ -76,6 +103,160 @@ function PoseRefinementUi:init_event_handling()
   qt.connect(self.widget.button_init_calibration, 'clicked()', function() self:init_calibration() end)
   qt.connect(self.widget.button_previous, 'clicked()', function() self:previous_camera() end)
   qt.connect(self.widget.button_next, 'clicked()', function() self:next_camera() end)
+end
+
+function PoseRefinementUi:previous_camera()
+  self.highlighted_vertex = nil
+  if self.current_photo > 1 then
+    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
+    self.current_photo = self.current_photo - 1 
+    self:update_photo_pass()
+    self:update_viewport_passes()
+    self:update_ui_info()
+  elseif self.current_sweep > 1 then
+    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
+    self.current_sweep = self.current_sweep - 1
+    self.current_photo = #self.scan.sweeps[self.current_sweep].photos
+    self:update_photo_pass()
+    self:update_viewport_passes()
+    self:update_ui_info()
+  end
+end
+
+function PoseRefinementUi:next_camera()
+  self.highlighted_vertex = nil
+  if #self.scan.sweeps[self.current_sweep].photos >= (self.current_photo+1) then
+    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
+    self.current_photo = self.current_photo + 1 
+    self:update_photo_pass()
+    self:update_viewport_passes()
+    self:update_ui_info()
+  elseif #self.scan.sweeps > self.current_sweep then
+    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
+    self.current_sweep = self.current_sweep + 1
+    self.current_photo = 1
+    self:update_photo_pass()
+    self:update_viewport_passes()
+    self:update_ui_info()
+  end
+end
+
+function PoseRefinementUi:update_ui_info()
+  self.widget.sweep_info:setText(string.format("%s %d/%d", "Current Sweep:", self.current_sweep, #self.scan.sweeps)) 
+  self.widget.photo_info:setText(string.format("%s %d/%d", "Current Photo:", self.current_photo, #self.scan.sweeps[self.current_sweep].photos)) 
+
+
+  local pair_matrix = self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs
+
+  local pair_matrix_string = ""
+  for i=1, pair_matrix:size(1) do
+    for j=1, pair_matrix:size(2) do
+      pair_matrix_string = pair_matrix_string .. string.format("%2.2f", pair_matrix[i][j]) .. " "
+    end
+    pair_matrix_string = pair_matrix_string .. "\n"
+  end
+  self.widget.calibration_matrix_info:setText(pair_matrix_string)
+
+  self.widget.calibration_info:setText(string.format("%s %d/%d", "Pairs Set:", self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated, self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs:size(1))) 
+end
+
+function PoseRefinementUi:select_vertex(mouse_x, mouse_y)
+  local click_coordinates = self:mouse_to_viewport_screenspace(mouse_x, mouse_y)
+  if click_coordinates ~= nil then
+    self.gl_viewport.renderer:activate_scene('viewport_scene')
+    self.gl_viewport.renderer:activate_camera('pose_camera')
+    self.highlighted_vertex = self.gl_viewport.renderer:pick_vertex(click_coordinates, (1/50))
+
+    if self.highlighted_vertex ~= nil then
+      log.trace("Selected vertex:", self.highlighted_vertex)
+      self.scan.sweeps[self.current_sweep].photos[self.current_photo]:add_vertex(self.highlighted_vertex)
+      self:update_viewport_passes()
+    end
+  end  
+end
+
+function PoseRefinementUi:drag_select_vertex()
+  if (self.mouse_left_start == nil) or (self.mouse_left_end == nil) then return end
+
+  self.gl_viewport.renderer:activate_scene('viewport_scene')
+  self.gl_viewport.renderer:activate_camera('pose_camera')
+
+  local selection_min = torch.Tensor(2)
+  local selection_max = torch.Tensor(2)
+
+  if (self.mouse_left_start[1] > self.mouse_left_end[1]) then
+    selection_min[1] = self.mouse_left_end[1]
+    selection_max[1] = self.mouse_left_start[1]
+  else
+    selection_min[1] = self.mouse_left_start[1]
+    selection_max[1] = self.mouse_left_end[1]
+  end
+
+  if (self.mouse_left_start[2] > self.mouse_left_end[2]) then
+    selection_min[2] = self.mouse_left_end[2]
+    selection_max[2] = self.mouse_left_start[2]
+  else
+    selection_min[2] = self.mouse_left_start[2]
+    selection_max[2] = self.mouse_left_end[2]
+  end
+
+  local selected_vertices = self.gl_viewport.renderer:pick_vertices(selection_min, selection_max)
+  if selected_vertices ~= nil then
+    self.highlighted_vertex = selected_vertices[1]
+    local highlighted_vertex_distance = self.gl_viewport.renderer.active_camera:world_to_screen(self.highlighted_vertex)[3]
+    --Find vertex closest to camera
+    log.trace("Selected",#selected_vertices, "vertices")
+    if #selected_vertices > 1 then
+      for v = 2, #selected_vertices do
+        local current_vertex_distance = self.gl_viewport.renderer.active_camera:world_to_screen(selected_vertices[v])[3]
+        if highlighted_vertex_distance > current_vertex_distance then
+          log.trace("Vertex", v, ":", selected_vertices[v], "is closer to camera at:", current_vertex_distance, "than", self.highlighted_vertex, "at:", highlighted_vertex_distance)
+          self.highlighted_vertex = selected_vertices[v]
+          highlighted_vertex_distance = current_vertex_distance
+        end
+      end
+    end
+    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:add_vertex(self.highlighted_vertex)
+  else
+    self.highlighted_vertex = nil
+  end
+  self:update_viewport_passes()
+  self:update_ui_info()
+  return selected_vertices
+end
+
+function PoseRefinementUi:select_image_coordinate(mouse_x, mouse_y)
+  local image_coordinate = self:mouse_to_viewport_screenspace(mouse_x, mouse_y)
+  if image_coordinate ~= nil then
+    log.trace("Selected image coordinate:", image_coordinate)
+    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:add_image_coordinate(image_coordinate)
+    self:update_ui_info()
+  end
+end
+
+function PoseRefinementUi:mouse_to_viewport_screenspace(mouse_x, mouse_y, res)
+  if not self.gl_viewport then return nil end
+
+  if res == nil then
+    res = torch.Tensor(2)
+  end
+  
+  res[1] = (((mouse_x-self.widget.calibration_view.x)/self.gl_viewport.renderer.cameras.vertex_highlight_camera.width)-0.5)*2
+  res[2] = -(((mouse_y-self.widget.calibration_view.y)/self.gl_viewport.renderer.cameras.vertex_highlight_camera.height)-0.5)*2 --flip y
+
+  if (res[1] > 1) or (res[1] < -1) or (res[2] > 1) or (res[2] < -1) then
+    return nil
+  end
+  return res
+end
+
+function PoseRefinementUi:viewport_screenspace_to_ui_xy(screen_position)
+  local pixels = screen_position + 1
+  torch.div(pixels, pixels, 2)
+  pixels[2] = 1.0 - pixels[2] --flip y
+  pixels[1] = (pixels[1]*self.layers[2].image:rect():totable().width)
+  pixels[2] = (pixels[2]*self.layers[2].image:rect():totable().height)
+  return pixels
 end
 
 function PoseRefinementUi:set_scan_folder()
@@ -99,6 +280,24 @@ function PoseRefinementUi:set_pose_file()
     return false
   end
   return true
+end
+
+function PoseRefinementUi:create_debug_camera_meshes(sweep_number)
+  local debug_model_data = require('util.obj2').new('../ui2/objs/debug_forward_pointer.obj')
+
+  for i = 1, #self.scan.sweeps[sweep_number].photos do
+    local camera_position = nil
+    local camera_rotation = nil
+
+    local debug_camera = self.gl_viewport.renderer:add_object(debug_model_data)
+    log.trace("Building debug camera number", i)
+    camera_position, camera_rotation = self.scan.sweeps[sweep_number]:calculate_camera_world(i)
+    log.trace("Camera",i,"position", camera_position)
+    log.trace("Camera",i,"rotation", camera_rotation)
+
+    debug_camera.position:copy(camera_position)
+    debug_camera.rotation:copy(camera_rotation)
+  end
 end
 
 function PoseRefinementUi:init_calibration()
@@ -131,11 +330,11 @@ function PoseRefinementUi:init_calibration()
   require('libui2').hide_widget(self.gl_viewport.qt_widget)
 
   self.current_sweep = 1
-  self.current_camera = 1
+  self.current_photo = 1
   self:update_photo_pass()
 
-  self:calculate_viewport_size(self.scan.sweeps[self.current_sweep].cameras[self.current_camera].image_data)
-  local fov_y = self.scan.sweeps[self.current_sweep].cameras[self.current_camera].lens.vfov
+  self:calculate_viewport_size(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data)
+  local fov_y = self.scan.sweeps[self.current_sweep].photos[self.current_photo].lens.vfov
   log.trace("Field of view y=", fov_y) 
   self.model_object = self.gl_viewport.renderer:add_object(self.scan.model_data)
 
@@ -158,65 +357,39 @@ function PoseRefinementUi:init_calibration()
   self.gl_viewport.renderer:create_camera('vertex_highlight_camera', self.viewport_width, self.viewport_height, fov_y)
 
   self:update_viewport_passes()
-end
+  self:update_ui_info()
 
-function PoseRefinementUi:previous_camera()
-  if self.current_camera > 1 then
-    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:flush_image()
-    self.current_camera = self.current_camera - 1 
-    self:update_photo_pass()
-    self:update_viewport_passes()
-  elseif self.current_sweep > 1 then
-    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:flush_image()
-    self.current_sweep = self.current_sweep - 1
-    self.current_camera = #self.scan.sweeps[self.current_sweep].cameras
-    self:update_photo_pass()
-    self:update_viewport_passes()
-  end
-end
-
-function PoseRefinementUi:next_camera()
-  if #self.scan.sweeps[self.current_sweep].cameras >= (self.current_camera+1) then
-    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:flush_image()
-    self.current_camera = self.current_camera + 1 
-    self:update_photo_pass()
-    self:update_viewport_passes()
-  elseif #self.scan.sweeps > self.current_sweep then
-    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:flush_image()
-    self.current_sweep = self.current_sweep + 1
-    self.current_camera = 1
-    self:update_photo_pass()
-    self:update_viewport_passes()
-  end
+  --[[
+  self.gl_viewport.renderer:activate_camera('viewport_camera')
+  self.gl_viewport.renderer:activate_scene('viewport_scene')
+  self:create_debug_camera_meshes(1)
+  self.model_object.mesh:restore_materials()
+  self.gl_viewport:update()
+  --]]
 end
 
 function PoseRefinementUi:update_photo_pass()
   collectgarbage()
-  if self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:image_loaded() == false then
-    self.scan.sweeps[self.current_sweep].cameras[self.current_camera]:load_image()
+  if self.scan.sweeps[self.current_sweep].photos[self.current_photo]:image_loaded() == false then
+    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:load_image()
   end
 
-  local photo_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].cameras[self.current_camera].image_data)
+  local photo_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data)
   self:attach_image(1, 'dslr_photo', 'SourceOver', photo_qt)
   self.widget:update()
 end
 
 function PoseRefinementUi:update_viewport_passes()
-  --Set GL camera to match current SweepCamera
+  --Set GL camera to match current Photo
   local camera_position = nil
   local camera_rotation = nil
 
-  camera_position, camera_rotation = self.scan.sweeps[self.current_sweep]:calculate_camera_world(self.current_camera)
+  camera_position, camera_rotation = self.scan.sweeps[self.current_sweep]:calculate_camera_world(self.current_photo)
 
   local forward_vector = torch.Tensor({0,1,0})
   local look_direction = geom.rotate_by_quat(forward_vector, camera_rotation)
   local camera_eye = camera_position
   local camera_center = camera_eye + look_direction
-
-  log.trace("camera_eye=", camera_eye)
-  log.trace("camera_center=", camera_center)
-  log.trace("look_direction=", look_direction)
-  log.trace("look_direction magnitude=", geom.dist(look_direction, torch.Tensor(3):fill(0)))
 
   self.gl_viewport.renderer.cameras.pose_camera.eye:copy(camera_eye)
   self.gl_viewport.renderer.cameras.pose_camera.center:copy(camera_center)
@@ -235,6 +408,15 @@ function PoseRefinementUi:update_viewport_passes()
   self.gl_viewport.renderer:render()
 
   --Vertex Highlighting Render of Model
+  gl.UseProgram(self.gl_viewport.renderer.shaders.vertex_highlight.program_id)
+  if self.highlighted_vertex ~= nil then
+    self.gl_viewport.renderer.shaders.vertex_highlight:set_uniform_uint('selectedVertexCount', 1)
+    self.gl_viewport.renderer.shaders.vertex_highlight:set_uniform_float('selectedVertexPosition', {self.highlighted_vertex[1], self.highlighted_vertex[2], self.highlighted_vertex[3]})
+  else
+    self.gl_viewport.renderer.shaders.vertex_highlight:set_uniform_uint('selectedVertexCount', 0)
+    self.gl_viewport.renderer.shaders.vertex_highlight:set_uniform_float('selectedVertexPosition', {0,0,0})
+  end
+  gl.UseProgram(0)
   self.gl_viewport.renderer:activate_camera('vertex_highlight_camera')
   self.gl_viewport.renderer:activate_scene('viewport_scene')
   self.model_object.mesh:override_materials(self.vertex_highlight_mat)
@@ -254,11 +436,6 @@ function PoseRefinementUi:update_viewport_passes()
 end
 
 function PoseRefinementUi:calculate_viewport_size(image)
-  -- TODO: get ui's window size
-  p("self.widget")
-  p(self.widget)
-  p("self.widget.calibration_view")
-  p(self.widget.calibration_view)
   local window_width = self.widget.calibration_view.width
   local window_height = self.widget.calibration_view.height
   local window_aspect = window_width / window_height
@@ -286,14 +463,15 @@ function PoseRefinementUi:update_magnifier(magnification, layer, x, y, width, he
   if self.magnifier == nil then
     self.magnifier = {}
   end
-
+  --TODO: Resize calibration_view frame to width and height of the GL renders.
+  --Instead of "self.gl_viewport.renderer.cameras.vertex_highlight_camera.width" use "self.painter.width"
   self.magnifier.layer = layer
   self.magnifier.width = width
   self.magnifier.height = height
   self.magnifier.start_x = x - (width*0.5)
   self.magnifier.start_y = y - (height*0.5)
-  self.magnifier.source_start_x = ((x/self.painter.width) * self.layers[layer].image:rect():totable().width) - ((width*0.5)/magnification)
-  self.magnifier.source_start_y = ((y/self.painter.height) * self.layers[layer].image:rect():totable().height) - ((height*0.5)/magnification)
+  self.magnifier.source_start_x = ((x/self.gl_viewport.renderer.cameras.vertex_highlight_camera.width) * self.layers[layer].image:rect():totable().width) - ((width*0.5)/magnification)
+  self.magnifier.source_start_y = ((y/self.gl_viewport.renderer.cameras.vertex_highlight_camera.height) * self.layers[layer].image:rect():totable().height) - ((height*0.5)/magnification)
   self.magnifier.source_width = width / magnification
   self.magnifier.source_height = height / magnification
 end
@@ -387,12 +565,43 @@ function PoseRefinementUi:draw_magnifier()
   self.painter:stroke(false)
 end
 
+function PoseRefinementUi:draw_selection_box(start_corner, end_corner)
+  self.painter:initmatrix()
+  local start_corner_pixels = self:viewport_screenspace_to_ui_xy(start_corner)
+  local end_corner_pixels = self:viewport_screenspace_to_ui_xy(end_corner)
+
+  local start = torch.Tensor(2)
+  local size = torch.Tensor(2)
+
+  if start_corner_pixels[1] < end_corner_pixels[1] then
+    start[1] = start_corner_pixels[1]
+    size[1] = end_corner_pixels[1] - start_corner_pixels[1]
+  else
+    start[1] = end_corner_pixels[1]
+    size[1] = start_corner_pixels[1] - end_corner_pixels[1]
+  end
+
+  if start_corner_pixels[2] < end_corner_pixels[2] then
+    start[2] = start_corner_pixels[2]
+    size[2] = end_corner_pixels[2] - start_corner_pixels[2]
+  else
+    start[2] = end_corner_pixels[2]
+    size[2] = start_corner_pixels[2] - end_corner_pixels[2]
+  end
+
+  self.painter:rectangle(start[1], start[2], size[1], size[2])
+  self.painter:setcolor(1.0, 0.96, 0.82, 0.8)
+  self.painter:fill()
+end
+
 function PoseRefinementUi:paint() 
   self.painter:gbegin()
 
   self:draw_image_layers()
 
   if self.magnifier ~= nil then self:draw_magnifier() end
+
+  if self.mouse_left_down == true then self:draw_selection_box(self.mouse_left_start, self.mouse_left_end) end
 
   self.painter:gend()
 end

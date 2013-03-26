@@ -1,8 +1,12 @@
+uniform uint selectedVertexCount;
+uniform vec3 selectedVertexPosition;
+
 out vec4 sFragColor;
 out uvec3 sPickingData;
 smooth in vec2 sVaryingTexCoords;
 
 in vec3 vertexPositionScreenSpace;
+in float highlightVertex; // Can't pass bools around. 0.0 = false, 1.0 = true
 
 uniform sampler2D textureUnit0; //framebuffer depth map
 
@@ -23,6 +27,10 @@ void main () {
     else if (worldDepth < vertexPositionScreenSpace.z && 
            abs(worldDepth - vertexPositionScreenSpace.z) > cullWiggleRoom)
       discard;
-    else
-      sFragColor = mix(vec4(0.5, 0.9, 0.9, 1.0), vec4(0.1, 0.2, 0.5, 1.0), clamp(r, 0.0, 1.0));
+    else {
+      if (highlightVertex > 0.5)
+        sFragColor = mix(vec4(1.0, 0.96, 0.82, 1.0), vec4(0.94, 0.73, 0.0, 1.0), clamp(r, 0.0, 1.0));
+      else
+        sFragColor = mix(vec4(0.86, 0.84, 0.91, 1.0), vec4(0.56, 0.54, 0.6, 1.0), clamp(r, 0.0, 1.0));
+    } 
 }

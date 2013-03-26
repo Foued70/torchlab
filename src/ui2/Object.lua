@@ -8,6 +8,7 @@ function Object:__init(widget, obj_data)
   self.mesh = Object.create_mesh(widget, obj_data)
 
   self.position = torch.Tensor(3):fill(0)
+  self.rotation = torch.Tensor({0,0,0,1})
 end
 
 function Object.create_mesh(widget, obj_data)
@@ -29,7 +30,10 @@ end
 function Object:paint(context)
   context:push()
 
-  context:translate(self.position)
+  context:set_model(self.rotation, self.position)
+  --context:rotate(self.rotation)
+
+  --context:translate()
 
   self.mesh:paint(context)
   
