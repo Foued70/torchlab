@@ -220,64 +220,34 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    -- +++++
    -- (1) create map of diagonal angles from optical center
    -- +++++
-   local lambda, phi, theta_map
-   local output_map
-   -- local r_map, xmap, ymap
 
-   -- FIXME this is horrible. Just trying to understand weird way
-   -- that Scaramuzza creates the thetas for his universal model.
-   if (lens_type == "scaramuzza") then
-      local Nmapw = mapw/2
-      local Nmaph = maph/2
-      local Nz    = -mapw/10
-      local params = self.invpol
-
-      xmap = torch.linspace(-Nmapw,Nmapw,mapw)
-      ymap = torch.linspace(-Nmaph,Nmaph,maph)
-      -- this is the setup dependent on the generic camera model
-      -- which scaramuzza uses in his OCamCalib (files:
-      -- world2cam_fast.m and undistort.m)
-      theta = projection.make_pythagorean_map(xmap,ymap)
-      xmap = xmap:repeatTensor(maph,1)
-      ymap = ymap:repeatTensor(mapw,1):t():contiguous()
-      xmap:cdiv(theta)
-      ymap:cdiv(theta)
-      theta:pow(-1):mul(Nz):atan()
-      local theta_pow = theta:clone()
-      r_map = torch.Tensor(theta:size())
-
-      -- printf("theta in: max: %f min: %f",theta:max(), theta:min())
-      r_map:fill(params[-1]) -- rho = invpol[0]
+   local lambda, phi, 
+   theta_map, output_map, 
+   mapw, maph = projection.projection_to_sphere(fov,hfov,vfov, 
+                                                mapw,maph,aspect_ratio, 
+                                                proj_type)
       
-      for i = params:size(1)-1,1,-1 do 
-         r_map:add(theta_pow * params[i]) -- coefficients of inverse poly.
-         theta_pow:cmul(theta)            -- powers of theta
-      end
+   -- +++++ 
+   -- (2) replace theta for each entry in map with r 
+   -- +++++
+   local r_map =
+      projection.sphere_to_camera(theta_map, lens_type, self.invpol)
+   printf("r_map: max: %f min: %f", r_map:max(), r_map:min())
+   
+   -- +++++
+   -- (3) make the ratio (new divided by old) by which we scale the
+      --     pixel offsets (in normalized coordinates) in the output
+   --     image to coordinates in the original image.
+   -- +++++
+   r_map:cdiv(output_map)
+   
+   -- +++++
+   -- (4) create map of x and y indices into the original image for
+   --     each location in the output image.
+   -- +++++
+   local xmap = lambda:repeatTensor(maph,1)
+   local ymap = phi:repeatTensor(mapw,1):t():contiguous()
 
-   else
-      lambda, phi, theta_map, output_map, mapw, maph =
-         projection.projection_to_sphere(fov,hfov,vfov,
-                                         mapw,maph,aspect_ratio,
-                                         proj_type)
-
-         -- +++++ (2) replace theta for each entry in map with r +++++
-         r_map =
-            projection.sphere_to_camera(theta_map, lens_type, self.invpol)
-         printf("r_map: max: %f min: %f", r_map:max(), r_map:min())
-
-         -- +++++
-         -- (4) create map of x and y indices into the original image for
-         --     each location in the output image.
-         -- +++++
-         xmap = lambda:repeatTensor(maph,1)
-         ymap = phi:repeatTensor(mapw,1):t():contiguous()
-         -- +++++
-         -- (3) make the ratio (new divided by old) by which we scale the
-         --     pixel offsets (in normalized coordinates) in the output
-         --     image to coordinates in the original image.
-         -- +++++
-         r_map:cdiv(r_map,output_map)
-   end
    -- +++++++
    -- (4) put xmap and ymap from normalized coordinates to pixel coordinates
    -- +++++++

@@ -219,21 +219,20 @@ function sphere_to_camera(theta_map,lens_type,params)
       --  + equisolid                 : r = 2 * f * sin(theta/2)
       r_map:mul(0.5):sin():mul(2)
    elseif (lens_type == "scaramuzza") then
-      local theta_pow = theta_map:clone()
-      printf("theta in: max: %f min: %f",theta_pow:max(), theta_pow:min())
-      -- theta_pow:mul(-1/5) 
-      -- theta_pow:add(-piover2):mul(-1)
-      -- theta_pow:mul(-1):add(piover2)
-      printf("theta start: max: %f min: %f",theta_pow:max(), theta_pow:min())
-      -- r_map:fill(params[-1]) -- rho = invpol[0]
-      r_map:fill(params[1]) -- rho = invpol[0]
+      local theta     = theta_map:clone()
+      -- we use a positive angle from optical center, but scaramuzza
+      -- uses a negative offset from focal point.
+      theta:add(-piover2) 
+      local theta_pow = theta:clone()
       
-      -- for i = params:size(1)-1,1,-1 do 
-      for i = 2,params:size(1)-1 do 
+      printf("theta start: max: %f min: %f",theta_pow:max(), theta_pow:min())
+      r_map:fill(params[-1]) -- rho = invpol[0]
+      
+      for i = params:size(1)-1,1,-1 do          
          r_map:add(theta_pow * params[i]) -- coefficients of inverse poly.
-         theta_pow:cmul(theta_pow)        -- powers of theta
+         theta_pow:cmul(theta)        -- powers of theta
       end
-      printf("rho out: max: %f min: %f",theta_pow:max(), theta_pow:min())
+      printf("rho out: max: %f min: %f",r_map:max(), r_map:min())
    else
       print("ERROR don't understand lens_type")
       return nil

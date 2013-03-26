@@ -58,7 +58,7 @@ img = images[1]
 
 
 lenses  = { LensSensor.new("nikon_10p5mm_calibrated",img),
---             LensSensor.new("nikon_D5100_w10p5mm",img) 
+             LensSensor.new("nikon_D5100_w10p5mm",img) 
 }
 for i = 1,#lenses do
    mylens = lenses[i]
