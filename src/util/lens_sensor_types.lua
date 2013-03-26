@@ -52,31 +52,32 @@ local lens_types = {
       -- calibration parameters from Davide Scaramuzza's OCamCalib_v2.0
       lens_type = "scaramuzza",
       pol = torch.Tensor({
-                            -557.3983233914906,
+                            -525.9304775020237,
                             0,
-                            0.000453290476425408,
-                            7.044220571829283e-07,
-                               -1.697108885039974e-10
+                            0.0006587985106851861,
+                            9.8724309479257e-08,
+                            1.814892907921985e-10,
                          }),
       -- this is in pixel coordinates in an image we had to rescale to
       -- get Scaramuzza's code to run. So we need to revert to
       -- normalized coordinates.
       invpol = torch.Tensor({
-                               14.39660618968421,
-                               115.0391594033587,
-                               349.5723302675825,
-                               525.4538867436418,
-                               465.0997198142186,
-                               327.5797600731358,
-                               142.0748956064312,
-                               473.8717113643804,
-                               786.5319440809841
+                               -1.406840268367202,
+                               -16.61904995462069,
+                               -79.52037729412098,
+                               -192.6306842596766,
+                               -239.1074046506864,
+                               -132.7044023233921,
+                               -35.37184841197575,
+                               473.1309124770347,
+                               784.2197736505799
                             }),
       
       cal_width = 1200,
       cal_height = 795,
-      cal_hc = 357.26964416,
-      cal_wc = 630.3124992 
+      -- for sanity's sake reverse the names x <-> y 
+      cal_yc = 401.79351104,
+      cal_xc = 602.2562304
    }
 
 }
