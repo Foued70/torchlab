@@ -32,9 +32,14 @@ function LensSensor:__init(lens_sensor,img)
    -- FIXME clean this up. Special case for calibration
    if (self.lens_type == "scaramuzza") then
       self.cal_focal_px = self.focal * (self.cal_height / self.sensor_h)
-      -- revert to normalized coordinates
-      -- self.invpol:div(self.cal_focal_px)
+      -- revert all calibration coeffs to normalized coordinates
+      self.invpol:mul(1/self.cal_focal_px)
+      self.cal_xc     = self.cal_xc / self.cal_focal_px
+      self.cal_yc     = self.cal_yc / self.cal_focal_px
+      self.cal_width  = self.cal_width / self.cal_focal_px
+      self.cal_height = self.cal_height / self.cal_focal_px
    end
+
    if img then
       self:add_image(img)
    else
@@ -87,7 +92,7 @@ function LensSensor:add_image(img)
       camh = self.sensor_w
       camw = self.sensor_h
    end
-
+   
    -- offset to optical center of image (px)
    local cx = (imgw + 1) * 0.5
    local cy = (imgh + 1) * 0.5
@@ -104,7 +109,7 @@ function LensSensor:add_image(img)
 
    -- normalized coordinates (px / px ==> dimensionless)
    local horz_norm = cx / hfocal_px
-   local vert_norm   = cy / vfocal_px
+   local vert_norm = cy / vfocal_px
 
    -- maximum distance in normalized image coordinates which we want
    -- to project from self (default is the diagonal).  Note this is
@@ -125,6 +130,14 @@ function LensSensor:add_image(img)
    printf(" -- normalized : diag: %f h: %f v: %f",
       diag_norm,
       horz_norm, vert_norm)
+
+   -- FIXME clean this up. Special case for calibration
+   -- reset center based on the calibration
+   if (self.lens_type == "scaramuzza") then   
+      -- calibrated center in raw image space
+      cx = imgw * (self.cal_xc / self.cal_width)
+      cy = imgh * (self.cal_yc / self.cal_height)
+   end
 
    local dfov = projection.compute_diagonal_fov(diag_norm,self.lens_type)
 
@@ -233,7 +246,7 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
       local theta_pow = theta:clone()
       r_map = torch.Tensor(theta:size())
 
-      printf("theta in: max: %f min: %f",theta:max(), theta:min())
+      -- printf("theta in: max: %f min: %f",theta:max(), theta:min())
       r_map:fill(params[-1]) -- rho = invpol[0]
       
       for i = params:size(1)-1,1,-1 do 
@@ -241,19 +254,6 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
          theta_pow:cmul(theta)            -- powers of theta
       end
 
-      -- scaramuzza's code does not use normalized coordinates but
-      -- rather projects to the original image width which we have
-      -- to downscale because the original dimensions were causing
-      -- the code to blow up.
-      -- local scale = phi:max() / self.cal_width
-
-      printf("r_map: max: %f min: %f",r_map:max(), r_map:min())
-
-      -- FIXME center points are in wrong scale
-      xmap:cmul(r_map):add(self.cal_xc)
-      ymap:cmul(r_map):add(self.cal_yc) 
-      printf("xmap: min: %f max: %f", xmap:min(), xmap:max())
-      printf("ymap: min: %f max: %f", ymap:min(), ymap:max())
    else
       lambda, phi, theta_map, output_map, mapw, maph =
          projection.projection_to_sphere(fov,hfov,vfov,
@@ -277,13 +277,12 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
          --     image to coordinates in the original image.
          -- +++++
          r_map:cdiv(r_map,output_map)
-         -- +++++++
-         -- (4) put xmap and ymap from normalized coordinates to pixel coordinates
-         -- +++++++
-         xmap:cmul(r_map):mul(self.hfocal_px):add(self.center_x)
-         ymap:cmul(r_map):mul(self.vfocal_px):add(self.center_y)
    end
-
+   -- +++++++
+   -- (4) put xmap and ymap from normalized coordinates to pixel coordinates
+   -- +++++++
+   xmap:cmul(r_map):mul(self.hfocal_px):add(self.center_x)
+   ymap:cmul(r_map):mul(self.vfocal_px):add(self.center_y)
 
    -- +++++++
    -- (5) make mask for out of bounds values
