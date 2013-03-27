@@ -40,28 +40,28 @@
    </item>
    <item>
     <layout class="QGridLayout" name="gridLayout">
-     <item row="4" column="1">
+     <item row="5" column="1">
       <widget class="QLabel" name="photo_info">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
+     <item row="4" column="1">
       <widget class="QLabel" name="sweep_info">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="6" column="0">
+     <item row="7" column="0">
       <widget class="QLabel" name="calibration_label">
        <property name="text">
         <string>Calibration Status</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="0">
+     <item row="5" column="0">
       <widget class="QLabel" name="photo_label">
        <property name="text">
         <string>Image</string>
@@ -82,7 +82,7 @@
        </property>
       </widget>
      </item>
-     <item row="3" column="0">
+     <item row="4" column="0">
       <widget class="QLabel" name="sweep_label">
        <property name="text">
         <string>Sweep</string>
@@ -103,21 +103,21 @@
        </property>
       </widget>
      </item>
-     <item row="6" column="1">
+     <item row="7" column="1">
       <widget class="QLabel" name="calibration_info">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
+     <item row="6" column="1">
       <widget class="QLabel" name="calibration_matrix_info">
        <property name="text">
         <string/>
        </property>
       </widget>
      </item>
-     <item row="7" column="0">
+     <item row="9" column="0">
       <widget class="QPushButton" name="button_previous">
        <property name="enabled">
         <bool>true</bool>
@@ -127,7 +127,7 @@
        </property>
       </widget>
      </item>
-     <item row="7" column="1">
+     <item row="9" column="1">
       <widget class="QPushButton" name="button_next">
        <property name="enabled">
         <bool>true</bool>
@@ -144,10 +144,24 @@
        </property>
       </widget>
      </item>
-     <item row="5" column="0">
+     <item row="6" column="0">
       <widget class="QLabel" name="labelOrigPose">
        <property name="text">
         <string>Calibration Matrix</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QPushButton" name="button_save_calibration">
+       <property name="text">
+        <string>Save Calibration</string>
+       </property>
+      </widget>
+     </item>
+     <item row="8" column="0">
+      <widget class="QCheckBox" name="check_box_white_wall">
+       <property name="text">
+        <string>Not Enough Features to Calibrate</string>
        </property>
       </widget>
      </item>

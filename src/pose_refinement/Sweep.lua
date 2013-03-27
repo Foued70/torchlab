@@ -51,9 +51,11 @@ function Sweep:calculate_camera_world(photo_number)
   local rotation = torch.Tensor(4):copy(self.rotation)
 
   --Accumulate all the camera's rotations up to the camera in question
+  local temp_quat = torch.Tensor(4)
   for i = 1, photo_number do
-    rotation = geom.quat_product(self.photos[i].offset_rotation, rotation)
-    geom.quaternion_normalize(rotation)
+    geom.quat_product(rotation, self.photos[i].offset_rotation, temp_quat)
+    geom.quaternion_normalize(temp_quat)
+    rotation:copy(temp_quat)
   end
   
   local camera_rig_offset_position = torch.Tensor({config.rig_offset_position[1], config.rig_offset_position[2], config.rig_offset_position[3]})
