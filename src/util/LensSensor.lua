@@ -30,7 +30,7 @@ function LensSensor:__init(lens_sensor,img)
    end
 
    -- FIXME clean this up. Special case for calibration
-   if (self.lens_type == "scaramuzza") then
+   if (self.lens_type:gmatch("scaramuzza")()) then
       self.cal_focal_px = self.focal * (self.cal_height / self.sensor_h)
       -- revert all calibration coeffs to normalized coordinates
       self.invpol:mul(1/self.cal_focal_px)
@@ -38,6 +38,8 @@ function LensSensor:__init(lens_sensor,img)
       self.cal_yc     = self.cal_yc / self.cal_focal_px
       self.cal_width  = self.cal_width / self.cal_focal_px
       self.cal_height = self.cal_height / self.cal_focal_px
+   else 
+      self.cal_focal_px = 1
    end
 
    if img then
@@ -51,9 +53,16 @@ function LensSensor:__init(lens_sensor,img)
       local horz_norm, vert_norm = projection.derive_hw(diag_norm,aspect_ratio)
       printf(" -- normalized : diag: %f h: %f v: %f", diag_norm, horz_norm, vert_norm)
 
-      local dfov =
-         projection.compute_diagonal_fov(diag_norm,self.lens_type)
-
+      local dfov
+      if (self.lens_type == "scaramuzza_r2t") then 
+         dfov =
+            projection.compute_diagonal_fov(diag_norm*self.cal_focal_px,
+                                            self.lens_type, self.pol)
+      else
+         dfov =
+            projection.compute_diagonal_fov(diag_norm,
+                                            self.lens_type, self.pol)
+      end
       local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
 
       printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
@@ -133,13 +142,22 @@ function LensSensor:add_image(img)
 
    -- FIXME clean this up. Special case for calibration
    -- reset center based on the calibration
-   if (self.lens_type == "scaramuzza") then   
+   if (self.lens_type:gmatch("scaramuzza")()) then   
       -- calibrated center in raw image space
       cx = imgw * (self.cal_xc / self.cal_width)
       cy = imgh * (self.cal_yc / self.cal_height)
    end
 
-   local dfov = projection.compute_diagonal_fov(diag_norm,self.lens_type)
+   local dfov 
+   if (self.lens_type == "scaramuzza_r2t") then
+      dfov = 
+         projection.compute_diagonal_fov(diag_norm*self.cal_focal_px,
+                                         self.lens_type, self.pol)
+   else
+      dfov = 
+         projection.compute_diagonal_fov(diag_norm,
+                                         self.lens_type, self.pol)
+   end
 
    local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
 
@@ -165,12 +183,12 @@ end
 
 -- Maps a camera image + lens to a unit sphere (azimuth and elevation)
 -- or through sphere to other projections.
---
+-- 
 -- Output is a map structure with a lookup table which can be used to
 -- generate the projection from the original image.
---
+-- 
 -- Lens types:
---
+-- 
 -- - Ideal
 --  + rectilinear (perspective) : r = f * tan(theta)
 --  + stereographic             : r = 2 * f * tan(theta/2)
@@ -178,12 +196,13 @@ end
 --  + equal_area (equisolid)    : r = 2 * f * sin(theta/2)
 --  + thoby (fisheye)           : r = k1 * f * sin(k2*theta)
 --  + equal_angle (eqidistant)  : r = f * theta  (for unit sphere f = 1)
---
+-- 
 -- - Calibrated
 --  + scaramuzza (OCamLib)
---
+--  + scaramuzza_r2t (modified to return theta's directly)
+-- 
 -- Projection types:
---
+-- 
 --  + sphere
 --  + rectilinear
 --  + cylindrical

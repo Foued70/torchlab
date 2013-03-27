@@ -56,11 +56,21 @@ function remap(img, map)
    return out
 end
 
-function compute_diagonal_fov(diagonal_normalized,lens_type)
-
+-- FIXME make a generic r2t and t2r function
+function compute_diagonal_fov(diagonal_normalized,lens_type,params)
+   local dfov
    if (lens_type == "rectilinear") then
       dfov = torch.atan(diagonal_normalized)   -- diag in rad
-
+   elseif (lens_type == "scaramuzza_r2t") then
+      print(" -- using scaramuzza calibration")
+      local d2 = diagonal_normalized
+      dfov = params[-1]
+      printf("dfov: %f d2: %f coeff: %f", dfov, d2, params[-1])
+      for i = params:size(1)-1,1,-1 do 
+         dfov = dfov + d2 * params[i]
+         d2 = d2 * diagonal_normalized
+         printf("[%d] dfov: %f d2: %f, coeff: %f",i,dfov,d2,params[i])
+      end
    elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
       -- FIXME using ideal thoby to compute fov for scaramuzza
       print(" -- using lens type: thoby")
@@ -223,6 +233,18 @@ function sphere_to_camera(theta_map,lens_type,params)
       -- we use a positive angle from optical center, but scaramuzza
       -- uses a negative offset from focal point.
       theta:add(-piover2) 
+      local theta_pow = theta:clone()
+      
+      printf("theta start: max: %f min: %f",theta_pow:max(), theta_pow:min())
+      r_map:fill(params[-1]) -- rho = invpol[0]
+      
+      for i = params:size(1)-1,1,-1 do          
+         r_map:add(theta_pow * params[i]) -- coefficients of inverse poly.
+         theta_pow:cmul(theta)        -- powers of theta
+      end
+      printf("rho out: max: %f min: %f",r_map:max(), r_map:min())
+   elseif (lens_type == "scaramuzza_r2t") then
+      local theta     = theta_map:clone()
       local theta_pow = theta:clone()
       
       printf("theta start: max: %f min: %f",theta_pow:max(), theta_pow:min())
