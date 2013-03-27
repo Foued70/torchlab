@@ -7,7 +7,8 @@ local Photo = require('Photo')
 local Sweep = torch.class('Sweep')
 
 
-function Sweep:__init(sweep_dir)
+function Sweep:__init(parent_scan, sweep_dir)
+  self.scan = parent_scan
   self.path = sweep_dir -- keep track of the sweep_dir; maybe use relative path instead? 
   self:set_photos()
 end
@@ -18,7 +19,7 @@ function Sweep:set_photos()
   
   self.photos = {}
   for i, f in ipairs(fs.files_only(img_dir, unpack(config.img_extensions))) do
-    table.insert(self.photos, Photo.new(f))
+    table.insert(self.photos, Photo.new(self, f))
   end
 end
 

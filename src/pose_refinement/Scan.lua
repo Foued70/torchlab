@@ -1,5 +1,6 @@
 require 'torch'
 
+local libui = require 'libui2'
 local paths = require 'paths'
 local config = require 'config'
 local Pose = require 'PoseSlim'
@@ -18,7 +19,9 @@ function Scan:__init(scan_path, pose_file)
     self:init_from_file(scan_path)
   elseif paths.dirp(scan_path) then    
     self.path = scan_path
-    self.camera_id = 'nikon_D800E_w18mm' -- hardcoded for now, can figure it from exif data maybe?
+    self.camera_id = 'nikon_D5100_w10p5mm' -- hardcoded for now, can figure it from exif data maybe?
+    self.lens_luts = {}
+    
     self:set_sweeps()
 
     log.trace("pose_file", pose_file)
@@ -38,6 +41,18 @@ function Scan:init_from_file(lua_file)
   self.model_path = scan.model_path
   self.camera_id = scan.camera_id
   self.camera_settings = scan.camera_settings
+end
+
+function Scan:get_lens(image_data)
+  local img_data_ptr, img_data_size = libui.double_storage_info(image_data)
+
+  if self.lens_luts[img_data_size] == nil then
+    local lens_sensor = LensSensor.new(self.camera_id, image_data)
+    local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
+    self.lens_luts[img_data_size] = {lens = lens_sensor, rectilinear = rectilinear_lut}
+  end
+
+  return self.lens_luts[img_data_size]
 end
 
 function Scan:set_camera_id()
@@ -71,7 +86,7 @@ end
 
 function Scan:load_model_data()
   if self.model_file ~= nil then
-    self.model_data = require('util.obj2').new(self.model_file)
+    self.model_data = require('util.obj').new(self.model_file)
     return true
   end
 
@@ -90,7 +105,7 @@ function Scan:set_sweeps()
   self.sweeps = {}    
   for i, v in ipairs(sweeps_dirs) do
     -- make a sweep for the img dir even if there are no imgs in it b.c. assumption is that sweep idx = pose idx
-    table.insert(self.sweeps, Sweep.new(v))
+    table.insert(self.sweeps, Sweep.new(self, v))
   end
   
   self:init_sweeps_poses()    

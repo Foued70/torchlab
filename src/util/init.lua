@@ -8,7 +8,6 @@ exports.projection  = require "util.projection"
 
 exports.depot = require "util.depot"
 exports.obj   = require "util.obj"
-exports.obj2  = require "util.obj2"
 
 -- classes
 exports.Ray   = require "util.Ray"

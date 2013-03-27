@@ -28,6 +28,7 @@ void main () {
            abs(worldDepth - vertexPositionScreenSpace.z) > cullWiggleRoom)
       discard;
     else {
+      sPickingData = uvec3(objectID, submeshStart, gl_PrimitiveID);
       if (highlightVertex > 0.5)
         sFragColor = mix(vec4(1.0, 0.96, 0.82, 1.0), vec4(0.94, 0.73, 0.0, 1.0), clamp(r, 0.0, 1.0));
       else

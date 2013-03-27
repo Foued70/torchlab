@@ -104,6 +104,11 @@ function PoseRefinementUi:init_event_handling()
   qt.connect(self.widget.button_save_calibration, 'clicked()', function() self:save_calibration() end)
   qt.connect(self.widget.button_previous, 'clicked()', function() self:previous_camera() end)
   qt.connect(self.widget.button_next, 'clicked()', function() self:next_camera() end)
+  qt.connect(self.widget.check_box_white_wall, 'clicked()', function() self:set_white_wall_status(self.widget.check_box_white_wall.checked) end)
+end
+
+function PoseRefinementUi:set_white_wall_status(status)
+  self.scan.sweeps[self.current_sweep].photos[self.current_photo].white_wall = status
 end
 
 function PoseRefinementUi:previous_camera()
@@ -165,43 +170,56 @@ function PoseRefinementUi:select_vertex(mouse_x, mouse_y)
   local click_coordinates = self:mouse_to_viewport_screenspace(mouse_x, mouse_y)
   if click_coordinates ~= nil then
     self.gl_viewport.renderer:activate_scene('viewport_scene')
-    self.gl_viewport.renderer:activate_camera('pose_camera')
-    self.highlighted_vertex = self.gl_viewport.renderer:pick_vertex(click_coordinates, (1/50))
+    self.gl_viewport.renderer:activate_camera('vertex_highlight_camera')
 
-    if self.highlighted_vertex ~= nil then
-      log.trace("Selected vertex:", self.highlighted_vertex)
-      self.scan.sweeps[self.current_sweep].photos[self.current_photo]:add_vertex(self.highlighted_vertex)
-      self:update_viewport_passes()
+    local pixels = self.gl_viewport.renderer.active_camera:screen_to_pixel(click_coordinates)
+    pixels[1] = math.floor(pixels[1])
+    pixels[2] = math.floor(pixels[2])
+
+    local object_id, triangle_index, submesh_start, primitive_id = self.gl_viewport.renderer.cameras.vertex_highlight_camera.frame_buffer:read_pick_pixel(pixels[1], pixels[2])
+    triangle_index = math.floor(primitive_id/3) + submesh_start
+    vertex_index = (primitive_id%3) + 1
+
+    if object_id < 1 then
+      self.highlighted_vertex = nil
+      return nil 
     end
-  end  
+    local object = self.gl_viewport.renderer.scenes.viewport_scene[object_id]
+    local verts, center, normal = object:get_triangle(triangle_index)
+    local vertex_positions = verts:narrow(2,1,3)
+
+    self.highlighted_vertex = vertex_positions[vertex_index]
+    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:add_vertex(self.highlighted_vertex)
+    self:update_viewport_passes()
+  end
 end
 
 function PoseRefinementUi:drag_select_vertex()
   if (self.mouse_left_start == nil) or (self.mouse_left_end == nil) then return end
 
   self.gl_viewport.renderer:activate_scene('viewport_scene')
-  self.gl_viewport.renderer:activate_camera('pose_camera')
+  self.gl_viewport.renderer:activate_camera('vertex_highlight_camera')
 
-  local selection_min = torch.Tensor(2)
-  local selection_max = torch.Tensor(2)
+  local selection_top_left = torch.Tensor(2)
+  local selection_bottom_right = torch.Tensor(2)
 
   if (self.mouse_left_start[1] > self.mouse_left_end[1]) then
-    selection_min[1] = self.mouse_left_end[1]
-    selection_max[1] = self.mouse_left_start[1]
+    selection_top_left[1] = self.mouse_left_end[1]
+    selection_bottom_right[1] = self.mouse_left_start[1]
   else
-    selection_min[1] = self.mouse_left_start[1]
-    selection_max[1] = self.mouse_left_end[1]
+    selection_top_left[1] = self.mouse_left_start[1]
+    selection_bottom_right[1] = self.mouse_left_end[1]
   end
 
   if (self.mouse_left_start[2] > self.mouse_left_end[2]) then
-    selection_min[2] = self.mouse_left_end[2]
-    selection_max[2] = self.mouse_left_start[2]
+    selection_bottom_right[2] = self.mouse_left_end[2]
+    selection_top_left[2] = self.mouse_left_start[2]
   else
-    selection_min[2] = self.mouse_left_start[2]
-    selection_max[2] = self.mouse_left_end[2]
+    selection_bottom_right[2] = self.mouse_left_start[2]
+    selection_top_left[2] = self.mouse_left_end[2]
   end
 
-  local selected_vertices = self.gl_viewport.renderer:pick_vertices(selection_min, selection_max)
+  local selected_vertices = self.gl_viewport.renderer:pick_vertices(selection_top_left, selection_bottom_right)
   if selected_vertices ~= nil then
     self.highlighted_vertex = selected_vertices[1]
     local highlighted_vertex_distance = self.gl_viewport.renderer.active_camera:world_to_screen(self.highlighted_vertex)[3]
@@ -284,7 +302,7 @@ function PoseRefinementUi:set_pose_file()
 end
 
 function PoseRefinementUi:create_debug_camera_meshes(sweep_number)
-  local debug_model_data = require('util.obj2').new('../ui2/objs/debug_forward_pointer.obj')
+  local debug_model_data = require('util.obj').new('../ui2/objs/debug_forward_pointer.obj')
 
   for i = 1, #self.scan.sweeps[sweep_number].photos do
     local camera_position = nil
@@ -338,8 +356,8 @@ function PoseRefinementUi:init_calibration()
   self.current_photo = 1
   self:update_photo_pass()
 
-  self:calculate_viewport_size(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data)
-  local fov_y = self.scan.sweeps[self.current_sweep].photos[self.current_photo].lens.vfov
+  self:calculate_viewport_size(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data_rectilinear)
+  local fov_y = self.scan.sweeps[self.current_sweep].photos[self.current_photo].lens.rectilinear.vfov
   log.trace("Field of view y=", fov_y) 
   self.model_object = self.gl_viewport.renderer:add_object(self.scan.model_data)
 
@@ -351,7 +369,7 @@ function PoseRefinementUi:init_calibration()
   self.gl_viewport.renderer:create_camera('wireframe_camera', self.viewport_width, self.viewport_height, fov_y)
   self.gl_viewport.renderer:activate_camera('wireframe_camera')
 
-  local billboard_data = require('util.obj2').new('../ui2/objs/planeNormalized.obj')
+  local billboard_data = require('util.obj').new('../ui2/objs/planeNormalized.obj')
   local billboard_object = self.gl_viewport.renderer:add_object(billboard_data)
   local wireframe_mat_data = {name='wireframe_mat', ambient={0,0,0,1}, diffuse={0,0,0,1}, specular={0,0,0,1}, shininess={0,0,0,1}, emission={0,0,0,1}}
   local wireframe_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.wireframe, {'pose_camera_frame_buffer_pass_picking'})
@@ -360,8 +378,6 @@ function PoseRefinementUi:init_calibration()
   self.vertex_highlight_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.vertex_highlight, {'pose_camera_frame_buffer_pass_depth'})
 
   self.gl_viewport.renderer:create_camera('vertex_highlight_camera', self.viewport_width, self.viewport_height, fov_y)
-
-  log.trace("CAMERA_INFO!", self.viewport_width, self.viewport_height, self.scan.sweeps[self.current_sweep].photos[self.current_photo].lens.hfov)
 
   self:update_viewport_passes()
   self:update_ui_info()
@@ -381,7 +397,7 @@ function PoseRefinementUi:update_photo_pass()
     self.scan.sweeps[self.current_sweep].photos[self.current_photo]:load_image()
   end
 
-  local photo_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data)
+  local photo_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data_rectilinear)
   self:attach_image(1, 'dslr_photo', 'SourceOver', photo_qt)
   self.widget:update()
 end
@@ -402,8 +418,6 @@ function PoseRefinementUi:update_viewport_passes()
   self.gl_viewport.renderer.cameras.pose_camera.center:copy(camera_center)
   self.gl_viewport.renderer.cameras.vertex_highlight_camera.eye:copy(camera_eye)
   self.gl_viewport.renderer.cameras.vertex_highlight_camera.center:copy(camera_center)
-
-  log.trace("CAMERA_EYE", camera_eye)
 
   --Standard Render of Model
   self.model_object.mesh:restore_materials()
@@ -482,6 +496,7 @@ function PoseRefinementUi:save_calibration()
     for photo = 1, #self.scan.sweeps[sweep].photos do
       file:write("  {\n")
       file:write("    image_path = \""..self.scan.sweeps[sweep].photos[photo].image_path.."\",\n")
+      file:write("    lens = { sensor= \""..self.scan.camera_id.."\", projection= \"rectilinear\"},\n")
       file:write("    white_wall = ")
       if self.scan.sweeps[sweep].photos[photo].white_wall then
         file:write("true,\n")
@@ -489,33 +504,33 @@ function PoseRefinementUi:save_calibration()
         file:write("false,\n")
       end
       file:write("    pairs_calibrated = "..self.scan.sweeps[sweep].photos[photo].pairs_calibrated..",\n")
-      file:write("    calibration_pairs = torch.Tensor({")
+      file:write("    calibration_pairs = torch.Tensor({\n")
       for j = 1, 3 do
+        file:write("      {")
         for k = 1, 5 do
           file:write(self.scan.sweeps[sweep].photos[photo].calibration_pairs[j][k])
-          if not (j==3 and k==5) then file:write(", ") end
+          if k ~= 5 then file:write(", ") end
         end
+        if j ~= 3 then file:write("},\n") else file:write("}\n") end 
       end
-      file:write("}):resize(3,5)\n")
+      file:write("    }),\n")
 
       file:write("    pose_position = torch.Tensor({")
       file:write(self.scan.sweeps[sweep].position[1]..", ")
       file:write(self.scan.sweeps[sweep].position[2]..", ")
-      file:write(self.scan.sweeps[sweep].position[3].."})\n")
+      file:write(self.scan.sweeps[sweep].position[3].."}),\n")
 
       file:write("    pose_rotation = torch.Tensor({")
       file:write(self.scan.sweeps[sweep].rotation[1]..", ")
       file:write(self.scan.sweeps[sweep].rotation[2]..", ")
       file:write(self.scan.sweeps[sweep].rotation[3]..", ")
-      file:write(self.scan.sweeps[sweep].rotation[4].."})\n")
+      file:write(self.scan.sweeps[sweep].rotation[4].."}),\n")
 
-      local photo_position = nil
-      local photo_rotation = nil
-      photo_position, photo_rotation = self.scan.sweeps[sweep]:calculate_camera_world(photo)
+      local photo_position, photo_rotation = self.scan.sweeps[sweep]:calculate_camera_world(photo)
       file:write("    photo_position = torch.Tensor({")
       file:write(photo_position[1]..", ")
       file:write(photo_position[2]..", ")
-      file:write(photo_position[3].."})\n")
+      file:write(photo_position[3].."}),\n")
 
       file:write("    photo_rotation = torch.Tensor({")
       file:write(photo_rotation[1]..", ")
