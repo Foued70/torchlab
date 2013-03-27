@@ -54,7 +54,7 @@ end
 function Camera:update_projection_matrix()
   local aspect = self.width / self.height
 
-  local f = 1 / math.tan(self.fov_y / 2)
+  local f = 1 / (math.tan(self.fov_y/2))
   
   self.projection_matrix:eye(4)
   self.projection_matrix[{1,1}] = f / aspect

@@ -101,6 +101,7 @@ function PoseRefinementUi:init_event_handling()
   qt.connect(self.widget.button_scan_folder, 'clicked()', function() self:set_scan_folder() end)
   qt.connect(self.widget.button_pose_file, 'clicked()', function() self:set_pose_file() end)
   qt.connect(self.widget.button_init_calibration, 'clicked()', function() self:init_calibration() end)
+  qt.connect(self.widget.button_save_calibration, 'clicked()', function() self:save_calibration() end)
   qt.connect(self.widget.button_previous, 'clicked()', function() self:previous_camera() end)
   qt.connect(self.widget.button_next, 'clicked()', function() self:next_camera() end)
 end
@@ -302,13 +303,17 @@ end
 
 function PoseRefinementUi:init_calibration()
   if (self.scan_folder == nil) then
-    log.trace("Failed to start calibration. No scan folder set.")
-    return false
+    --log.trace("Failed to start calibration. No scan folder set.")
+    --return false
+    --For Testing, use a default for immidiate startup
+    self.scan_folder = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen'
   end
 
   if (self.pose_file == nil) then
-    log.trace("Failed to start calibration. No pose file set.")
-    return false
+    --log.trace("Failed to start calibration. No pose file set.")
+    --return false
+    --For Testing, use a default for immidiate startup
+    self.pose_file = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen/scanner371_job286000_texture_info.txt'
   end
 
   log.trace("Loading scan at", sys.clock())
@@ -356,6 +361,8 @@ function PoseRefinementUi:init_calibration()
 
   self.gl_viewport.renderer:create_camera('vertex_highlight_camera', self.viewport_width, self.viewport_height, fov_y)
 
+  log.trace("CAMERA_INFO!", self.viewport_width, self.viewport_height, self.scan.sweeps[self.current_sweep].photos[self.current_photo].lens.hfov)
+
   self:update_viewport_passes()
   self:update_ui_info()
 
@@ -395,6 +402,8 @@ function PoseRefinementUi:update_viewport_passes()
   self.gl_viewport.renderer.cameras.pose_camera.center:copy(camera_center)
   self.gl_viewport.renderer.cameras.vertex_highlight_camera.eye:copy(camera_eye)
   self.gl_viewport.renderer.cameras.vertex_highlight_camera.center:copy(camera_center)
+
+  log.trace("CAMERA_EYE", camera_eye)
 
   --Standard Render of Model
   self.model_object.mesh:restore_materials()
@@ -457,6 +466,82 @@ function PoseRefinementUi:calculate_viewport_size(image)
 
   self.viewport_width = math.floor(viewport_width)
   self.viewport_height = math.floor(viewport_height)
+end
+
+--Simple save function to get some calibration data to test with. 
+function PoseRefinementUi:save_calibration()
+  local save_path = qt.QFileDialog.getSaveFileName(self.widget, "Save As", '', "Lua Files (*.lua)"):tostring()
+  local file = io.open(save_path, "w")
+
+  file:write("require \'torch\'\n")
+
+  local scan_table = "local scan = {"
+
+  for sweep = 1, #self.scan.sweeps do
+    file:write("local sweep_"..sweep.." = {\n")
+    for photo = 1, #self.scan.sweeps[sweep].photos do
+      file:write("  {\n")
+      file:write("    image_path = \""..self.scan.sweeps[sweep].photos[photo].image_path.."\",\n")
+      file:write("    white_wall = ")
+      if self.scan.sweeps[sweep].photos[photo].white_wall then
+        file:write("true,\n")
+      else
+        file:write("false,\n")
+      end
+      file:write("    pairs_calibrated = "..self.scan.sweeps[sweep].photos[photo].pairs_calibrated..",\n")
+      file:write("    calibration_pairs = torch.Tensor({")
+      for j = 1, 3 do
+        for k = 1, 5 do
+          file:write(self.scan.sweeps[sweep].photos[photo].calibration_pairs[j][k])
+          if not (j==3 and k==5) then file:write(", ") end
+        end
+      end
+      file:write("}):resize(3,5)\n")
+
+      file:write("    pose_position = torch.Tensor({")
+      file:write(self.scan.sweeps[sweep].position[1]..", ")
+      file:write(self.scan.sweeps[sweep].position[2]..", ")
+      file:write(self.scan.sweeps[sweep].position[3].."})\n")
+
+      file:write("    pose_rotation = torch.Tensor({")
+      file:write(self.scan.sweeps[sweep].rotation[1]..", ")
+      file:write(self.scan.sweeps[sweep].rotation[2]..", ")
+      file:write(self.scan.sweeps[sweep].rotation[3]..", ")
+      file:write(self.scan.sweeps[sweep].rotation[4].."})\n")
+
+      local photo_position = nil
+      local photo_rotation = nil
+      photo_position, photo_rotation = self.scan.sweeps[sweep]:calculate_camera_world(photo)
+      file:write("    photo_position = torch.Tensor({")
+      file:write(photo_position[1]..", ")
+      file:write(photo_position[2]..", ")
+      file:write(photo_position[3].."})\n")
+
+      file:write("    photo_rotation = torch.Tensor({")
+      file:write(photo_rotation[1]..", ")
+      file:write(photo_rotation[2]..", ")
+      file:write(photo_rotation[3]..", ")
+      file:write(photo_rotation[4].."})\n")
+
+      if photo ~= #self.scan.sweeps[sweep].photos then
+        file:write("  },\n")
+      else
+        file:write("  }\n")
+      end
+    end
+    file:write("}\n\n")
+
+    if sweep ~= #self.scan.sweeps then
+      scan_table = scan_table.."sweep_"..sweep..", "
+    else
+      scan_table = scan_table.."sweep_"..sweep
+    end
+  end
+
+  scan_table = scan_table.."}"
+  file:write(scan_table.."\n")
+  file:write("return scan\n")
+  file:close()
 end
 
 function PoseRefinementUi:update_magnifier(magnification, layer, x, y, width, height)
