@@ -17,9 +17,13 @@ void main() {
     vertexSize.x = 20.0 * (1.0/float(screenWidth));
     vertexSize.y = 20.0 * (1.0/float(screenHeight));
 
+    
     for(int i = 0; i < gl_in.length(); i++)
     {
         vec4 pos = gl_in[i].gl_Position;
+
+        // Making gl_PrimitiveID a vertex draw counter
+        gl_PrimitiveID = (gl_PrimitiveIDIn * 3) + i;
 
         vec2 animatedVertexSize = vertexSize;
         if (vertexSelected[i] > 0.5) {

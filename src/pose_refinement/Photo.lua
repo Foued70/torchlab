@@ -9,7 +9,8 @@ local Photo = torch.class('Photo')
 
 local REQUIRED_CALIBRATION_PAIRS = 3
 
-function Photo:__init(image_path)
+function Photo:__init(parent_sweep, image_path)
+  self.sweep = parent_sweep
   self.calibration_pairs = torch.Tensor(REQUIRED_CALIBRATION_PAIRS,5):fill(0)
   self.pairs_calibrated = 0
   self.vertex_set = false
@@ -17,10 +18,10 @@ function Photo:__init(image_path)
   self.white_wall = false
 
   self.image_path = image_path
-  self.image_data = nil
+  self.image_data_raw = nil
+  self.image_data_rectilinear = nil
 
   self.lens = nil
-  self.rectilinear_lut = nil
 end
 
 function Photo:add_vertex(vertex_position)
@@ -54,25 +55,21 @@ function Photo:calibration_complete()
 end
 
 function Photo:image_loaded()
-  return not (self.image_data == nil)
+  return (self.image_data_raw ~= nil) and (self.image_data_rectilinear ~= nil)
 end
 
 function Photo:load_image()
   log.trace("Loading image from path:", "\""..self.image_path.."\"", "at:", sys.clock())
-  local image_native = image.load(self.image_path)
-
-  --TODO: Move Lens out of here to proper place in sweep
-  self.lens = LensSensor.new("nikon_D5100_w10p5mm",image_native)
-  self.rectilinear_lut = self.lens:make_projection_map("rectilinear")
-  self.image_data = projection.remap(image_native,self.rectilinear_lut)
-  lens = nil
-  rectilinear_map = nil
-  collectgarbage()
+  self.image_data_raw = image.load(self.image_path)
+  self.lens = self.sweep.scan:get_lens(self.image_data_raw)
+  self.image_data_rectilinear = projection.remap(self.image_data_raw, self.lens.rectilinear)
   log.trace("Completed image load at:", sys.clock())
 end
 
 function Photo:flush_image()
-  image_data = nil
+  self.lens = nil
+  self.image_data_raw = nil
+  self.image_data_rectilinear = nil
   collectgarbage()
 end
 
