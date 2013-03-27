@@ -1,7 +1,6 @@
 -- ObjData can load and save a .obj file 
 -- Obj can be n-gon but for now, all objs should be triangulated for opengl loading 
 -- TODO: n-gon support
--- TODO: obj without uvs will die in viewer even though there are defaults.
 -- TODO: test saving after retexture
 
 local paths = require "paths"
@@ -188,13 +187,13 @@ function ObjData:load(filename)
       -- f 944//1572 945//1572 942//942
       -- we don't care about normals, we will calc them later
       local face_vert_idx = 1
-      for face_vert in line:gmatch("%d+[/%d+]+") do                    
+      for face_vert in line:gmatch("%d+[/%d+]*") do                       
         local idx = vert_cache[face_vert]        
         local vert_pos_idx = face_vert:match("%d+")
         
         local vert_pos_idx = tonumber(face_vert:match("%d+")) -- first set of digits        
         local vert_uv_idx = tonumber(face_vert:match("[^/]/(%d+)")) -- second set of digits (might not exist)
-                
+        
         local vert = verts[vert_pos_idx]:narrow(1, 1, 3)        
         
         if not idx then
