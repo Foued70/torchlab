@@ -71,7 +71,7 @@ end
 
 function Scan:load_model_data()
   if self.model_file ~= nil then
-    self.model_data = require('util.obj2').new(self.model_file)
+    self.model_data = require('util.obj').new(self.model_file)
     return true
   end
 

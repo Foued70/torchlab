@@ -1,212 +1,361 @@
-require 'torch'
-require 'sys'
-local geom = require "util/geom"
+-- ObjData can load and save a .obj file 
+-- Obj can be n-gon but for now, all objs should be triangulated for opengl loading 
+-- TODO: n-gon support
+-- TODO: obj without uvs will die in viewer even though there are defaults.
+-- TODO: test saving after retexture
 
-local objops = {}
+local paths = require "paths"
+local geom = require "util.geom"
 
--- see: http://en.wikipedia.org/wiki/Wavefront_.obj_file
-function objops.load(...)
-   local file,maxvertsperface
-   local args = {...}
-   local nargs = #args
-   if nargs == 2 then
-      file = args[1]
-      maxvertsperface = args[2]
-   elseif nargs == 1 then
-      file = args[1]
-      maxvertsperface = 3
-   else
-      print(dok.usage('obj.load',
-                      'load an obj file',
-                      '> returns: lua table with faces, verts etc.',
-                      {type='string', help='obj filepath', req=true},
-                      {type='number', help='max vertices per face', default=3}))
-      dok.error('incorrect arguments','obj.load')
-   end
-   
-   sys.tic()
-   local nverts = tonumber(io.popen(string.format("grep -c '^v ' %s",file)):read())
-   local nfaces = tonumber(io.popen(string.format("grep -c '^f ' %s",file)):read())
+local _t = sys.clock()
+local function tic(msg)
+  local lapse = sys.clock() - _t
+  _t = sys.clock()
+  if msg then
+    print(lapse, msg)
+  end
+end
 
-   print(string.format("Found nverts: %d nfaces: %d in %2.2f", nverts, nfaces, sys.toc()))
+local ObjData = torch.class('ObjData')
 
-   sys.tic()
+function ObjData:__init(filename)
+  if filename and paths.filep(filename) then    
+    self:load(filename)
+    self:add_derived_data()
+  end
+end
 
-   -- could be a table as we don't know max number of vertices per face
-   local verts = torch.Tensor(nverts,4):fill(1)
-   local faces = torch.IntTensor(nfaces,maxvertsperface):fill(-1)
-   local nverts_per_face = torch.IntTensor(nfaces)
+local function parse_color(line)
+  local r, g, b = line:match('[^%s]+%s+([^%s]+)%s+([^%s]+)%s+([^%s]+)')
+  return {tonumber(r), tonumber(g), tonumber(b), 1}
+end
 
-   local objFile = io.open(file)
-   local fc = 1
-   local vc = 1
-   for line in objFile:lines() do
-      if (line:match("^v ")) then
-         -- vertices
-         -- v -1.968321 0.137992 -1.227969
-         local vs = line:gsub("^v ", "")
-         local k = 1
-         for n in vs:gmatch("[-.%d]+") do
-            verts[vc][k] = tonumber(n)
-            k = k + 1
-         end
-         vc = vc + 1
-      elseif (line:match("^f ")) then
-         -- faces
-         -- 1) position
-         -- f 1 2 3
-         -- 2) position/texture
-         -- f 44/12 51/13 1/14
-         -- 3) position/texture/normal
-         -- f 44/12/1 51/13/2 1/14/2
-         local vs = line:gsub("^f ", "")
-         -- FIXME for now discard texture and normal
-         vs = vs:gsub("/%d*","")
-         local k = 1
-         -- can have faces with different number of verts gmatch
-         -- returns an iterator so we can't get the length before hand
-         -- and have to check against maxverts in the loop
-         for n in vs:gmatch("[-.%d]+") do 
-            if (k > maxvertsperface) then
-               print(string.format("Warning face %d has more verts than max: %d", 
-                                   fc, maxvertsperface))
-               break
-            else
-               faces[fc][k] = tonumber(n)
-            end
-            k = k + 1
-         end
-         nverts_per_face[fc] = k - 1
-         fc = fc + 1
+local function trim(s)
+  return s:match'^%s*(.*%S)' or ''
+end
+
+local function get_counts(filename)
+  local n_faces = 0;
+  local n_verts = 0;
+  local n_uvs = 0;
+  local n_gon = 0;
+  local n_verts_per_face = {}
+    
+  for line in io.lines(filename) do
+    if line:match('^f ') then
+      n_faces = n_faces + 1
+      new_line, face_count = trim(line):gsub("%s+", "")
+      if face_count > n_gon then n_gon = face_count end
+      table.insert(n_verts_per_face, face_count)
+    elseif line:match('^v ') then
+      n_verts = n_verts + 1
+    elseif line:match('^vt ') then
+      n_uvs = n_uvs + 1;
+    end
+  end
+
+  return n_faces, n_verts, n_uvs, n_gon, n_verts_per_face
+end
+
+function ObjData:add_derived_data()
+  tic()
+  local n_faces = self.n_faces
+  local n_verts_per_face = self.n_verts_per_face
+  local face_verts = self.face_verts
+  
+  local face_normals        = torch.Tensor(n_faces, 3)
+  local face_center_dists   = torch.Tensor(n_faces)
+  local face_centers        = torch.Tensor(n_faces, 3)
+  local face_bboxes         = torch.Tensor(n_faces, 6) -- xmin,ymin,zmin,xmax,ymax,zmax
+  local bbox                = torch.Tensor(6)
+
+  for face_idx = 1,n_faces do 
+    local nverts = n_verts_per_face[face_idx]
+    local fverts = face_verts[face_idx]:narrow(1, 1, nverts)
+       
+    -- a) compute face centers
+    face_centers[face_idx] = fverts:mean(1):squeeze()
+    
+    -- b) compute plane normal and face_center_dists distance from origin for plane eq.
+    face_normals[face_idx] = geom.compute_normal(fverts)
+    face_center_dists[face_idx] = - torch.dot(face_normals[face_idx], face_centers[face_idx])
+    
+    -- c) compute bbox
+    local thisbb   = face_bboxes[face_idx]
+    thisbb:narrow(1,1,3):copy(fverts:min(1):squeeze())
+    thisbb:narrow(1,4,3):copy(fverts:max(1):squeeze())
+  end 
+  
+  bbox:narrow(1,1,3):copy(face_bboxes:narrow(2,1,3):min(1):squeeze())
+  bbox:narrow(1,4,3):copy(face_bboxes:narrow(2,4,3):max(1):squeeze())
+  
+  self.face_normals = face_normals
+  self.face_center_dists = face_center_dists
+  self.face_centers = face_centers
+  self.face_bboxes = face_bboxes
+  self.bbox = bbox
+
+  tic('derive')
+  
+end
+
+local function default_material()
+  local material = {}
+  material.name = "default"
+  material.diffuse = {0.5, 0.5, 0.5, 1}
+  material.ambient = {0, 0, 0, 1}
+  return material
+end
+
+local function load_materials(pathname, filename)
+  filename = paths.concat(pathname, filename)
+  
+  local materials = {}
+  local mtl_name_index_map = {}
+  local mtl
+  
+  if paths.filep(filename) then 
+
+    for line in io.lines(filename) do
+      if line:match('^newmtl ') then
+        mtl = {name = trim(line:sub(8))}
+        table.insert(materials, mtl)
+
+        mtl_name_index_map[mtl.name] = #materials
+      elseif line:match('^Ns ') then
+        mtl.shininess = tonumber(line:sub(4))
+      elseif line:match('^Ka ') then
+        mtl.ambient = parse_color(line)
+      elseif line:match('^Kd ') then
+        mtl.diffuse = parse_color(line)
+      elseif line:match('^Ks ') then
+        mtl.specular = parse_color(line)
+      elseif line:match('^d ')  then
+        mtl.alpha = tonumber(line:sub(3))
+      elseif line:match('^Tr ') then
+        mtl.alpha = tonumber(line:sub(4))
+      elseif line:match('^illum ') then
+        mtl.illumType = tonumber(line:sub(7))
+      elseif line:match('^map_Kd ') then
+        mtl.diffuse_tex_path = paths.concat(pathname, trim(line:sub(8)))
       end
-   end
-   print(string.format("Loaded %d verts %d faces in %2.2fs", vc-1, fc-1, sys.toc()))
+    end
+    
+  end
 
+  return materials, mtl_name_index_map
+end
 
-   sys.tic()
-   local face_verts  = torch.Tensor(nfaces,maxvertsperface,3)
-   local normals     = torch.Tensor(nfaces,3)
-   local d           = torch.Tensor(nfaces) 
-   local centers     = torch.Tensor(nfaces,3)
-   local face_bboxes = torch.Tensor(nfaces,6) -- xmin,ymin,zmin,xmax,ymax,zmax
-   local bbox        = torch.Tensor(6)
-   for fid = 1,nfaces do
+function ObjData:load(filename)
+  tic()
+  local n_faces, n_verts, n_uvs, n_gon, n_verts_per_face = get_counts(filename);
+  tic('counts')  
+  
+  local verts         = torch.Tensor(n_verts, 4):fill(1)
+  local uvs           = torch.Tensor(n_uvs, 2):fill(1)  
+  local faces         = torch.IntTensor(n_faces, n_gon):fill(-1) 
+  local face_verts    = torch.Tensor(n_faces, n_gon, 3):fill(1)
+  local unified_verts = torch.Tensor(n_faces*n_gon, 9):fill(1) -- n_faces*n_gon is max. we'll trim later.  
+  tic('alloc')
+  
+  local materials, mtl_name_index_map
+  local submeshes = {}
+  local vert_cache = {}
+  local vert_idx = 1
+  local face_idx = 1
+  local uv_idx = 1
+  local unified_verts_idx = 1
+  
+  for line in io.lines(filename) do 
+    if line:match('^v ') then
+      -- vertices: v -1.968321 0.137992 -1.227969
+      local x, y, z = line:match('%s*([^%s]+)%s*([^%s]+)%s*([^%s]+)', 3)
+      verts[{vert_idx, 1}] = tonumber(x)
+      verts[{vert_idx, 2}] = tonumber(y)
+      verts[{vert_idx, 3}] = tonumber(z)
+      vert_idx = vert_idx + 1      
+    elseif line:match('^vt ') then
+      -- uvs: vt 0.442180 0.660924
+      local u, v = line:match('%s*([^%s]+)%s*([^%s]+)', 4)
+      uvs[{uv_idx, 1}] = tonumber(u)
+      uvs[{uv_idx, 2}] = tonumber(v)
+      uv_idx = uv_idx + 1;      
+    elseif line:match('^f ') then
+      -- faces: 
+      -- f 944 945 942
+      -- f 944/1572 945/1569 942/1570
+      -- f 944/1572/944 945/1569/945 942/1570/942
+      -- f 944//1572 945//1572 942//942
+      -- we don't care about normals, we will calc them later
+      local face_vert_idx = 1
+      for face_vert in line:gmatch("%d+[/%d+]+") do                    
+        local idx = vert_cache[face_vert]        
+        local vert_pos_idx = face_vert:match("%d+")
+        
+        local vert_pos_idx = tonumber(face_vert:match("%d+")) -- first set of digits        
+        local vert_uv_idx = tonumber(face_vert:match("[^/]/(%d+)")) -- second set of digits (might not exist)
+                
+        local vert = verts[vert_pos_idx]:narrow(1, 1, 3)        
+        
+        if not idx then
+          idx = unified_verts_idx                
+                    
+          unified_verts[{idx, {1, 3}}] = vert
+          if vert_uv_idx then unified_verts[{idx, {5, 6}}] = uvs[vert_uv_idx] end
+          vert_cache[face_vert] = idx
+          unified_verts_idx = unified_verts_idx + 1
+        end              
 
-      local nverts = nverts_per_face[fid]
-      local fverts = face_verts[fid]:narrow(1,1,nverts)
-      local face   = faces[fid]
-
-      -- a) build face_verts (copy all the data)
-      for j = 1,nverts do
-         fverts[j] = verts[ {face[j],{1,3}} ]
+        faces[{face_idx, face_vert_idx}] = idx        
+        face_verts[{face_idx, face_vert_idx, {1, 3}}] = vert -- keep the vert value close
+        
+        face_vert_idx = face_vert_idx + 1
       end
-
-      -- b) compute object centers
-      centers[fid] = fverts:mean(1):squeeze()
-
-      -- c) compute plane normal and d distance from origin for plane eq.
-      normals[fid] = geom.compute_normal(fverts)
-      d[fid]       = - torch.dot(normals[fid],centers[fid])
-
-      -- d) compute bbox
-      local thisbb   = face_bboxes[fid]
-      thisbb:narrow(1,1,3):copy(fverts:min(1):squeeze())
-      thisbb:narrow(1,4,3):copy(fverts:max(1):squeeze())
       
-   end
+      face_idx = face_idx + 1           
+    elseif line:match('^usemtl ') then
+      local mtl_name = trim(line:sub(8))
+      local mtl_id = mtl_name_index_map[mtl_name]
 
-   bbox:narrow(1,1,3):copy(face_bboxes:narrow(2,1,3):min(1):squeeze())
-   bbox:narrow(1,4,3):copy(face_bboxes:narrow(2,4,3):max(1):squeeze())
+      if #submeshes > 0 then
+        submeshes[#submeshes][2] = face_idx - 1
+      end
 
-   print(string.format("Processed face_verts, centers and normals in %2.2fs", sys.toc()))
-
-   local obj = {}
-   obj.nverts          = nverts
-   obj.nfaces          = nfaces
-   obj.verts           = verts
-   obj.faces           = faces
-   obj.nverts_per_face = nverts_per_face
-   obj.face_verts      = face_verts
-   obj.normals         = normals
-   obj.d               = d
-   obj.centers         = centers
-   obj.face_bboxes     = face_bboxes
-   obj.bbox            = bbox
-   
-   return obj
+      table.insert(submeshes, {face_idx, 0, mtl_id})
+    elseif line:match('^mtllib ') then
+      local mtllib = trim(line:sub(8))    
+      materials, mtl_name_index_map = load_materials(paths.dirname(filename), mtllib)
+    end
+  end
+  if #submeshes > 0 then
+    submeshes[#submeshes][2] = face_idx - 1
+  elseif #submeshes == 0 then
+    -- default submesh is all faces pointing to default material
+    materials = {default_material()}
+    submeshes[1] = {1, n_faces, 1} 
+  end  
+  tic('parse file')
+  
+  unified_verts_count = unified_verts_idx - 1
+  local trimmed_unified_verts = torch.Tensor(unified_verts_count, 9)
+  trimmed_unified_verts[{{1, unified_verts_count}}] = unified_verts[{{1, unified_verts_count}}]
+  tic('trim')
+    
+  self.n_faces            = n_faces -- number of faces
+  self.n_verts            = n_verts -- number of verts
+  self.n_uvs              = n_uvs -- number of uvs
+  self.n_gon              = n_gon -- max number of verts for any given face
+  self.n_verts_per_face   = n_verts_per_face
+  
+  self.verts              = verts -- all unique verts. n_verts x 4
+  self.uvs                = uvs -- all unique uvs. n_uvs x 2
+  self.faces              = faces -- all faces with indexes into unified verts. n_faces x n_gon
+  self.face_verts         = face_verts -- all faces with copy of vert data. n_faces x n_gon x 3 (retexture)
+  self.unified_verts      = trimmed_unified_verts -- unique pos/texture pairs. ?x9. 4 position + 2 uv + 3 normal (viewer)
+  self.submeshes          = torch.IntTensor(submeshes) -- indexes of faces in  a submesh and index into materials. 
+  self.materials          = materials -- table of material properties (viewer)
 end
 
--- save a retextured object to obj
-function objops.save(obj,objfname,mtlfname,imgbasename)
-   if not objfname then 
-      objfname = "retexture.obj" 
-   end
-   local objf = assert(io.open(objfname, "w"))
-
-   if not mtlfname then
-      mtlfname = "retexture.mtl"
-   end
-   local mtlf = assert(io.open(mtlfname, "w"))
-   objf:write(string.format("mtllib %s\n\n", paths.basename(mtlfname)))
-
-   if not imgbasename then 
-      imgbasename = "texture"
-   end
-   local nvpf = obj.nverts_per_face
-
-   -- print vertices
-   local verts = obj.verts
-   for vid = 1,verts:size(1) do 
-      local v = verts[vid]
-      objf:write(string.format("v %f %f %f %f\n",v[1],v[2],v[3],v[4]))
-   end
-
-   -- uvs
-   local uv = obj.uv
-   objf:write("\n")
-   for uid = 1,uv:size(1) do 
-      for vid = 1,nvpf[uid] do 
-         objf:write(string.format("vt %f %f\n",
-                                  uv[uid][vid][1],uv[uid][vid][2]))
+local function write_mtl_prop(mtlf, mtl, mtl_prop, file_prop)
+  mtl_prop = mtl[mtl_prop]
+  
+  if mtl_prop then 
+    local str = file_prop.." "
+    
+    if type(mtl_prop) == 'table' then
+      for i=1, #mtl_prop do
+        str = str..mtl_prop[i].." "
       end
-   end
-
-   -- faces
-   local faces = obj.faces
-   local vti = 1
-   for fid = 1,obj.nfaces do
-
-      -- save texture to an image file
-      local iname = string.format("%s_face%05d.png",imgbasename,fid)
-      if obj.textures[fid] and not paths.filep(iname) then
-         image.save(iname,obj.textures[fid])
-      end
-      local filep = paths.filep(iname)
-      local biname = paths.basename(iname)
-      if filep then
-         -- store path to image in mtlfile
-         mtlf:write(string.format("newmtl %s\n", biname))
-         mtlf:write(string.format("map_Ka %s\n", biname))
-         mtlf:write(string.format("map_Kd %s\n", biname))
-         mtlf:write("\n")
-      end
-      -- store face and mtl info to obj
-      objf:write("\n")
-      objf:write(string.format("g face%05d\n",fid))
-      if filep  then
-         objf:write(string.format("usemtl %s\n",biname))
-      end
-      str = "f "
-      for vid = 1,nvpf[fid] do 
-         str = str .. string.format("%d/%d ",faces[fid][vid],vti)
-         vti = vti + 1
-      end
-      objf:write(str .. "\n")
-   end
-   
-   mtlf:close()
-   objf:close()
+    else
+      str = str..mtl_prop
+    end
+    mtlf:write(str.."\n") 
+  end
 end
 
+function ObjData:save(filename, mtlname)
+  filename = filename or "scan.obj"
+  mtlname = mtlname or "scan.mtl"  
+  
+  local objf = assert(io.open(filename, "w"))  
+  objf:write(string.format("mtllib %s\n\n", paths.basename(mtlname)))
+  
+  -- print vertices
+  local verts = self.verts
+  local verts_idxs = {}
+  for vert_idx = 1,self.n_verts do 
+     local vert = verts[vert_idx]
+     verts_idxs[vert[1]] = verts_idxs[vert[1]] or {}
+     verts_idxs[vert[1]][vert[2]] = verts_idxs[vert[1]][vert[2]] or {}
+     verts_idxs[vert[1]][vert[2]][vert[3]] = vert_idx
+     objf:write(string.format("v %f %f %f\n",vert[1],vert[2],vert[3]))
+  end
 
-return objops
+  -- print uvs
+  local uvs = self.uvs
+  local uvs_idxs = {}
+  objf:write("\n")
+  for uv_idx = 1,self.n_uvs do 
+    local uv = uvs[uv_idx]
+    uvs_idxs[uv[1]] = uvs_idxs[uv[1]] or {}
+    uvs_idxs[uv[1]][uv[2]] = uv_idx
+    objf:write(string.format("vt %f %f\n", uv[1], uv[2]))
+  end
+
+  -- faces
+  local faces = self.faces
+  objf:write("\n")  
+  
+  local materials = self.materials
+  local submeshes = self.submeshes
+  local unified_verts = self.unified_verts
+  local n_verts_per_face = self.n_verts_per_face
+  
+  for submesh_idx=1, submeshes:size()[1] do
+    local submesh = submeshes[submesh_idx]
+    objf:write("\n")
+    objf:write(string.format("g face%05d\n",submesh_idx))
+    local material = materials[submesh[3]]      
+    if material then
+      objf:write(string.format("usemtl %s\n", material.name))
+    end
+            
+    for face_idx = submesh[1], submesh[2] do                        
+      local str = "f "
+      for face_vert_idx=1, n_verts_per_face[face_idx] do
+        local unified_vert_idx = faces[face_idx][face_vert_idx]
+        local vert = unified_verts[{unified_vert_idx, {1,3}}]
+        local uv = unified_verts[{unified_vert_idx, {5,6}}]
+        str = str..string.format("%d/%d ", verts_idxs[vert[1]][vert[2]][vert[3]], uvs_idxs[uv[1]][uv[2]])
+      end
+      objf:write(str.."\n")
+    end
+  end
+  
+  objf:close()
+  
+  local mtlf = assert(io.open(mtlname, "w"))  
+  for i=1, #materials do
+    local material = materials[i]
+    write_mtl_prop(mtlf, material, 'name', 'newmtl')
+    write_mtl_prop(mtlf, material, 'shininess', 'Ns')
+    write_mtl_prop(mtlf, material, 'ambient', 'Ka')
+    write_mtl_prop(mtlf, material, 'diffuse', 'Kd')
+    write_mtl_prop(mtlf, material, 'specular', 'Ks')
+    write_mtl_prop(mtlf, material, 'alpha', 'd')    
+    write_mtl_prop(mtlf, material, 'illumType', 'illum')
+    
+    if material.diffuse_tex_path then
+      if not paths.filep(material.diffuse_tex_path) then
+        image.save(material.diffuse_tex_path, material.image)      
+      end
+      mtlf:write(string.format("map_Kd %s\n", paths.basename(material.diffuse_tex_path)))
+    end   
+    
+    mtlf:write("\n")
+  end
+  mtlf:close()
+
+end
+
+return ObjData
