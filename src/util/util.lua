@@ -24,44 +24,66 @@ function util.select_by_index(ind,mat)
    shape[1] = nelem
 
    local s = torch.Tensor(shape)
-   for i = 1,nelem do 
+   for i = 1,nelem do
       s[i] = mat[ind[i]]
    end
    return s
 end
 
 -- <vals> sorted list of values
--- 
+--
 -- <val> value for which we want pointer into list where everything
 --       before pointer is < val and after >= val
 
 function util.get_index_lt_val(vals,val)
-   local idx = vals:size(1)*0.5
+   local idx  = math.ceil(vals:size(1)*0.5)
    local cval = vals[idx]
-   local nval = vals[idx+1]
-   local step = idx*0.5
+   local pval = vals[idx-1]
+   local vals_size = vals:size(1)
+   local step = math.floor(idx*0.5)
    local count = 0
-   while true do 
+   -- O(n) code for debugging
+   local debug = false
+   local onidx = idx
+   if debug then
+      printf("size: %d idx: %f pval: %f cval: %f step: %f",vals_size,idx,pval,cval,step)
+      for i = 1,vals_size do
+         if (vals[i] >= val) then
+            onidx = i
+            break
+         end
+      end
+   end
+   -- O(log(n)) code which had some edge cases
+   while true do
       count = count + 1
-      if (cval >= val) then
-         idx = idx - step
-      elseif (nval < val) then
-         idx = idx + step
+      -- stop condition or take step
+      if ((cval >= val) and (pval < val)) then
+         break            -- stop condition
+      elseif (cval < val) then
+         idx = idx + step -- step forwards
       else
-         break
+         idx = idx - step -- step backwards
       end
-      step = math.floor(0.5 + (step * 0.5))
-      if (idx <= 0) or (idx >= vals:size(1)) or (step < 1) then
-         break
+      -- only decrement if step is > 1
+      if (step > 1) then
+         step = math.floor(0.5 + (step * 0.5))
       end
+      -- keep things inbounds
+      if (idx < 2) then idx = 2 end
+      if (idx > vals_size) then idx = vals_size end
+      -- setup next loop
       cval = vals[idx]
-      nval = vals[idx+1]
+      pval = vals[idx-1]
    end
-   if (idx < 1) or (idx >= vals:size(1)) then
-      return -1,count
+   if debug and (onidx ~= idx) then
+      printf("found: %f %f %d", idx, onidx, count)
+      printf("sv: %f on[%f]: %f,%f",val, onidx, vals[onidx-1], vals[onidx])
+      printf("          log[%f]: %f,%f", idx, vals[idx-1],vals[idx])
+      print(vals)
+      error("dont match")
    end
-
-   return math.floor(idx),count
+   return idx,count
 end
 
 
