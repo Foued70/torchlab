@@ -72,10 +72,45 @@ local lens_types = {
                                473.1309124770347,
                                784.2197736505799
                             }),
-      
+
       cal_width = 1200,
       cal_height = 795,
-      -- for sanity's sake reverse the names x <-> y 
+      -- for sanity's sake reverse the names x <-> y
+      cal_yc = 401.79351104,
+      cal_xc = 602.2562304
+   },
+
+   nikon_10p5mm_r2t = {
+
+      name     = "Calibrated Nikon D5100 with 10.5mm",
+
+      -- copied from exif info
+      sensor_w = 23.6, -- mm
+      sensor_h = 15.6, -- mm
+
+      focal    = 10.58, -- mm
+
+      -- calibration parameters from Davide Scaramuzza's OCamCalib_v2.0
+      lens_type = "scaramuzza_r2t",
+      -- r (pixel coords) 2 theta
+      pol = torch.Tensor({
+                            1.79591890000176e-07,
+                            0.00185490944884283,
+                            0.003079708921663535
+                         }),
+      -- theta 2 r (pixel coords)
+      -- this is in pixel coordinates in an image we had to rescale to
+      -- get Scaramuzza's code to run. So we need to revert to
+      -- normalized coordinates.
+      invpol = torch.Tensor({
+                               -24.20915754935855,
+                               537.5462237075097,
+                                  -1.437859414075788
+                            }),
+
+      cal_width = 1200,
+      cal_height = 795,
+      -- for sanity's sake reverse the names x <-> y
       cal_yc = 401.79351104,
       cal_xc = 602.2562304
    }
