@@ -1,0 +1,27 @@
+README
+
+1. Brew install Octave
+2. In this directory, there should be an optim directory,
+3. Run octave, and addpath([optim directory path]);
+4. To calibrate the camera, copy full resolution checkerboard 
+    calibration images into calibration directory
+5. Make sure the images have the same base name and are numbered 
+    consecutively.
+    Example:    Calib007.jpg, Calib008.jpg, Calib009.jpg, 
+                Calib010.jpg, Calib011.jpg, Calib012.jpg
+6. Run FLOORED_ocam_calib, and follow the prompts. Ignore any 
+    warnings.
+7. The calibrated parameters should be stored in ocam_model_orig
+8. Relevant members of ocam_model_orig:
+    r2t - polynomial coefficient mapping from rho, the pixel 
+            radius from the "center" to theta, the real-world 
+            angle of the z axis (axis orthogonal to image plane)
+    t2r - polynomial coefficient mapping from theta to rho.
+    xc, yc - pixel coordinates for the center.
+    height, width - pixel height and width of calibration images
+9. As a sanity check, use FLOORED_undistort_image to undistort 
+    image and see if calibration was sane. Use jpg files and 
+    pass in the name without file extension. For example, 
+    FLOORED_undistort_image('Calib007', ocam_model_orig, 1000, 2000); 
+    will undistort Calib007.jpg and save the undistorted image as 
+    a 1000h x 2000w jpg file.
