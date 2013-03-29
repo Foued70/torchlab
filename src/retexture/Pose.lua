@@ -86,7 +86,7 @@ function Pose:compute_dirs(scale)
    if not scale then 
       scale = 1
    end
-   printf("Computing dirs for pose[%d] at scale 1/%d",self.pid,scale)
+   log.trace("Computing dirs for pose", self.pid, "and scale 1/", scale)
 
    local image_w = self.image_w
    local image_h = self.image_h
@@ -150,7 +150,7 @@ function Pose:load_dirs(scale,ps)
    if paths.filep(dirscache) then
       sys.tic()
       dirs = torch.load(dirscache)
-      printf("Loaded dirs from %s in %2.2fs", dirscache, sys.toc())
+      log.trace("Loaded dirs from", dirscache, sys.toc())
    else
       sys.tic()
       if ps then 
@@ -158,9 +158,9 @@ function Pose:load_dirs(scale,ps)
       else
          dirs = self:compute_dirs(scale)
       end
-      printf("Built dirs in %2.2fs", sys.toc())
+      log.trace("Built dirs in", sys.toc())
       torch.save(dirscache,dirs)
-      printf("Saving dirs to %s", dirscache)
+      log.trace("Saving dirs to", dirscache)
    end
    return self:store_dirs(dirs,scale)
 end
@@ -200,13 +200,13 @@ function Pose:load_depth(scale,ps)
    if paths.filep(depthcache) then
       sys.tic()
       depthmap = torch.load(depthcache)
-      printf("Loaded depths from %s in %2.2fs", depthcache, sys.toc())
+      log.trace("Loaded depths from", depthcache, sys.toc())
       if not self.depthmap then
          self.depthmap = {}
       end
       self.depthmap[scale] = depthmap
    else
-      printf("No depth map found")
+      log.trace("No depth map found")
    end
 end
 

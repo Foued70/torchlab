@@ -4,8 +4,11 @@ require 'math'
 require 'image'
 require 'paths'
 
+local Pose = require('Pose')
+
 -- this is container class for all the poses
 local Poses = torch.class('Poses')
+
 
 --
 -- Email containing information about the pose file from matterport
@@ -136,7 +139,7 @@ function Poses:save_wireframes_red_alpha(obj,outdir,ext)
       image.display(wimage)
       -- save
       local wimagename = outdir .. pose.name:gsub(".jpg",ext)
-      printf("Saving: %s", wimagename)
+      log.trace("Saving:", wimagename)
       image.save(wimagename,wimage)
    end
 end
@@ -162,7 +165,7 @@ function Poses:save_wireframes_image_blacklines(obj,outdir,ext)
       if pose.name:gmatch("png") then
          wimagename = outdir .. pose.name:gsub(".png",ext)
       end
-      printf("Saving: %s", wimagename)
+      log.trace("Saving:", wimagename)
       image.save(wimagename,cimage)
    end
 end
