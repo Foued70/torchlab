@@ -1,3 +1,5 @@
+local geom = require 'util.geom'
+
 local MatrixStack = torch.class('MatrixStack')
 
 function MatrixStack:__init()
@@ -10,7 +12,9 @@ function MatrixStack:__init()
   self.stack = {}
 
   -- scratch
+  self.rotation_matrix = torch.FloatTensor(4,4):eye(4,4)
   self.translation_matrix = torch.FloatTensor(4,4):eye(4,4)
+  self.model_matrix = torch.FloatTensor(4,4):t()
 end
 
 function MatrixStack:push()
@@ -28,6 +32,14 @@ function MatrixStack:translate(translation)
   -- we have to make a copy here because torch can't do *= with matices, prolly overwrites the data it needs as it goes
   -- we use this methof to maintain the :t() on the model_view_matrix
   self.model_view_matrix:mm(self.model_view_matrix:clone(), self.translation_matrix)
+end
+
+function MatrixStack:set_model(rotation, translation)
+  geom.rotation_matrix(rotation, self.rotation_matrix)
+  self.translation_matrix[{{1,3},4}] = translation
+
+  self.model_matrix:mm(self.translation_matrix, self.rotation_matrix) 
+  self.model_view_matrix:mm(self.model_view_matrix:clone(), self.model_matrix)
 end
 
 function MatrixStack:set_projection(projection_matix)

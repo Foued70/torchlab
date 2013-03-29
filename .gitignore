@@ -1,7 +1,7 @@
 .DS_Store
-src/cache
 src/assets
-src/output
+src/*/cache
+src/*/output
 build
 
 # Compiled Object files
@@ -24,3 +24,7 @@ build
 cloudlab.sublime-project
 cloudlab.sublime-workspace
 .idea
+
+# temp files
+*~
+\#*

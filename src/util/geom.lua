@@ -188,12 +188,34 @@ function quat_conjugate(quat,res)
    return res
 end
 
+function quat_equals(quat1, quat2)
+  if (  (math.abs(quat2[1]-quat1[1])<1e-8) and
+        (math.abs(quat2[2]-quat1[2])<1e-8) and
+        (math.abs(quat2[3]-quat1[3])<1e-8) and
+        (math.abs(quat2[4]-quat1[4])<1e-8) ) then
+    return true
+  else
+    return false
+  end
+end
+
 -- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
 -- FIXME test cases
 function quat_product(quat1,quat2,res)
+   local zero_quat = torch.Tensor({0,0,0,1})
+
+   if quat_equals(quat1, zero_quat) and quat_equals(quat1, zero_quat) then
+    if (not res) then 
+      return zero_quat
+    else
+      return res:copy(zero_quat)
+    end
+   end
+
    if (not res) then
       res = torch.Tensor(4)
    end
+
    local v1 = quat1:narrow(1,1,3)
    local v2 = quat2:narrow(1,1,3)
    local vres = res:narrow(1,1,3)
@@ -204,17 +226,17 @@ end
 
 -- returns quaternion represnting angle between two vectors
 function quaternion_from_to(from_vector, to_vector, quat)
-  from_vector = args[2]:narrow(1,1,3)
-  to_vector   = args[3]:narrow(1,1,3)
+  from = from_vector:narrow(1,1,3)
+  to   = to_vector:narrow(1,1,3)
 
-  local rot_axis = torch.cross(from_vector, to_vector)
+  local rot_axis = torch.cross(from, to)
   local rot_angle = 0
 
   --avoid the degenerate case when from_vector is very close to to_vector
   local m = torch.norm(rot_axis)
   if(m > 1e-8) then
     rot_axis  = rot_axis/m
-    rot_angle = torch.acos(torch.dot(from_vector, to_vector))
+    rot_angle = torch.acos(torch.dot(from, to))
   end
 
   return quaternion_from_axis_angle(rot_axis, rot_angle, quat)
@@ -228,6 +250,15 @@ function quaternion_from_axis_angle(rot_axis, rot_angle, quat)
   quat[4] = torch.cos(rot_angle / 2)
 
   return quat
+end
+
+function quaternion_length(quat)
+  return math.sqrt(quat[1]*quat[1] + quat[2]*quat[2] + quat[3]*quat[3] + quat[4]*quat[4])
+end
+
+function quaternion_normalize(quat)
+  local length = quaternion_length(quat)
+  torch.div(quat, quat, length)
 end
 
 -- FIXME make tests as this function seems to invert results for

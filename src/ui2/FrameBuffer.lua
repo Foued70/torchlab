@@ -169,7 +169,35 @@ function FrameBuffer:read_pick_pixel(x, y)
   self:unbind()
 
   -- object_id, triangle_id = submesh_start + primitive_id
-  return pick_pixel[0], pick_pixel[1] + pick_pixel[2]
+  -- submesh_start, primitive_id are also returned for when seperatated data(ex:vertex picking) is needed.
+  return pick_pixel[0], pick_pixel[1] + pick_pixel[2], pick_pixel[1], pick_pixel[2]
+end
+
+function FrameBuffer:read_pick_pixels(start_pixels, end_pixels)
+  self:bind()
+  gl.ReadBuffer(gl.COLOR_ATTACHMENT1)
+  gl.check_errors()
+  gl.PixelStorei(gl.PACK_ALIGNMENT, 1)
+  gl.check_errors()
+
+  local size = torch.Tensor(2)
+  size[1] = math.ceil(end_pixels[1]-start_pixels[1])
+  size[2] = math.ceil(end_pixels[2]-start_pixels[2])
+  if size[1] < 1 then size[1] = 1 end
+  if size[2] < 1 then size[2] = 1 end
+
+  local start_index = torch.Tensor({math.floor(start_pixels[1]), self.height-math.ceil(start_pixels[2]+size[2])})
+
+  local pick_pixels = torch.IntTensor(size[2], size[1], 3):fill(0)
+  local img_data_ptr, img_data_size = libui.int_storage_info(pick_pixels)
+  gl.ReadPixels(start_index[1], start_index[2], size[1], size[2], gl.RGB_INTEGER, gl.UNSIGNED_INT, img_data_ptr)
+  gl.check_errors()
+  gl.ReadBuffer(gl.NONE)
+  self:unbind()
+  gl.check_errors()
+
+  -- object_id, submesh_start, primitive_id
+  return pick_pixels
 end
 
 

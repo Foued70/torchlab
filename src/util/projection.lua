@@ -1,8 +1,13 @@
 setfenv(1, setmetatable({}, {__index = _G}))
 
+local piover2 = math.pi*0.5
+
 -- thoby constants
 local k1 = 1.47
 local k2 = 0.713
+
+-- rectilinear max fov in radians
+local max_rad_rectilinear = 1
 
 -- image is 3 x map dims
 -- now map is 1D (this is faster)
@@ -51,15 +56,23 @@ function remap(img, map)
    return out
 end
 
-function compute_diagonal_fov(diagonal_normalized,lens_type)
-   -- We don't have most of these types of lenses but it is easy
-   -- enough to put here.  Perhaps we will include a universal model
-   -- as per Scaramuzza's calibration.
-
+-- FIXME make a generic r2t and t2r function
+function compute_diagonal_fov(diagonal_normalized,lens_type,params)
+   local dfov
    if (lens_type == "rectilinear") then
       dfov = torch.atan(diagonal_normalized)   -- diag in rad
-
-   elseif (lens_type == "thoby") then
+   elseif (lens_type == "scaramuzza_r2t") then
+      print(" -- using scaramuzza calibration")
+      local d2 = diagonal_normalized
+      dfov = params[-1]
+      printf("dfov: %f d2: %f coeff: %f", dfov, d2, params[-1])
+      for i = params:size(1)-1,1,-1 do 
+         dfov = dfov + d2 * params[i]
+         d2 = d2 * diagonal_normalized
+         printf("[%d] dfov: %f d2: %f, coeff: %f",i,dfov,d2,params[i])
+      end
+   elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
+      -- FIXME using ideal thoby to compute fov for scaramuzza
       print(" -- using lens type: thoby")
       -- thoby : theta = asin((r/f)/(k1 * f))/k2
       if (diagonal_normalized > k1) then 
@@ -102,9 +115,10 @@ function derive_hw(diag,aspect_ratio)
    -- feel right but gives the expected result as opposed to the
    -- non-euclidean cos(c) = cos(a)cos(b)
    local h = diag/math.sqrt(aspect_ratio*aspect_ratio + 1)
-   local w = aspect_ratio*h
+   local w = h*aspect_ratio
    return h,w
 end
+
 
 -- given an xrange and a yrange (lambda, phi) compute the 2D map of
 -- diagonal distances these x and y values cover.
@@ -140,8 +154,8 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
    local lambda,phi,theta_map, output_map
    if (proj_type == "rectilinear") then
       -- limit the fov to roughly 120 degrees
-      if fov > 1 then
-         fov = 1
+      if fov > max_rad_rectilinear then
+         fov = max_rad_rectilinear
          vfov,hfov = derive_hw(fov,aspect_ratio)
       end
       -- set up size of the output table
@@ -196,7 +210,7 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
 
 end
 
-function sphere_to_camera(theta_map,lens_type)
+function sphere_to_camera(theta_map,lens_type,params)
    local r_map = theta_map:clone() -- copy
 
    if (lens_type == "rectilinear") then
@@ -214,6 +228,33 @@ function sphere_to_camera(theta_map,lens_type)
    elseif (lens_type == "equisolid") then
       --  + equisolid                 : r = 2 * f * sin(theta/2)
       r_map:mul(0.5):sin():mul(2)
+   elseif (lens_type == "scaramuzza") then
+      local theta     = theta_map:clone()
+      -- we use a positive angle from optical center, but scaramuzza
+      -- uses a negative offset from focal point.
+      theta:add(-piover2) 
+      local theta_pow = theta:clone()
+      
+      printf("theta start: max: %f min: %f",theta_pow:max(), theta_pow:min())
+      r_map:fill(params[-1]) -- rho = invpol[0]
+      
+      for i = params:size(1)-1,1,-1 do          
+         r_map:add(theta_pow * params[i]) -- coefficients of inverse poly.
+         theta_pow:cmul(theta)        -- powers of theta
+      end
+      printf("rho out: max: %f min: %f",r_map:max(), r_map:min())
+   elseif (lens_type == "scaramuzza_r2t") then
+      local theta     = theta_map:clone()
+      local theta_pow = theta:clone()
+      
+      printf("theta start: max: %f min: %f",theta_pow:max(), theta_pow:min())
+      r_map:fill(params[-1]) -- rho = invpol[0]
+      
+      for i = params:size(1)-1,1,-1 do          
+         r_map:add(theta_pow * params[i]) -- coefficients of inverse poly.
+         theta_pow:cmul(theta)        -- powers of theta
+      end
+      printf("rho out: max: %f min: %f",r_map:max(), r_map:min())
    else
       print("ERROR don't understand lens_type")
       return nil

@@ -96,8 +96,8 @@ end
 function intersect.ray_polygon(ray,obj,fid,debug)
    local orig = ray.origin
    local  dir = ray.dir
-   local norm = obj.normals[fid]
-   local    d = obj.d[fid]
+   local norm = obj.face_normals[fid]
+   local    d = obj.face_center_dists[fid]
    local    a = norm:dot(dir)
    if torch.abs(a) < 1e-8 then 
       return nil
@@ -113,10 +113,10 @@ function intersect.ray_polygon(ray,obj,fid,debug)
    end
    local intersection = ray(t)
    -- precompute
-   local _,ds   = torch.sort(torch.abs(obj.normals[fid]))
-   local nverts = obj.nverts_per_face[fid]
+   local _,ds   = torch.sort(torch.abs(obj.face_normals[fid]))
+   local nverts = obj.n_verts_per_face[fid]
    local verts  = obj.face_verts[fid]:narrow(1,1,nverts)
-   local center = obj.centers[fid]
+   local center = obj.face_centers[fid]
    local found  = intersect.point_in_polygon(intersection,verts,ds,center)
    if debug then
       printf("  - %s", found)

@@ -54,7 +54,7 @@ end
 function Camera:update_projection_matrix()
   local aspect = self.width / self.height
 
-  local f = 1 / math.tan(self.fov_y / 2)
+  local f = 1 / (math.tan(self.fov_y/2))
   
   self.projection_matrix:eye(4)
   self.projection_matrix[{1,1}] = f / aspect
@@ -190,7 +190,11 @@ function Camera:world_to_screen(world_position)
   local mvp_matrix = torch.mm(self.projection_matrix, self.model_view_matrix)
   local screen_position = torch.mm(mvp_matrix, world_position_matrix);
   screen_position:resize(4)
-  return screen_position[{{1,3}}]
+  torch.div(screen_position, screen_position, screen_position[4])
+  if (screen_position[1] > 1) or (screen_position[1] < -1) or (screen_position[2] > 1) or (screen_position[2] < -1) then
+    return nil
+  end
+  return screen_position
 end
 
 function Camera:pixel_to_world(x, y)
@@ -206,6 +210,18 @@ function Camera:pixel_to_world(x, y)
   screen_position[4] = 1
     
   return self:screen_to_world(screen_position)
+end
+
+function Camera:screen_to_pixel(screen_position)
+  local pixels = torch.Tensor(2)
+  pixels[1] = screen_position[1]
+  pixels[2] = -screen_position[2] --invert y
+
+  torch.add(pixels, pixels, 1)
+  torch.div(pixels, pixels, 2)
+  pixels[1] = pixels[1] * self.width
+  pixels[2] = pixels[2] * self.height
+  return pixels
 end
 
 function Camera:set_eye(x, y, z)

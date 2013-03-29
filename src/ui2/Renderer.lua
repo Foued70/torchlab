@@ -28,7 +28,7 @@ function Renderer:init(viewport_width, viewport_height)
   self:create_camera('viewport_camera', viewport_width, viewport_height, (math.pi/4), torch.Tensor({2,3,5}), torch.Tensor({0,1,0}))
   self:activate_camera('viewport_camera')
 
-  self:create_camera('raycast_camera', viewport_width, viewport_height)  
+  self:create_camera('raycast_camera', viewport_width, viewport_height, (math.pi/4))  
   self:create_shaders()
 
   self:create_scene('viewport_scene')
@@ -202,30 +202,50 @@ function Renderer:raycast(start, direction)
   return hit_location
 end
 
-function Renderer:pick_vertex(screen_position, selection_radius)
-  local pixel_coord_x = math.floor(self.cameras.viewport_camera.frame_buffer.width * ((screen_position[1]+1)*0.5))
-  local pixel_coord_y = math.floor(self.cameras.viewport_camera.frame_buffer.height * ((screen_position[2]+1)*0.5))
-  log.trace("screen_position")
-  log.trace(screen_position)
-  log.trace("pixel_coord_x")
-  log.trace(pixel_coord_x)
-  log.trace("pixel_coord_y")
-  log.trace(pixel_coord_y)
-  local object_id, triangle_index = self.cameras.viewport_camera.frame_buffer:read_pick_pixel(pixel_coord_x, pixel_coord_y)
-  log.trace()
-  local object = self.scenes.viewport_scene[object_id]
-  local verts, center, normal = object:get_triangle(triangle_index)
+function Renderer:pick_vertices(screen_position_top_left, screen_position_bottom_right)
+  local pixels_min = self.active_camera:screen_to_pixel(screen_position_top_left)
+  local pixels_max = self.active_camera:screen_to_pixel(screen_position_bottom_right)
 
-  local selection = nil
-  for i, vertex in ipairs(verts) do
-    local vertex_screen_space = self.cameras.viewport_camera:world_to_screen(vertex)
-    local offset = vertex_screen_space - screen_position
-    if math.sqrt((offset[1]*offset[1])+(offset[2]*offset[2])) <= selection_radius then
-      selection = vertex
-      break
+  local pick_image = self.active_camera.frame_buffer:read_pick_pixels(pixels_min, pixels_max)
+  local pick_values = pick_image:resize(pick_image:size(1)*pick_image:size(2),3):double()
+
+  --Use hashing to create a unique list of object, submesh, primitive_id triplets
+  local hash_function = torch.Tensor({1, 10e3, 10e6})
+
+  local hashed_tensor = pick_values * hash_function
+
+  local hash = {}
+  local num_elements = 0
+  for i = 1, hashed_tensor:size(1) do 
+    if not hash[hashed_tensor[i]] then 
+      hash[hashed_tensor[i]] = i 
+      num_elements = num_elements + 1
+    end 
+  end
+
+  local unique_picks = torch.Tensor(num_elements, pick_values:size(2))
+  local j = 1
+  for _,i in pairs(hash) do
+      unique_picks[j] = pick_values[i]
+      j = j + 1
+  end
+
+  local selected_vertices = {}
+  for t=1, unique_picks:size(1) do
+    local object_index = unique_picks[t][1]
+    if object_index > 0 then
+      local triangle_index = unique_picks[t][2] + math.floor(unique_picks[t][3]/3)
+      local vertex_index = (unique_picks[t][3] % 3) + 1
+      local object = self.active_scene[object_index]
+      local verts, center, normal = object:get_triangle(triangle_index)
+      table.insert(selected_vertices, verts:narrow(2,1,3)[vertex_index])
     end
   end
-  return selection
+
+  if #selected_vertices > 0 then
+    return selected_vertices
+  end
+  return nil
 end
 
 return Renderer
