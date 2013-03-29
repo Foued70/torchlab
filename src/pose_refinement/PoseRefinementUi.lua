@@ -273,8 +273,8 @@ function PoseRefinementUi:viewport_screenspace_to_ui_xy(screen_position)
   local pixels = screen_position + 1
   torch.div(pixels, pixels, 2)
   pixels[2] = 1.0 - pixels[2] --flip y
-  pixels[1] = (pixels[1]*self.layers[2].image:rect():totable().width)
-  pixels[2] = (pixels[2]*self.layers[2].image:rect():totable().height)
+  pixels[1] = (pixels[1]*self.layers[3].image:rect():totable().width)
+  pixels[2] = (pixels[2]*self.layers[3].image:rect():totable().height)
   return pixels
 end
 
@@ -397,8 +397,10 @@ function PoseRefinementUi:update_photo_pass()
     self.scan.sweeps[self.current_sweep].photos[self.current_photo]:load_image()
   end
 
-  local photo_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data_rectilinear)
-  self:attach_image(1, 'dslr_photo', 'SourceOver', photo_qt)
+  local photo_raw_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data_raw)
+  local photo_rectilinear_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data_rectilinear)
+  self:attach_image(1, 'dslr_photo_raw', 'Hidden', photo_raw_qt)
+  self:attach_image(2, 'dslr_photo_rectilinear', 'SourceOver', photo_rectilinear_qt)
   self.widget:update()
 end
 
@@ -452,8 +454,8 @@ function PoseRefinementUi:update_viewport_passes()
   local vertex_highlight_image_tensor = self.gl_viewport.renderer.cameras.vertex_highlight_camera.frame_buffer:get_color_image()
   local vertex_highlight_image_qt = qt.QImage.fromTensor(vertex_highlight_image_tensor)
 
-  self:attach_image(2, 'wireframe', 'SourceOver', wireframe_image_qt)
-  self:attach_image(3, 'vertices', 'SourceOver', vertex_highlight_image_qt)
+  self:attach_image(3, 'wireframe', 'SourceOver', wireframe_image_qt)
+  self:attach_image(4, 'vertices', 'SourceOver', vertex_highlight_image_qt)
 
   self.widget:update()
 end
@@ -496,7 +498,12 @@ function PoseRefinementUi:save_calibration()
     for photo = 1, #self.scan.sweeps[sweep].photos do
       file:write("  {\n")
       file:write("    image_path = \""..self.scan.sweeps[sweep].photos[photo].image_path.."\",\n")
-      file:write("    lens = { sensor= \""..self.scan.camera_id.."\", projection= \"rectilinear\"},\n")
+
+      if self.scan.sweeps[sweep].photos[photo].lens ~= nil then
+        file:write("    lens = { lens_type= \""..self.scan.sweeps[sweep].photos[photo].lens.sensor.lens_type.."\", projection= \"nil\"},\n")
+      else
+        file:write("    lens = { lens_type= \"nil\", projection= \"nil\"},\n")
+      end
       file:write("    white_wall = ")
       if self.scan.sweeps[sweep].photos[photo].white_wall then
         file:write("true,\n")
@@ -593,35 +600,37 @@ end
 
 function PoseRefinementUi:draw_image_layers()
   for layer_number, layer_data in ipairs(self.layers) do
-    self.painter:initmatrix()
+    if layer_data.blend_mode ~= 'Hidden' then
+      self.painter:initmatrix()
 
-    --Fit image inside painter
-    local painter_width = self.painter.width
-    local painter_height = self.painter.height
-    local painter_aspect = painter_width / painter_height
+      --Fit image inside painter
+      local painter_width = self.painter.width
+      local painter_height = self.painter.height
+      local painter_aspect = painter_width / painter_height
 
-    local layer_width = layer_data.image:rect():totable().width
-    local layer_height = layer_data.image:rect():totable().height
-    local layer_aspect = layer_width / layer_height
+      local layer_width = layer_data.image:rect():totable().width
+      local layer_height = layer_data.image:rect():totable().height
+      local layer_aspect = layer_width / layer_height
 
-    local final_width = nil
-    local final_height = nil
+      local final_width = nil
+      local final_height = nil
 
-    if layer_aspect > painter_aspect then 
-      final_height = math.floor(layer_height * (painter_width/layer_width))
-      final_width = painter_width
-    else
-      final_width = math.floor(layer_width * (painter_height/layer_height))
-      final_height = painter_height
+      if layer_aspect > painter_aspect then 
+        final_height = math.floor(layer_height * (painter_width/layer_width))
+        final_width = painter_width
+      else
+        final_width = math.floor(layer_width * (painter_height/layer_height))
+        final_height = painter_height
+      end
+
+      local scale_x = final_width / layer_width  
+      local scale_y = final_height / layer_height
+
+      self.painter:scale(scale_x, scale_y)
+
+      self.painter:currentmode(layer_data.blend_mode)
+      self.painter:image(0, 0, layer_data.image)
     end
-
-    local scale_x = final_width / layer_width  
-    local scale_y = final_height / layer_height
-
-    self.painter:scale(scale_x, scale_y)
-
-    self.painter:currentmode(layer_data.blend_mode)
-    self.painter:image(0, 0, layer_data.image)
   end
 end
 
@@ -667,6 +676,7 @@ end
 
 function PoseRefinementUi:draw_selection_box(start_corner, end_corner)
   self.painter:initmatrix()
+  self.painter:currentmode('SourceOver')
   local start_corner_pixels = self:viewport_screenspace_to_ui_xy(start_corner)
   local end_corner_pixels = self:viewport_screenspace_to_ui_xy(end_corner)
 

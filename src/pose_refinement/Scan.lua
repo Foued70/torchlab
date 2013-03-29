@@ -49,7 +49,7 @@ function Scan:get_lens(image_data)
   if self.lens_luts[img_data_size] == nil then
     local lens_sensor = LensSensor.new(self.camera_id, image_data)
     local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
-    self.lens_luts[img_data_size] = {lens = lens_sensor, rectilinear = rectilinear_lut}
+    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut}
   end
 
   return self.lens_luts[img_data_size]

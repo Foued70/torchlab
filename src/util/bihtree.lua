@@ -146,7 +146,7 @@ function bihtree.build(obj,debug)
    -- [1] dim
    -- [2] bounding interval min
    -- [3] bounding interval max
-   tree.nodes   = torch.Tensor(obj.nfaces,3):fill(0)
+   tree.nodes   = torch.Tensor(obj.n_faces,3):fill(0)
 
    -- inner node
    -- [1] index left child
@@ -154,16 +154,16 @@ function bihtree.build(obj,debug)
    -- leaf node
    -- [1] start index in leaf_fid matrix
    -- [2] stop index in leaf_fid matrix
-   tree.child_index = torch.LongTensor(obj.nfaces,2):fill(0)
+   tree.child_index = torch.LongTensor(obj.n_faces,2):fill(0)
 
    -- leaves are indices to the faces
-   tree.leaf_fid = torch.LongTensor(obj.nfaces):fill(0)
+   tree.leaf_fid = torch.LongTensor(obj.n_faces):fill(0)
 
 
    tree.leafindex = 1 -- Global offset at which to write the next leaf
    tree.min_for_leaf = 4
 
-   local noffset = recurse_build(tree,obj.centers,obj.face_bboxes)
+   local noffset = recurse_build(tree,obj.face_centers,obj.face_bboxes)
 
    -- clean up
    tree.child_index = tree.child_index:narrow(1,1,noffset-1)
@@ -192,26 +192,26 @@ function bihtree.dump(tree,obj)
    local leaf_offset = tree.child_index
    local leaf_fid    = tree.leaf_fid
 
-   local nvpf  = obj.nverts_per_face
-   local faces = obj.faces
-
-   for i = 1,nodes:size(1) do
-      if (nodes[i][1] == 0) then
-         local loff = leaf_offset[i]
-         local fids = leaf_fid[{{loff[1],loff[2]},{}}]
-         objf:write("\n")
-         objf:write(string.format("o node_%05d\n",i))
-         for j = 1,fids:size(1) do
-            local fid = fids[j]
-            str = "f "
-            for vid = 1,nvpf[fid] do
-               str = str .. string.format("%d ",faces[fid][vid])
-            end
-            objf:write(str .. "\n")
-         end
-
-      end
-   end
+   local nvpf  = obj.n_verts_per_face
+   -- local faces = obj.faces
+   -- 
+   --    for i = 1,nodes:size(1) do
+   --       if (nodes[i][1] == 0) then
+   --          local loff = leaf_offset[i]
+   --          local fids = leaf_fid[{{loff[1],loff[2]},{}}]
+   --          objf:write("\n")
+   --          objf:write(string.format("o node_%05d\n",i))
+   --          for j = 1,fids:size(1) do
+   --             local fid = fids[j]
+   --             str = "f "
+   --             for vid = 1,nvpf[fid] do
+   --                str = str .. string.format("%d ",faces[fid][vid])
+   --             end
+   --             objf:write(str .. "\n")
+   --          end
+   -- 
+   --       end
+   --    end
    objf:close()
    printf("Wrote %s",objfilename)
 end

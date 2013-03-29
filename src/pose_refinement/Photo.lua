@@ -67,7 +67,6 @@ function Photo:load_image()
 end
 
 function Photo:flush_image()
-  self.lens = nil
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
   collectgarbage()

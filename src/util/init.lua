@@ -11,8 +11,6 @@ exports.obj   = require "util.obj"
 
 -- classes
 exports.Ray   = require "util.Ray"
-exports.Pose  = require "util.Pose"
-exports.Poses = require "util.Poses"
 
 
 require "util.global"
