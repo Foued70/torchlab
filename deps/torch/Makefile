@@ -1,8 +1,9 @@
 include ../Makefile.common
 
-ver=eff29a50c0d9e6a15145fa164a3a9ef8d275fd7b
+ver=188b7e90207531d3e8968b5e179e1332f8b53445
 
 git_clone=$(build_dir)/deps/torch
+# git_clone=/Users/dustin/proj/torch
 
 install=$(install_root)/bin/torch
 
@@ -28,7 +29,6 @@ $(pkgs): $(install)
 
 
 $(install): $(git_clone)
-	cd $(git_clone); git checkout $(ver)
 	cd $(git_clone); mkdir -p build
 	cd $(git_clone)/build; cmake $(args) ..
 	cd $(git_clone)/build; make install
@@ -36,7 +36,8 @@ $(install): $(git_clone)
 
 $(git_clone):
 	git clone https://github.com/floored/torch $(git_clone)
-#	git clone https://github.com/andresy/torch $(git_clone)
+	cd $(git_clone); git checkout $(ver)
 
-tmp:
-
+clean:
+	rm -f $(install)*
+	rm -rf $(git_clone)
