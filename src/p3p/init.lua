@@ -49,11 +49,9 @@ local geom = require 'util.geom'
 
 -- Load the C versions of intermediate functions
 ffi.cdef[[
-            int solveQuartic( double *factors, double *realRoots);
-            int computeFactors(double f_1, double f_2, 
-                               double p_1, double p_2, 
-                               double b, double d_12, 
-                               double *factors);
+            int solveQuartic(double *factors, double *realRoots);
+            int computeFactors(double *factors, double *pointData);
+            int backSubstitute(double *solutions, double *pointData, double *realRoots);
             
          ]]
 
@@ -78,20 +76,42 @@ function p3p.compute_poses (camera)
       return
    end
 
+   -- Carefull these aren't uv's but angles derived from the image
+   -- coordinates and camera calibration.  FIXME current code expects
+   -- this data on Unit Cartesian Sphere (Directions on unit sphere in
+   -- camera coordinates with optical axis at (0,0,1)) update to
+   -- handle our internal spherical coordinates.
    local uv   = camera.uv
    local f1  = uv[1]
    local f2  = uv[2]
-   f3  = uv[3]
+   local f3  = uv[3]
 
    -- Create intermediate camera frame
    camT = torch.Tensor(3,3)
    camT[1] = f1
    camT[3] = torch.cross(f1,f2)
    geom.normalize(camT[3])
-
    camT[2] = torch.cross(camT[3],camT[1])
-   
-   local pf3 = camT*f3 -- make sure > 0
+
+   local pf3 = camT*f3 
+
+   -- Swap first 2 vectors and worldpoints to keep theta between 0 and
+   -- pi. (See paper p.2972 and Figure 4 for explanation).
+   if (pf3[3] > 0) then 
+      f1 = uv[2]
+      f2 = uv[1]
+      camT[1] = f1
+      camT[3] = torch.cross(f1,f2)
+      geom.normalize(camT[3])
+      camT[2] = torch.cross(camT[3],camT[1])
+
+      pf3 = camT*f3 
+
+      p1 = xyz[2]
+      p2 = xyz[1]
+      p2p1 = p2 - p1 
+      p3p1 = p3 - p1
+   end
 
    -- Create intermediate world frame
    local worldT = torch.Tensor(3,3)
@@ -105,25 +125,47 @@ function p3p.compute_poses (camera)
 
    local pp3 = worldT*p3p1
 
-   local d_12 = p2p1:norm()
-   local f_1  = pf3[1]/pf3[3]
-   local f_2  = pf3[2]/pf3[3]
-   local p_1  = pp3[1]
-   local p_2  = pp3[2]
+   local pointData = torch.Tensor(6)
+
+   pointData[1] = p2p1:norm()   -- d_12
+   pointData[2] = pf3[1]/pf3[3] -- f_1
+   pointData[3] = pf3[2]/pf3[3] -- f_2
+   pointData[4] = pp3[1]        -- p_1
+   pointData[5] = pp3[2]        -- p_2
 
    local cos_beta = f1 * f2
-   local b = 1/(1-math.pow(cos_beta,2)) -1
-
+   if cos_beta > 1 then 
+      error("cos_beta is >1. some error in data processing")
+   end
+   local b = (1/(1-math.pow(cos_beta,2))) -1 
    if (cos_beta < 0) then
       b = -math.sqrt(b)
    else
       b = math.sqrt(b)
    end
+   pointData[6] = b
+   printf("b: %f cos_beta: %f",b, cos_beta)
+
    local factors = torch.Tensor(5)
-   p3pC.computeFactors(f_1,f_2,p_1,p_2,b,d_12,torch.data(factors))
+   p3pC.computeFactors(torch.data(factors),
+                       torch.data(pointData))
+   print(factors)
 
    local real_roots = torch.Tensor(4)
-   p3pC.solveQuartic(torch.data(factors),torch.data(real_roots))
+   p3pC.solveQuartic(torch.data(real_roots),
+                     torch.data(factors))
+                     
+   print(real_roots)
+
+   local solutions = torch.Tensor(4,4,3)
+   p3pC.backSubstitute(torch.data(solutions),
+                       torch.data(pointData),
+                       torch.data(real_roots))
+                     
+    
+   print(solutions)
+
+   -- return best solution
    return real_roots 
 end
 

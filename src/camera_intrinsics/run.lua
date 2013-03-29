@@ -58,6 +58,7 @@ img = images[1]
 
 
 lenses  = { 
+   LensSensor.new("nikon_10p5mm_r2t_full"),
    LensSensor.new("nikon_10p5mm_r2t"),
    LensSensor.new("nikon_10p5mm_calibrated"),
    LensSensor.new("nikon_D5100_w10p5mm") 
