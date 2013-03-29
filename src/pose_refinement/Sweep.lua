@@ -40,7 +40,7 @@ function Sweep:set_pose(pose)
     else
       geom.quaternion_from_axis_angle(rotation_axis, angular_velocity, offset_rotation)
     end
-    geom.quaternion_normalize(offset_rotation)
+    geom.normalize(offset_rotation)
 
    photo.offset_position = offset_position
    photo.offset_rotation = offset_rotation
@@ -55,13 +55,13 @@ function Sweep:calculate_camera_world(photo_number)
   local temp_quat = torch.Tensor(4)
   for i = 1, photo_number do
     geom.quat_product(rotation, self.photos[i].offset_rotation, temp_quat)
-    geom.quaternion_normalize(temp_quat)
+    geom.normalize(temp_quat)
     rotation:copy(temp_quat)
   end
   
   local camera_rig_offset_position = torch.Tensor({config.rig_offset_position[1], config.rig_offset_position[2], config.rig_offset_position[3]})
   local camera_rig_offset_rotation = torch.Tensor({config.rig_offset_rotation[1], config.rig_offset_rotation[2], config.rig_offset_rotation[3], config.rig_offset_rotation[4]})
-  geom.quaternion_normalize(camera_rig_offset_rotation)
+  geom.normalize(camera_rig_offset_rotation)
 
   local forward_vector = torch.Tensor({0,1,0})
   local camera_look_direction = geom.rotate_by_quat(forward_vector, camera_rig_offset_rotation)
@@ -79,7 +79,7 @@ function Sweep:calculate_camera_world(photo_number)
 
   local final_rotation = torch.Tensor(4)
   geom.quaternion_from_to(forward_vector, camera_look_direction_rotated, final_rotation)
-  geom.quaternion_normalize(final_rotation)
+  geom.normalize(final_rotation)
   
   return position, final_rotation 
 end

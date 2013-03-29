@@ -6,6 +6,7 @@ require 'qtwidget'
 require 'qt'
 
 local geom = require 'util.geom'
+local libui = require 'libui2'
 local config = require 'ui2/pp_config'
 local Scan = require 'Scan'
 
@@ -66,6 +67,10 @@ function PoseRefinementUi:init_event_handling()
         self.mouse_left_down = true
       elseif mouse_button == 'RightButton' then
         self.mouse_right_down = true
+        self.widget.cursor = qt.QCursor.new("BlankCursor")
+        self.mouse_start = torch.Tensor({x,y})
+        self.mouse_last = torch.Tensor({x,y})
+        self.mouse_slowed = torch.Tensor({x,y})
       end
     end )
 
@@ -80,7 +85,16 @@ function PoseRefinementUi:init_event_handling()
         self.mouse_left_down = false
       elseif mouse_button == 'RightButton' then
         if self.gl_viewport ~= nil then
-          self:select_image_coordinate(x,y)
+
+          local window_position = qt.QPoint.totable(self.widget.pos)
+          window_position.x = window_position.x + self.mouse_slowed[1] + self.widget.calibration_view.x
+          window_position.y = window_position.y + self.mouse_slowed[2] + self.widget.calibration_view.y
+          self:select_image_coordinate(self.mouse_slowed[1],self.mouse_slowed[2])
+          self.widget.cursor.setPos(qt.QPoint(window_position))
+          self.widget.cursor = qt.QCursor.new("CrossCursor")
+          self.mouse_start = nil
+          self.mouse_last = nil
+          self.mouse_slowed = nil
         end
         self.highlighted_vertex = nil
         self.mouse_right_down = false
@@ -94,7 +108,17 @@ function PoseRefinementUi:init_event_handling()
       if self.mouse_left_down == true then
         self:mouse_to_viewport_screenspace(x, y, self.mouse_left_end)
       elseif self.mouse_right_down == true then
-        self:update_magnifier(1.0, 1, x-self.widget.calibration_view.x, y-self.widget.calibration_view.y, 200, 200)
+        if (self.mouse_last[1]~=x) or (self.mouse_last[2]~=y) then
+          self.mouse_last[1] = x
+          self.mouse_last[2] = y
+
+          local mouse_delta = torch.Tensor({x,y}) - self.mouse_start
+          torch.mul(mouse_delta, mouse_delta, 0.05)
+          log.trace("mouse_delta", mouse_delta)
+          torch.add(self.mouse_slowed, self.mouse_start, mouse_delta)
+          log.trace("mouse_slowed", self.mouse_slowed)
+          self:update_magnifier(2.0, 1, self.mouse_slowed[1]-self.widget.calibration_view.x, self.mouse_slowed[2]-self.widget.calibration_view.y, 200, 200)
+        end
       end
     end )
 
@@ -349,8 +373,8 @@ function PoseRefinementUi:init_calibration()
   end
   collectgarbage()
 
-  require('libui2').make_current(self.gl_viewport.qt_widget)
-  require('libui2').hide_widget(self.gl_viewport.qt_widget)
+  libui.make_current(self.gl_viewport.qt_widget)
+  libui.hide_widget(self.gl_viewport.qt_widget)
 
   self.current_sweep = 1
   self.current_photo = 1

@@ -15,6 +15,12 @@
     <pointsize>10</pointsize>
    </font>
   </property>
+  <property name="cursor">
+   <cursorShape>CrossCursor</cursorShape>
+  </property>
+  <property name="focusPolicy">
+   <enum>Qt::ClickFocus</enum>
+  </property>
   <property name="windowTitle">
    <string>Pose Refinement</string>
   </property>
