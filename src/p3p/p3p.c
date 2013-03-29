@@ -46,27 +46,38 @@
  *                  -1 if world points aligned
  */
 
-
+#include <stdio.h>
 #include <math.h>
 #include <complex.h>
 
-int computeFactors(double f_1, double f_2, 
-                   double p_1, double p_2, 
-                   double b, double d_12, 
-                   double *factors)
+int computeFactors(double *factors, double *pointData) 
 {
   // Definition of temporary variables for avoiding multiple computation
 
-  double f_1_pw2 = pow(f_1,2);
-  double f_2_pw2 = pow(f_2,2);
-  double p_1_pw2 = pow(p_1,2);
-  double p_1_pw3 = p_1_pw2 * p_1;
-  double p_1_pw4 = p_1_pw3 * p_1;
-  double p_2_pw2 = pow(p_2,2);
-  double p_2_pw3 = p_2_pw2 * p_2;
-  double p_2_pw4 = p_2_pw3 * p_2;
+  double d_12 = pointData[0];
+  double f_1  = pointData[1];
+  double f_2  = pointData[2];
+  double p_1  = pointData[3];
+  double p_2  = pointData[4];
+  double b    = pointData[5];
+
   double d_12_pw2 = pow(d_12,2);
-  double b_pw2 = pow(b,2);
+  double f_1_pw2  = pow(f_1,2);
+  double f_2_pw2  = pow(f_2,2);
+  double p_1_pw2  = pow(p_1,2);
+  double p_1_pw3  = p_1_pw2 * p_1;
+  double p_1_pw4  = p_1_pw3 * p_1;
+  double p_2_pw2  = pow(p_2,2);
+  double p_2_pw3  = p_2_pw2 * p_2;
+  double p_2_pw4  = p_2_pw3 * p_2;
+  double b_pw2    = pow(b,2);
+
+  printf("d_12: %f d_12^2: %f\n", d_12, d_12_pw2);
+  printf("f_1: %f f_1^2: %f\n", f_1, f_1_pw2);
+  printf("f_2: %f f_2^2: %f\n", f_2, f_2_pw2);
+  printf("p_1: %f p_1^2: %f\n", p_1, p_1_pw2);
+  printf("p_2: %f p_2^2: %f\n", p_2, p_2_pw2);
+  printf("b: %f b^2: %f\n", b, b_pw2);
 
   // Computation of factors of 4th degree polynomial
 
@@ -77,7 +88,7 @@ int computeFactors(double f_1, double f_2,
   factors[1] = 2*p_2_pw3*d_12*b
     +2*f_2_pw2*p_2_pw3*d_12*b
     -2*f_2*p_2_pw3*f_1*d_12;
-
+  
   factors[2] = -f_2_pw2*p_2_pw2*p_1_pw2
     -f_2_pw2*p_2_pw2*d_12_pw2*b_pw2
     -f_2_pw2*p_2_pw2*d_12_pw2
@@ -107,7 +118,7 @@ int computeFactors(double f_1, double f_2,
 
   return 0;
 }
-int solveQuartic( double *factors, double *realRoots  )
+int solveQuartic( double *realRoots, double *factors)
 {
   double A = factors[0];
   double B = factors[1];
@@ -123,7 +134,7 @@ int solveQuartic( double *factors, double *realRoots  )
   double B_pw4 = B_pw3*B;
 
   double alpha = -3*B_pw2/(8*A_pw2)+C/A;
-  double beta = B_pw3/(8*A_pw3)-B*C/(2*A_pw2)+D/A;
+  double beta  =  B_pw3/(8*A_pw3)-B*C/(2*A_pw2)+D/A;
   double gamma = -3*B_pw4/(256*A_pw4)+B_pw2*C/(16*A_pw3)-B*D/(4*A_pw2)+E/A;
 
   double alpha_pw2 = alpha*alpha;
@@ -157,3 +168,57 @@ int solveQuartic( double *factors, double *realRoots  )
   return 0;
 }
 
+
+int backSubstitute (double *solutions, double *pointData, double *rr)
+{
+  double d_12 = pointData[0];
+  double f_1  = pointData[1];
+  double f_2  = pointData[2];
+  double p_1  = pointData[3];
+  double p_2  = pointData[4];
+  double b    = pointData[5];
+
+  int i;  
+  for(i=0; i<4; i++){
+
+    double cot_alpha = (-f_1*p_1/f_2-rr[i]*p_2+d_12*b)/(-f_1*rr[i]*p_2/f_2+p_1-d_12);
+
+    double cos_theta = rr[i];
+    double sin_theta = sqrt(1-pow(rr[i],2));
+    double sin_alpha = sqrt(1/(pow(cot_alpha,2)+1));
+    double cos_alpha = sqrt(1-pow(sin_alpha,2));
+    
+    if (cot_alpha < 0)
+      cos_alpha = -cos_alpha;
+
+    // Translation 
+    *solutions = d_12*cos_alpha*(sin_alpha*b+cos_alpha);
+    solutions++;
+    *solutions = cos_theta*d_12*sin_alpha*(sin_alpha*b+cos_alpha);
+    solutions++;
+    *solutions = sin_theta*d_12*sin_alpha*(sin_alpha*b+cos_alpha);
+    // Rotation: R[0]
+    *solutions = -cos_alpha;
+    solutions++;
+    *solutions = -sin_alpha*cos_theta; 
+    solutions++;
+    *solutions = -sin_alpha*sin_theta;
+    solutions++;
+    // Rotation: R[1] 
+    *solutions = sin_alpha; 
+    solutions++;
+    *solutions = -cos_alpha*cos_theta;
+    solutions++;
+    *solutions = -cos_alpha*sin_theta;
+    solutions++;
+    // Rotation: R[2] 
+    *solutions = 0;
+    solutions++;
+    *solutions = -sin_theta;
+    solutions++;
+    *solutions = cos_theta ;
+    solutions++;
+
+  }
+  return 0;
+}
