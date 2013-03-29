@@ -1,17 +1,44 @@
 README
 
-1. Brew install Octave
-2. In this directory, there should be an optim directory,
-3. Run octave, and addpath([optim directory path]);
-4. To calibrate the camera, copy full resolution checkerboard 
+INSTALL
+
+ +  Install octave.  on OSX: 
+    brew install octave
+ +  You need to compile the autoCornerFinder executable.
+    FIXME make this cleaner.
+   - cd autoCornerFinder 
+   - edit Makefile line for the CLOUDLABLIBPATH and
+     CLOUDLABINCLUDEPATH for you installation. 
+   - type make
+   - make a sym link to CLOUDLABLIBPATH in autoCornerFinder: 
+     ln -s ~/Users/marco/local/lib 
+   - FIXME figure out the annoying dynamic linking on OSX so that the
+     full pathnames for opencv are added to the executable
+
+RUN
+
+1. cd calibration (octave searches local path for code)
+2. start octave: octave
+
+3. addpath("/Users/<you>/<cloudlabpath>/camera_calib/optim") . you
+   need the absolute path to the optim/ directory.
+
+4. To calibrate the camera, copy full resolution checkerboard
     calibration images into calibration directory
-5. Make sure the images have the same base name and are numbered 
+
+5. Make sure the images have the same base name and are numbered
     consecutively.
-    Example:    Calib007.jpg, Calib008.jpg, Calib009.jpg, 
+    Example:    Calib007.jpg, Calib008.jpg, Calib009.jpg,
                 Calib010.jpg, Calib011.jpg, Calib012.jpg
-6. Run FLOORED_ocam_calib, and follow the prompts. Ignore any 
-    warnings.
-7. The calibrated parameters should be stored in ocam_model_orig
+
+6. Run FLOORED_ocam_calib, and follow the prompts. Ignore any
+    warnings. All defaults are fine except the checkerboard pattern
+    should be 7 horizontal and 5 vertical.
+
+7. The calibrated parameters should be stored in ocam_model_orig and
+saved to ocam_model.txt.  You can copy the relevant parameters to the
+cloudlab code src/util/lens_sensor_type.lua
+
 8. Relevant members of ocam_model_orig:
     r2t - polynomial coefficient mapping from rho, the pixel 
             radius from the "center" to theta, the real-world 
@@ -19,6 +46,7 @@ README
     t2r - polynomial coefficient mapping from theta to rho.
     xc, yc - pixel coordinates for the center.
     height, width - pixel height and width of calibration images
+
 9. As a sanity check, use FLOORED_undistort_image to undistort 
     image and see if calibration was sane. Use jpg files and 
     pass in the name without file extension. For example, 

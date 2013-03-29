@@ -1,14 +1,19 @@
 # Project: Project1
 # Makefile created by Dev-C++ 4.9.9.2
 
+# **** CHANGE THESE ****
+CLOUDLABLIBPATH = /Users/marco/local/lib
+CLOUDLABINCLUDEPATH = /Users/marco/local/include
+
+ 
 CPP  = g++
 CC   = gcc
 RES  = 
 OBJ  = main.o cvcalibinit3.o $(RES)
 LINKOBJ  = main.o cvcalibinit3.o $(RES)
-LIBS =  -L"/usr/lib" -L"/Users/lihui815/cloudlab/build/usr/local/lib" -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_video
-INCS =  -I"/usr/include"  -I"/Users/lihui815/cloudlab/build/usr/local/include" -I"/Users/lihui815/cloudlab/build/usr/local/include/opencv"
-CXXINCS = -I"/usr/include" -I"/Users/lihui815/cloudlab/build/usr/local/include" -I"/Users/lihui815/cloudlab/build/usr/local/include/opencv"
+LIBS =  -L"/usr/lib" -L${CLOUDLABLIBPATH} -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_video
+INCS =  -I"/usr/include"  -I${CLOUDLABINCLUDEPATH} -I${CLOUDLABINCLUDEPATH}/opencv 
+CXXINCS = -I"/usr/include" -I${CLOUDLABINCLUDEPATH} -I${CLOUDLABINCLUDEPATH}/opencv
 BIN  = FindCorners.exe
 CXXFLAGS = $(CXXINCS)  
 CFLAGS = $(INCS)  

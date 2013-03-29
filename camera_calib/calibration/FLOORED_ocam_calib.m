@@ -136,3 +136,7 @@ ocam_model_orig
 % after calibration, undistort using FLOORED_undistort_image
 % for example, to undistort DSC_0044.jpg with output image size of 2000h x 1000w,
 % type FLOORED_undistort_image('DSC_0044', ocam_model_orig, 2000, 1000);
+
+% save out the model
+save "ocam_model.txt" ocam_model_orig
+

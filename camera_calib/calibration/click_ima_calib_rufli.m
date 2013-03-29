@@ -20,6 +20,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 fclose('all');
+
+mkdir("autoCornerFinder/cToMatlab/");
+
 if exist('autoCornerFinder/cToMatlab/cornerInfo.txt','file')
     delete('autoCornerFinder/cToMatlab/cornerInfo.txt');
 end
