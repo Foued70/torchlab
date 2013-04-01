@@ -62,8 +62,8 @@ local p3pC  = ffi.load(ffidir .. "libp3p.dylib")
 
 local p3p = {}
 
-function p3p.compute_poses (camera)
-   local xyz = camera.world
+function p3p.compute_poses (world_pts,camera_angles)
+   local xyz = world_pts
    local p1 = xyz[1]
    local p2 = xyz[2]
    local p3 = xyz[3]
@@ -76,15 +76,27 @@ function p3p.compute_poses (camera)
       return
    end
 
-   -- Carefull these aren't uv's but angles derived from the image
-   -- coordinates and camera calibration.  FIXME current code expects
-   -- this data on Unit Cartesian Sphere (Directions on unit sphere in
-   -- camera coordinates with optical axis at (0,0,1)) update to
-   -- handle our internal spherical coordinates.
-   local uv   = camera.uv
-   local f1  = uv[1]
-   local f2  = uv[2]
-   local f3  = uv[3]
+   -- Carefull input is angles derived from the image
+   -- coordinates and camera calibration.  
+   -- 
+   -- FIXME current code expects this data on Unit Cartesian Sphere
+   -- (Directions on unit sphere in camera coordinates with optical
+   -- axis at (0,0,1)) update to handle our internal spherical
+   -- coordinates.  For now: convert azimuth and elevation to
+   -- cartesian unit sphere
+   local angles   = camera_angles
+
+   local azimuth   = angles[{{},1}]
+   local elevation = angles[{{},2}]
+
+   local sin_elevation = torch.sin(elevation)
+  
+   -- x = cos(azimuth) * sin(elevation)
+   local f1  = torch.cos(azimuth):cmul(sin_elevation)
+   -- y = sin(azimuth) * sin(elevation)
+   local f2  = torch.sin(azimuth):cmul(sin_elevation)
+   -- z = cos(elevation
+   local f3  = torch.cos(elevation)
 
    -- Create intermediate camera frame
    camT = torch.Tensor(3,3)
@@ -98,8 +110,9 @@ function p3p.compute_poses (camera)
    -- Swap first 2 vectors and worldpoints to keep theta between 0 and
    -- pi. (See paper p.2972 and Figure 4 for explanation).
    if (pf3[3] > 0) then 
-      f1 = uv[2]
-      f2 = uv[1]
+      local tmp = f1
+      f1 = f2
+      f2 = tmp
       camT[1] = f1
       camT[3] = torch.cross(f1,f2)
       geom.normalize(camT[3])

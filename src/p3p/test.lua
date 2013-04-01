@@ -1,18 +1,16 @@
 require 'image'
 
 local util = require 'util'
-local geom = util.geom
 local p3p = require 'p3p'
+local LensSensor = require "util.LensSensor"
 
-local r2d = 180 / math.pi
-local d2r = math.pi / 180
 
 -- top level filenames
 
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text()
-cmd:text('Compute depth maps')
+cmd:text('Compute Perspective 3 points algorithm')
 cmd:text()
 cmd:text('Options')
 cmd:option('-posefile',
@@ -25,23 +23,22 @@ cmd:text()
 -- parse input params
 params = cmd:parse(arg)
 
+-- load lens calibration
+lens = LensSensor.new("nikon_10p5mm_r2t_full")
+
+-- temp load data from ui
 data = dofile("calibration_3_26_12.lua")
 
 for si,sweep in pairs(data) do 
-   for li,lens in pairs(sweep) do 
-      printf("[%d][%d]", si, li)
-      if not lens.white_wall then
-         if not lens.world then 
-            lens.world = lens.calibration_pairs:narrow(2,1,3)
-            -- need homogeneous coords for uv ...
-            lens.uv    = torch.ones(lens.world:size(1),3)
-            lens.uv:narrow(2,1,2):copy(lens.calibration_pairs:narrow(2,4,2))
-            for uvi = 1,lens.uv:size(1) do 
-               local n = lens.uv[uvi]:norm()
-               lens.uv[uvi]:mul(1/n) -- Unitary vector
-            end
+   for pi,photo in pairs(sweep) do 
+      printf("[%d][%d]", si, pi)
+      if not photo.white_wall then
+         if not photo.world then 
+            photo.world = photo.calibration_pairs:narrow(2,1,3)
+            photo.uv = photo.calibration_pairs:narrow(2,4,2)
+            photo.angles = lens:img_coords_to_world_angle(photo.uv,"uv")
          end
-         p3p.compute_poses(lens)
+         p3p.compute_poses(photo.world,photo.angles)
       end
    end
 end

@@ -305,5 +305,57 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
 
 end
 
+-- Input: 
+-- 
+--   + img_pts: Nx2 tensor of points in image space
+-- 
+--   + pt_type: type of points.
+-- 
+--   - "uv" as output from opengl center of image at 0,0 x and y between -1,1
+-- 
+--   - "pixel_space" the offsets in pixels of raw image, (0,0) in
+--      upper left corner.
+-- 
+-- Output: world angles (horizontal and vertical) or (azimuth and elevation)
+-- 
+function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
+   local normalized_pts
+
+   -- put points in normalized coordinates. 
+   if (pt_type == "uv") then
+      -- need homogeneous coords for uv ...
+      normalized_pts  = torch.Tensor(img_pts:size(1),3):fill(-1)
+      -- put image space -1,1 in x and -1,1 in y into normalized
+      -- coordinates computed when calibrating the lens.
+      normalized_pts:narrow(2,1,2):copy(img_pts)
+      normalized_pts[{{},1}]:mul(self.horizontal_normalized)
+      normalized_pts[{{},2}]:mul(self.vertical_normalized)
+      
+   elseif (pt_type == "pixel_space") then
+      normalized_pts  = torch.Tensor(img_pts:size(1),3):fill(-1)
+      normalized_pts[{{},1}]:mul(self.horizontal_normalized)
+      normalized_pts[{{},2}]:mul(self.vertical_normalized)
+      
+   else -- normalized
+      print("-- points already in normalized coordinates")
+      normalized_pts = img_pts
+   end
+
+   -- compute diagonal distances
+   local xsqr = normalized_pts[{{},1}]:clone()
+   xsqr:cmul(xsqr)
+   local ysqr = normalized_pts[{{},2}]:clone()
+   ysqr:cmul(ysqr)
+   local d = torch.add(xsqr,ysqr)
+   d:sqrt()
+
+   -- apply the lens transform
+   local dangles = 
+      projection.compute_diagonal_fov(d, self.lens_type, self.invpol)
+
+   -- convert diagonal angle to spherical coordinates
+   return projection.derive_hw(dangles,self.aspect_ratio) 
+
+end
 
 return LensSensor

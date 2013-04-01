@@ -56,26 +56,32 @@ function remap(img, map)
    return out
 end
 
--- FIXME make a generic r2t and t2r function
+
+
 function compute_diagonal_fov(diagonal_normalized,lens_type,params)
+   local convert = false
+   if (type(diagonal_normalized) == "number") then 
+      diagonal_normalized = torch.Tensor({diagonal_normalized})
+      convert = true
+   end
    local dfov
    if (lens_type == "rectilinear") then
       dfov = torch.atan(diagonal_normalized)   -- diag in rad
    elseif (lens_type == "scaramuzza_r2t") then
       print(" -- using scaramuzza calibration")
-      local d2 = diagonal_normalized
-      dfov = params[-1]
-      printf("dfov: %f d2: %f coeff: %f", dfov, d2, params[-1])
+      local d2 = diagonal_normalized:clone()
+      dfov = torch.Tensor(d2:size()):fill(params[-1])
+      printf("dfov: %f d2: %f coeff: %f", dfov[1], d2[1], params[-1])
       for i = params:size(1)-1,1,-1 do 
          dfov = dfov + d2 * params[i]
-         d2 = d2 * diagonal_normalized
-         printf("[%d] dfov: %f d2: %f, coeff: %f",i,dfov,d2,params[i])
+         d2:cmul(diagonal_normalized)
+         printf("[%d] dfov: %f d2: %f, coeff: %f",i,dfov[1],d2[1],params[i])
       end
    elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
       -- FIXME using ideal thoby to compute fov for scaramuzza
       print(" -- using lens type: thoby")
       -- thoby : theta = asin((r/f)/(k1 * f))/k2
-      if (diagonal_normalized > k1) then 
+      if (diagonal_normalized:max() > k1) then 
          error("diagonal too large for thoby")
       else
          dfov = torch.asin(diagonal_normalized/k1)/k2
@@ -84,26 +90,29 @@ function compute_diagonal_fov(diagonal_normalized,lens_type,params)
       dfov = diagonal_normalized
 
    elseif (lens_type =="equal_area") then
-      if( diagonal_normalized <= 2 ) then
+      if( diagonal_normalized:max() <= 2 ) then
          dfov = 2 * torch.asin( 0.5 * diagonal_normalized )
       end
-      if( dfov == 0 ) then
+      if( torch.sum(dfov:eq(0)) > 0) then
          error( "equal-area FOV too large" )
       end
 
    elseif (lens_type == "stereographic") then
-      dfov = 2 * atan( 0.5 * diagonal_normalized );
+      dfov = 2 * torch.atan(diagonal_normalized*0.5 );
 
    elseif (lens_type == "orthographic") then
-      if( diagonal_normalized <= 1 ) then
+      if( diagonal_normalized:max() <= 1 ) then
          dfov = torch.asin( diagonal_normalized )
       end
-      if( dfov == 0 ) then
+      if( torch.sum(dfov:eq(0)) > 0) then
          error( "orthographic FOV too large" );
       end;
 
    else
       error("don't understand self lens model requested")
+   end
+   if convert then 
+      dfov = dfov[1]
    end
    return dfov
 end
@@ -197,12 +206,12 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
       phi:atan()
       theta_map = make_pythagorean_map(lambda,phi)
    else
-      lambda = torch.linspace(-hfov,hfov,mapw)
-      phi    = torch.linspace(-vfov,vfov,maph)
       -- default is to project to sphere
       -- create horizontal (lambda) and vertical angles (phi) x,y lookup
       --  in spherical map from -radians,radians at resolution mapw and
       --  maph.  Equal steps in angles.
+      lambda = torch.linspace(-hfov,hfov,mapw)
+      phi    = torch.linspace(-vfov,vfov,maph)
       output_map = make_pythagorean_map(lambda,phi)
       theta_map  = output_map
    end
