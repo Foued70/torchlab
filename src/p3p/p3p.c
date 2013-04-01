@@ -72,13 +72,6 @@ int computeFactors(double *factors, double *pointData)
   double p_2_pw4  = p_2_pw3 * p_2;
   double b_pw2    = pow(b,2);
 
-  printf("d_12: %f d_12^2: %f\n", d_12, d_12_pw2);
-  printf("f_1: %f f_1^2: %f\n", f_1, f_1_pw2);
-  printf("f_2: %f f_2^2: %f\n", f_2, f_2_pw2);
-  printf("p_1: %f p_1^2: %f\n", p_1, p_1_pw2);
-  printf("p_2: %f p_2^2: %f\n", p_2, p_2_pw2);
-  printf("b: %f b^2: %f\n", b, b_pw2);
-
   // Computation of factors of 4th degree polynomial
 
   factors[0] = -f_2_pw2*p_2_pw4

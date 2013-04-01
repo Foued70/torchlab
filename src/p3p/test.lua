@@ -38,7 +38,8 @@ for si,sweep in pairs(data) do
             photo.uv = photo.calibration_pairs:narrow(2,4,2)
             photo.angles = lens:img_coords_to_world_angle(photo.uv,"uv")
          end
-         p3p.compute_poses(photo.world,photo.angles)
+         solutions = p3p.compute_poses(photo.world,photo.angles)
+         print(solutions)
       end
    end
 end

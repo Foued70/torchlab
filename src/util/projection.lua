@@ -71,11 +71,9 @@ function compute_diagonal_fov(diagonal_normalized,lens_type,params)
       print(" -- using scaramuzza calibration")
       local d2 = diagonal_normalized:clone()
       dfov = torch.Tensor(d2:size()):fill(params[-1])
-      printf("dfov: %f d2: %f coeff: %f", dfov[1], d2[1], params[-1])
       for i = params:size(1)-1,1,-1 do 
          dfov = dfov + d2 * params[i]
          d2:cmul(diagonal_normalized)
-         printf("[%d] dfov: %f d2: %f, coeff: %f",i,dfov[1],d2[1],params[i])
       end
    elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
       -- FIXME using ideal thoby to compute fov for scaramuzza

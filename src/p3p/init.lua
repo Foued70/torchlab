@@ -7,7 +7,7 @@ local geom = require 'util.geom'
 
 --  Copyright (c) 2011, Laurent Kneip, ETH Zurich
 --  All rights reserved.
---
+-- 
 --  Redistribution and use in source and binary forms, with or without
 --  modification, are permitted provided that the following conditions are met:
 --      * Redistributions of source code must retain the above copyright
@@ -18,7 +18,7 @@ local geom = require 'util.geom'
 --      * Neither the name of ETH Zurich nor the
 --        names of its contributors may be used to endorse or promote products
 --        derived from this software without specific prior written permission.
---
+-- 
 --  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 --  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 --  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -29,21 +29,33 @@ local geom = require 'util.geom'
 --  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 --  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 --  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
--- /
+-- 
 
 --  P3p.cpp
---
+-- 
 --   Created on: Nov 2, 2010
 --       Author: Laurent Kneip
 --  Description: Compute the absolute pose of a camera using three 3D-to-2D correspondences
 --    Reference: A Novel Parametrization of the P3P-Problem for a Direct Computation of
 --               Absolute Camera Position and Orientation
---
---        Input: featureVectors: 3x3 matrix with UNITARY feature vectors (each column is a vector)
---               worldPoints: 3x3 matrix with corresponding 3D world points (each column is a point)
---               solutions: 3x16 matrix that will contain the solutions
---                          form: [ 3x1 position(solution1) 3x3 orientation(solution1) 3x1 position(solution2) 3x3 orientation(solution2) ... ]
---                          the obtained orientation matrices are defined as transforming points from the cam to the world frame
+-- 
+--        Input: 
+-- 
+--               featureVectors: 3x3 matrix with UNITARY feature
+--                 vectors (each column is a vector)
+-- 
+--               worldPoints: 3x3 matrix with corresponding 3D world
+--                 points (each column is a point)
+-- 
+--               solutions: 3x16 matrix that will contain the
+--                 solutions in the form:
+-- 
+--                 [ 3x1 position(1) 3x3 orientation(1) 
+--                   3x1 position(2) 3x3 orientation(2) ... ] 
+-- 
+--                the obtained orientation matrices are defined as
+--                transforming points from the cam to the world frame
+-- 
 --       Output: int: 0 if correct execution
 --                   -1 if world points aligned
 
@@ -157,29 +169,23 @@ function p3p.compute_poses (world_pts,camera_angles)
       b = math.sqrt(b)
    end
    pointData[6] = b
-   printf("b: %f cos_beta: %f",b, cos_beta)
 
    local factors = torch.Tensor(5)
    p3pC.computeFactors(torch.data(factors),
                        torch.data(pointData))
-   print(factors)
 
    local real_roots = torch.Tensor(4)
    p3pC.solveQuartic(torch.data(real_roots),
                      torch.data(factors))
                      
-   print(real_roots)
-
    local solutions = torch.Tensor(4,4,3)
    p3pC.backSubstitute(torch.data(solutions),
                        torch.data(pointData),
                        torch.data(real_roots))
                      
     
-   print(solutions)
-
-   -- return best solution
-   return real_roots 
+   -- FIXME (perhaps?) return best solution
+   return solutions
 end
 
 return p3p
