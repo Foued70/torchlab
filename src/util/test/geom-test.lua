@@ -39,6 +39,40 @@ function test.quat2rot()
    print(string.format(" - Found %d/%d errors",e,test.data.quat:size(1)))
 end
 
+function test.rot2quat()
+   print("Testing rotation matrix to quaternion")
+   local e = 0
+   local maxerr = 0
+   local res = torch.Tensor(test.data.vec:size(1)*test.data.quat:size(1),3)
+   local i = 1
+   for j = 1,test.data.quat:size(1) do
+      local q = geom.rotation_matrix_to_quaternion(test.data.result_rot_mat[j])
+      -- cant test quat to quat so we test that they transform a
+      -- vector in the same way.
+      for k = 1,test.data.vec:size(1) do
+         local v   = test.data.vec[k]
+         geom.rotate_by_quat(res[i],v,q)
+         local d   = res[i] - test.data.result_rot_by_quat[i]
+         local ce  = d:abs():max()
+         if (ce > maxerr) then maxerr = ce end
+         -- FIXME numerical error is getting really high.  Redo test
+         -- suite with the highest precision possible.
+         if (ce > 1e-2) then
+            printf("error: %f",ce)
+            printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3])
+            printf("should be: (%f,%f,%f)",
+                   test.data.result_rot_by_quat[i][1],
+                   test.data.result_rot_by_quat[i][2],
+                   test.data.result_rot_by_quat[i][3])
+            e = e + 1
+         end
+         i = i + 1
+      
+      end
+   end
+   print(string.format(" - Found %d/%d errors",e,res:size(1)))
+end
+
 function test.rotation_by_quat()
    print("Testing rotation with quaternion")
    local e = 0
@@ -56,12 +90,11 @@ function test.rotation_by_quat()
          if (ce > maxerr) then maxerr = ce end
          if (ce > 1e-3) then
             printf("error: %f",ce)
-            printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3],res[i][4])
+            printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3])
             printf("should be: (%f,%f,%f)",
                    test.data.result_rot_by_quat[i][1],
                    test.data.result_rot_by_quat[i][2],
-                   test.data.result_rot_by_quat[i][3],
-                   test.data.result_rot_by_quat[i][4])
+                   test.data.result_rot_by_quat[i][3])
             e = e + 1
          end
          i = i + 1
@@ -106,7 +139,6 @@ function test.rotation_by_mat()
    local i = 1
    sys.tic()
    for j = 1,test.data.quat:size(1) do
-      local q = test.data.quat[j]
       local mat = test.data.result_rot_mat[j]
       for k = 1,test.data.vec:size(1) do
          local v = test.data.vec[k]
@@ -321,6 +353,7 @@ end
 function test.all()
    test.quaternion_from_to()
    test.quat2rot()
+   test.rot2quat()
    test.rotation_by_mat()
    test.rotation_by_quat()
    test.quat_product()

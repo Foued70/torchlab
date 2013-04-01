@@ -115,6 +115,65 @@ function quaternion_to_rotation_matrix(quaternion, res)
    return res
 end
 
+function rotation_matrix_to_quaternion (rmat, quat)
+   if (not quat) then
+      quat = torch.Tensor(4)
+   end
+
+   quat[1] =  rmat[1][1] - rmat[2][2] - rmat[3][3] + 1
+   quat[2] = -rmat[1][1] + rmat[2][2] - rmat[3][3] + 1
+   quat[3] = -rmat[1][1] - rmat[2][2] + rmat[3][3] + 1
+   quat[4] =  rmat[1][1] + rmat[2][2] + rmat[3][3] + 1
+   quat:mul(0.25)
+
+   -- set everything less than 0 to 0
+   quat[quat:lt(0)] = 0
+   -- take square root
+   quat:sqrt()
+
+   local qsign = torch.Tensor(4)
+
+   if ((quat[4] >= quat[1]) and (quat[4] >= quat[2]) and (quat[4] >= quat[3])) then
+
+      qsign[1] = rmat[3][2] - rmat[2][3]
+      qsign[2] = rmat[1][3] - rmat[3][1]
+      qsign[3] = rmat[2][1] - rmat[1][2]
+      qsign[4] = 1
+
+   elseif ((quat[1] >= quat[4]) and (quat[1] >= quat[2]) and (quat[1] >= quat[3])) then
+
+      qsign[1] = 1
+      qsign[2] = rmat[2][1] + rmat[1][2]
+      qsign[3] = rmat[1][3] + rmat[3][1]
+      qsign[4] = rmat[3][2] - rmat[2][3]
+
+   elseif ((quat[2] >= quat[4]) and (quat[2] >= quat[1]) and (quat[2] >= quat[3])) then
+
+      qsign[1] = rmat[2][1] + rmat[1][2]
+      qsign[2] = 1
+      qsign[3] = rmat[3][2] + rmat[2][3]
+      qsign[4] = rmat[1][3] - rmat[3][1]
+
+   elseif ((quat[3] >= quat[4]) and (quat[3] >= quat[1]) and (quat[3] >= quat[2])) then
+
+      qsign[1] = rmat[3][1] + rmat[1][3]
+      qsign[2] = rmat[3][2] + rmat[2][3]
+      qsign[3] = 1
+      qsign[4] = rmat[2][1] - rmat[1][2]
+
+   else
+      error("Bad input perhaps not a rotation matrix?")
+   end
+
+   qsign:sign() -- convert to just +1,-1
+   -- put signs into quaternion
+   quat:cmul(qsign)
+
+   normalize(quat)
+
+   return quat
+end
+
 -- rotate a vector around axis by angle radians
 function rotate_axis_angle(vec, rot_axis, rot_angle)
    local quat = quaternion_from_axis_angle(rot_axis, rot_angle)
