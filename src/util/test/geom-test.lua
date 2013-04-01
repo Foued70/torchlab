@@ -5,7 +5,7 @@ local util = require 'util'
 local geom = util.geom
 
 local test = {}
-test.data = require "util/test/geom-data"
+test.data = require "util.test.geom-data"
 
 function test.quaternion_from_to()
    print("Testing quaternion angle btw. 2 vectors")
@@ -29,7 +29,7 @@ function test.quat2rot()
    print("Testing quaternion to rotation matrix")
    local e = 0
    for i = 1,test.data.quat:size(1) do
-      local m = geom.rotation_matrix(test.data.quat[i])
+      local m = geom.quaternion_to_rotation_matrix(test.data.quat[i])
       local d = m - test.data.result_rot_mat[i]
       if (d:abs():max() > 1e-6) then
          print(d,m,test.data.result_rot_mat[i])
@@ -43,19 +43,25 @@ function test.rotation_by_quat()
    print("Testing rotation with quaternion")
    local e = 0
    local maxerr = 0
-   local res = torch.Tensor(test.data.vec:size(1)*test.data.quat:size(1),4)
+   local res = torch.Tensor(test.data.vec:size(1)*test.data.quat:size(1),3)
    local i = 1
    sys.tic()
-   for j = 1,test.data.quat:size(1) do 
+   for j = 1,test.data.quat:size(1) do
       local q = test.data.quat[j]
       for k = 1,test.data.vec:size(1) do
          local v   = test.data.vec[k]
-         geom.rotate_by_quat(res[i],v,q) 
+         geom.rotate_by_quat(res[i],v,q)
          local d   = res[i] - test.data.result_rot_by_quat[i]
          local ce  = d:abs():max()
          if (ce > maxerr) then maxerr = ce end
          if (ce > 1e-3) then
-            print(ce,res[i],test.data.result_rot_by_quat[i])
+            printf("error: %f",ce)
+            printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3],res[i][4])
+            printf("should be: (%f,%f,%f)",
+                   test.data.result_rot_by_quat[i][1],
+                   test.data.result_rot_by_quat[i][2],
+                   test.data.result_rot_by_quat[i][3],
+                   test.data.result_rot_by_quat[i][4])
             e = e + 1
          end
          i = i + 1
@@ -71,7 +77,7 @@ function test.quat_product()
    local maxerr = 0
    sys.tic()
    local q1 = test.data.quat[1]
-   for j = 2,test.data.quat:size(1) do 
+   for j = 2,test.data.quat:size(1) do
       local q2 = test.data.quat[j]
       for k = 1,test.data.vec:size(1) do
          local v    = test.data.vec[k]
@@ -81,7 +87,7 @@ function test.quat_product()
          local vr12 = geom.rotate_by_quat(v,q12)
          local ce = torch.max(torch.abs(vr12 - vr2))
          if (ce > maxerr) then maxerr = ce end
-         if (ce > 5e-4) then 
+         if (ce > 5e-4) then
             print(ce,vr2,vr12)
             e = e + 1
          end
@@ -96,15 +102,15 @@ function test.rotation_by_mat()
    print("Testing rotation w/ rotation matrix")
    local e = 0
    local maxerr = 0
-   local res = torch.Tensor(test.data.vec:size(1)*test.data.quat:size(1),4)
+   local res = torch.Tensor(test.data.vec:size(1)*test.data.quat:size(1),3)
    local i = 1
    sys.tic()
-   for j = 1,test.data.quat:size(1) do 
+   for j = 1,test.data.quat:size(1) do
       local q = test.data.quat[j]
-      local mat = geom.rotation_matrix(test.data.quat[j])
+      local mat = test.data.result_rot_mat[j]
       for k = 1,test.data.vec:size(1) do
          local v = test.data.vec[k]
-         geom.rotate_by_mat(res[i],v,mat) 
+         geom.rotate_by_mat(res[i],v,mat)
          local d = res[i] - test.data.result_rot_by_quat[i]
          local ce = d:abs():max()
          if (ce > maxerr) then maxerr = ce end
@@ -209,12 +215,12 @@ function test.ray_plane_intersection()
    local maxterr = 0
    local maxierr = 0
    sys.tic()
-   for i = 1,test.data.vec:size(1) do 
+   for i = 1,test.data.vec:size(1) do
       local tvec = test.data.vec[i]:narrow(1,1,3)
       for j = 1,plane_norm:size(1) do
          local n = geom.normalize(plane_norm[j])
          local d = plane_d[j]
-         local intersection,t = 
+         local intersection,t =
             geom.ray_plane_intersection(tvec,tvec,n,d,false)
          cnt = cnt + 1
          local gt = results[cnt]
@@ -258,11 +264,11 @@ function test.ray_face_intersection()
    for i = 1,pts:size(1) do
       local pt  = pts[i]
       local dir = dirs[i]
-      for j = 1,face_plane:size(1) do 
+      for j = 1,face_plane:size(1) do
          local n = face_plane[j]:narrow(1,1,3)
          local d = face_plane[j][4]
          local v = face_verts[j]
-         local intersection,t = 
+         local intersection,t =
             geom.ray_face_intersection(pt,dir,n,d,v,false)
          cnt = cnt + 1
          local gt = results[i][j]
@@ -271,8 +277,8 @@ function test.ray_face_intersection()
                e = e + 1
             else
                local terr = torch.max(torch.abs(intersection - gt))
-               if terr > 1e-7    then 
-                  e = e + 1 
+               if terr > 1e-7    then
+                  e = e + 1
                end
                if terr > maxterr then maxterr = terr end
             end

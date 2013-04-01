@@ -12,19 +12,19 @@ z_axis = axes[3]
 local neg_axes   = torch.eye(3):mul(-1)
 
 function eq(vec1, vec2)
-  return torch.min(torch.eq(vec1,vec2)) == 1
+   return torch.min(torch.eq(vec1,vec2)) == 1
 end
 
 function dist(vec1, vec2)
-  return (vec1 - vec2):norm()
+   return (vec1 - vec2):norm()
 end
 
 function direction(vec1, vec2)
-  return normalize(vec1 - vec2)
+   return normalize(vec1 - vec2)
 end
 
 function normalize(vec)
-  return torch.div(vec, vec, vec:norm())
+   return torch.div(vec, vec, vec:norm())
 end
 
 function normalized(...)
@@ -60,7 +60,7 @@ function compute_normal(v)
 end
 
 function angle_between(vec1, vec2)
-  return torch.acos(torch.dot(vec1, vec2) / (vec1:norm()*vec2:norm()))
+   return torch.acos(torch.dot(vec1, vec2) / (vec1:norm()*vec2:norm()))
 end
 
 function axis_rotation(normal,d)
@@ -92,9 +92,9 @@ function largest_rotation (normal)
    return axis_rotation(n,a),d
 end
 
-function rotation_matrix(quaternion, res)
+function quaternion_to_rotation_matrix(quaternion, res)
    if (not res) then
-      res   = torch.Tensor(4,4)
+      res   = torch.Tensor(3,3)
    end
    res:fill(0)
    local qq  = torch.addr(torch.zeros(4,4),quaternion,quaternion)
@@ -112,15 +112,13 @@ function rotation_matrix(quaternion, res)
    res[3][2] =     qq[2][3] + qq[4][1]
    res[3][3] = 1 - qq[1][1] - qq[2][2]
 
-   res[4][4] = 1
-
    return res
 end
 
 -- rotate a vector around axis by angle radians
 function rotate_axis_angle(vec, rot_axis, rot_angle)
-  local quat = quaternion_from_axis_angle(rot_axis, rot_angle)
-  return rotate_by_quat(vec, vec, quat)
+   local quat = quaternion_from_axis_angle(rot_axis, rot_angle)
+   return rotate_by_quat(vec, vec, quat)
 end
 
 -- rotate vector by rotation matrix
@@ -135,10 +133,10 @@ function rotate_by_mat(...)
    elseif nargs == 2 then
       vec   = args[1]
       mat   = args[2]
-      res = torch.Tensor(4)
+      res = torch.Tensor(3)
    else
       print(dok.usage('rotate_by_mat',
-                      'rotate a vector by rotation matrix', 
+                      'rotate a vector by rotation matrix',
                       '> returns: rotated vector',
                       {type='torch.Tensor', help='result'},
                       {type='torch.Tensor', help='vector', req=true},
@@ -149,7 +147,7 @@ function rotate_by_mat(...)
    return res:narrow(1,1,3)
 end
 
--- rotate vector by quaternion 
+-- rotate vector by quaternion
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
 function rotate_by_quat(...)
@@ -166,7 +164,7 @@ function rotate_by_quat(...)
       res = torch.Tensor(3)
    else
       print(dok.usage('rotate_by_quat',
-                      'rotate a vector by quaternion', 
+                      'rotate a vector by quaternion',
                       '> returns: rotated vector',
                       {type='torch.Tensor', help='result'},
                       {type='torch.Tensor', help='vector', req=true},
@@ -193,14 +191,14 @@ function quat_conjugate(quat,res)
 end
 
 function quat_equals(quat1, quat2)
-  if (  (math.abs(quat2[1]-quat1[1])<1e-8) and
-        (math.abs(quat2[2]-quat1[2])<1e-8) and
-        (math.abs(quat2[3]-quat1[3])<1e-8) and
-        (math.abs(quat2[4]-quat1[4])<1e-8) ) then
-    return true
-  else
-    return false
-  end
+   if (  (math.abs(quat2[1]-quat1[1])<1e-8) and
+         (math.abs(quat2[2]-quat1[2])<1e-8) and
+         (math.abs(quat2[3]-quat1[3])<1e-8) and
+         (math.abs(quat2[4]-quat1[4])<1e-8) ) then
+      return true
+   else
+      return false
+   end
 end
 
 -- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
@@ -209,11 +207,11 @@ function quat_product(quat1,quat2,res)
    local zero_quat = torch.Tensor({0,0,0,1})
 
    if quat_equals(quat1, zero_quat) and quat_equals(quat1, zero_quat) then
-    if (not res) then 
-      return zero_quat
-    else
-      return res:copy(zero_quat)
-    end
+      if (not res) then
+         return zero_quat
+      else
+         return res:copy(zero_quat)
+      end
    end
 
    if (not res) then
@@ -230,30 +228,30 @@ end
 
 -- returns quaternion represnting angle between two vectors
 function quaternion_from_to(from_vector, to_vector, quat)
-  from = from_vector:narrow(1,1,3)
-  to   = to_vector:narrow(1,1,3)
+   from = from_vector:narrow(1,1,3)
+   to   = to_vector:narrow(1,1,3)
 
-  local rot_axis = torch.cross(from, to)
-  local rot_angle = 0
+   local rot_axis = torch.cross(from, to)
+   local rot_angle = 0
 
-  --avoid the degenerate case when from_vector is very close to to_vector
-  local m = torch.norm(rot_axis)
-  if(m > 1e-8) then
-    rot_axis  = rot_axis/m
-    rot_angle = torch.acos(torch.dot(from, to))
-  end
+   --avoid the degenerate case when from_vector is very close to to_vector
+   local m = torch.norm(rot_axis)
+   if(m > 1e-8) then
+      rot_axis  = rot_axis/m
+      rot_angle = torch.acos(torch.dot(from, to))
+   end
 
-  return quaternion_from_axis_angle(rot_axis, rot_angle, quat)
+   return quaternion_from_axis_angle(rot_axis, rot_angle, quat)
 end
 
 function quaternion_from_axis_angle(rot_axis, rot_angle, quat)
-  if not quat then 
+   if not quat then
       quat = torch.Tensor(4)
-  end
-  quat[{{1,3}}] = rot_axis * torch.sin(rot_angle / 2)
-  quat[4] = torch.cos(rot_angle / 2)
+   end
+   quat[{{1,3}}] = rot_axis * torch.sin(rot_angle / 2)
+   quat[4] = torch.cos(rot_angle / 2)
 
-  return quat
+   return quat
 end
 
 -- FIXME make tests as this function seems to invert results for
@@ -268,7 +266,7 @@ function ray_plane_intersection(...)
    end
    if nargs < 4 then
       print(dok.usage('ray_plane_intersection',
-                      'does ray intersect the plane', 
+                      'does ray intersect the plane',
                       '> returns: intersection,distance or nil,errno',
                       {type='torch.Tensor', help='point (start of ray)'},
                       {type='torch.Tensor', help='direction (of ray)', req=true},
@@ -295,11 +293,11 @@ function ray_plane_intersection(...)
       return nil,2
    end
    local i = pt + dir * t
-   if debug then print(string.format(" - int: [%f, %f, %f]", 
+   if debug then print(string.format(" - int: [%f, %f, %f]",
                                      i[1],i[2],i[3])) end
    return i,t
 end
-      
+
 
 function ray_face_intersection(...)
    local pt,dir,plane_norm,plane_d,face_verts,debug
@@ -310,7 +308,7 @@ function ray_face_intersection(...)
    end
    if nargs < 4 then
       print(dok.usage('ray_face_intersection',
-                      'does ray intersect the face', 
+                      'does ray intersect the face',
                       '> returns: intersection point,distance, or nil,errno',
                       {type='torch.Tensor', help='point (start of ray)'},
                       {type='torch.Tensor', help='direction (of ray)', req=true},
@@ -328,14 +326,14 @@ function ray_face_intersection(...)
       face_verts = args[5]
    end
    -- First find planar intersection
-   local intersection,t = 
+   local intersection,t =
       ray_plane_intersection(pt,dir,plane_norm,plane_d,debug)
    if not intersection then
       return nil,t
    end
    -- pick two most planar dimensions of the face throw away
    -- coordinate with greatest magnitude (if normal is mostly z
-   -- then we want x and y) 
+   -- then we want x and y)
    local nverts = face_verts:size(1)
    local _,ds = torch.sort(torch.abs(plane_norm))
    local ri = torch.Tensor(2)
@@ -351,7 +349,7 @@ function ray_face_intersection(...)
    local count = 0
    for vi = 1,nverts do
       local cvert = verts[vi]
-      --  compute y axis crossing (b = y - mx) 
+      --  compute y axis crossing (b = y - mx)
       local run  =  cvert[1] - pvert[1]
       local b    = -math.huge
       local cpos = 1
@@ -365,7 +363,7 @@ function ray_face_intersection(...)
          if (cvert[1] < 0) then cpos = -1 end
          if (pvert[1] < 0) then ppos = -1 end
          if (b >= 0) and ((cpos + ppos) == 0) then
-            count = count + 1 
+            count = count + 1
          end
       end
       pvert = cvert
