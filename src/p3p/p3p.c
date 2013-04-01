@@ -190,6 +190,8 @@ int backSubstitute (double *solutions, double *pointData, double *rr)
     *solutions = cos_theta*d_12*sin_alpha*(sin_alpha*b+cos_alpha);
     solutions++;
     *solutions = sin_theta*d_12*sin_alpha*(sin_alpha*b+cos_alpha);
+    solutions++;
+
     // Rotation: R[0]
     *solutions = -cos_alpha;
     solutions++;
@@ -197,6 +199,7 @@ int backSubstitute (double *solutions, double *pointData, double *rr)
     solutions++;
     *solutions = -sin_alpha*sin_theta;
     solutions++;
+
     // Rotation: R[1] 
     *solutions = sin_alpha; 
     solutions++;
@@ -204,6 +207,7 @@ int backSubstitute (double *solutions, double *pointData, double *rr)
     solutions++;
     *solutions = -cos_alpha*sin_theta;
     solutions++;
+
     // Rotation: R[2] 
     *solutions = 0;
     solutions++;
