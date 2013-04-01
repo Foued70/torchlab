@@ -59,6 +59,10 @@ function compute_normal(v)
    return normalize(torch.cross(v[3] - v[2], v[1] - v[2]))
 end
 
+function angle_between(vec1, vec2)
+  return torch.acos(torch.dot(vec1, vec2) / (vec1:norm()*vec2:norm()))
+end
+
 function axis_rotation(normal,d)
    local n   = normalized(normal:narrow(1,1,3))
    return quaternion_from_to(n,d)
@@ -250,15 +254,6 @@ function quaternion_from_axis_angle(rot_axis, rot_angle, quat)
   quat[4] = torch.cos(rot_angle / 2)
 
   return quat
-end
-
-function quaternion_length(quat)
-  return math.sqrt(quat[1]*quat[1] + quat[2]*quat[2] + quat[3]*quat[3] + quat[4]*quat[4])
-end
-
-function quaternion_normalize(quat)
-  local length = quaternion_length(quat)
-  torch.div(quat, quat, length)
 end
 
 -- FIXME make tests as this function seems to invert results for
