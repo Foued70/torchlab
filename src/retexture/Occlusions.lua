@@ -11,7 +11,6 @@ local loader = require 'util.loader'
 local Ray = require 'util.Ray'
 local bihtree = require 'util.bihtree'
 local interpolate = require 'util.interpolate'
-local ObjData = require 'util.obj'
 
 local output_dir = paths.concat(paths.dirname(paths.thisfile()), 'output')
 sys.execute("mkdir -p " .. output_dir)
@@ -56,7 +55,7 @@ end
 
 function Occlusions:calc()   
   local poses = loader(self.posefile, Poses.new)
-  local target = loader(self.targetfile, ObjData.new)
+  local target = loader(self.targetfile, util.Obj.new)
   local occlusions = {}
   
   sys.tic()

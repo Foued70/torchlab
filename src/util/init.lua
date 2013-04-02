@@ -7,7 +7,6 @@ exports.interpolate = require "util.interpolate"
 exports.projection  = require "util.projection"
 
 exports.depot = require "util.depot"
-exports.obj   = require "util.obj"
 
 -- classes
 exports.Ray   = require "util.Ray"
