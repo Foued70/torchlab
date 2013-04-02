@@ -7,7 +7,8 @@ function _G.Class(parent)
 
   local package = _G
   for part in name:gmatch('[^/]+') do
-    if not package[part] then package[part] = {} end
+    local next_package = rawget(package, part)
+    if not next_package then rawset(package, part, {}) end
     package = package[part]
   end
 
@@ -50,3 +51,24 @@ function _G.reload()
     end
   end
 end
+
+
+local function package_class_loader(self, name)
+  local package_name = getmetatable(self).package_name
+  require(package_name..'.'..name)
+  return rawget(rawget(_G, package_name), name)
+end
+
+
+for file_name in paths.files(CLOUDLAB_SRC) do
+  local dir_name = paths.concat(CLOUDLAB_SRC, file_name)
+  if paths.dirp(dir_name) then
+    _G[file_name] = {}
+    setmetatable(_G[file_name], {
+      __index = package_class_loader,
+      package_name = file_name
+    })
+
+  end 
+end
+
