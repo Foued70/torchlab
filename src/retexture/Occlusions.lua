@@ -57,6 +57,7 @@ end
 function Occlusions:calc()   
   local poses = loader(self.posefile, Poses.new)
   local target = loader(self.targetfile, ObjData.new)
+  local occlusions = {}
   
   sys.tic()
   local tree = bihtree.build(target)
@@ -100,8 +101,11 @@ function Occlusions:calc()
     local output_file = self:file(pi)
     log.trace("Saving depth map:", output_file)
     torch.save(output_file, out_tree)
+    
+    occlusions[pi] = out_tree
   end
-   
+  
+  self.occlusions = occlusions
 end
 
 
