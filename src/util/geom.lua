@@ -162,7 +162,8 @@ function rotation_matrix_to_quaternion (rmat, quat)
       qsign[4] = rmat[2][1] - rmat[1][2]
 
    else
-      error("Bad input perhaps not a rotation matrix?")
+      print("Bad input perhaps not a rotation matrix?")
+      return nil
    end
 
    qsign:sign() -- convert to just +1,-1

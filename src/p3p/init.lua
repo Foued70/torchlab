@@ -102,13 +102,18 @@ function p3p.compute_poses (world_pts,camera_angles)
    local elevation = angles[{{},2}]
 
    local sin_elevation = torch.sin(elevation)
-  
-   -- x = cos(azimuth) * sin(elevation)
-   local f1  = torch.cos(azimuth):cmul(sin_elevation)
-   -- y = sin(azimuth) * sin(elevation)
-   local f2  = torch.sin(azimuth):cmul(sin_elevation)
-   -- z = cos(elevation
-   local f3  = torch.cos(elevation)
+   unit_vec = torch.Tensor(3,3)
+   -- Z is up like in the world coordinates
+
+   -- x = cos(azimuth) * sin(elevation) 
+   unit_vec[{{},1}]  = torch.cos(azimuth):cmul(sin_elevation)
+   -- y = sin(azimuth) * sin(elevation) 
+   unit_vec[{{},2}]  = torch.sin(azimuth):cmul(sin_elevation)
+   -- z = cos(elevation) 
+   unit_vec[{{},3}]  = torch.cos(elevation)
+   local f1 = unit_vec[1]
+   local f2 = unit_vec[2]
+   local f3 = unit_vec[3]
 
    -- Create intermediate camera frame
    camT = torch.Tensor(3,3)
@@ -139,7 +144,7 @@ function p3p.compute_poses (world_pts,camera_angles)
    end
 
    -- Create intermediate world frame
-   local worldT = torch.Tensor(3,3)
+   worldT = torch.Tensor(3,3)
    worldT[1] = p2p1
    geom.normalize(worldT[1])
    
@@ -147,7 +152,6 @@ function p3p.compute_poses (world_pts,camera_angles)
    geom.normalize(worldT[3])
    
    worldT[2] = torch.cross(worldT[3],worldT[1])
-
    local pp3 = worldT*p3p1
 
    local pointData = torch.Tensor(6)
@@ -168,6 +172,7 @@ function p3p.compute_poses (world_pts,camera_angles)
    else
       b = math.sqrt(b)
    end
+
    pointData[6] = b
 
    local factors = torch.Tensor(5)
@@ -183,7 +188,18 @@ function p3p.compute_poses (world_pts,camera_angles)
                        torch.data(pointData),
                        torch.data(real_roots))
                      
-    
+   -- return solutions to world coordinate frame
+   for si = 1,4 do
+      C = solutions[si][1]
+      R = solutions[si]:narrow(1,2,3)
+      -- C = P1 + N.T()*C
+      C:copy(p1 + worldT:t()*C) 
+      -- R = N.T()*R.T()*T 
+      local temp = worldT:t()*R:t()*camT
+      R:copy(temp:t())
+   end
+
+   
    -- FIXME (perhaps?) return best solution
    return solutions
 end

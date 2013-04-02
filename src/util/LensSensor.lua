@@ -338,7 +338,7 @@ function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
       
    else -- normalized
       print("-- points already in normalized coordinates")
-      normalized_pts = img_pts
+      normalized_pts = img_pts:clone()
    end
 
    -- compute diagonal distances
@@ -349,13 +349,20 @@ function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
    local d = torch.add(xsqr,ysqr)
    d:sqrt()
 
+   -- keep track of the sign
+   normalized_pts:sign()
+
    -- apply the lens transform
    local dangles = 
       projection.compute_diagonal_fov(d, self.lens_type, self.invpol)
 
    -- convert diagonal angle to spherical coordinates
-   return projection.derive_hw(dangles,self.aspect_ratio) 
-
+   local elevation,azimuth = projection.derive_hw(dangles,self.aspect_ratio) 
+   local spherical_angles = torch.Tensor(elevation:size(1),2)
+   spherical_angles[{{},1}] = azimuth
+   spherical_angles[{{},2}] = elevation
+   spherical_angles:cmul(normalized_pts:narrow(2,1,2))
+   return spherical_angles
 end
 
 return LensSensor
