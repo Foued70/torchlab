@@ -45,7 +45,7 @@ function Poses:__init(posefile)
       self.names  = {}
       self.nposes =
          tonumber(io.popen(string.format("grep -c '.' %s",posefile)):read())
-      print(string.format("Found %d poses in %2.2fs", self.nposes, sys.toc()))
+      log.trace(self.nposes, "poses found in", sys.toc())
       sys.tic()
       self.data = torch.Tensor(self.nposes,19)
 
@@ -67,9 +67,9 @@ function Poses:__init(posefile)
          self.data[pc][17] = self.data[pc][19] * (1-self.data[pc][9])
          pc = pc + 1
       end
-      self.cachedir = "cache/"
+
       self:process()
-      print(string.format("Loaded %d poses in %2.2fs", pc-1, sys.toc()))
+      log.trace(pc-1, "poses loaded in", sys.toc())
    end
 end
 
