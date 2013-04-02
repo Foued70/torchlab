@@ -175,6 +175,15 @@ function rotation_matrix_to_quaternion (rmat, quat)
    return quat
 end
 
+
+-- if two quaternions are equal they will rotate a vector the same distance
+local quaternion_dist_testvec = normalize(torch.Tensor({1,1,1}))
+function quaternion_dist(quat1, quat2)
+   local vec1 = rotate_by_quat(quaternion_dist_testvec, quat1)
+   local vec2 = rotate_by_quat(quaternion_dist_testvec, quat2)
+   return vec1:dist(vec2)
+end
+
 -- rotate a vector around axis by angle radians
 function rotate_axis_angle(vec, rot_axis, rot_angle)
    local quat = quaternion_from_axis_angle(rot_axis, rot_angle)
