@@ -32,8 +32,7 @@ function Object:paint(context)
 
   context:set_model(self.rotation, self.position)
   --context:rotate(self.rotation)
-
-  --context:translate()
+  --context:translate(self.position)
 
   self.mesh:paint(context)
   

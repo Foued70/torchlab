@@ -35,7 +35,8 @@ function MatrixStack:translate(translation)
 end
 
 function MatrixStack:set_model(quaternion, translation)
-  geom.quaternion_to_rotation_matrix(quaternion, self.rotation_matrix)
+  geom.quaternion_to_rotation_matrix(quaternion, self.rotation_matrix:sub(1,3,1,3))
+
   self.translation_matrix[{{1,3},4}] = translation
 
   self.model_matrix:mm(self.translation_matrix, self.rotation_matrix) 
