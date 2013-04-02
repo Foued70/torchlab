@@ -25,4 +25,4 @@ cmd:text()
 local params = cmd:parse(arg)
 
 local occlusions = Occlusions.new(params.posefile, params.targetfile, params.scale, params.packetsize)
-occlusions:calc(true)
+occlusions:calc()

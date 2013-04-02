@@ -1,4 +1,4 @@
--- ObjData can load and save a .obj file 
+-- Obj can load and save a .obj file 
 -- Obj can be n-gon but for now, all objs should be triangulated for opengl loading 
 -- TODO: n-gon support
 -- TODO: test saving after retexture
@@ -15,9 +15,9 @@ local function tic(msg)
   end
 end
 
-local ObjData = torch.class('ObjData')
+local Obj = Class()
 
-function ObjData:__init(filename)
+function Obj:__init(filename)
   if filename and paths.filep(filename) then    
     self:load(filename)
     self:add_derived_data()
@@ -56,7 +56,7 @@ local function get_counts(filename)
   return n_faces, n_verts, n_uvs, n_gon, n_verts_per_face
 end
 
-function ObjData:add_derived_data()
+function Obj:add_derived_data()
   tic()
   local n_faces = self.n_faces
   local n_verts_per_face = self.n_verts_per_face
@@ -145,7 +145,7 @@ local function load_materials(pathname, filename)
   return materials, mtl_name_index_map
 end
 
-function ObjData:load(filename)
+function Obj:load(filename)
   tic()
   local n_faces, n_verts, n_uvs, n_gon, n_verts_per_face = get_counts(filename);
   tic('counts')  
@@ -272,7 +272,7 @@ local function write_mtl_prop(mtlf, mtl, mtl_prop, file_prop)
   end
 end
 
-function ObjData:save(filename, mtlname)
+function Obj:save(filename, mtlname)
   filename = filename or "scan.obj"
   mtlname = mtlname or "scan.mtl"  
   
@@ -356,5 +356,3 @@ function ObjData:save(filename, mtlname)
   mtlf:close()
 
 end
-
-return ObjData

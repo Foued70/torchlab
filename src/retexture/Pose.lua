@@ -1,4 +1,6 @@
 local geom = require "util.geom"
+local loader = require "util.loader"
+local util = require "util.util"
 
 local r2d = 180 / math.pi
 local d2r = math.pi / 180
@@ -12,8 +14,6 @@ function Pose:__init(poses,i)
    if poses.images then
       self.image  = poses.images[i]
    end
-
-   self.cachedir = poses.cachedir
 
    self.quat            = poses.quat[i]
    self.xyz             = poses.xyz[i]
@@ -31,7 +31,6 @@ function Pose:__init(poses,i)
    self.inv_image_w     = 1/self.image_w
    self.inv_image_h     = 1/self.image_h
 end
-
 
 -- Extrinsic Parameters: 
 -- global x,y,z to camera local x,y,z (origin at
@@ -82,7 +81,6 @@ end
 -- + FIXME improve speed : creation with a simple increment if possible. (SLERP)
 
 function Pose:compute_dirs(scale)
-
    if not scale then 
       scale = 1
    end
@@ -109,105 +107,35 @@ function Pose:compute_dirs(scale)
       inh = inh + scale
       inw = 0
    end
-   return self:store_dirs(dirs,scale)
+   return dirs
 end
 
-function Pose:store_dirs(dirs,scale)
-   if not self.dirs then 
-      self.dirs = {}
-   end
-   self.dirs[scale] = dirs
-   return self.dirs[scale]
+function Pose:dirs_file(scale, ps)
+  local f = 'pose-'..self.pid..'_'..self.name..'_s'..scale  
+  if ps then f = f .."_-_grid_".. ps end  
+  f = f..'-dirs.t7'
+  return f
 end
 
--- 
--- Caching
--- 
--- isdependant on pose rotation as well as image width, height, scale and center
-function Pose:load_dirs(scale,ps)
-
-   local image_w = self.image_w
-   local image_h = self.image_h
-
-   local outw = math.ceil(image_w/scale)
-   local outh = math.ceil(image_h/scale)
-
-   local center_x = self.center_x
-   local center_y = self.center_y
-
-   local dirscache   = 
-      string.format("%s/pose_rot_%f_%f_%f_%f_w_%d_h_%d_s_%d_cx_%d_cy_%f",
-                    self.cachedir,
-                    self.quat[1],self.quat[2],self.quat[3],self.quat[4],
-                    image_w,image_h,scale,center_x,center_y)
-   
-   if ps then 
-      dirscache = dirscache .."_-_grid_".. ps
-   end
-   dirscache = dirscache ..".t7"
-
-   local dirs = nil
-   if paths.filep(dirscache) then
-      sys.tic()
-      dirs = torch.load(dirscache)
-      log.trace("Loaded dirs from", dirscache, sys.toc())
-   else
-      sys.tic()
-      if ps then 
-         dirs = util.grid_contiguous(self:compute_dirs(scale),ps,ps)
-      else
-         dirs = self:compute_dirs(scale)
-      end
-      log.trace("Built dirs in", sys.toc())
-      torch.save(dirscache,dirs)
-      log.trace("Saving dirs to", dirscache)
-   end
-   return self:store_dirs(dirs,scale)
+function Pose:build_dirs(scale,ps)  
+  sys.tic()
+  local dirs = nil
+  if ps then
+    dirs = util.grid_contiguous(self:compute_dirs(scale),ps,ps)
+  else
+    dirs = self:compute_dirs(scale)
+  end
+  log.trace("Built dirs in", sys.toc())
+  return dirs
 end
 
 -- loads if needed or return
-function Pose:get_dirs(scale,ps)
-   if not self.dirs then
-      self.dirs = {}
-   end
-   if not self.dirs[scale] then
-      return self:load_dirs(scale,ps)
-   else
-      return self.dirs[scale]
-   end
-end
-
--- is unique for each scale and pose.
-function Pose:load_depth(scale,ps)
-
-   local image_w = self.image_w
-   local image_h = self.image_h
-
-   local outw = math.ceil(image_w/scale)
-   local outh = math.ceil(image_h/scale)
-
-   local center_x = self.center_x
-   local center_y = self.center_y
-
-   local depthcache   = self.cachedir .. 
-      "orig_"..image_w.."x"..image_h.."_-_"..
-      "scaled_"..outw.."x"..outh.."_-_"..
-      "center_"..center_x.."x"..center_y
-
-   depthcache = depthcache ..".t7"
-
-   local depthmap = nil
-   if paths.filep(depthcache) then
-      sys.tic()
-      depthmap = torch.load(depthcache)
-      log.trace("Loaded depths from", depthcache, sys.toc())
-      if not self.depthmap then
-         self.depthmap = {}
-      end
-      self.depthmap[scale] = depthmap
-   else
-      log.trace("No depth map found")
-   end
+function Pose:get_dirs(scale, ps)
+  self.dirs = self.dirs or {}
+  if not self.dirs[scale] then 
+    self.dirs[scale] = loader(self:dirs_file(scale, ps), self.build_dirs, self, scale, ps)
+  end
+  return self.dirs[scale]  
 end
 
 function Pose:draw_wireframe (obj)
