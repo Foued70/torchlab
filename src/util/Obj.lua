@@ -283,28 +283,31 @@ function Obj:save(filename, mtlname)
   objf:write(string.format("mtllib %s\n\n", paths.basename(mtlname)))
   
   -- print vertices
+  log.trace('writing verts', self.n_verts)  
   local verts = self.verts
   for vert_idx = 1,self.n_verts do 
      local vert = verts[vert_idx]
      objf:write(string.format("v %f %f %f\n",vert[1],vert[2],vert[3]))
   end
-
+  
   -- print uvs
+  log.trace('writing uvs', self.n_uvs)  
   local uvs = self.uvs
   objf:write("\n")
   for uv_idx = 1,self.n_uvs do 
     local uv = uvs[uv_idx]
     objf:write(string.format("vt %f %f\n", uv[1], uv[2]))
   end
-
+  
   -- faces
+  log.trace('writing faces', self.n_faces)    
   local faces = self.faces
   objf:write("\n")  
   
   local materials = self.materials
   local submeshes = self.submeshes
   local n_verts_per_face = self.n_verts_per_face
-  
+
   for submesh_idx=1, submeshes:size()[1] do
     local submesh = submeshes[submesh_idx]
     objf:write("\n")
@@ -332,6 +335,7 @@ function Obj:save(filename, mtlname)
   objf:close()
   
   local mtlf = assert(io.open(mtlname, "w"))  
+  log.trace('writing materials', #materials)  
   for i=1, #materials do
     local material = materials[i]
     write_mtl_prop(mtlf, material, 'name', 'newmtl')
@@ -352,5 +356,6 @@ function Obj:save(filename, mtlname)
     mtlf:write("\n")
   end
   mtlf:close()
-
+  
+  log.trace('obj saved', filename)
 end
