@@ -96,24 +96,10 @@ function p3p.compute_poses (world_pts,camera_angles)
    -- axis at (0,0,1) ??) update to handle our internal spherical
    -- coordinates.  For now: convert azimuth and elevation to
    -- cartesian unit sphere
-   local angles   = camera_angles
 
-   local azimuth   = angles[{{},1}]
-   local elevation = angles[{{},2}]
-
-   
-   local unit_vec = torch.Tensor(3,3)
-   -- Z is forward ??
-   local sin_elevation = torch.sin(elevation)
-   
-   -- x = cos(azimuth) * sin(elevation) 
-   unit_vec[{{},1}]  = torch.cos(azimuth):cmul(sin_elevation)
-   -- y = sin(azimuth) * sin(elevation) 
-   unit_vec[{{},2}]  = torch.sin(azimuth):cmul(sin_elevation)
-   -- z = cos(elevation) 
-   unit_vec[{{},3}]  = torch.cos(elevation)
-
-   local f1 = unit_vec[1]
+   local unit_vec = 
+      geom.spherical_coords_to_unit_cartesian(camera_angles)
+   local f1 = unit_vec[1] 
    local f2 = unit_vec[2]
    local f3 = unit_vec[3]
 

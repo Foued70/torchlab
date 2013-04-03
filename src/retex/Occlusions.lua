@@ -5,17 +5,18 @@ require 'sys'
 require 'paths'
 require 'math'
 
-local Poses = require 'Poses'
-
 local loader = require 'util.loader'
 local Ray = require 'util.Ray'
 local bihtree = require 'util.bihtree'
 local interpolate = require 'util.interpolate'
 
+local Poses = retex.Poses
+
+-- TODO: refactor output dir 
 local output_dir = paths.concat(paths.dirname(paths.thisfile()), 'output')
 sys.execute("mkdir -p " .. output_dir)
 
-local Occlusions = torch.class('Occlusions')
+local Occlusions = Class()
 
 function Occlusions:__init(posefile, targetfile, scale, packetsize)
   if not posefile or not targetfile then error('arguments invalid') end
@@ -53,7 +54,7 @@ function Occlusions:file(pose)
   return paths.concat(output_dir, occ_file)
 end
 
-function Occlusions:calc()   
+function Occlusions:calc()
   local poses = loader(self.posefile, Poses.new)
   local target = loader(self.targetfile, util.Obj.new)
   local occlusions = {}
@@ -64,7 +65,7 @@ function Occlusions:calc()
   
   for pi = 1, poses.nposes do
     local pose     = poses[pi]
-    local dirs     = pose:get_dirs(self.scale,packetsize)
+    local dirs     = pose:get_dirs(self.scale,self.packetsize)
 
     local out_tree = torch.Tensor(dirs:size(1),dirs:size(2))
     local fid_tree = torch.LongTensor(dirs:size(1),dirs:size(2))
@@ -106,6 +107,3 @@ function Occlusions:calc()
   
   self.occlusions = occlusions
 end
-
-
-return Occlusions

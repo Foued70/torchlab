@@ -323,6 +323,30 @@ function quaternion_from_axis_angle(rot_axis, rot_angle, quat)
    return quat
 end
 
+-- input:  Nx2 tensor of azimuth and elevation for a set of points
+-- output: Nx3 tensor of unit cartesian vectors
+-- these are in camera coords
+--    x : right
+--    y : forward
+--    z : up
+function spherical_coords_to_unit_cartesian(angles)
+
+   local azimuth   = angles[{{},1}]
+   local elevation = angles[{{},2}]
+   
+   local unit_vec = torch.Tensor(angles:size(1),3)
+   local cos_elevation = torch.cos(elevation)
+   
+   -- right = sin(azimuth) * cos(elevation) 
+   unit_vec[{{},1}]  = torch.sin(azimuth):cmul(cos_elevation)
+   -- forward = cos(azimuth) * cos(elevation) 
+   unit_vec[{{},2}]  = torch.cos(azimuth):cmul(cos_elevation)
+   -- up = sin(elevation)  or cos(pi/2 - elevation) == cos(polar)
+   unit_vec[{{},3}]  = torch.sin(elevation)
+
+   return unit_vec
+end
+
 -- FIXME make tests as this function seems to invert results for
 -- simple axis-aligned plane intersections
 
