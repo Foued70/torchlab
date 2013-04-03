@@ -50,7 +50,7 @@ function LensSensor:__init(lens_sensor,img)
       local h = self.sensor_h
       local aspect_ratio = w/h
       local diag_norm = math.sqrt(w*w + h*h) / (2 * self.focal)
-      local horz_norm, vert_norm = projection.derive_hw(diag_norm,aspect_ratio)
+      local vert_norm, horz_norm = projection.derive_hw(diag_norm,aspect_ratio)
       printf(" -- normalized : diag: %f h: %f v: %f", diag_norm, horz_norm, vert_norm)
 
       local dfov
@@ -319,26 +319,28 @@ end
 -- Output: world angles (horizontal and vertical) or (azimuth and elevation)
 -- 
 function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
-   local normalized_pts
+   local normalized_pts = img_pts:clone()
 
    -- put points in normalized coordinates. 
    if (pt_type == "uv") then
-      -- need homogeneous coords for uv ...
-      normalized_pts  = torch.Tensor(img_pts:size(1),3):fill(-1)
       -- put image space -1,1 in x and -1,1 in y into normalized
       -- coordinates computed when calibrating the lens.
-      normalized_pts:narrow(2,1,2):copy(img_pts)
-      normalized_pts[{{},1}]:mul(self.horizontal_normalized)
-      normalized_pts[{{},2}]:mul(self.vertical_normalized)
+      -- 1) apply the calibrated center to adjust position of 0,0
+      local xoff = -1 + (2 * self.center_x / self.image_w)
+      local yoff = -1 + (2 * self.center_y / self.image_h)
+      -- 2) scale
+      normalized_pts[{{},1}]:add(xoff):mul(self.horizontal_normalized)
+      normalized_pts[{{},2}]:add(yoff):mul(self.vertical_normalized)
       
    elseif (pt_type == "pixel_space") then
-      normalized_pts  = torch.Tensor(img_pts:size(1),3):fill(-1)
       normalized_pts[{{},1}]:mul(self.horizontal_normalized)
       normalized_pts[{{},2}]:mul(self.vertical_normalized)
       
    else -- normalized
-      print("-- points already in normalized coordinates")
-      normalized_pts = img_pts
+      -- do nothing
+      if debug then 
+         print("-- points already in normalized coordinates") 
+      end
    end
 
    -- compute diagonal distances
@@ -348,14 +350,22 @@ function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
    ysqr:cmul(ysqr)
    local d = torch.add(xsqr,ysqr)
    d:sqrt()
+   d:mul(self.cal_focal_px) -- put d in pixel coords
+
+   -- keep track of the sign
+   normalized_pts:sign()
 
    -- apply the lens transform
-   local dangles = 
-      projection.compute_diagonal_fov(d, self.lens_type, self.invpol)
+   local diagonal_angles = 
+      projection.compute_diagonal_fov(d, self.lens_type, self.pol)
 
    -- convert diagonal angle to spherical coordinates
-   return projection.derive_hw(dangles,self.aspect_ratio) 
-
+   local elevation,azimuth = projection.derive_hw(diagonal_angles,self.aspect_ratio) 
+   local spherical_angles = torch.Tensor(elevation:size(1),2)
+   spherical_angles[{{},1}] = azimuth
+   spherical_angles[{{},2}] = elevation
+   spherical_angles:cmul(normalized_pts) -- put the sign
+   return spherical_angles
 end
 
 return LensSensor

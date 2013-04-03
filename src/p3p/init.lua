@@ -93,7 +93,7 @@ function p3p.compute_poses (world_pts,camera_angles)
    -- 
    -- FIXME current code expects this data on Unit Cartesian Sphere
    -- (Directions on unit sphere in camera coordinates with optical
-   -- axis at (0,0,1)) update to handle our internal spherical
+   -- axis at (0,0,1) ??) update to handle our internal spherical
    -- coordinates.  For now: convert azimuth and elevation to
    -- cartesian unit sphere
    local angles   = camera_angles
@@ -101,14 +101,21 @@ function p3p.compute_poses (world_pts,camera_angles)
    local azimuth   = angles[{{},1}]
    local elevation = angles[{{},2}]
 
+   
+   local unit_vec = torch.Tensor(3,3)
+   -- Z is forward ??
    local sin_elevation = torch.sin(elevation)
-  
-   -- x = cos(azimuth) * sin(elevation)
-   local f1  = torch.cos(azimuth):cmul(sin_elevation)
-   -- y = sin(azimuth) * sin(elevation)
-   local f2  = torch.sin(azimuth):cmul(sin_elevation)
-   -- z = cos(elevation
-   local f3  = torch.cos(elevation)
+   
+   -- x = cos(azimuth) * sin(elevation) 
+   unit_vec[{{},1}]  = torch.cos(azimuth):cmul(sin_elevation)
+   -- y = sin(azimuth) * sin(elevation) 
+   unit_vec[{{},2}]  = torch.sin(azimuth):cmul(sin_elevation)
+   -- z = cos(elevation) 
+   unit_vec[{{},3}]  = torch.cos(elevation)
+
+   local f1 = unit_vec[1]
+   local f2 = unit_vec[2]
+   local f3 = unit_vec[3]
 
    -- Create intermediate camera frame
    camT = torch.Tensor(3,3)
@@ -121,7 +128,8 @@ function p3p.compute_poses (world_pts,camera_angles)
 
    -- Swap first 2 vectors and worldpoints to keep theta between 0 and
    -- pi. (See paper p.2972 and Figure 4 for explanation).
-   if (pf3[3] > 0) then 
+   if (pf3[3] > 0) then
+      print("Swapping") 
       local tmp = f1
       f1 = f2
       f2 = tmp
@@ -137,9 +145,9 @@ function p3p.compute_poses (world_pts,camera_angles)
       p2p1 = p2 - p1 
       p3p1 = p3 - p1
    end
-
+   
    -- Create intermediate world frame
-   local worldT = torch.Tensor(3,3)
+   worldT = torch.Tensor(3,3)
    worldT[1] = p2p1
    geom.normalize(worldT[1])
    
@@ -147,7 +155,6 @@ function p3p.compute_poses (world_pts,camera_angles)
    geom.normalize(worldT[3])
    
    worldT[2] = torch.cross(worldT[3],worldT[1])
-
    local pp3 = worldT*p3p1
 
    local pointData = torch.Tensor(6)
@@ -183,7 +190,17 @@ function p3p.compute_poses (world_pts,camera_angles)
                        torch.data(pointData),
                        torch.data(real_roots))
                      
-    
+   -- return solutions to world coordinate frame
+   for si = 1,4 do
+      C = solutions[si][1]
+      R = solutions[si]:narrow(1,2,3)
+      -- C = P1 + N.T()*C
+      C:copy(p1 + (worldT:t()*C)) 
+      -- R = N.T()*R.T()*T 
+      local temp = worldT:t()*R:t()*camT
+      R:copy(temp:t())
+   end
+
    -- FIXME (perhaps?) return best solution
    return solutions
 end
