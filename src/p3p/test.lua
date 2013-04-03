@@ -31,6 +31,7 @@ img = image.load(data[1][1].image_path)
 
 -- load lens calibration
 lens = LensSensor.new("nikon_10p5mm_r2t_full",img)
+-- lens = LensSensor.new("nikon_D5100_w10p5mm",img)
 
 rot_error = 0 
 trans_error = 0 
@@ -57,7 +58,13 @@ for si,sweep in pairs(data) do
          pw = photo.world
          pa = photo.angles
          print(photo.uv)
-         print(pa)
+         r2d = 180/math.pi
+         print(pa * r2d)
+         test_corners = torch.Tensor({{-1,-1},{-1,1},{1,-1},{1,1}})
+         test_angles = lens:img_coords_to_world_angle(test_corners,"uv")
+         print("test angles")
+         print(test_angles * r2d)
+         printf("lens: hfov: %f vfov: %f", lens.hfov*r2d, lens.vfov*r2d)
          solutions = p3p.compute_poses(photo.world,photo.angles)
 
          local trans_err = 1e16 

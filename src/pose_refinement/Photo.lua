@@ -54,6 +54,15 @@ function Photo:calibration_complete()
   return (self.pairs_calibrated == REQUIRED_CALIBRATION_PAIRS)
 end
 
+function Photo:delete_calibration_pair(pair_index)
+  for i = pair_index + 1, self.pairs_calibrated do
+    self.calibration_pairs[i-1]:copy(self.calibration_pairs[i])
+  end
+
+  self.calibration_pairs[self.pairs_calibrated]:fill(0)
+  self.pairs_calibrated = self.pairs_calibrated - 1
+end
+
 function Photo:image_loaded()
   return (self.image_data_raw ~= nil) and (self.image_data_rectilinear ~= nil)
 end

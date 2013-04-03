@@ -35,9 +35,9 @@ function test.get_index_lt_val()
    function eval_test(r,val,verbose)
       local idx,count = util.get_index_lt_val(r,val)
       local err = 0
-      if (idx > 0) then
-         local cval = r[idx]
-         local nval = r[idx+1]
+      if (idx > 1) then
+         local cval = r[idx-1]
+         local nval = r[idx]
          if (cval < val) and (nval >= val) then
             if verbose then
                printf("  OK idx: %d val: %f count: %d", idx, val, count)

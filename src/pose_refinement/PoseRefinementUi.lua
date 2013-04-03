@@ -133,10 +133,17 @@ function PoseRefinementUi:init_event_handling()
   qt.connect(self.widget.button_previous, 'clicked()', function() self:previous_camera() end)
   qt.connect(self.widget.button_next, 'clicked()', function() self:next_camera() end)
   qt.connect(self.widget.check_box_white_wall, 'clicked()', function() self:set_white_wall_status(self.widget.check_box_white_wall.checked) end)
+  qt.connect(self.widget.button_delete_calibration_pair, 'clicked()', function() self:delete_last_calibration_pair() end)
+end
+
+function PoseRefinementUi:delete_last_calibration_pair()
+  self.scan.sweeps[self.current_sweep].photos[self.current_photo]:delete_calibration_pair(self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated)
+  self:update_ui_info()
 end
 
 function PoseRefinementUi:set_white_wall_status(status)
   self.scan.sweeps[self.current_sweep].photos[self.current_photo].white_wall = status
+  self:update_ui_info()
 end
 
 function PoseRefinementUi:previous_camera()
@@ -179,20 +186,17 @@ function PoseRefinementUi:update_ui_info()
   self.widget.sweep_info:setText(string.format("%d/%d", self.current_sweep, #self.scan.sweeps)) 
   self.widget.photo_info:setText(string.format("%d/%d", self.current_photo, #self.scan.sweeps[self.current_sweep].photos)) 
 
-  --[[
+  
   local pair_matrix = self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs
 
-  local pair_matrix_string = ""
-  for i=1, pair_matrix:size(1) do
+  local pair_matrix_string = "Calibration Pairs:\n"
+  for i=1, self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated do
     for j=1, pair_matrix:size(2) do
       pair_matrix_string = pair_matrix_string .. string.format("%2.2f", pair_matrix[i][j]) .. " "
     end
     pair_matrix_string = pair_matrix_string .. "\n"
   end
-  self.widget.calibration_matrix_info:setText(pair_matrix_string)
-
-  self.widget.calibration_info:setText(string.format("%s %d/%d", "Pairs Set:", self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated, self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs:size(1))) 
-  ]]--
+  self.widget.calibration_pair_info:setText(pair_matrix_string)
 end
 
 function PoseRefinementUi:select_vertex(mouse_x, mouse_y)
@@ -364,17 +368,17 @@ end
 
 function PoseRefinementUi:init_calibration()
   if (self.scan_folder == nil) then
-    --log.trace("Failed to start calibration. No scan folder set.")
-    --return false
+    log.trace("Failed to start calibration. No scan folder set.")
+    return false
     --For Testing, use a default for immidiate startup
-    self.scan_folder = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen'
+    --self.scan_folder = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen'
   end
 
   if (self.pose_file == nil) then
-    --log.trace("Failed to start calibration. No pose file set.")
-    --return false
+    log.trace("Failed to start calibration. No pose file set.")
+    return false
     --For Testing, use a default for immidiate startup
-    self.pose_file = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen/scanner371_job286000_texture_info.txt'
+    --self.pose_file = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen/scanner371_job286000_texture_info.txt'
   end
 
   log.trace("Loading scan at", sys.clock())
@@ -415,8 +419,8 @@ function PoseRefinementUi:init_calibration()
   self.gl_viewport.renderer:create_camera('wireframe_camera')
   self.gl_viewport.renderer:create_camera('vertex_highlight_camera')
 
-  self.current_sweep = 3
-  self.current_photo = 8
+  self.current_sweep = 1
+  self.current_photo = 1
   self:update_photo_pass()
   self:update_ui_info()
   self:resize_viewport_by_photo(self.scan.sweeps[self.current_sweep].photos[self.current_photo])
@@ -441,12 +445,9 @@ function PoseRefinementUi:update_viewport_passes()
   local camera_rotation = nil
 
   camera_position, camera_rotation = self.scan.sweeps[self.current_sweep]:calculate_camera_world(self.current_photo)
-  --camera_position = torch.Tensor({3.276560, -2.5, 1.78})
-  --camera_rotation = torch.Tensor({0.031647, 0.023114, 0.731051, -0.681197})
 
   local forward_vector = torch.Tensor({0,1,0})
   local look_direction = geom.rotate_by_quat(forward_vector, camera_rotation)
-  log.trace(look_direction:norm())
 
   local camera_eye = camera_position
   local camera_center = camera_eye + look_direction

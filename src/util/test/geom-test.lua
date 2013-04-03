@@ -350,6 +350,55 @@ function test.compute_normals()
                        e,cnt, maxerr,sys.toc()))
 end
 
+function test.spherical_coords_to_unit_cartesian()
+   print("Testing spherical_coords_to_unit_cartesian")
+   local pi  = math.pi
+   local pi2 = math.pi / 2
+   local pi4 = math.pi / 4
+   local sp4 = math.sin(pi4)
+   local angles = torch.Tensor(
+      {
+         {   0,    0}, -- right:  0 forward: 1 up:  0 
+         { pi2,    0}, -- right:  1 forward: 0 up:  0 
+         {-pi2,    0}, -- right: -1 forward: 0 up:  0 
+         {   0,  pi2}, -- right:  0 forward: 0 up:  1 
+         {   0, -pi2}, -- right:  0 forward: 0 up: -1 
+         { pi2,  pi2}, -- right:  0 forward: 0 up:  1 
+         {-pi2, -pi2}, -- right:  0 forward: 0 up: -1 
+         { pi2, -pi2}, -- right:  0 forward: 0 up: -1 
+         {-pi2,  pi2}, -- right:  0 forward: 0 up:  1 
+         {  pi,   pi}, -- right:  0 forward: 1 up:  0 
+         { pi2,   pi}, -- right: -1 forward: 0 up:  0 
+         {-pi2,   pi}, -- right:  1 forward: 0 up:  0 
+         {  pi,  pi2}, -- right:  0 forward: 0 up:  1 
+         {  pi, -pi2}, -- right:  0 forward: 0 up: -1 
+      })
+   
+   local unit = geom.spherical_coords_to_unit_cartesian(angles)
+   
+   local unit_check = torch.Tensor(
+      {
+         { 0,1, 0}, --    0,  0
+         { 1,0, 0}, --  pi2,  0
+         {-1,0, 0}, -- -pi2,  0
+         { 0,0, 1}, --    0,  pi2
+         { 0,0,-1}, --    0, -pi2
+         { 0,0, 1}, --  pi2,  pi2
+         { 0,0,-1}, -- -pi2, -pi2
+         { 0,0,-1}, --  pi2, -pi2
+         { 0,0, 1}, -- -pi2,  pi2
+         { 0,1, 0}, --   pi,  pi
+         {-1,0, 0}, --  pi2,  pi
+         { 1,0, 0}, -- -pi2,  pi
+         { 0,0, 1}, --   pi,  pi2
+         { 0,0,-1}, --   pi, -pi2
+      })
+   
+   local error = unit:dist(unit_check,1)
+   if error < 1e-8 then error = 0 end
+   print(string.format(" - Found %d errors", error)) 
+end
+
 function test.all()
    test.quaternion_from_to()
    test.quat2rot()
@@ -364,6 +413,7 @@ function test.all()
    test.ray_plane_intersection()
    test.ray_face_intersection()
    test.compute_normals()
+   test.spherical_coords_to_unit_cartesian()
 end
 
 return test
