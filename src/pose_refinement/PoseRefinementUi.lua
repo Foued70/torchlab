@@ -133,10 +133,17 @@ function PoseRefinementUi:init_event_handling()
   qt.connect(self.widget.button_previous, 'clicked()', function() self:previous_camera() end)
   qt.connect(self.widget.button_next, 'clicked()', function() self:next_camera() end)
   qt.connect(self.widget.check_box_white_wall, 'clicked()', function() self:set_white_wall_status(self.widget.check_box_white_wall.checked) end)
+  qt.connect(self.widget.button_delete_calibration_pair, 'clicked()', function() self:delete_last_calibration_pair() end)
+end
+
+function PoseRefinementUi:delete_last_calibration_pair()
+  self.scan.sweeps[self.current_sweep].photos[self.current_photo]:delete_calibration_pair(self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated)
+  self:update_ui_info()
 end
 
 function PoseRefinementUi:set_white_wall_status(status)
   self.scan.sweeps[self.current_sweep].photos[self.current_photo].white_wall = status
+  self:update_ui_info()
 end
 
 function PoseRefinementUi:previous_camera()
@@ -179,20 +186,17 @@ function PoseRefinementUi:update_ui_info()
   self.widget.sweep_info:setText(string.format("%d/%d", self.current_sweep, #self.scan.sweeps)) 
   self.widget.photo_info:setText(string.format("%d/%d", self.current_photo, #self.scan.sweeps[self.current_sweep].photos)) 
 
-  --[[
+  
   local pair_matrix = self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs
 
-  local pair_matrix_string = ""
-  for i=1, pair_matrix:size(1) do
+  local pair_matrix_string = "Calibration Pairs:\n"
+  for i=1, self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated do
     for j=1, pair_matrix:size(2) do
       pair_matrix_string = pair_matrix_string .. string.format("%2.2f", pair_matrix[i][j]) .. " "
     end
     pair_matrix_string = pair_matrix_string .. "\n"
   end
-  self.widget.calibration_matrix_info:setText(pair_matrix_string)
-
-  self.widget.calibration_info:setText(string.format("%s %d/%d", "Pairs Set:", self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated, self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs:size(1))) 
-  ]]--
+  self.widget.calibration_pair_info:setText(pair_matrix_string)
 end
 
 function PoseRefinementUi:select_vertex(mouse_x, mouse_y)
