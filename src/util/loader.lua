@@ -32,4 +32,4 @@ local function loader(file, init_fn, ...)
   return object
 end
 
-return loader;
+return loader
