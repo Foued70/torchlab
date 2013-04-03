@@ -162,7 +162,8 @@ function rotation_matrix_to_quaternion (rmat, quat)
       qsign[4] = rmat[2][1] - rmat[1][2]
 
    else
-      error("Bad input perhaps not a rotation matrix?")
+      print("Bad input perhaps not a rotation matrix?")
+      return nil
    end
 
    qsign:sign() -- convert to just +1,-1
@@ -172,6 +173,15 @@ function rotation_matrix_to_quaternion (rmat, quat)
    normalize(quat)
 
    return quat
+end
+
+
+-- if two quaternions are equal they will rotate a vector the same distance
+local quaternion_dist_testvec = normalize(torch.Tensor({1,1,1}))
+function quaternion_dist(quat1, quat2)
+   local vec1 = rotate_by_quat(quaternion_dist_testvec, quat1)
+   local vec2 = rotate_by_quat(quaternion_dist_testvec, quat2)
+   return vec1:dist(vec2)
 end
 
 -- rotate a vector around axis by angle radians

@@ -58,7 +58,7 @@ end
 
 
 
-function compute_diagonal_fov(diagonal_normalized,lens_type,params)
+function compute_diagonal_fov(diagonal_normalized,lens_type,params,debug)
    local convert = false
    if (type(diagonal_normalized) == "number") then 
       diagonal_normalized = torch.Tensor({diagonal_normalized})
@@ -68,16 +68,17 @@ function compute_diagonal_fov(diagonal_normalized,lens_type,params)
    if (lens_type == "rectilinear") then
       dfov = torch.atan(diagonal_normalized)   -- diag in rad
    elseif (lens_type == "scaramuzza_r2t") then
-      print(" -- using scaramuzza calibration")
+      if debug then print(" -- using scaramuzza calibration") end
       local d2 = diagonal_normalized:clone()
       dfov = torch.Tensor(d2:size()):fill(params[-1])
       for i = params:size(1)-1,1,-1 do 
          dfov = dfov + d2 * params[i]
          d2:cmul(diagonal_normalized)
       end
+      -- using ideal thoby to compute fov for scaramuzza's original
+      -- code which does not solve for theta. Can remove this eventually.
    elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
-      -- FIXME using ideal thoby to compute fov for scaramuzza
-      print(" -- using lens type: thoby")
+      if debug then print(" -- using lens type: thoby") end
       -- thoby : theta = asin((r/f)/(k1 * f))/k2
       if (diagonal_normalized:max() > k1) then 
          error("diagonal too large for thoby")
@@ -96,15 +97,15 @@ function compute_diagonal_fov(diagonal_normalized,lens_type,params)
       end
 
    elseif (lens_type == "stereographic") then
-      dfov = 2 * torch.atan(diagonal_normalized*0.5 );
+      dfov = 2 * torch.atan(diagonal_normalized*0.5 )
 
    elseif (lens_type == "orthographic") then
       if( diagonal_normalized:max() <= 1 ) then
          dfov = torch.asin( diagonal_normalized )
       end
       if( torch.sum(dfov:eq(0)) > 0) then
-         error( "orthographic FOV too large" );
-      end;
+         error( "orthographic FOV too large" )
+      end
 
    else
       error("don't understand self lens model requested")

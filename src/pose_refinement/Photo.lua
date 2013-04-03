@@ -5,9 +5,9 @@ local util = require "util" -- need printf
 local LensSensor = require "util.LensSensor"
 local projection = require "util.projection"
 
-local Photo = torch.class('Photo')
+local Photo = Class()
 
-local REQUIRED_CALIBRATION_PAIRS = 3
+local REQUIRED_CALIBRATION_PAIRS = 4
 
 function Photo:__init(parent_sweep, image_path)
   self.sweep = parent_sweep

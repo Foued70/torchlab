@@ -27,7 +27,7 @@ function Camera:__init(widget, name)
   self.center = torch.Tensor({0,1,0})
   self.clip_near = 0.0001
   self.clip_far = 1000
-  self.fov_y = math.pi / 4 -- 45 degrees
+  self.vfov = math.pi / 4 -- 45 degrees
 
   -- intermediate direction vectors
   self.look_dir = torch.Tensor({0,1,0})
@@ -54,7 +54,7 @@ end
 function Camera:update_projection_matrix()
   local aspect = self.width / self.height
 
-  local f = 1 / (math.tan(self.fov_y/2))
+  local f = 1 / (math.tan(self.vfov/2))
   
   self.projection_matrix:eye(4)
   self.projection_matrix[{1,1}] = f / aspect
