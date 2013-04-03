@@ -368,17 +368,17 @@ end
 
 function PoseRefinementUi:init_calibration()
   if (self.scan_folder == nil) then
-    --log.trace("Failed to start calibration. No scan folder set.")
-    --return false
+    log.trace("Failed to start calibration. No scan folder set.")
+    return false
     --For Testing, use a default for immidiate startup
-    self.scan_folder = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen'
+    --self.scan_folder = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen'
   end
 
   if (self.pose_file == nil) then
-    --log.trace("Failed to start calibration. No pose file set.")
-    --return false
+    log.trace("Failed to start calibration. No pose file set.")
+    return false
     --For Testing, use a default for immidiate startup
-    self.pose_file = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen/scanner371_job286000_texture_info.txt'
+    --self.pose_file = '/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen/scanner371_job286000_texture_info.txt'
   end
 
   log.trace("Loading scan at", sys.clock())
@@ -419,8 +419,8 @@ function PoseRefinementUi:init_calibration()
   self.gl_viewport.renderer:create_camera('wireframe_camera')
   self.gl_viewport.renderer:create_camera('vertex_highlight_camera')
 
-  self.current_sweep = 3
-  self.current_photo = 8
+  self.current_sweep = 1
+  self.current_photo = 1
   self:update_photo_pass()
   self:update_ui_info()
   self:resize_viewport_by_photo(self.scan.sweeps[self.current_sweep].photos[self.current_photo])
@@ -445,12 +445,9 @@ function PoseRefinementUi:update_viewport_passes()
   local camera_rotation = nil
 
   camera_position, camera_rotation = self.scan.sweeps[self.current_sweep]:calculate_camera_world(self.current_photo)
-  --camera_position = torch.Tensor({3.276560, -2.5, 1.78})
-  --camera_rotation = torch.Tensor({0.031647, 0.023114, 0.731051, -0.681197})
 
   local forward_vector = torch.Tensor({0,1,0})
   local look_direction = geom.rotate_by_quat(forward_vector, camera_rotation)
-  log.trace(look_direction:norm())
 
   local camera_eye = camera_position
   local camera_center = camera_eye + look_direction
