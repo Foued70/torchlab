@@ -1,4 +1,4 @@
-local PoseSlim = torch.class('PoseSlim')
+local PoseSlim = Class()
 
 function PoseSlim:__init(pose_string)
   local pose_values = torch.Tensor(1, 11)

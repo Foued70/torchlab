@@ -24,7 +24,7 @@ function Object.create_mesh(widget, obj_data)
     table.insert(submeshes, {start = sub[1], length = sub[2] - sub[1] + 1, material = materials[sub[3]]})
   end
 
-  return require('ui2.Mesh').new(obj_data.unified_verts, obj_data.faces, submeshes)
+  return require('ui2.Mesh').new(obj_data.unified_verts, obj_data.faces[{{}, {}, 1}], submeshes)
 end
 
 function Object:paint(context)

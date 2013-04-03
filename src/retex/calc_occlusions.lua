@@ -1,5 +1,3 @@
-local Occlusions = require('Occlusions')
-
 -- top level filenames
 cmd = torch.CmdLine()
 cmd:text()
@@ -24,5 +22,5 @@ cmd:text()
 -- parse input params
 local params = cmd:parse(arg)
 
-local occlusions = Occlusions.new(params.posefile, params.targetfile, params.scale, params.packetsize)
+local occlusions = retex.Occlusions.new(params.posefile, params.targetfile, params.scale, params.packetsize)
 occlusions:calc()

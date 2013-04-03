@@ -5,7 +5,7 @@ local util = require "util.util"
 local r2d = 180 / math.pi
 local d2r = math.pi / 180
 
-local Pose = torch.class('Pose')
+local Pose = Class()
 
 function Pose:__init(poses,i)
    self.pid    = i
@@ -172,6 +172,3 @@ function Pose:draw_wireframe (obj)
    end
    return wimage
 end
-
-
-return Pose

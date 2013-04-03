@@ -152,7 +152,7 @@ function Obj:load(filename)
   
   local verts         = torch.Tensor(n_verts, 4):fill(1)
   local uvs           = torch.Tensor(n_uvs, 2):fill(1)  
-  local faces         = torch.IntTensor(n_faces, n_gon):fill(-1) 
+  local faces         = torch.IntTensor(n_faces, n_gon, 3):fill(-1) 
   local face_verts    = torch.Tensor(n_faces, n_gon, 3):fill(1)
   local unified_verts = torch.Tensor(n_faces*n_gon, 9):fill(1) -- n_faces*n_gon is max. we'll trim later.  
   tic('alloc')
@@ -204,10 +204,13 @@ function Obj:load(filename)
           vert_cache[face_vert] = idx
           unified_verts_idx = unified_verts_idx + 1
         end              
-
-        faces[{face_idx, face_vert_idx}] = idx        
-        face_verts[{face_idx, face_vert_idx, {1, 3}}] = vert -- keep the vert value close
         
+        face_verts[{face_idx, face_vert_idx, {1, 3}}] = vert -- shortcut to the vert
+        
+        faces[{face_idx, face_vert_idx, 1}] = idx -- unified_vert index
+        faces[{face_idx, face_vert_idx, 2}] = vert_pos_idx -- vert indx
+        if vert_uv_idx then faces[{face_idx, face_vert_idx, 3}] = vert_uv_idx end -- uv index
+                
         face_vert_idx = face_vert_idx + 1
       end
       
@@ -248,7 +251,7 @@ function Obj:load(filename)
   
   self.verts              = verts -- all unique verts. n_verts x 4
   self.uvs                = uvs -- all unique uvs. n_uvs x 2
-  self.faces              = faces -- all faces with indexes into unified verts. n_faces x n_gon
+  self.faces              = faces -- all faces with indexes into unified verts, verts, and uvs. n_faces x n_gon x 3
   self.face_verts         = face_verts -- all faces with copy of vert data. n_faces x n_gon x 3 (retexture)
   self.unified_verts      = trimmed_unified_verts -- unique pos/texture pairs. ?x9. 4 position + 2 uv + 3 normal (viewer)
   self.submeshes          = torch.IntTensor(submeshes) -- indexes of faces in  a submesh and index into materials. 
@@ -281,23 +284,16 @@ function Obj:save(filename, mtlname)
   
   -- print vertices
   local verts = self.verts
-  local verts_idxs = {}
   for vert_idx = 1,self.n_verts do 
      local vert = verts[vert_idx]
-     verts_idxs[vert[1]] = verts_idxs[vert[1]] or {}
-     verts_idxs[vert[1]][vert[2]] = verts_idxs[vert[1]][vert[2]] or {}
-     verts_idxs[vert[1]][vert[2]][vert[3]] = vert_idx
      objf:write(string.format("v %f %f %f\n",vert[1],vert[2],vert[3]))
   end
 
   -- print uvs
   local uvs = self.uvs
-  local uvs_idxs = {}
   objf:write("\n")
   for uv_idx = 1,self.n_uvs do 
     local uv = uvs[uv_idx]
-    uvs_idxs[uv[1]] = uvs_idxs[uv[1]] or {}
-    uvs_idxs[uv[1]][uv[2]] = uv_idx
     objf:write(string.format("vt %f %f\n", uv[1], uv[2]))
   end
 
@@ -307,7 +303,6 @@ function Obj:save(filename, mtlname)
   
   local materials = self.materials
   local submeshes = self.submeshes
-  local unified_verts = self.unified_verts
   local n_verts_per_face = self.n_verts_per_face
   
   for submesh_idx=1, submeshes:size()[1] do
@@ -322,10 +317,13 @@ function Obj:save(filename, mtlname)
     for face_idx = submesh[1], submesh[2] do                        
       local str = "f "
       for face_vert_idx=1, n_verts_per_face[face_idx] do
-        local unified_vert_idx = faces[face_idx][face_vert_idx]
-        local vert = unified_verts[{unified_vert_idx, {1,3}}]
-        local uv = unified_verts[{unified_vert_idx, {5,6}}]
-        str = str..string.format("%d/%d ", verts_idxs[vert[1]][vert[2]][vert[3]], uvs_idxs[uv[1]][uv[2]])
+        local vert_idx = faces[face_idx][face_vert_idx][2];
+        local uv_idx = faces[face_idx][face_vert_idx][3];    
+        if uv_idx == -1 then
+          str = str..string.format("%d ", vert_idx)    
+        else
+          str = str..string.format("%d/%d ", vert_idx, uv_idx)          
+        end          
       end
       objf:write(str.."\n")
     end

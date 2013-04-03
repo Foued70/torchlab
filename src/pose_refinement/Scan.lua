@@ -2,11 +2,10 @@ require 'torch'
 
 local libui = require 'libui2'
 local paths = require 'paths'
-local config = require 'config'
-local Pose = require 'PoseSlim'
+local config = require 'pose_refinement.config'
 local fs = require 'util.fs'
-local Sweep = require 'Sweep'
-local Scan = torch.class('Scan')
+
+local Scan = Class()
 
 local MODEL_FILE_EXTENSION = '.obj'
 
@@ -85,6 +84,7 @@ function Scan:set_model_file(file_path)
 end
 
 function Scan:load_model_data()
+  log.trace("Loading "..self.model_file.." to as model data.")
   if self.model_file ~= nil then
     self.model_data = util.Obj.new(self.model_file)
     return true
@@ -105,7 +105,7 @@ function Scan:set_sweeps()
   self.sweeps = {}    
   for i, v in ipairs(sweeps_dirs) do
     -- make a sweep for the img dir even if there are no imgs in it b.c. assumption is that sweep idx = pose idx
-    table.insert(self.sweeps, Sweep.new(self, v))
+    table.insert(self.sweeps, pose_refinement.Sweep.new(self, v))
   end
   
   self:init_sweeps_poses()    
@@ -129,7 +129,7 @@ function Scan:set_poses(pose_file)
   self.poses = {}
   local t = f:read("*all")
   for line in string.gmatch(t, "[^\r\n]+") do
-    table.insert(self.poses, Pose.new(line))
+    table.insert(self.poses, pose_refinement.PoseSlim.new(line))
   end
   f:close()
     
