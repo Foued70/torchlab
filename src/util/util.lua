@@ -31,7 +31,7 @@ function util.select_by_index(ind,mat)
 end
 
 -- <vals> sorted list of values
---
+-- 
 -- <val> value for which we want pointer into list where everything
 --       before pointer is < val and after >= val
 
@@ -53,6 +53,12 @@ function util.get_index_lt_val(vals,val)
             break
          end
       end
+   end
+   if val <= torch.min(vals) then 
+      return 1,0 
+   end
+   if val >= torch.max(vals) then 
+      return vals:size(1),0 
    end
    -- O(log(n)) code which had some edge cases
    while true do
