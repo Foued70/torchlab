@@ -88,16 +88,19 @@ function Renderer:render()
   end
 end
 
-function Renderer:create_camera(name, width, height, fov_y, eye, center)
+function Renderer:create_camera(name, width, height, vfov, eye, center)
   local camera = require('ui2.Camera').new(self, name)
-  if fov_y then camera.fov_y = fov_y end
-  local eye_position = eye or torch.Tensor({0,0,0})
-  local center_position = center or torch.Tensor({0,1,0})
 
-  camera:set_eye(eye_position[1], eye_position[2], eye_position[3])
-  camera:set_center(center_position[1], center_position[2], center_position[3])
+  local camera_width = width or self.cameras.viewport_camera.width
+  local camera_height = height or self.cameras.viewport_camera.height
+  local camera_vfov = vfov or self.cameras.viewport_camera.vfov
+  local camera_eye = eye or torch.Tensor({0,0,0})
+  local camera_center = center or torch.Tensor({0,1,0})
 
-  camera:resize(width, height)
+  camera.vfov = camera_vfov
+  camera:resize(camera_width, camera_height)
+  camera:set_eye(camera_eye[1], camera_eye[2], camera_eye[3])
+  camera:set_center(camera_center[1], camera_center[2], camera_center[3])
   camera:update()
   self.cameras[camera.name] = camera
   log.trace("Created camera", name)
@@ -127,6 +130,7 @@ function Renderer:activate_scene(scene_name)
     return
   end
   self.active_scene = self.scenes[scene_name]
+  log.trace("Scene "..scene_name.." activated.")
 end
 
 function Renderer:create_shader(name)

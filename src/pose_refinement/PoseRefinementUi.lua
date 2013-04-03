@@ -7,15 +7,15 @@ require 'qt'
 
 local geom = require 'util.geom'
 local libui = require 'libui2'
-local config = require 'ui2/pp_config'
-local Scan = require 'Scan'
+local config = require 'ui2.pp_config'
 
-local PoseRefinementUi = torch.class('PoseRefinementUi')
+local PoseRefinementUi = Class()
 
 function PoseRefinementUi:__init()
   self.gl_viewport = nil
-  self.viewport_width = nil
-  self.viewport_height = nil
+  self.viewport_size = torch.Tensor(2)
+  self.viewport_vfov = nil
+
   self.highlighted_vertex = nil
 
   self.scan_folder = nil
@@ -27,7 +27,7 @@ function PoseRefinementUi:__init()
   self.description = paths.thisfile('pose_refinement.ui')
 
   self.widget = qtuiloader.load(self.description)
-  self.painter = qt.QtLuaPainter(self.widget.calibration_view)
+  self.painter = qt.QtLuaPainter(self.widget.viewport_container.viewport)
 
   self.layers = {}
   self.magnifier = nil
@@ -68,9 +68,11 @@ function PoseRefinementUi:init_event_handling()
       elseif mouse_button == 'RightButton' then
         self.mouse_right_down = true
         self.widget.cursor = qt.QCursor.new("BlankCursor")
-        self.mouse_start = torch.Tensor({x,y})
-        self.mouse_last = torch.Tensor({x,y})
-        self.mouse_slowed = torch.Tensor({x,y})
+
+        local cursor_pos = qt.QPoint.totable(self.widget.cursor:pos())
+        self.mouse_start_global = torch.Tensor({cursor_pos.x, cursor_pos.y})
+        self.mouse_start_local = self:window_to_viewport_pixels(x,y)
+        self.mouse_slowed_local = torch.Tensor(2):copy(self.mouse_start_local)
       end
     end )
 
@@ -85,16 +87,21 @@ function PoseRefinementUi:init_event_handling()
         self.mouse_left_down = false
       elseif mouse_button == 'RightButton' then
         if self.gl_viewport ~= nil then
+          local mouse_position = torch.Tensor(2)
+          mouse_position[1] = self.widget.main_frame.x + self.widget.main_frame.viewport_container.x + self.widget.main_frame.viewport_container.viewport.x + self.mouse_slowed_local[1]
+          mouse_position[2] = self.widget.main_frame.y + self.widget.main_frame.viewport_container.y + self.widget.main_frame.viewport_container.viewport.y + self.mouse_slowed_local[2]
+          self:select_image_coordinate(mouse_position[1], mouse_position[2])
 
-          local window_position = qt.QPoint.totable(self.widget.pos)
-          window_position.x = window_position.x + self.mouse_slowed[1] + self.widget.calibration_view.x
-          window_position.y = window_position.y + self.mouse_slowed[2] + self.widget.calibration_view.y
-          self:select_image_coordinate(self.mouse_slowed[1],self.mouse_slowed[2])
-          self.widget.cursor.setPos(qt.QPoint(window_position))
+          --Oddly, mouse position must be set gobally, in pixel coordinates of the monitor, not the application. 
+          --Because OS window decoration cannot be predicted, the offset is being used to calculate the end.
+          local mouse_move_delta = self.mouse_slowed_local - self.mouse_start_local
+          local mouse_end_global = self.mouse_start_global + mouse_move_delta
+          self.widget.cursor.setPos(qt.QPoint({x=mouse_end_global[1], y=mouse_end_global[2]}))
+          
           self.widget.cursor = qt.QCursor.new("CrossCursor")
-          self.mouse_start = nil
-          self.mouse_last = nil
-          self.mouse_slowed = nil
+          self.mouse_start_global = nil
+          self.mouse_start_local = nil
+          self.mouse_slowed_local = nil
         end
         self.highlighted_vertex = nil
         self.mouse_right_down = false
@@ -108,17 +115,14 @@ function PoseRefinementUi:init_event_handling()
       if self.mouse_left_down == true then
         self:mouse_to_viewport_screenspace(x, y, self.mouse_left_end)
       elseif self.mouse_right_down == true then
-        if (self.mouse_last[1]~=x) or (self.mouse_last[2]~=y) then
-          self.mouse_last[1] = x
-          self.mouse_last[2] = y
+        local mouse_current = self:window_to_viewport_pixels(x,y)
+        local mouse_delta = mouse_current - self.mouse_start_local
+        torch.mul(mouse_delta, mouse_delta, 0.01)
+        torch.add(self.mouse_slowed_local, self.mouse_slowed_local, mouse_delta)
 
-          local mouse_delta = torch.Tensor({x,y}) - self.mouse_start
-          torch.mul(mouse_delta, mouse_delta, 0.05)
-          log.trace("mouse_delta", mouse_delta)
-          torch.add(self.mouse_slowed, self.mouse_start, mouse_delta)
-          log.trace("mouse_slowed", self.mouse_slowed)
-          self:update_magnifier(2.0, 1, self.mouse_slowed[1]-self.widget.calibration_view.x, self.mouse_slowed[2]-self.widget.calibration_view.y, 200, 200)
-        end
+        self:update_magnifier(2.0, 1, self.mouse_slowed_local[1], self.mouse_slowed_local[2], 200, 200)
+
+        self.widget.cursor.setPos(qt.QPoint({x=self.mouse_start_global[1], y=self.mouse_start_global[2]}))
       end
     end )
 
@@ -172,10 +176,10 @@ function PoseRefinementUi:next_camera()
 end
 
 function PoseRefinementUi:update_ui_info()
-  self.widget.sweep_info:setText(string.format("%s %d/%d", "Current Sweep:", self.current_sweep, #self.scan.sweeps)) 
-  self.widget.photo_info:setText(string.format("%s %d/%d", "Current Photo:", self.current_photo, #self.scan.sweeps[self.current_sweep].photos)) 
+  self.widget.sweep_info:setText(string.format("%d/%d", self.current_sweep, #self.scan.sweeps)) 
+  self.widget.photo_info:setText(string.format("%d/%d", self.current_photo, #self.scan.sweeps[self.current_sweep].photos)) 
 
-
+  --[[
   local pair_matrix = self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs
 
   local pair_matrix_string = ""
@@ -188,6 +192,7 @@ function PoseRefinementUi:update_ui_info()
   self.widget.calibration_matrix_info:setText(pair_matrix_string)
 
   self.widget.calibration_info:setText(string.format("%s %d/%d", "Pairs Set:", self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated, self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs:size(1))) 
+  ]]--
 end
 
 function PoseRefinementUi:select_vertex(mouse_x, mouse_y)
@@ -277,15 +282,27 @@ function PoseRefinementUi:select_image_coordinate(mouse_x, mouse_y)
   end
 end
 
+function PoseRefinementUi:window_to_viewport_pixels(x, y, res)
+  if res == nil then
+    res = torch.Tensor(2)
+  end
+
+  res[1] = x - (self.widget.main_frame.x + self.widget.main_frame.viewport_container.x + self.widget.main_frame.viewport_container.viewport.x)
+  res[2] = y - (self.widget.main_frame.y + self.widget.main_frame.viewport_container.y + self.widget.main_frame.viewport_container.viewport.y)
+  return res
+end
+
 function PoseRefinementUi:mouse_to_viewport_screenspace(mouse_x, mouse_y, res)
   if not self.gl_viewport then return nil end
+
+  local viewport_pixels = self:window_to_viewport_pixels(mouse_x, mouse_y)
 
   if res == nil then
     res = torch.Tensor(2)
   end
-  
-  res[1] = (((mouse_x-self.widget.calibration_view.x)/self.gl_viewport.renderer.cameras.vertex_highlight_camera.width)-0.5)*2
-  res[2] = -(((mouse_y-self.widget.calibration_view.y)/self.gl_viewport.renderer.cameras.vertex_highlight_camera.height)-0.5)*2 --flip y
+
+  res[1] = ((viewport_pixels[1] / self.viewport_size[1])-0.5)*2
+  res[2] = ((1.0-(viewport_pixels[2] / self.viewport_size[2]))-0.5)*2 
 
   if (res[1] > 1) or (res[1] < -1) or (res[2] > 1) or (res[2] < -1) then
     return nil
@@ -293,12 +310,14 @@ function PoseRefinementUi:mouse_to_viewport_screenspace(mouse_x, mouse_y, res)
   return res
 end
 
-function PoseRefinementUi:viewport_screenspace_to_ui_xy(screen_position)
+function PoseRefinementUi:viewport_screenspace_to_viewport_pixels(screen_position)
   local pixels = screen_position + 1
   torch.div(pixels, pixels, 2)
   pixels[2] = 1.0 - pixels[2] --flip y
-  pixels[1] = (pixels[1]*self.layers[3].image:rect():totable().width)
-  pixels[2] = (pixels[2]*self.layers[3].image:rect():totable().height)
+
+  pixels[1] = pixels[1] * self.widget.main_frame.viewport_container.viewport.width
+  pixels[2] = pixels[2] * self.widget.main_frame.viewport_container.viewport.height
+
   return pixels
 end
 
@@ -359,7 +378,7 @@ function PoseRefinementUi:init_calibration()
   end
 
   log.trace("Loading scan at", sys.clock())
-  self.scan = Scan.new(self.scan_folder, self.pose_file)
+  self.scan = pose_refinement.Scan.new(self.scan_folder, self.pose_file)
   log.trace("Completed scan load at", sys.clock())
 
   log.trace("Loading model data at", sys.clock())
@@ -376,43 +395,31 @@ function PoseRefinementUi:init_calibration()
   libui.make_current(self.gl_viewport.qt_widget)
   libui.hide_widget(self.gl_viewport.qt_widget)
 
-  self.current_sweep = 1
-  self.current_photo = 1
-  self:update_photo_pass()
-
-  self:calculate_viewport_size(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data_rectilinear)
-  local fov_y = self.scan.sweeps[self.current_sweep].photos[self.current_photo].lens.rectilinear.vfov
-  log.trace("Field of view y=", fov_y) 
+  self.gl_viewport.renderer:activate_scene('viewport_scene')
   self.model_object = self.gl_viewport.renderer:add_object(self.scan.model_data)
-
-  self.gl_viewport.renderer:create_camera('pose_camera', self.viewport_width, self.viewport_height, fov_y)
-  self.gl_viewport.renderer:activate_camera('pose_camera')
 
   self.gl_viewport.renderer:create_scene('wireframe_scene')
   self.gl_viewport.renderer:activate_scene('wireframe_scene')
-  self.gl_viewport.renderer:create_camera('wireframe_camera', self.viewport_width, self.viewport_height, fov_y)
-  self.gl_viewport.renderer:activate_camera('wireframe_camera')
 
   local billboard_data = require('util.obj').new('../ui2/objs/planeNormalized.obj')
   local billboard_object = self.gl_viewport.renderer:add_object(billboard_data)
+
   local wireframe_mat_data = {name='wireframe_mat', ambient={0,0,0,1}, diffuse={0,0,0,1}, specular={0,0,0,1}, shininess={0,0,0,1}, emission={0,0,0,1}}
   local wireframe_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.wireframe, {'pose_camera_frame_buffer_pass_picking'})
   billboard_object.mesh:override_materials(wireframe_mat)
 
   self.vertex_highlight_mat = self.gl_viewport.renderer:create_material(wireframe_mat_data, self.gl_viewport.renderer.shaders.vertex_highlight, {'pose_camera_frame_buffer_pass_depth'})
 
-  self.gl_viewport.renderer:create_camera('vertex_highlight_camera', self.viewport_width, self.viewport_height, fov_y)
+  --Creating cameras with default settings. These setting get overridden during resize_viewport_by_photo() 
+  self.gl_viewport.renderer:create_camera('pose_camera')
+  self.gl_viewport.renderer:create_camera('wireframe_camera')
+  self.gl_viewport.renderer:create_camera('vertex_highlight_camera')
 
-  self:update_viewport_passes()
+  self.current_sweep = 3
+  self.current_photo = 8
+  self:update_photo_pass()
   self:update_ui_info()
-
-  --[[
-  self.gl_viewport.renderer:activate_camera('viewport_camera')
-  self.gl_viewport.renderer:activate_scene('viewport_scene')
-  self:create_debug_camera_meshes(1)
-  self.model_object.mesh:restore_materials()
-  self.gl_viewport:update()
-  --]]
+  self:resize_viewport_by_photo(self.scan.sweeps[self.current_sweep].photos[self.current_photo])
 end
 
 function PoseRefinementUi:update_photo_pass()
@@ -434,9 +441,13 @@ function PoseRefinementUi:update_viewport_passes()
   local camera_rotation = nil
 
   camera_position, camera_rotation = self.scan.sweeps[self.current_sweep]:calculate_camera_world(self.current_photo)
+  --camera_position = torch.Tensor({3.276560, -2.5, 1.78})
+  --camera_rotation = torch.Tensor({0.031647, 0.023114, 0.731051, -0.681197})
 
   local forward_vector = torch.Tensor({0,1,0})
   local look_direction = geom.rotate_by_quat(forward_vector, camera_rotation)
+  log.trace(look_direction:norm())
+
   local camera_eye = camera_position
   local camera_center = camera_eye + look_direction
 
@@ -484,14 +495,18 @@ function PoseRefinementUi:update_viewport_passes()
   self.widget:update()
 end
 
-function PoseRefinementUi:calculate_viewport_size(image)
-  local window_width = self.widget.calibration_view.width
-  local window_height = self.widget.calibration_view.height
+function PoseRefinementUi:resize_viewport_by_photo(photo)
+  local window_width = self.widget.viewport_container.width
+  local window_height = self.widget.viewport_container.height
   local window_aspect = window_width / window_height
+  log.trace("window_aspect", window_aspect)
 
-  local image_width   = image:size()[3]
-  local image_height  = image:size()[2]
+  log.trace("Calibration view size:", window_width, window_height)
+
+  local image_width   = photo.image_data_rectilinear:size()[3]
+  local image_height  = photo.image_data_rectilinear:size()[2]
   local image_aspect = image_width / image_height
+  log.trace("image_aspect", image_aspect)
 
   local viewport_width = nil
   local viewport_height = nil
@@ -504,8 +519,31 @@ function PoseRefinementUi:calculate_viewport_size(image)
     viewport_height = window_height
   end
 
-  self.viewport_width = math.floor(viewport_width)
-  self.viewport_height = math.floor(viewport_height)
+  viewport_width = math.floor(viewport_width)
+  viewport_height = math.floor(viewport_height)
+
+  self:resize_viewport(viewport_width, viewport_height, photo.lens.rectilinear.vfov)
+end
+
+function PoseRefinementUi:resize_viewport(width, height, vfov)
+  self.viewport_size[1] = width
+  self.viewport_size[2] = height
+  self.viewport_vfov = vfov
+
+  self.gl_viewport.renderer.cameras.pose_camera.vfov = self.viewport_vfov
+  self.gl_viewport.renderer.cameras.wireframe_camera.vfov = self.viewport_vfov
+  self.gl_viewport.renderer.cameras.vertex_highlight_camera.vfov = self.viewport_vfov
+
+  self.gl_viewport.renderer.cameras.pose_camera:resize(self.viewport_size[1], self.viewport_size[2])
+  self.gl_viewport.renderer.cameras.wireframe_camera:resize(self.viewport_size[1], self.viewport_size[2])
+  self.gl_viewport.renderer.cameras.vertex_highlight_camera:resize(self.viewport_size[1], self.viewport_size[2])
+
+  local viewport_position_x = (self.widget.viewport_container.width - width) / 2
+  local viewport_position_y = (self.widget.viewport_container.height - height) / 2
+  self.widget.viewport_container.viewport.pos = qt.QPoint.new({x=viewport_position_x, y=viewport_position_y})
+  self.widget.viewport_container.viewport.size = qt.QSize.new({width=width, height=height})
+
+  self:update_viewport_passes()
 end
 
 --Simple save function to get some calibration data to test with. 
@@ -536,13 +574,13 @@ function PoseRefinementUi:save_calibration()
       end
       file:write("    pairs_calibrated = "..self.scan.sweeps[sweep].photos[photo].pairs_calibrated..",\n")
       file:write("    calibration_pairs = torch.Tensor({\n")
-      for j = 1, 3 do
+      for j = 1, self.scan.sweeps[sweep].photos[photo].calibration_pairs:size(1) do
         file:write("      {")
-        for k = 1, 5 do
+        for k = 1, self.scan.sweeps[sweep].photos[photo].calibration_pairs:size(2) do
           file:write(self.scan.sweeps[sweep].photos[photo].calibration_pairs[j][k])
           if k ~= 5 then file:write(", ") end
         end
-        if j ~= 3 then file:write("},\n") else file:write("}\n") end 
+        if j ~= 4 then file:write("},\n") else file:write("}\n") end 
       end
       file:write("    }),\n")
 
@@ -594,15 +632,13 @@ function PoseRefinementUi:update_magnifier(magnification, layer, x, y, width, he
   if self.magnifier == nil then
     self.magnifier = {}
   end
-  --TODO: Resize calibration_view frame to width and height of the GL renders.
-  --Instead of "self.gl_viewport.renderer.cameras.vertex_highlight_camera.width" use "self.painter.width"
   self.magnifier.layer = layer
-  self.magnifier.width = width
-  self.magnifier.height = height
   self.magnifier.start_x = x - (width*0.5)
   self.magnifier.start_y = y - (height*0.5)
-  self.magnifier.source_start_x = ((x/self.gl_viewport.renderer.cameras.vertex_highlight_camera.width) * self.layers[layer].image:rect():totable().width) - ((width*0.5)/magnification)
-  self.magnifier.source_start_y = ((y/self.gl_viewport.renderer.cameras.vertex_highlight_camera.height) * self.layers[layer].image:rect():totable().height) - ((height*0.5)/magnification)
+  self.magnifier.width = width
+  self.magnifier.height = height
+  self.magnifier.source_start_x = ((x/self.widget.main_frame.viewport_container.viewport.width) * self.layers[layer].image:rect():totable().width) - ((width*0.5)/magnification)
+  self.magnifier.source_start_y = ((y/self.widget.main_frame.viewport_container.viewport.height) * self.layers[layer].image:rect():totable().height) - ((height*0.5)/magnification)
   self.magnifier.source_width = width / magnification
   self.magnifier.source_height = height / magnification
 end
@@ -627,28 +663,8 @@ function PoseRefinementUi:draw_image_layers()
     if layer_data.blend_mode ~= 'Hidden' then
       self.painter:initmatrix()
 
-      --Fit image inside painter
-      local painter_width = self.painter.width
-      local painter_height = self.painter.height
-      local painter_aspect = painter_width / painter_height
-
-      local layer_width = layer_data.image:rect():totable().width
-      local layer_height = layer_data.image:rect():totable().height
-      local layer_aspect = layer_width / layer_height
-
-      local final_width = nil
-      local final_height = nil
-
-      if layer_aspect > painter_aspect then 
-        final_height = math.floor(layer_height * (painter_width/layer_width))
-        final_width = painter_width
-      else
-        final_width = math.floor(layer_width * (painter_height/layer_height))
-        final_height = painter_height
-      end
-
-      local scale_x = final_width / layer_width  
-      local scale_y = final_height / layer_height
+      local scale_x = self.widget.main_frame.viewport_container.viewport.width / layer_data.image:rect():totable().width  
+      local scale_y = self.widget.main_frame.viewport_container.viewport.height / layer_data.image:rect():totable().height
 
       self.painter:scale(scale_x, scale_y)
 
@@ -701,8 +717,8 @@ end
 function PoseRefinementUi:draw_selection_box(start_corner, end_corner)
   self.painter:initmatrix()
   self.painter:currentmode('SourceOver')
-  local start_corner_pixels = self:viewport_screenspace_to_ui_xy(start_corner)
-  local end_corner_pixels = self:viewport_screenspace_to_ui_xy(end_corner)
+  local start_corner_pixels = self:viewport_screenspace_to_viewport_pixels(start_corner)
+  local end_corner_pixels = self:viewport_screenspace_to_viewport_pixels(end_corner)
 
   local start = torch.Tensor(2)
   local size = torch.Tensor(2)

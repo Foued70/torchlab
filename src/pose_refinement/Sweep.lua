@@ -2,9 +2,8 @@ require 'torch'
 local geom = require 'util.geom'
 local fs = require 'util.fs'
 local paths = require 'paths'
-local config = require 'config'
-local Photo = require('Photo')
-local Sweep = torch.class('Sweep')
+local config = require 'pose_refinement.config'
+local Sweep = Class()
 
 
 function Sweep:__init(parent_scan, sweep_dir)
@@ -19,7 +18,7 @@ function Sweep:set_photos()
   
   self.photos = {}
   for i, f in ipairs(fs.files_only(img_dir, unpack(config.img_extensions))) do
-    table.insert(self.photos, Photo.new(self, f))
+    table.insert(self.photos, pose_refinement.Photo.new(self, f))
   end
 end
 
