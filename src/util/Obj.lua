@@ -1,7 +1,6 @@
 -- Obj can load and save a .obj file 
 -- Obj can be n-gon but for now, all objs should be triangulated for opengl loading 
 -- TODO: n-gon support
--- TODO: test saving after retexture
 
 local paths = require "paths"
 local geom = require "util.geom"

@@ -30,4 +30,11 @@ tex:make()
 --   table.insert(tex.target.materials, material)
 --   table.insert(tex.target.submeshes, {fid, fid, #tex.target.materials})
 -- end
--- tex:save_obj()
+-- tex:update_obj()
+-- glw = require('ui.GLWidget').new()
+-- while not glw.initialized do
+--   os.execute("sleep "..tonumber(1))
+-- end
+-- 
+-- glw.renderer:add_object(tex.target)
+-- glw:update()

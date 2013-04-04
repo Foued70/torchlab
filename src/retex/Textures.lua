@@ -451,14 +451,14 @@ function Textures:save_img(fid)
   table.insert(self.target.submeshes, {fid, fid, #self.target.materials})
 end
 
--- update obj properties and save it
-function Textures:save_obj()
-  log.trace('saving obj')
+-- reconcile unified_verts and faces' index into unified_verts so obj can be shown in glwidget
+function Textures:update_obj()  
   local obj = self.target
-  local faces = obj.faces  
   local verts = obj.verts
   local uvs = obj.uvs
   local n_verts_per_face = obj.n_verts_per_face
+  
+  local faces = obj.faces  
   local unified_verts = obj.unified_verts
   
   local vert_cache = {}
@@ -469,8 +469,8 @@ function Textures:save_obj()
     local face = faces[fid]
     
     for vert_i=1, n_verts_per_face[fid] do
-      local vert_idx = face[vert_i][2]
-      local uv_idx = face[vert_i][3]
+      local vert_idx = face[vert_i][2] -- verts idx stayed same throughout the texturing process
+      local uv_idx = face[vert_i][3] -- uv idx taken care of in create_uvs
       
       local idx = vert_cache[{vert_idx, uv_idx}]
       if not idx then
@@ -481,7 +481,7 @@ function Textures:save_obj()
         unified_verts[{idx, {1, 3}}] = verts[vert_idx]:narrow(1, 1, 3)
         unified_verts[{idx, {5, 6}}] = uvs[uv_idx]        
       end
-      face[vert_i][1] = idx
+      face[vert_i][1] = idx 
     end
   end
   
@@ -494,7 +494,8 @@ function Textures:save_obj()
   obj.unified_verts = trimmed_unified_verts
   obj.uvs = trimmed_uvs
   obj.submeshes = torch.IntTensor(obj.submeshes)
-  
+end
+function Textures:save_obj()  
   local objfile  = paths.concat(output_dir, paths.basename(self.targetfile))
   local mtlfile  = objfile:gsub(".obj$",".mtl")
   log.trace('Saving obj and mtl', objfile, mtlfile)
@@ -507,5 +508,6 @@ function Textures:make()
     self:create_uvs(fid)
     self:save_img(fid) 
   end
+  self:update_obj()
   self:save_obj()
 end
