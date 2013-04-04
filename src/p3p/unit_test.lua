@@ -1,9 +1,10 @@
-util = require 'util'
-geom = util.geom
-p3p = require "p3p"
+util       = require 'util'
+geom       = util.geom
+p3p        = require "p3p"
+LensSensor = require "util.LensSensor"
 
 -- receate the tests from Kneip's paper
--- 1000 random points in 4x4x4
+-- 1000 random points in roughly 4x4x4
 npts = 1000
 pts3D = torch.randn(npts,3)
 printf("pts3D range")
@@ -19,32 +20,39 @@ local zmax = z:max()
 printf(" - x: %f < x < %f",xmin,xmax)
 printf(" - y: %f < y < %f",ymin,ymax)
 printf(" - z: %f < z < %f",zmin,zmax)
+
+-- using one of our lens objects
+lens = LensSensor.new("nikon_10p5mm_r2t_full",640,480)
+
 -- camera at 0,6,0
 c = {
-   xyz = torch.Tensor({0,6,0}),
+   xyz = torch.Tensor({6,0,0}),
    -- camera rotation
-   rot = torch.Tensor({{1,0,0},{0,-1,0},{0,0,1}}),
-   -- image sizes from Kniep paper
+   rot = torch.Tensor({{-1,0,0},{0,1,0},{0,0,-1}}),
+   -- image sizes from Kneip paper
    w = 640,
    h = 480,
    -- center
    cw = 320,
    ch = 240,
    -- focal
-   f = 800 
+   f = 800
 }
-c.fovx = math.atan2(c.cw,c.f)
-c.fovy = math.atan2(c.ch,c.f)
-c.quat = geom.rotation_matrix_to_quaternion(c.rot)
-c.quat_r = geom.quat_conjugate(c.quat)
+c.fovx   = math.atan2(c.cw,c.f)
+c.fovy   = math.atan2(c.ch,c.f)
+c.quat_r = geom.rotation_matrix_to_quaternion(c.rot)
+c.quat   = geom.quat_conjugate(c.quat_r)
 
 function c:global2local(v)
-   return geom.rotate_by_quat(v - self.xyz, self.quat_r)
+   return geom.normalize(geom.rotate_by_quat(v - self.xyz, self.quat_r))
 end
    
 function c:globalxyz2angle(pt)
-   local v = self:global2local(pt)
-   return torch.Tensor({torch.atan2(v[2],v[1]), torch.asin(v[3])})
+   local v = self:global2local(pt) 
+   local angles = torch.Tensor({torch.atan2(v[2],v[1]), torch.asin(v[3])})
+   printf("pt(%f,%f,%f) v(%f,%f,%f) angle: %f %f",
+          pt[1],pt[2],pt[3],v[1],v[2],v[3],angles[1],angles[2])
+   return angles
 end
 
 rot_error = 0 
@@ -53,17 +61,10 @@ trans_error = 0
 for i = 1,10 do 
    -- pick 3 random points
    pts = pts3D[torch.LongTensor():randperm(npts):narrow(1,1,3)]
-   angles = torch.Tensor(3,2)
-   angles[1] = c:globalxyz2angle(pts[1])
-   angles[2] = c:globalxyz2angle(pts[2])
-   angles[3] = c:globalxyz2angle(pts[3])
-   
-   -- project vector onto camera plane 
-   for i = 1,3 do 
-      printf("pts[%d](%f,%f,%f) angle: %f %f",i,
-          pts[i][1],pts[i][2],pts[i][3],angles[i][1],angles[i][2])
-   end
-
+   angles = torch.Tensor(3,3)
+   angles[1] = c:global2local(pts[1])
+   angles[2] = c:global2local(pts[2])
+   angles[3] = c:global2local(pts[3])
    solutions = p3p.compute_poses(pts,angles)
    
    local trans_err = 1e16 
