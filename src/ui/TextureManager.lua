@@ -1,5 +1,5 @@
-local libui = require 'libui2'
-local gl = require 'ui2.gl'
+local libui = require 'libui'
+local gl = require 'ui.gl'
 
 require 'image' -- fucking image global
 

@@ -1,9 +1,9 @@
-require 'libui2'
+require 'libui'
 
 local ui = {}
 
 function ui.display()
-   libui2.display()
+   libui.display()
 end
 
 

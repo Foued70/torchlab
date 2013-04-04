@@ -1,6 +1,6 @@
-local gl = require 'ui2.gl'
-local libui = require 'libui2'
-local Material = require 'ui2.Material'
+local gl = require 'ui.gl'
+local libui = require 'libui'
+local Material = require 'ui.Material'
 
 local FrameBuffer = torch.class('FrameBuffer')
 

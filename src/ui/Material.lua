@@ -1,5 +1,5 @@
-local gl = require 'ui2.gl'
-local libui = require 'libui2'
+local gl = require 'ui.gl'
+local libui = require 'libui'
 
 local Material = torch.class('Material')
 
@@ -23,7 +23,7 @@ function Material:__init(widget, mtl_data)
   self.shininess = mtl_data.shininess
   self.emission = {0,0,0,1} --mtl_data.emission
 
-  self.shader = require('ui2.Shader').shaders.textured
+  self.shader = require('ui.Shader').shaders.textured
   self.textures = {}
 
   if mtl_data.diffuse_tex_path then

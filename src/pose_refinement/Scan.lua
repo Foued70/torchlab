@@ -1,6 +1,6 @@
 require 'torch'
 
-local libui = require 'libui2'
+local libui = require 'libui'
 local paths = require 'paths'
 local config = require 'pose_refinement.config'
 local fs = require 'util.fs'

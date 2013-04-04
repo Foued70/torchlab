@@ -1,4 +1,4 @@
-local gl = require 'ui2.gl'
+local gl = require 'ui.gl'
 
 local Object = torch.class('Object')
 
@@ -14,7 +14,7 @@ end
 function Object.create_mesh(widget, obj_data)
   local materials = {}
   for _, mtl_data in ipairs(obj_data.materials) do
-    local material = require('ui2.Material').new(widget, mtl_data)
+    local material = require('ui.Material').new(widget, mtl_data)
     table.insert(materials, material)
   end
 
@@ -24,7 +24,7 @@ function Object.create_mesh(widget, obj_data)
     table.insert(submeshes, {start = sub[1], length = sub[2] - sub[1] + 1, material = materials[sub[3]]})
   end
 
-  return require('ui2.Mesh').new(obj_data.unified_verts, obj_data.faces[{{}, {}, 1}], submeshes)
+  return require('ui.Mesh').new(obj_data.unified_verts, obj_data.faces[{{}, {}, 1}], submeshes)
 end
 
 function Object:paint(context)

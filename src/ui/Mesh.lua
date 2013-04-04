@@ -1,5 +1,5 @@
-local gl = require 'ui2.gl'
-local libui = require 'libui2'
+local gl = require 'ui.gl'
+local libui = require 'libui'
 
 local Mesh = torch.class('Mesh')
 

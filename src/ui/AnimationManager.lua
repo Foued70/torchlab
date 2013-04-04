@@ -1,4 +1,4 @@
-local libui = require 'libui2'
+local libui = require 'libui'
 
 local AnimationManager = torch.class('AnimationManager')
 
@@ -15,7 +15,7 @@ BEZIER_END_BEHAVIORS = {
 }
 
 function AnimationManager:__init()
-  self.timer = require('ui2.Timer').new()
+  self.timer = require('ui.Timer').new()
   self.animations = {}
 end
 

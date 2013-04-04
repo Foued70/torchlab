@@ -51,6 +51,6 @@ ADD_CUSTOM_COMMAND(
   COMMAND  clang -c ${CMAKE_CURRENT_SOURCE_DIR}/core_profile_attributes.mm -o ${CMAKE_CURRENT_BINARY_DIR}/core_profile_attributes.o
 )
 
-ADD_TORCH_PACKAGE(ui2 "${src}" "" "Floored Viewer")
+ADD_TORCH_PACKAGE(ui "${src}" "" "Floored Viewer")
 
-target_link_libraries(ui2 precomp luaT TH ${COCOA_LIBRARY} ${OPENGL_LIBRARIES} ${QT_LIBRARIES} )
+target_link_libraries(ui precomp luaT TH ${COCOA_LIBRARY} ${OPENGL_LIBRARIES} ${QT_LIBRARIES} )

@@ -1,6 +1,6 @@
-local libui = require 'libui2'
-local gl = require 'ui2.gl'
-local key = require 'ui2.key'
+local libui = require 'libui'
+local gl = require 'ui.gl'
+local key = require 'ui.key'
 local geom = require 'util.geom'
 
 require 'qt'
@@ -18,7 +18,7 @@ function GLWidget:__init()
   self.initialized = false
   libui.attach_qt(self)
 
-  self.renderer = require('ui2.Renderer').new(self)
+  self.renderer = require('ui.Renderer').new(self)
   self.mode = NAV_MODE
 end
 

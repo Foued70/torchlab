@@ -1,4 +1,4 @@
-local gl = require 'ui2.gl'
+local gl = require 'ui.gl'
 local geom = require 'util.geom'
 
 local Camera = torch.class('Camera')
@@ -71,7 +71,7 @@ function Camera:rebuild_buffers()
   if self.frame_buffer then
     self.frame_buffer:__gc()
   end
-  self.frame_buffer = require('ui2.FrameBuffer').new(self.widget, self.name..'_frame_buffer', self.width, self.height)
+  self.frame_buffer = require('ui.FrameBuffer').new(self.widget, self.name..'_frame_buffer', self.width, self.height)
 end
 
 function Camera:update_matrix(context)

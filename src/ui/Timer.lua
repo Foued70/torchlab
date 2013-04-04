@@ -1,4 +1,4 @@
-local libui = require 'libui2'
+local libui = require 'libui'
 
 local Timer = torch.class('Timer')
 

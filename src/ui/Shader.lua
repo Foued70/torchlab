@@ -1,16 +1,16 @@
-local gl = require 'ui2.gl'
+local gl = require 'ui.gl'
 local ffi = require 'ffi'
-local libui = require 'libui2'
+local libui = require 'libui'
 
 local Shader = torch.class('Shader')
 
 local function read(filename)
-  io.input(CLOUDLAB_SRC..'/ui2/shaders/'..filename)
+  io.input(CLOUDLAB_SRC..'/ui/shaders/'..filename)
   return io.read("*all")
 end
 
 local function file_exists(filename)
-  local file = io.open(CLOUDLAB_SRC..'/ui2/shaders/'..filename)
+  local file = io.open(CLOUDLAB_SRC..'/ui/shaders/'..filename)
   if file ~= nil then
     io.close(file)
     return true

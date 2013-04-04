@@ -1,10 +1,10 @@
-local libui = require 'libui2'
-local gl = require 'ui2.gl'
-local key = require 'ui2.key'
+local libui = require 'libui'
+local gl = require 'ui.gl'
+local key = require 'ui.key'
 local geom = require 'util.geom'
 
-local Shader = require 'ui2.Shader'
-local MatrixStack = require 'ui2.MatrixStack'
+local Shader = require 'ui.Shader'
+local MatrixStack = require 'ui.MatrixStack'
 
 local Renderer = torch.class('Renderer')
 
@@ -18,8 +18,8 @@ function Renderer:__init(parent, width, height)
   self.materials = {}
   self.shaders = {}
   self.context = MatrixStack.new()
-  self.texture_manager = require('ui2.TextureManager').new()
-  self.animation_manager = require('ui2.AnimationManager').new()
+  self.texture_manager = require('ui.TextureManager').new()
+  self.animation_manager = require('ui.AnimationManager').new()
 
   log.trace("Renderer Constructed")
 end
@@ -89,7 +89,7 @@ function Renderer:render()
 end
 
 function Renderer:create_camera(name, width, height, vfov, eye, center)
-  local camera = require('ui2.Camera').new(self, name)
+  local camera = require('ui.Camera').new(self, name)
 
   local camera_width = width or self.cameras.viewport_camera.width
   local camera_height = height or self.cameras.viewport_camera.height
@@ -147,7 +147,7 @@ function Renderer:create_shaders()
 end
 
 function Renderer:add_object(data_obj)
-  local object = require('ui2.Object').new(self, data_obj)
+  local object = require('ui.Object').new(self, data_obj)
   table.insert(self.active_scene, object)
   return object
 end
@@ -157,7 +157,7 @@ function Renderer:add_material(material)
 end
 
 function Renderer:create_material(data_mat, shader, textures)
-  local material = require('ui2.Material').new(self, data_mat)
+  local material = require('ui.Material').new(self, data_mat)
   material:set_shader(shader)
   for t = 1, #textures do
     material:attach_texture(textures[t], t-1)
