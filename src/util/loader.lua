@@ -7,6 +7,10 @@ sys.execute("mkdir -p "..cache_dir)
 
 local function loader(file, init_fn, ...)
   local object = nil
+
+  -- TODO: Create caching that works on our new Class() system. 
+  -- The following cache scheme is broken, and disabled, as it only works for torch classes.
+  --[[
   local cached_file = file  
   local torch_file = cached_file:find(".t7$")
   
@@ -27,7 +31,8 @@ local function loader(file, init_fn, ...)
     torch.save(cached_file, object)
     log.trace('Caching file', file)
   end
-  
+  ]]--
+  object = init_fn(file, ...)
   return object
 end
 
