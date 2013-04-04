@@ -5,7 +5,7 @@ local util = require "util.util"
 local r2d = 180 / math.pi
 local d2r = math.pi / 180
 
-local Pose = Class()
+local Pose = torch.class('Pose')
 
 function Pose:__init(poses,i)
    self.pid    = i
@@ -84,7 +84,7 @@ function Pose:compute_dirs(scale)
    if not scale then 
       scale = 1
    end
-   log.trace("Computing dirs for pose", self.pid, "and scale 1/", scale)
+   log.trace("Computing dirs for pose", self.pid, "at scale 1/", scale)
 
    local image_w = self.image_w
    local image_h = self.image_h
@@ -172,3 +172,5 @@ function Pose:draw_wireframe (obj)
    end
    return wimage
 end
+
+return Pose

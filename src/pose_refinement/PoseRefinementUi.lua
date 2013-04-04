@@ -349,7 +349,7 @@ function PoseRefinementUi:set_pose_file()
 end
 
 function PoseRefinementUi:create_debug_camera_meshes(sweep_number)
-  local debug_model_data = util.Obj.new('../ui/objs/debug_forward_pointer.obj')
+  local debug_model_data = require('util.Obj').new('../ui/objs/debug_forward_pointer.obj')
 
   for i = 1, #self.scan.sweeps[sweep_number].photos do
     local camera_position = nil
@@ -405,7 +405,7 @@ function PoseRefinementUi:init_calibration()
   self.gl_viewport.renderer:create_scene('wireframe_scene')
   self.gl_viewport.renderer:activate_scene('wireframe_scene')
 
-  local billboard_data = util.Obj.new('../ui/objs/planeNormalized.obj')
+  local billboard_data = require('util.Obj').new('../ui/objs/planeNormalized.obj')
   local billboard_object = self.gl_viewport.renderer:add_object(billboard_data)
 
   local wireframe_mat_data = {name='wireframe_mat', ambient={0,0,0,1}, diffuse={0,0,0,1}, specular={0,0,0,1}, shininess={0,0,0,1}, emission={0,0,0,1}}
