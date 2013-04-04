@@ -36,11 +36,13 @@ function Occlusions:get()
     local occlusions = {}
     local poses = loader(self.posefile, Poses.new)
     for i=1, poses.nposes do
-      if paths.filep(self:file(i)) then 
-        self.occlusions[i] = torch.load(self:file(i)) 
+      if paths.filep(self:file(i)) then
+        occlusions[i] = torch.load(self:file(i))        
+        log.trace('loaded occlusions for pose', i)
       else
-        self.occlusions[i] = nil 
-      end      
+        occlusions[i] = nil
+        log.trace('no occlusions found for pose', i)
+      end
     end
     
     self.occlusions = occlusions

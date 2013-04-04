@@ -7,7 +7,9 @@ require 'math'
 
 local Poses = retex.Poses
 local loader = require 'util.loader'
+local geom = require 'util.geom'
 
+-- TODO: deal with output dir -- arc?
 local output_dir = paths.concat(paths.dirname(paths.thisfile()), 'output')
 sys.execute("mkdir -p " .. output_dir)
 
@@ -23,9 +25,13 @@ function Textures:__init(posefile, targetfile, opts)
   end  
   
   self.targetfile = targetfile
+  self:load_target() 
+  
   self.posefile = posefile
   self.poses = loader(posefile, Poses.new)
+  
   self.textures = {}
+  self.faces = {} -- store some info about faces
   
   local defaults = {
     scale = 4, -- scale at which to process 4 = 1/4 resolution
@@ -36,7 +42,8 @@ function Textures:__init(posefile, targetfile, opts)
     maxdist = 50,
     vertbuffer = 0 -- how close in pixels to edge of texture do we accept
   }
-
+  
+  opts = opts or {}
   for k, v in pairs(defaults) do
     self[k] = opts[k] or v
   end
@@ -70,8 +77,9 @@ function Textures:load_target()
 end
 
 function Textures:load_occlusions()
-  local occlusions = retex.Occlusions.new(self.posefile, self.targetfile)
-  self.occlusions = occlusions.get()
+  -- assumes occlusions have been calculated already
+  local occlusions = retex.Occlusions.new(self.posefile, self.targetfile, self.scale)
+  self.occlusions = occlusions:get()
 end
 
 -- + ----------------
@@ -80,6 +88,7 @@ end
 -- input: face ids <fid>
 -- FIXME redo this function.  Trace ray to each pose.
 function Textures:get_closest_poses(fid,debug)
+  log.trace('getting closest poses for face', fid)
   local obj = self.target
   local poses = self.poses
   
@@ -109,7 +118,7 @@ function Textures:get_closest_poses(fid,debug)
   local len = dirs:norm(2,2):squeeze():cmul(wrong_side)
   local slen,sidx = torch.sort(len)
   if debug then
-    log.trace(fid, '-' 
+    log.trace('face', fid, ' - sidx/slen - ', 
       sidx[1],slen[1], 
       sidx[2],slen[2],
       sidx[3],slen[3],
@@ -141,94 +150,100 @@ end
 -- find rotatation and translation for a virutal camera centered on
 -- the face and the dimensions of a texture map
 function Textures:face_to_texture_transform_and_dimension(fid,debug)
-  local obj = self.target
+  log.trace('get texture transform and dimensions for face', fid)
+  if not self.faces[fid] then
+    local obj = self.target
   
-  local face_verts = obj.face_verts[fid]
-  local nverts     = obj.n_verts_per_face[fid]
-  local normal     = obj.face_normals[fid]
+    local face_verts = obj.face_verts[fid]
+    local nverts     = obj.n_verts_per_face[fid]
+    local normal     = obj.face_normals[fid]
 
-  --  a) find translation (point closest to origin of longest edge)
-  local eid = 1
-  local maxedge = torch.norm(face_verts[1] - face_verts[nverts])
-  local e2 = nil
-  for vi = 2,nverts do
-    local v1 = face_verts[vi]
-    local v2 = face_verts[vi-1]
-    local e1 = v1 - v2
-    local elen = torch.norm(e1)
-    if debug and e2 then 
-      local en = torch.cross(v1,v2)
-      log.trace("vertex normal:", en[1],en[2],en[3])
+    --  a) find translation (point closest to origin of longest edge)
+    local eid = 1
+    local maxedge = torch.norm(face_verts[1] - face_verts[nverts])
+    local e2 = nil
+    for vi = 2,nverts do
+      local v1 = face_verts[vi]
+      local v2 = face_verts[vi-1]
+      local e1 = v1 - v2
+      local elen = torch.norm(e1)
+      if debug and e2 then 
+        local en = torch.cross(v1,v2)
+        log.trace("vertex normal:", en[1],en[2],en[3])
+      end
+      if maxedge < elen then
+        maxedge = elen
+        eid = vi
+      end
+      e2 = e1
     end
-    if maxedge < elen then
-      maxedge = elen
-      eid = vi
+  
+    local pid = eid - 1
+    if pid == 0 then pid = nverts end
+    local trans = face_verts[pid]:clone()
+    local longedge = face_verts[eid] - trans
+
+    -- make sure we translate by the edge closest to origin
+    if (trans:norm() > face_verts[eid]:norm()) then
+      if debug then log.trace("Swapping translation") end
+      longedge = trans - face_verts[eid] 
+      trans:copy(face_verts[eid])
     end
-    e2 = e1
+   
+    if debug then log.trace("longedge:", pid, eid) end
+
+    -- align largest dimension of the plane normal
+    local nrot,ndim = geom.largest_rotation(normal)
+   
+    -- align longest edge which is in a plane orthogonal to the new
+    -- zaxis, and needs to be rotated to the xaxis around the zaxis
+    local nrot_longedge = geom.rotate_by_quat(longedge,nrot)
+
+    local erot,edim  = geom.largest_rotation(nrot_longedge)
+
+    -- combine the rotations into a single rotation
+    local rot = geom.quat_product(erot,nrot)
+   
+    local ydim = 6 - (edim+ndim)
+    local dims = torch.Tensor({ndim,edim,ydim})
+
+    if debug then    
+      log.trace("   Orig normal:", normal[1],normal[2],normal[3])
+      local n = geom.rotate_by_quat(normal,nrot)
+      log.trace("Rotated normal:",n[1],n[2],n[3])
+
+      log.trace(" --  long edge:",longedge[1],longedge[2],longedge[3])
+      log.trace(" --  nrot edge:",nrot_longedge[1],nrot_longedge[2],nrot_longedge[3])
+      local enrot_longedge  = geom.rotate_by_quat(nrot_longedge,erot)    
+      log.trace(" -- enrot edge:",enrot_longedge[1],enrot_longedge[2],enrot_longedge[3])
+      enrot_longedge  = geom.rotate_by_quat(longedge,rot)
+      log.trace(" -- enrot edge:",enrot_longedge[1],enrot_longedge[2],enrot_longedge[3])
+
+      log.trace("-- dim: ", ndim, "nrot:", nrot[1],nrot[2],nrot[3],nrot[4])
+      log.trace("-- dim:", edim, "erot:",edim,erot[1],erot[2],erot[3],erot[4])
+      log.trace("-- dim:", ydim, "rot:",ydim,rot[1],rot[2],rot[3],rot[4])
+    end
+
+    --  b) find dimensions of the texture to be created
+    local v = geom.rotate_by_quat(face_verts[1] - trans,rot)
+    -- range is min,max,range
+    local xrange = torch.Tensor(3):fill(v[edim])
+    local yrange = torch.Tensor(3):fill(v[ydim])
+    for vi = 2,nverts do
+      v = geom.rotate_by_quat(face_verts[vi] - trans,rot)
+      if (yrange[1] > v[ydim]) then yrange[1] = v[ydim] end
+      if (yrange[2] < v[ydim]) then yrange[2] = v[ydim] end
+      if (xrange[1] > v[edim]) then xrange[1] = v[edim] end
+      if (xrange[2] < v[edim]) then xrange[2] = v[edim] end
+    end
+    xrange[3] = xrange[2] - xrange[1]
+    yrange[3] = yrange[2] - yrange[1]
+
+    self.faces = {}    
+    self.faces[fid] = {rot, trans, dims, xrange, yrange}
   end
   
-  local pid = eid - 1
-  if pid == 0 then pid = nverts end
-  local trans = face_verts[pid]:clone()
-  local longedge = face_verts[eid] - trans
-
-  -- make sure we translate by the edge closest to origin
-  if (trans:norm() > face_verts[eid]:norm()) then
-    if debug then log.trace("Swapping translation") end
-    longedge = trans - face_verts[eid] 
-    trans:copy(face_verts[eid])
-  end
-   
-  if debug then log.trace("longedge:", pid, eid) end
-
-  -- align largest dimension of the plane normal
-  local nrot,ndim = geom.largest_rotation(normal)
-   
-  -- align longest edge which is in a plane orthogonal to the new
-  -- zaxis, and needs to be rotated to the xaxis around the zaxis
-  local nrot_longedge = geom.rotate_by_quat(longedge,nrot)
-
-  local erot,edim  = geom.largest_rotation(nrot_longedge)
-
-  -- combine the rotations into a single rotation
-  local rot = geom.quat_product(erot,nrot)
-   
-  local ydim = 6 - (edim+ndim)
-  local dims = torch.Tensor({ndim,edim,ydim})
-
-  if debug then    
-    log.trace("   Orig normal:", normal[1],normal[2],normal[3])
-    local n = geom.rotate_by_quat(normal,nrot)
-    log.trace("Rotated normal:",n[1],n[2],n[3])
-
-    log.trace(" --  long edge:",longedge[1],longedge[2],longedge[3])
-    log.trace(" --  nrot edge:",nrot_longedge[1],nrot_longedge[2],nrot_longedge[3])
-    local enrot_longedge  = geom.rotate_by_quat(nrot_longedge,erot)    
-    log.trace(" -- enrot edge:",enrot_longedge[1],enrot_longedge[2],enrot_longedge[3])
-    enrot_longedge  = geom.rotate_by_quat(longedge,rot)
-    log.trace(" -- enrot edge:",enrot_longedge[1],enrot_longedge[2],enrot_longedge[3])
-
-    log.trace("-- dim: ", ndim, "nrot:", nrot[1],nrot[2],nrot[3],nrot[4])
-    log.trace("-- dim:", edim, "erot:",edim,erot[1],erot[2],erot[3],erot[4])
-    log.trace("-- dim:", ydim, "rot:",ydim,rot[1],rot[2],rot[3],rot[4])
-  end
-
-  --  b) find dimensions of the texture to be created
-  local v = geom.rotate_by_quat(face_verts[1] - trans,rot)
-  -- range is min,max,range
-  local xrange = torch.Tensor(3):fill(v[edim])
-  local yrange = torch.Tensor(3):fill(v[ydim])
-  for vi = 2,nverts do
-    v = geom.rotate_by_quat(face_verts[vi] - trans,rot)
-    if (yrange[1] > v[ydim]) then yrange[1] = v[ydim] end
-    if (yrange[2] < v[ydim]) then yrange[2] = v[ydim] end
-    if (xrange[1] > v[edim]) then xrange[1] = v[edim] end
-    if (xrange[2] < v[edim]) then xrange[2] = v[edim] end
-  end
-  xrange[3] = xrange[2] - xrange[1]
-  yrange[3] = yrange[2] - yrange[1]
-
-  return rot,trans,dims,xrange,yrange
+  return unpack(self.faces[fid])
 end
 
 function Textures:test_face_to_texture()
@@ -251,37 +266,37 @@ end
 --  prefer smaller angle w/ respect to norm
 -- (normalize with pi/2 as that is the biggest angle)
 function Textures:compute_alpha(dir,d,norm,debug)
-   if debug then log.trace('dir', dir, 'd', d, 'norm', norm) end
-      
-   if (d < self.mindist) or (d > self.maxdist) then return 0 end   
+  log.trace('computing alpha')
+  if debug then log.trace('dir', dir, 'd', d, 'norm', norm) end
+  if (d < self.mindist) or (d > self.maxdist) then return 0 end   
 
-   -- angle 1 == perpendicular.
-   local a = 1 - torch.acos(torch.dot(-dir,norm))/pi2
-   if debug then log.trace("a:",a) end
-   -- reject obvious wrong
-   if (torch.abs(a) > pi2) then return 0 end
-   -- do ramp to ideal dist
-   if (d < idealdist) then
-      return a*(d*fin_a + fin_b)
-   else
-      return a*(d*fout_a + fout_b)
-   end
+  -- angle 1 == perpendicular.
+  local a = 1 - torch.acos(torch.dot(-dir,norm))/pi2
+  if debug then log.trace("a:",a) end
+  -- reject obvious wrong
+  if (torch.abs(a) > pi2) then return 0 end
+  -- do ramp to ideal dist
+  if (d < self.idealdist) then
+    return a*(d*self.fin_a + self.fin_b)
+  else
+    return a*(d*self.fout_a + self.fout_b)
+  end
 end
 
-function Textures:create_uvs(fid,rot,trans,dims,xrange,yrange)
-  local obj = self.target
+-- Remap UVs: rotate each vertex into the coordinates of the new texture
+function Textures:create_uvs(fid, debug)
+  log.trace('uvs for face', fid)
+  local rot,trans,dims,xrange,yrange = self:face_to_texture_transform_and_dimension(fid, debug)  
+  local obj = self.target  
   local face_verts = obj.face_verts[fid]
-  local face = obj.faces[fid]
-  local n_uvs = obj.n_uvs
-  local uvs = obj.uvs
   
   for vi = 1, obj.n_verts_per_face[fid] do
     local vtrans = face_verts[vi] - trans
     vtrans = geom.rotate_by_quat(vtrans,rot)
-    n_uvs = n_uvs + 1
-    uvs[n_uvs][1] = (vtrans[dims[2]] - xrange[1])/xrange[3]
-    uvs[n_uvs][2] = 1 - ((vtrans[dims[3]] - yrange[1])/yrange[3])
-    face[vi][3] = n_uvs    
+    obj.n_uvs = obj.n_uvs + 1
+    obj.uvs[n_uvs][1] = (vtrans[dims[2]] - xrange[1])/xrange[3]
+    obj.uvs[n_uvs][2] = 1 - ((vtrans[dims[3]] - yrange[1])/yrange[3])
+    obj.faces[fid][vi][3] = obj.n_uvs
   end
 end
 
@@ -290,21 +305,22 @@ function Textures:range_to_texture_dimensions(xrange, yrange)
   local heightpx = math.floor(yrange * self.ppm + 1)
   local dx = xrange/widthpx
   local dy = yrange/heightpx
-  log.trace("w:", widthpx, "h:", heightpx, "dx:", dx, "dy:", dy)
+  log.trace("texture dimensions - w:", widthpx, "h:", heightpx, "dx:", dx, "dy:", dy)
   return widthpx, heightpx, dx, dy
 end
 
 function Textures:make_img(fid, debug)
-  local obj = self.target
-  local nposes = self.nposes
-  local poses = self.poses
-  local occlusions = self.occlusions
-  local scale_inv = self.scale_inv
+  log.trace('making image for face', fid)
+  local obj         = self.target
+  local nposes      = self.nposes
+  local poses       = self.poses
+  local occlusions  = self.occlusions
+  local scale_inv   = self.scale_inv
   
   -- Retexture Algo:
   -- 1) get closest poses:
-  local pose_idx = self:get_closest_poses(fid, debug)
-  if not pose_idx then
+  local closest_poses = self:get_closest_poses(fid, debug)
+  if not closest_poses then
     log.trace('No valid poses found for face', fid)
     return 
   end
@@ -341,15 +357,15 @@ function Textures:make_img(fid, debug)
       v = geom.rotate_by_quat(v,rotT) + trans
       local found = 0
       -- loop through closest poses
-      for pi = 1,pose_idx:size(1) do
-        local pid  = pose_idx[pi]
+      for pi = 1,closest_poses:size(1) do
+        local pid  = closest_poses[pi]
         local pose = poses[pid]
         local timg = pose.image
         local pt   = pose.xyz
-        local pocc = nil
+        local p_occ = nil
         
         if occlusions then
-          pocc = occlusions[pose.pid]
+          p_occ = occlusions[pid]
         end
         
         --  get uv of global coordinate in the pose
@@ -370,10 +386,10 @@ function Textures:make_img(fid, debug)
           local dist = dir:norm()
           local not_occluded = true
           -- check occlusion (look up in ray traced pose mask)
-          if occlusions then
+          if p_occ then
             local opx = math.max(1,math.floor(px*scale_inv + 0.5))
             local opy = math.max(1,math.floor(py*scale_inv + 0.5))
-            local od  = pocc[opy][opx]
+            local od  = p_occ[opy][opx]
             -- only is falsified 
             not_occluded = torch.abs(dist - od) < 0.2
             -- printf("occluded: %s dist: %f od: %f",not not_occluded,dist,od)
@@ -382,7 +398,7 @@ function Textures:make_img(fid, debug)
             dir = dir * (1/dist) 
             found = found + 1
             color[found] = timg[{{},py,px}]
-            alpha[found] = compute_alpha(dir,dist,normal,debug)
+            alpha[found] = self:compute_alpha(dir,dist,normal,debug)
           end
         end
         if found >= nposes then break end
@@ -407,36 +423,36 @@ function Textures:make_img(fid, debug)
   -- 6) store new texture file
   -- not sure about saving to disk, or saving in object.
   self.textures[fid] = fimg
-  
-  -- 7) Remap UVs: rotate each vertex into the coordinates of the new texture
-  self:create_uvs(fid,rot,trans,dims,xrange,yrange)
 end
 
+-- get file path for a face's texture
 function Textures:file(fid)
-  local name = paths.basename(self.targetfile):sub(".obj$", string.format("_face%05d.png", fid)
+  local name = paths.basename(self.targetfile):gsub(".obj$", "_face-"..fid..".png")
   return paths.concat(output_dir, name)
 end
 
+-- save the texture for a face and update the materials and submeshes
 function Textures:save_img(fid)    
+  log.trace('saving image for face', fid)
   local texture_img = self.textures[fid]  
+  local material = {
+    name = "face"..fid,
+    diffuse = {0.5, 0.5, 0.5, 1},    
+  }
   if texture_img then
     local img_file = self:file(fid)
     log.trace('Saving texture', img_file)
     win = image.display{image=texture_img,min=0,max=1,win=win}    
     image.save(img_file, texture_img)
-    
-    local material = {
-      name = "face"..fid,
-      diffuse = {0.5, 0.5, 0.5, 1},
-      diffuse_tex_path = paths.basename(img_file)
-    }
-
-    table.insert(self.target.materials, material)
-    table.insert(self.target.submeshes, {fid, fid, #self.target.materials})
+    material.diffuse_tex_path = paths.basename(img_file)
   end
+  table.insert(self.target.materials, material)
+  table.insert(self.target.submeshes, {fid, fid, #self.target.materials})
 end
 
+-- update obj properties and save it
 function Textures:save_obj()
+  log.trace('saving obj')
   local obj = self.target
   local faces = obj.faces  
   local verts = obj.verts
@@ -479,10 +495,11 @@ function Textures:save_obj()
   obj.save(objfile, mtlfile)
 end
 
-function Textures:make()    
+function Textures:make()     
   for fid = 1, self.target.n_faces do
     self:make_img(fid)
-    self:save_img(fid)     
+    self:create_uvs(fid)
+    self:save_img(fid) 
   end
   self:save_obj()
 end
