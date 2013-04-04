@@ -13,7 +13,7 @@ local bihtree = {}
 
 -- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
 
--- sv : split_verts.    Used to split the faces (obj.centers)
+-- sv : split_verts.    Used to split the faces (obj.face_centers)
 -- bb : bounding_boxes. Around the object centered in each bbox
 local function recurse_build(tree,sv,bb,noffset,absindex,debug)
    local debug = false
@@ -193,25 +193,26 @@ function bihtree.dump(tree,obj)
    local leaf_fid    = tree.leaf_fid
 
    local nvpf  = obj.n_verts_per_face
-   -- local faces = obj.faces
-   -- 
-   --    for i = 1,nodes:size(1) do
-   --       if (nodes[i][1] == 0) then
-   --          local loff = leaf_offset[i]
-   --          local fids = leaf_fid[{{loff[1],loff[2]},{}}]
-   --          objf:write("\n")
-   --          objf:write(string.format("o node_%05d\n",i))
-   --          for j = 1,fids:size(1) do
-   --             local fid = fids[j]
-   --             str = "f "
-   --             for vid = 1,nvpf[fid] do
-   --                str = str .. string.format("%d ",faces[fid][vid])
-   --             end
-   --             objf:write(str .. "\n")
-   --          end
-   -- 
-   --       end
-   --    end
+   local faces = obj.faces
+   
+   for i=1, nodes:size(1) do
+     if (nodes[i][1]==0) then
+       local loff = leaf_offset[i]
+       local fids = leaf_fid[{{loff[1],loff[2]},{}}]
+       
+       objf:write("\n")
+       objf:write(string.format("o node_%05d\n",i))
+       for j = 1,fids:size(1) do
+         local fid = fids[j]
+         str = "f "
+         for vid = 1,nvpf[fid] do
+           str = str .. string.format("%d ",faces[fid][vid][2])
+         end
+        objf:write(str .. "\n")
+       end
+     end
+   end
+
    objf:close()
    printf("Wrote %s",objfilename)
 end

@@ -1,6 +1,6 @@
 require 'torch'
 
-local libui = require 'libui2'
+local libui = require 'libui'
 local paths = require 'paths'
 local config = require 'pose_refinement.config'
 local fs = require 'util.fs'
@@ -86,7 +86,7 @@ end
 function Scan:load_model_data()
   log.trace("Loading "..self.model_file.." to as model data.")
   if self.model_file ~= nil then
-    self.model_data = util.Obj.new(self.model_file)
+    self.model_data = require('util.Obj').new(self.model_file)
     return true
   end
 

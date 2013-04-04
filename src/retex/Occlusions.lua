@@ -10,7 +10,7 @@ local Ray = require 'util.Ray'
 local bihtree = require 'util.bihtree'
 local interpolate = require 'util.interpolate'
 
-local Poses = retex.Poses
+local Poses = require('Poses')
 
 -- TODO: refactor output dir 
 local output_dir = paths.concat(paths.dirname(paths.thisfile()), 'output')
@@ -34,7 +34,7 @@ end
 function Occlusions:get()
   if not self.occlusions then
     local occlusions = {}
-    local poses = loader(self.posefile, Poses.new)
+    local poses = loader(self.posefile, Poses.new)    
     for i=1, poses.nposes do
       if paths.filep(self:file(i)) then
         occlusions[i] = torch.load(self:file(i))        
@@ -58,12 +58,12 @@ end
 
 function Occlusions:calc()
   local poses = loader(self.posefile, Poses.new)
-  local target = loader(self.targetfile, util.Obj.new)
+  local target = loader(self.targetfile, require('util.Obj').new)
   local occlusions = {}
   
   sys.tic()
   local tree = bihtree.build(target)
-  log.trace("Built tree", sys.toc())
+  log.trace("Built tree in", sys.toc())
   
   for pi = 1, poses.nposes do
     local pose     = poses[pi]
@@ -73,7 +73,7 @@ function Occlusions:calc()
     local fid_tree = torch.LongTensor(dirs:size(1),dirs:size(2))
 
     sys.tic()
-    log.trace("Computing depth map for pose", pi, 'scale 1/', self.scale)
+    log.trace("Computing depth map for pose", pi, 'at scale 1/', self.scale)
 
     local tot = 0
     local totmiss = 0
@@ -91,7 +91,7 @@ function Occlusions:calc()
         end
       end
     end
-    log.trace("Done with pose", pi, sys.toc(), totmiss..'/'..tot)    
+    log.trace("Depth map done for pose", pi, sys.toc(), totmiss..'/'..tot)    
     log.trace("Interpolating for "..totmiss.." missed edges")
 
     sys.tic()

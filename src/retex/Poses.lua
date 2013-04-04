@@ -4,10 +4,10 @@ require 'math'
 require 'image'
 require 'paths'
 
-local Pose = retex.Pose
+local Pose = require('Pose')
 
 -- this is container class for all the poses
-local Poses = Class()
+local Poses = torch.class('Poses')
 
 
 --
@@ -169,3 +169,5 @@ function Poses:save_wireframes_image_blacklines(obj,outdir,ext)
       image.save(wimagename,cimage)
    end
 end
+
+return Poses

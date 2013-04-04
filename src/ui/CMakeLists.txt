@@ -4,28 +4,21 @@ include(../common.cmake REQUIRED)
 
 find_library(COCOA_LIBRARY Cocoa)
 
-FILE(GLOB src "*.cpp" "engine/*.cpp" "engine/*.c")
+FILE(GLOB src "*.cpp" )
 
 SET( QT_USE_QTOPENGL TRUE )
 find_package(Qt4 REQUIRED)
 INCLUDE( ${QT_USE_FILE} )
 
-SET( moc_headers ScanWidget.h )
-SET(qt_rcs resources.qrc)
-QT4_ADD_RESOURCES(qt_rc_srcs ${qt_rcs})
+SET( moc_headers GLWidget.h )
 QT4_WRAP_CPP( moc_srcs ${moc_headers} )
-SET(src ${src} ${moc_srcs} ${qt_rc_srcs} )
+SET(src ${src} ${moc_srcs} )
 
 
 include_directories(${QT_INCLUDE_DIR})
 
 find_package(OpenGL REQUIRED)
 include_directories(${OPENGL_INCLUDE_DIR})
-
-find_package(GLUT REQUIRED)
-include_directories(${GLUT_INCLUDE_DIR})
-
-SET( EXPAT_DIR_STRING expat-2.0.1 )
 
 SET( precomp_object_files
   ${CMAKE_CURRENT_BINARY_DIR}/core_profile_attributes.o
