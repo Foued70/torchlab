@@ -25,7 +25,7 @@ cmd:text()
 params = cmd:parse(arg)
 
 -- temp load data from ui
-data = dofile("calibration_3_27_12.lua")
+data = dofile("Kitchen_calibration_4_3_13.lua")
 
 img = image.load(data[1][1].image_path)
 
