@@ -177,11 +177,14 @@ end
 
 
 -- if two quaternions are equal they will rotate a vector the same distance
-local quaternion_dist_testvec = normalize(torch.Tensor({1,1,1}))
 function quaternion_dist(quat1, quat2)
-   local vec1 = rotate_by_quat(quaternion_dist_testvec, quat1)
-   local vec2 = rotate_by_quat(quaternion_dist_testvec, quat2)
-   return vec1:dist(vec2)
+   local vec1x = rotate_by_quat(xaxis, quat1)
+   local vec2x = rotate_by_quat(xaxis, quat2)
+   local vec1y = rotate_by_quat(yaxis, quat1)
+   local vec2y = rotate_by_quat(yaxis, quat2)
+   local vec1z = rotate_by_quat(zaxis, quat1)
+   local vec2z = rotate_by_quat(zaxis, quat2)
+   return vec1x:dist(vec2x) + vec1y:dist(vec2y) + vec1z:dist(vec2z)
 end
 
 -- rotate a vector around axis by angle radians
@@ -303,7 +306,7 @@ function quaternion_from_to(from_vector, to_vector, quat)
    local rot_axis = torch.cross(from, to)
    local rot_angle = 0
 
-   --avoid the degenerate case when from_vector is very close to to_vector
+   -- avoid the degenerate case when from_vector is very close to to_vector
    local m = torch.norm(rot_axis)
    if(m > 1e-8) then
       rot_axis  = rot_axis/m
