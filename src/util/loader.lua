@@ -24,7 +24,6 @@ local function loader(file, init_fn, ...)
     else
       object = init_fn(file, ...)
     end
-    log.trace(cached_file)
     torch.save(cached_file, object)
     log.trace('Caching file', file)
   end
