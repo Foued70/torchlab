@@ -326,6 +326,27 @@ function quaternion_from_axis_angle(rot_axis, rot_angle, quat)
    return quat
 end
 
+-- input:  Nx3 tensor of unit cartesian vectors
+-- output: Nx2 tensor of azimuth and elevation for a set of points
+-- these are in camera coords
+--    x : right
+--    y : forward
+--    z : up
+function unit_cartesian_to_spherical_coords(uc)
+
+   local x = uc[{{},1}]
+   local y = uc[{{},2}]
+   local z = uc[{{},3}]
+
+   local angles = torch.Tensor(uc:size(1),2)
+   
+   angles[{{},1}] = torch.atan2(x,y) -- azimuth
+   angles[{{},2}] = torch.asin(z)   -- elevation
+
+   return angles
+
+end
+
 -- input:  Nx2 tensor of azimuth and elevation for a set of points
 -- output: Nx3 tensor of unit cartesian vectors
 -- these are in camera coords
