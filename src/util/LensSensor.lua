@@ -12,7 +12,7 @@ LensSensor.default_lens_sensor = require "util.lens_sensor_types"
 
 -- combine image and lens data into a single object
 
-function LensSensor:__init(lens_sensor,img)
+function LensSensor:__init(lens_sensor,...)
 
    if not lens_sensor then
       error("Pass lens + sensor type as first arg")
@@ -42,56 +42,34 @@ function LensSensor:__init(lens_sensor,img)
       self.cal_focal_px = 1
    end
 
-   if img then
-      self:add_image(img)
-   else
-      -- compute some values off sensor data
-      local w = self.sensor_w
-      local h = self.sensor_h
-      local aspect_ratio = w/h
-      local diag_norm = math.sqrt(w*w + h*h) / (2 * self.focal)
-      local vert_norm, horz_norm = projection.derive_hw(diag_norm,aspect_ratio)
-      printf(" -- normalized : diag: %f h: %f v: %f", diag_norm, horz_norm, vert_norm)
-
-      local dfov
-      if (self.lens_type == "scaramuzza_r2t") then 
-         dfov =
-            projection.compute_diagonal_fov(diag_norm*self.cal_focal_px,
-                                            self.lens_type, self.pol)
-      else
-         dfov =
-            projection.compute_diagonal_fov(diag_norm,
-                                            self.lens_type, self.pol)
-      end
-      local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
-
-      printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
-         dfov*r2d, hfov*r2d,vfov*r2d)
-      self.aspect_ratio = aspect_ratio
-
-      self.fov  = dfov
-      self.hfov = hfov
-      self.vfov = vfov
-
-      self.diagonal_normalized   = diag_norm
-      self.horizontal_normalized = horz_norm
-      self.vertical_normalized   = vert_norm
-
+   if ... then
+      self:add_image(...)
    end
 
    return self
 
 end
 
-function LensSensor:add_image(img)
-
+function LensSensor:add_image(...)
+   
    -- recompute almost everything based on the image pixels as this is
    -- better than basing measurements on spec sheets.
-   local imgw = img:size(3)
-   local imgh = img:size(2)
-
+   local imgw,imgh
    local camw = 0
    local camh = 0
+
+   local args = {...}
+   local nargs = #args
+   if (nargs == 1) and (type(args[1]) == "userdata") then 
+      local img = args[1]
+      imgw = img:size(3)
+      imgh = img:size(2)
+   elseif (nargs == 2) then 
+      imgw = args[1]
+      imgh = args[2]
+   else 
+      error("Don't understand arguments")
+   end
 
    -- handle vertical images
    if imgw > imgh then
