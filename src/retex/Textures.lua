@@ -284,11 +284,11 @@ function Textures:compute_alpha(dir,d,norm,debug)
 end
 
 -- Remap UVs: rotate each vertex into the coordinates of the new texture
-function Textures:create_uvs(fid, debug)  
-  log.trace(obj.n_verts_per_face[fid], 'uvs for face', fid)  
+function Textures:create_uvs(fid, debug)
   local rot,trans,dims,xrange,yrange = self:face_to_texture_transform_and_dimension(fid, debug)  
   local obj = self.target  
   local face_verts = obj.face_verts[fid]
+  log.trace(obj.n_verts_per_face[fid], 'uvs for face', fid)  
   
   for vi = 1, obj.n_verts_per_face[fid] do
     local vtrans = face_verts[vi] - trans
@@ -459,14 +459,18 @@ function Textures:save_obj()
   local verts = obj.verts
   local uvs = obj.uvs
   local n_verts_per_face = obj.n_verts_per_face
+  local unified_verts = obj.unified_verts
   
   local vert_cache = {}
   local unified_verts_idx = 0
   
+  log.trace('calculating unified verts')
   for fid=1, obj.n_faces do  
+    local face = faces[fid]
+    
     for vert_i=1, n_verts_per_face[fid] do
-      local vert_idx = faces[fid][2]
-      local uv_idx = faces[fid][3]
+      local vert_idx = face[vert_i][2]
+      local uv_idx = face[vert_i][3]
       
       local idx = vert_cache[{vert_idx, uv_idx}]
       if not idx then
@@ -475,8 +479,9 @@ function Textures:save_obj()
         vert_cache[{vert_idx, uv_idx}] = idx
         
         unified_verts[{idx, {1, 3}}] = verts[vert_idx]:narrow(1, 1, 3)
-        unified_verts[{idx, {5, 6}}] = uvs[uv_idx]
+        unified_verts[{idx, {5, 6}}] = uvs[uv_idx]        
       end
+      face[vert_i][1] = idx
     end
   end
   
@@ -491,9 +496,9 @@ function Textures:save_obj()
   obj.submeshes = torch.IntTensor(obj.submeshes)
   
   local objfile  = paths.concat(output_dir, paths.basename(self.targetfile))
-  local mtlfile  = objfile:sub(".obj$",".mtl")
+  local mtlfile  = objfile:gsub(".obj$",".mtl")
   log.trace('Saving obj and mtl', objfile, mtlfile)
-  obj.save(objfile, mtlfile)
+  obj:save(objfile, mtlfile)
 end
 
 function Textures:make()     

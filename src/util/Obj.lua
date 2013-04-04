@@ -308,7 +308,7 @@ function Obj:save(filename, mtlname)
   local submeshes = self.submeshes
   local n_verts_per_face = self.n_verts_per_face
 
-  for submesh_idx=1, submeshes:size()[1] do
+  for submesh_idx=1, submeshes:size(1) do
     local submesh = submeshes[submesh_idx]
     objf:write("\n")
     objf:write(string.format("g face%05d\n",submesh_idx))
@@ -345,11 +345,8 @@ function Obj:save(filename, mtlname)
     write_mtl_prop(mtlf, material, 'specular', 'Ks')
     write_mtl_prop(mtlf, material, 'alpha', 'd')    
     write_mtl_prop(mtlf, material, 'illumType', 'illum')
-    
-    if material.diffuse_tex_path then
-      if not paths.filep(material.diffuse_tex_path) then
-        image.save(material.diffuse_tex_path, material.image)      
-      end
+
+    if material.diffuse_tex_path then      
       mtlf:write(string.format("map_Kd %s\n", paths.basename(material.diffuse_tex_path)))
     end   
     
