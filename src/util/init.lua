@@ -6,13 +6,9 @@ exports.bihtree     = require "util.bihtree"
 exports.interpolate = require "util.interpolate"
 exports.projection  = require "util.projection"
 
-exports.depot = require "util.depot"
-
 -- classes
 exports.Ray   = require "util.Ray"
 
-
-require "util.global"
 
 function exports.run_tests()
    local util_test = require "util.test.util-test"
