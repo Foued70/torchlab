@@ -155,6 +155,8 @@ function LensSensor:add_image(...)
    self.fov  = dfov
    self.hfov = hfov
    self.vfov = vfov
+   self.inv_hfov = 1/hfov
+   self.inv_vfov = 1/vfov
 
    self.diagonal_normalized   = diag_norm
    self.horizontal_normalized = horz_norm

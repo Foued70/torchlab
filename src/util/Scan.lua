@@ -6,7 +6,6 @@ local config = require 'util.config'
 local fs = require 'util.fs'
 local loader = require 'util.loader'
 local Obj = require 'util.Obj'
-local Pose = require 'util.Pose'
 local Sweep = require 'util.Sweep'
 
 local Scan = torch.class('Scan')
@@ -119,18 +118,8 @@ function Scan:set_poses(pose_file)
       log.trace('no pose file found')
       return
     end
-  end
-  
-  local f, err = io.open(pose_file, "r")
-  if err then log.trace('error opening pose file', err) return end
-  
-  self.poses = {}
-  local t = f:read("*all")
-  for line in string.gmatch(t, "[^\r\n]+") do
-    table.insert(self.poses, Pose.new(line))
-  end
-  f:close()
-    
+  end  
+  self.poses = util.mp.poses(pose_file)  
   self:init_sweeps_poses()
 end
 

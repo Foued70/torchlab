@@ -126,8 +126,8 @@ function Photo:globalxyz2uv(pt)
    local elevation = r2d * torch.asin(norm[3])
    
    local lens = self:get_lens()
-   local proj_x  = 0.5 + lens.sensor.center_x + (  azimuth * lens.sensor.hfov)
-   local proj_y  = 0.5 + self.center_y - (elevation * lens.sensor.vfov)
+   local proj_x  = 0.5 + lens.sensor.center_x + (  azimuth * lens.sensor.inv_hfov)
+   local proj_y  = 0.5 + self.center_y - (elevation * lens.sensor.inv_vfov)
    
    -- u,v = 0,0 in upper left
    local proj_u  = proj_x * lens.sensor.inv_image_w
