@@ -20,7 +20,7 @@ function get_model(model_name)
     return nil 
   end
 
-  models[model_name] = util.Obj.new(model_path)
+  models[model_name] = require('util.Obj').new(model_path)
   return models[model_name]
 end
 

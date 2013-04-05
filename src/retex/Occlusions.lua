@@ -10,6 +10,7 @@ require 'sys'
 require 'paths'
 require 'math'
 
+
 local loader = require 'util.loader'
 local Ray = require 'util.Ray'
 local bihtree = require 'util.bihtree'
@@ -67,16 +68,16 @@ end
 function Occlusions:calc()
   local poses = loader(self.posefile, Poses.new)
   local target = loader(self.targetfile, require('util.Obj').new)
+
   local occlusions = {}
   
   sys.tic()
   local tree = bihtree.build(target)
   log.trace("Built tree in", sys.toc())
   
-  for pi = 1, poses.nposes do
+  for pi = 2, poses.nposes do
     local pose     = poses[pi]
     local dirs     = pose:get_dirs(self.scale,self.packetsize)
-
     local out_tree = torch.Tensor(dirs:size(1),dirs:size(2))
     local fid_tree = torch.LongTensor(dirs:size(1),dirs:size(2))
 
@@ -89,8 +90,16 @@ function Occlusions:calc()
 
     for ri = 1,dirs:size(1) do
       for ci = 1,dirs:size(2) do
+        --log.trace("Computing depth map for pose", pi, 'scale 1/', self.scale, ri, ci)
         local ray = Ray.new(pt,dirs[ri][ci])
-        local tree_d, tree_fid = bihtree.traverse(tree,target,ray)
+
+        sys.tic()
+        
+        --local tree_d, tree_fid = bihtree.traverse(tree,target,ray) -- turned off debugging
+        --bihtree.test_traverse(tree,target,ray)
+        local tree_d, tree_fid = self:get_occlusion_slow(ray,target)
+        log.trace("traversed tree in", sys.toc())
+
         tot = tot + 1
         out_tree[ri][ci] = tree_d
         fid_tree[ri][ci] = tree_fid
@@ -106,7 +115,7 @@ function Occlusions:calc()
     interpolate.math_huge(out_tree)
     log.trace("Interpolation done", sys.toc())
   
-    image.display{image={out_tree},min=0,max=5}
+    image.display{image={out_tree},min=0,max=10}
     
     local output_file = self:file(pi)
     log.trace("Saving depth map:", output_file)
@@ -116,4 +125,37 @@ function Occlusions:calc()
   end
   
   self.occlusions = occlusions
+end
+
+-- Intentionally very slow.  Checks _all_ the faces. Returns closest
+-- intersection. Used for debugging the aggregates.
+function Occlusions:get_occlusion_slow(ray,obj,debug)
+   local mindepth        = math.huge
+   local fid             = 0
+   local nverts_per_face = obj.n_verts_per_face
+   local face_verts      = obj.face_verts
+   local normals         = obj.face_normals
+   local ds              = obj.face_center_dists
+   -- exhausting loop through all faces
+   for fi = 1,obj.n_faces do
+      local nverts = nverts_per_face[fi]
+      local verts  = face_verts[fi]:narrow(1,1,nverts)      
+      local normal = normals[fi]
+      local d      = ds[fi]
+
+      
+      local testd = intersect.ray_polygon(ray,obj,fi,debug)
+      local bstr  = " "
+      if testd and (testd < mindepth) then
+         bstr = "*"
+         mindepth = testd
+         fid = fi
+      end
+      if debug then 
+         if not testd then testd = math.huge end
+         printf("%s[%05d] : %f", bstr,fi,testd)
+      end
+      
+   end
+   return mindepth,fid
 end
