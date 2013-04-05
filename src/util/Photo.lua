@@ -19,7 +19,9 @@ function Photo:__init(parent_sweep, image_path)
   self.image_path = image_path
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
-
+  self.image_w = nil
+  self.image_h = nil
+  
   self.lens = nil
 end
 
@@ -67,11 +69,14 @@ function Photo:image_loaded()
 end
 
 function Photo:load_image()
-  log.trace("Loading image from path:", "\""..self.image_path.."\"", "at:", sys.clock())
+  sys.tic()
+  log.trace("Loading image from path:", "\""..self.image_path.."\"")
   self.image_data_raw = image.load(self.image_path)
   self.lens = self.sweep.scan:get_lens(self.image_data_raw)
-  self.image_data_rectilinear = projection.remap(self.image_data_raw, self.lens.rectilinear)
-  log.trace("Completed image load at:", sys.clock())
+  self.image_data_rectilinear = projection.remap(self.image_data_raw, self.lens.rectilinear)    
+  self.image_w = self.image_data_raw:size(3)
+  self.image_h = self.image_data_raw:size(2)
+  log.trace("Completed image load in", sys.toc())
 end
 
 function Photo:flush_image()
