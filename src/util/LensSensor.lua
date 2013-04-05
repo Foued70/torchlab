@@ -1,4 +1,5 @@
 local projection = require "util.projection"
+local geom = require 'util.geom'
 
 local pi = math.pi
 local piover2 = math.pi * 0.5
@@ -332,8 +333,9 @@ function LensSensor:img_coords_to_world (img_pts, pt_type, out_type)
    ysqr:cmul(ysqr)
    local d = torch.add(xsqr,ysqr)
    d:sqrt()
-   d:mul(self.cal_focal_px) -- put d in pixel coords
-
+   if self.cal_focal_px then 
+      d:mul(self.cal_focal_px) -- put d in pixel coords
+   end
    -- keep track of the sign
    normalized_pts:sign()
 
@@ -347,6 +349,7 @@ function LensSensor:img_coords_to_world (img_pts, pt_type, out_type)
    spherical_angles[{{},1}] = azimuth
    spherical_angles[{{},2}] = elevation
    spherical_angles:cmul(normalized_pts) -- put the sign
+
    if (out_type == "uc") or (out_type == "unit_cartesian") then
       return geom.spherical_coords_to_unit_cartesian(spherical_angles)
    else

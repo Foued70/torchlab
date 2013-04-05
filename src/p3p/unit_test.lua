@@ -55,9 +55,10 @@ function c:globalxyz2angle(pt)
    return angles
 end
 
-function check_solutions(solutions,c)
+function check_solutions(solutions,c,pts)
    local trans_err = 1e16
    local rot_err = 1e16
+   local reprojection_err = 1e16
    for ui = 1,4 do
       s = solutions[ui]
       trans = s[1]
@@ -77,31 +78,50 @@ function check_solutions(solutions,c)
                 quat[1],quat[2],quat[3],quat[4],quat:norm())
          printf(" - c.quat_r: %f %f %f %f norm: %f",
                 c.quat_r[1],c.quat_r[2],c.quat_r[3],c.quat_r[4],c.quat_r:norm())
+
+         -- new unit vectors from new position should align with the original 
+         newuc = torch.Tensor(3,3) -- c.uc:size())
+         for uci = 1,3 do -- newuc:size(1) do 
+            newuc[uci] = 
+               geom.normalize(geom.rotate_by_quat(c.world[uci] - trans, quat))
+         end
+         local creproj_err = newuc:dist(c.uc:narrow(1,1,3))
+         printf(" - reproj err: %f", creproj_err)
+         if creproj_err < reprojection_err then 
+            reprojection_err = creproj_err 
+         end
       else
          print("skipping")
       end
    end
-   return trans_err, rot_err
+   return trans_err, rot_err, reprojection_err
 end
 
-rot_error = 0
-trans_error = 0
+rot_error    = 0
+trans_error  = 0
+reproj_error = 0
 
-
-for i = 1,10 do
+for i = 1,100 do
    -- reset camera position
    c.xyz = geom.normalize(torch.randn(3)) * 6
    c.quat_r = geom.quaternion_from_to(xaxis,geom.normalize(torch.mul(c.xyz,-1)))
    c.quat   = geom.quat_conjugate(c.quat_r)
    if true then
       -- shoot rays through corners of camera, put in world coords
-      test_corners = torch.Tensor({{-1,-1},{-1,1},{1,-1},{1,1}})
+      -- test_corners = torch.Tensor({{-1,-1},{-1,1},{1,-1},{1,1}})
+      test_corners = torch.rand(4,2):mul(2):add(-1)
       test_unit    = c:img_coords_to_world(test_corners,"uv","uc")
       test_world   = test_unit:clone()
       for ti = 1,test_unit:size(1) do
          test_world[ti]:mul(math.random()*6)
          test_world[ti] = c:local2global(test_world[ti])
       end 
+      -- jitter
+      -- print(test_unit)
+      -- test_unit:add(torch.randn(test_unit:size()):mul(0.001))
+      -- print(test_unit)
+      c.world = test_world
+      c.uc    = test_unit 
       solutions = p3p.compute_poses(test_world,test_unit)
    else 
       -- pick 3 random points
@@ -110,16 +130,23 @@ for i = 1,10 do
       unit_vec[1] = c:global2local(pts[1])
       unit_vec[2] = c:global2local(pts[2])
       unit_vec[3] = c:global2local(pts[3])
+      c.world = pts
+      c.uc    = unit_vec
       solutions   = p3p.compute_poses(pts,unit_vec)
    end
 
-   local trans_err, rot_err = check_solutions(solutions,c)
+   local trans_err, rot_err, reproj_err = check_solutions(solutions,c)
 
-   printf("Lowest trans error: %f", trans_err)
+   printf("Lowest trans error : %f", trans_err)
    trans_error = trans_error + trans_err
-   printf("Lowest rot error: %f", rot_err)
+   printf("Lowest rot error   : %f", rot_err)
    rot_error = rot_error + rot_err
+   printf("Lowest reproj error: %f", reproj_err)
+   reproj_error = reproj_error + reproj_err
+
+
 end
 
-printf("Total Translation Error: %f", trans_error)
-printf("Total Rotation Error: %f", rot_error)
+printf("Total Translation Error : %f", trans_error)
+printf("Total Rotation Error    : %f", rot_error)
+printf("Total Reprojection Error: %f", reproj_error)
