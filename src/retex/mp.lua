@@ -20,6 +20,10 @@ function scan_name(posefile, objfile)
 end
 
 function scan(posefile, objfile)
+  return loader(scan_name(posefile, objfile), load_scan, posefile, objfile)
+end
+
+function load_scan(posefile, objfile)  
   local scan_folder = paths.dirname(posefile)
   local scan = Scan.new(scan_folder, posefile, objfile)  
   local poses = loader(posefile, Poses)
@@ -32,14 +36,9 @@ function scan(posefile, objfile)
     local photo = Photo.new(sweep, paths.concat(scan_folder, pose.name))
     table.insert(sweep.photos, photo)
     table.insert(sweeps, sweep)
-    
-    scan:init_sweeps_poses()
   end
+  scan.sweeps = sweeps
+  scan:init_sweeps_poses()
   
   return scan
-  -- return loader(scan_name(posefile, objfile), load_scan, posefile, objfile)
-end
-
-function load_scan(posefile, objfile)
-  
 end

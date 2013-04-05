@@ -1,3 +1,5 @@
+-- TODO: pull relevant functions out into util classes and kill this one.
+
 local geom = require "util.geom"
 local loader = require "util.loader"
 local util = require "util.util"
@@ -5,7 +7,7 @@ local util = require "util.util"
 local r2d = 180 / math.pi
 local d2r = math.pi / 180
 
-local Pose = torch.class('Pose')
+local Pose = torch.class('MP_Pose')
 
 function Pose:__init(poses,i)
    self.pid    = i
@@ -144,7 +146,7 @@ function Pose:draw_wireframe (obj)
    psize[1] = 4
    local wimage = torch.Tensor(psize):fill(0)
    local face_verts = obj.face_verts
-   local nverts = obj.nverts_per_face
+   local nverts = obj.n_verts_per_face
    for fi = 1,face_verts:size(1) do
       local nv = nverts[fi]
       local f = face_verts[fi]:narrow(1,1,nv)

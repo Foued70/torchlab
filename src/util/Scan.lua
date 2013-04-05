@@ -76,15 +76,20 @@ function Scan:set_model_file(file_path)
   log.trace("no model file found")
 end
 
-function Scan:load_model_data()
-  log.trace("Loading "..self.model_file.." to as model data.")
-  if self.model_file ~= nil then
-    self.model_data = loader(self.model_file, Obj.new)
-    return true
+function Scan:get_model_data()
+  if not self.model_file or not paths.filep(self.model_file) then 
+    log.trace('Could not get model data. No file found.')
+    return nil 
   end
-
-  log.trace("Failed to load model data. No model file set")
-  return false
+  
+  if not self.model_data then 
+    sys.tic()
+    log.trace("Loading model data from", self.model_file)    
+    self.model_data = loader(self.model_file, Obj.new)
+    log.trace('Model loaded in', sys.toc())
+  end
+  
+  return self.model_data
 end
 
 function Scan:flush_model_data()
