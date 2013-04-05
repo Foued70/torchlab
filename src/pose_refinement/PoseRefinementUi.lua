@@ -354,17 +354,14 @@ function PoseRefinementUi:create_debug_camera_meshes(sweep_number)
   local debug_model_data = util.AssetManager.get_model('debug_forward_pointer')
 
   for i = 1, #self.scan.sweeps[sweep_number].photos do
-    local camera_position = nil
-    local camera_rotation = nil
-
     local debug_camera = self.gl_viewport.renderer:add_object(debug_model_data)
     log.trace("Building debug camera number", i)
-    camera_position, camera_rotation = self.scan.sweeps[sweep_number]:calculate_camera_world(i)
-    log.trace("Camera",i,"position", camera_position)
-    log.trace("Camera",i,"rotation", camera_rotation)
+    local photo = self.scan.sweeps[sweep_number].photos[i]
+    log.trace("Camera",i,"position", photo.position)
+    log.trace("Camera",i,"rotation", photo.rotation)
 
-    debug_camera.position:copy(camera_position)
-    debug_camera.rotation:copy(camera_rotation)
+    debug_camera.position:copy(photo.position)
+    debug_camera.rotation:copy(photo.rotation)
   end
 end
 
@@ -387,10 +384,6 @@ function PoseRefinementUi:init_calibration()
   self.scan = Scan.new(self.scan_folder, self.pose_file)
   log.trace("Completed scan load at", sys.clock())
 
-  log.trace("Loading model data at", sys.clock())
-  self.scan:load_model_data()
-  log.trace("Completed model load at", sys.clock())
-
   collectgarbage()
   self.gl_viewport = GLWidget.new()
   while self.gl_viewport.initialized ~= true do
@@ -402,7 +395,7 @@ function PoseRefinementUi:init_calibration()
   libui.hide_widget(self.gl_viewport.qt_widget)
 
   self.gl_viewport.renderer:activate_scene('viewport_scene')
-  self.model_object = self.gl_viewport.renderer:add_object(self.scan.model_data)
+  self.model_object = self.gl_viewport.renderer:add_object(self.scan:get_model_data())
 
   self.gl_viewport.renderer:create_scene('wireframe_scene')
   self.gl_viewport.renderer:activate_scene('wireframe_scene')
@@ -430,12 +423,10 @@ end
 
 function PoseRefinementUi:update_photo_pass()
   collectgarbage()
-  if self.scan.sweeps[self.current_sweep].photos[self.current_photo]:image_loaded() == false then
-    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:load_image()
-  end
 
-  local photo_spherical_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data_spherical)
-  local photo_rectilinear_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo].image_data_rectilinear)
+  local photo_spherical_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo]:get_image_spherical())
+  local photo_rectilinear_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo]:get_image_rectilinear())
+  
   self:attach_image(1, 'dslr_photo_spherical', 'Hidden', photo_spherical_qt)
   self:attach_image(2, 'dslr_photo_rectilinear', 'SourceOver', photo_rectilinear_qt)
   self.widget:update()
@@ -443,15 +434,12 @@ end
 
 function PoseRefinementUi:update_viewport_passes()
   --Set GL camera to match current Photo
-  local camera_position = nil
-  local camera_rotation = nil
-
-  camera_position, camera_rotation = self.scan.sweeps[self.current_sweep]:calculate_camera_world(self.current_photo)
+  local photo = self.scan.sweeps[self.current_sweep].photos[self.current_photo]  
 
   local forward_vector = torch.Tensor({0,1,0})
-  local look_direction = geom.rotate_by_quat(forward_vector, camera_rotation)
+  local look_direction = geom.rotate_by_quat(forward_vector, photo.rotation)
 
-  local camera_eye = camera_position
+  local camera_eye = photo.position
   local camera_center = camera_eye + look_direction
 
   self.gl_viewport.renderer.cameras.pose_camera.eye:copy(camera_eye)
@@ -597,18 +585,17 @@ function PoseRefinementUi:save_calibration()
       file:write(self.scan.sweeps[sweep].rotation[2]..", ")
       file:write(self.scan.sweeps[sweep].rotation[3]..", ")
       file:write(self.scan.sweeps[sweep].rotation[4].."}),\n")
-
-      local photo_position, photo_rotation = self.scan.sweeps[sweep]:calculate_camera_world(photo)
+      local photo = self.scan.sweeps[sweep].photos[photo]      
       file:write("    photo_position = torch.Tensor({")
-      file:write(photo_position[1]..", ")
-      file:write(photo_position[2]..", ")
-      file:write(photo_position[3].."}),\n")
+      file:write(photo.position[1]..", ")
+      file:write(photo.position[2]..", ")
+      file:write(photo.position[3].."}),\n")
 
       file:write("    photo_rotation = torch.Tensor({")
-      file:write(photo_rotation[1]..", ")
-      file:write(photo_rotation[2]..", ")
-      file:write(photo_rotation[3]..", ")
-      file:write(photo_rotation[4].."})\n")
+      file:write(photo.rotation[1]..", ")
+      file:write(photo.rotation[2]..", ")
+      file:write(photo.rotation[3]..", ")
+      file:write(photo.rotation[4].."})\n")
 
       if photo ~= #self.scan.sweeps[sweep].photos then
         file:write("  },\n")
