@@ -15,6 +15,7 @@ local loader = require 'util.loader'
 local Ray = require 'util.Ray'
 local bihtree = require 'util.bihtree'
 local interpolate = require 'util.interpolate'
+local intersect = require 'util.intersect'
 
 local Poses = require('retex.Poses')
 
@@ -90,7 +91,7 @@ function Occlusions:calc()
 
     for ri = 1,dirs:size(1) do
       for ci = 1,dirs:size(2) do
-        --log.trace("Computing depth map for pose", pi, 'scale 1/', self.scale, ri, ci)
+        log.trace("Computing depth map for pose", pi, 'scale 1/', self.scale, ri, ci)
         local ray = Ray.new(pt,dirs[ri][ci])
 
         sys.tic()
