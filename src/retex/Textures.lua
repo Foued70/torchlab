@@ -1,3 +1,9 @@
+-- takes a posefile and a targetfile (obj), writes .obj, .mtl, and various .pngs to file sys
+-- also updates the obj instance for direct viewer display
+-- example usage: 
+-- tex = retex.Textures.new(posefile, targetfile, {ppm = 300})
+-- tex:make()
+-- 
 -- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua
 
 require 'torch'
@@ -8,10 +14,6 @@ require 'math'
 local Poses = require 'Poses'
 local loader = require 'util.loader'
 local geom = require 'util.geom'
-
--- TODO: deal with output dir -- arc?
-local output_dir = paths.concat(paths.dirname(paths.thisfile()), 'output')
-sys.execute("mkdir -p " .. output_dir)
 
 local Textures = Class()
 
@@ -29,6 +31,9 @@ function Textures:__init(posefile, targetfile, opts)
   
   self.posefile = posefile
   self.poses = loader(posefile, Poses.new)
+  
+  self.output_dir = paths.concat(paths.dirname(posefile), 'retexture')
+  sys.execute("mkdir -p " .. self.output_dir)
   
   self.textures = {}
   self.faces = {} -- store some info about faces
@@ -428,7 +433,7 @@ end
 -- get file path for a face's texture
 function Textures:file(fid)
   local name = paths.basename(self.targetfile):gsub(".obj$", "_face-"..fid..".png")
-  return paths.concat(output_dir, name)
+  return paths.concat(self.output_dir, name)
 end
 
 -- save the texture for a face and update the materials and submeshes
@@ -440,12 +445,16 @@ function Textures:save_img(fid)
   }
   if texture_img then
     local img_file = self:file(fid)
-    log.trace('Saving texture for face', fid, img_file)
     win = image.display{image=texture_img,min=0,max=1,win=win}    
     image.save(img_file, texture_img)
-    material.diffuse_tex_path = paths.basename(img_file)
+    if paths.filep(img_file) then
+      log.trace('Texture saved for face', fid, img_file)
+      material.diffuse_tex_path = img_file
+    else
+      log.trace('No texture saved for face', fid)
+    end
   else
-    log.trace('No texture for face', fid)
+    log.trace('No texture exists for face', fid)
   end
   table.insert(self.target.materials, material)
   table.insert(self.target.submeshes, {fid, fid, #self.target.materials})
@@ -497,7 +506,7 @@ function Textures:update_obj()
 end
 
 function Textures:save_obj()  
-  local objfile  = paths.concat(output_dir, paths.basename(self.targetfile))
+  local objfile  = paths.concat(self.output_dir, paths.basename(self.targetfile))
   local mtlfile  = objfile:gsub(".obj$",".mtl")
   log.trace('Saving obj and mtl', objfile, mtlfile)
   self.target:save(objfile, mtlfile)

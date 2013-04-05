@@ -1,3 +1,8 @@
+-- takes a posefile and targetfile and writes a .t7 to filesystem with depth map for each pose-photo
+-- example usage:
+-- occlusions = retex.Occlusions.new(posefile, targetfile, scale, packetsize)
+-- occlusions:calc()
+-- 
 -- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua. 
 
 require 'torch'
@@ -30,6 +35,8 @@ function Occlusions:__init(posefile, targetfile, scale, packetsize)
   if packetsize and packetsize < 1 then self.packetsize = nil end
 end
 
+-- get occlusions for each pose, trying to load occlusions from torch file
+-- if occlusions can't be found for the pose, set to nil
 function Occlusions:get()
   if not self.occlusions then
     local occlusions = {}
@@ -49,12 +56,14 @@ function Occlusions:get()
   return self.occlusions
 end
 
+-- filename to use when saving and loading occlusions for a pose
 function Occlusions:file(pose)
   local occ_file = string.format('%s-%s-p%s-s%s-depth.t7', paths.basename(self.targetfile), 
                     paths.basename(self.posefile), pose, self.scale)
   return paths.concat(self.output_dir, occ_file)
 end
 
+-- calculate occlusions for all poses
 function Occlusions:calc()
   local poses = loader(self.posefile, Poses.new)
   local target = loader(self.targetfile, require('util.Obj').new)
