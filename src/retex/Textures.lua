@@ -1,4 +1,4 @@
--- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua. 
+-- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua
 
 require 'torch'
 require 'sys'
@@ -495,11 +495,12 @@ function Textures:update_obj()
   obj.uvs = trimmed_uvs
   obj.submeshes = torch.IntTensor(obj.submeshes)
 end
+
 function Textures:save_obj()  
   local objfile  = paths.concat(output_dir, paths.basename(self.targetfile))
   local mtlfile  = objfile:gsub(".obj$",".mtl")
   log.trace('Saving obj and mtl', objfile, mtlfile)
-  obj:save(objfile, mtlfile)
+  self.target:save(objfile, mtlfile)
 end
 
 function Textures:make()     
