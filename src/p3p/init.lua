@@ -74,7 +74,7 @@ local p3pC  = ffi.load(ffidir .. "libp3p.dylib")
 
 local p3p = {}
 
-function p3p.compute_poses (world_pts,camera_angles)
+function p3p.compute_poses (world_pts,unit_vec) 
    local xyz = world_pts
    local p1 = xyz[1]
    local p2 = xyz[2]
@@ -88,17 +88,12 @@ function p3p.compute_poses (world_pts,camera_angles)
       return
    end
 
-   -- Carefull input is angles derived from the image
-   -- coordinates and camera calibration.  
-   -- 
    -- FIXME current code expects this data on Unit Cartesian Sphere
    -- (Directions on unit sphere in camera coordinates with optical
    -- axis at (0,0,1) ??) update to handle our internal spherical
    -- coordinates.  For now: convert azimuth and elevation to
    -- cartesian unit sphere
 
-   local unit_vec = 
-      geom.spherical_coords_to_unit_cartesian(camera_angles)
    local f1 = unit_vec[1] 
    local f2 = unit_vec[2]
    local f3 = unit_vec[3]

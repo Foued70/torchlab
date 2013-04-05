@@ -1,3 +1,8 @@
+-- takes a posefile and targetfile and writes a .t7 to filesystem with depth map for each pose-photo
+-- example usage:
+-- occlusions = retex.Occlusions.new(posefile, targetfile, scale, packetsize)
+-- occlusions:calc()
+-- 
 -- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua. 
 
 require 'torch'
@@ -10,11 +15,7 @@ local Ray = require 'util.Ray'
 local bihtree = require 'util.bihtree'
 local interpolate = require 'util.interpolate'
 
-local Poses = retex.Poses
-
--- TODO: refactor output dir 
-local output_dir = paths.concat(paths.dirname(paths.thisfile()), 'output')
-sys.execute("mkdir -p " .. output_dir)
+local Poses = require('retex.Poses')
 
 local Occlusions = Class()
 
@@ -26,15 +27,20 @@ function Occlusions:__init(posefile, targetfile, scale, packetsize)
     
   self.posefile = posefile
   self.targetfile = targetfile
+  self.output_dir = paths.concat(paths.dirname(posefile), 'occlusions')
+  sys.execute("mkdir -p " .. self.output_dir)
+  
   self.scale = scale or 4
   self.packetsize = packetsize
   if packetsize and packetsize < 1 then self.packetsize = nil end
 end
 
+-- get occlusions for each pose, trying to load occlusions from torch file
+-- if occlusions can't be found for the pose, set to nil
 function Occlusions:get()
   if not self.occlusions then
     local occlusions = {}
-    local poses = loader(self.posefile, Poses.new)
+    local poses = loader(self.posefile, Poses.new)    
     for i=1, poses.nposes do
       if paths.filep(self:file(i)) then
         occlusions[i] = torch.load(self:file(i))        
@@ -50,20 +56,22 @@ function Occlusions:get()
   return self.occlusions
 end
 
+-- filename to use when saving and loading occlusions for a pose
 function Occlusions:file(pose)
   local occ_file = string.format('%s-%s-p%s-s%s-depth.t7', paths.basename(self.targetfile), 
                     paths.basename(self.posefile), pose, self.scale)
-  return paths.concat(output_dir, occ_file)
+  return paths.concat(self.output_dir, occ_file)
 end
 
+-- calculate occlusions for all poses
 function Occlusions:calc()
   local poses = loader(self.posefile, Poses.new)
-  local target = loader(self.targetfile, util.Obj.new)
+  local target = loader(self.targetfile, require('util.Obj').new)
   local occlusions = {}
   
   sys.tic()
   local tree = bihtree.build(target)
-  log.trace("Built tree", sys.toc())
+  log.trace("Built tree in", sys.toc())
   
   for pi = 1, poses.nposes do
     local pose     = poses[pi]
@@ -73,7 +81,7 @@ function Occlusions:calc()
     local fid_tree = torch.LongTensor(dirs:size(1),dirs:size(2))
 
     sys.tic()
-    log.trace("Computing depth map for pose", pi, 'scale 1/', self.scale)
+    log.trace("Computing depth map for pose", pi, 'at scale 1/', self.scale)
 
     local tot = 0
     local totmiss = 0
@@ -91,7 +99,7 @@ function Occlusions:calc()
         end
       end
     end
-    log.trace("Done with pose", pi, sys.toc(), totmiss..'/'..tot)    
+    log.trace("Depth map done for pose", pi, sys.toc(), totmiss..'/'..tot)    
     log.trace("Interpolating for "..totmiss.." missed edges")
 
     sys.tic()

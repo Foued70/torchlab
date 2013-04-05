@@ -7,7 +7,9 @@ require 'qt'
 
 local geom = require 'util.geom'
 local libui = require 'libui'
-local config = require 'ui.pp_config'
+local Scan = require 'util.Scan'
+local GLWidget = require 'ui.GLWidget'
+local Obj = require 'util.Obj'
 
 local PoseRefinementUi = Class()
 
@@ -382,7 +384,7 @@ function PoseRefinementUi:init_calibration()
   end
 
   log.trace("Loading scan at", sys.clock())
-  self.scan = pose_refinement.Scan.new(self.scan_folder, self.pose_file)
+  self.scan = Scan.new(self.scan_folder, self.pose_file)
   log.trace("Completed scan load at", sys.clock())
 
   log.trace("Loading model data at", sys.clock())
@@ -390,7 +392,7 @@ function PoseRefinementUi:init_calibration()
   log.trace("Completed model load at", sys.clock())
 
   collectgarbage()
-  self.gl_viewport = require('ui.GLWidget').new()
+  self.gl_viewport = GLWidget.new()
   while self.gl_viewport.initialized ~= true do
     os.execute("sleep " .. tonumber(1))
   end

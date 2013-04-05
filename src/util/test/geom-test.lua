@@ -399,6 +399,92 @@ function test.spherical_coords_to_unit_cartesian()
    print(string.format(" - Found %d errors", error)) 
 end
 
+function test.unit_cartesian_to_spherical_coords()
+   print("Testing unit_cartesian_to_spherical_coords")
+   local pi  = math.pi
+   local pi2 = math.pi / 2
+   local pi4 = math.pi / 4
+   local sp4 = math.sin(pi4)
+   
+   local unit_cartesian = torch.Tensor(
+      {
+         { 0,1, 0}, --    0,  0
+         { 1,0, 0}, --  pi2,  0
+         {-1,0, 0}, -- -pi2,  0
+         { 0,0, 1}, --    0,  pi2
+         { 0,0,-1}, --    0, -pi2
+         { 0,0, 1}, --  pi2,  pi2
+         { 0,0,-1}, -- -pi2, -pi2
+         { 0,0,-1}, --  pi2, -pi2
+         { 0,0, 1}, -- -pi2,  pi2
+         { 0,1, 0}, --   pi,  pi
+         {-1,0, 0}, --  pi2,  pi
+         { 1,0, 0}, -- -pi2,  pi
+         { 0,0, 1}, --   pi,  pi2
+         { 0,0,-1}, --   pi, -pi2
+      })
+
+   local angles = geom.unit_cartesian_to_spherical_coords(unit_cartesian)
+
+   local angles_check = torch.Tensor(
+      {
+         {   0,    0}, -- right:  0 forward: 1 up:  0 
+         { pi2,    0}, -- right:  1 forward: 0 up:  0 
+         {-pi2,    0}, -- right: -1 forward: 0 up:  0 
+         {   0,  pi2}, -- right:  0 forward: 0 up:  1 
+         {   0, -pi2}, -- right:  0 forward: 0 up: -1 
+         { pi2,  pi2}, -- right:  0 forward: 0 up:  1 
+         {-pi2, -pi2}, -- right:  0 forward: 0 up: -1 
+         { pi2, -pi2}, -- right:  0 forward: 0 up: -1 
+         {-pi2,  pi2}, -- right:  0 forward: 0 up:  1 
+         {  pi,   pi}, -- right:  0 forward: 1 up:  0 
+         { pi2,   pi}, -- right: -1 forward: 0 up:  0 
+         {-pi2,   pi}, -- right:  1 forward: 0 up:  0 
+         {  pi,  pi2}, -- right:  0 forward: 0 up:  1 
+         {  pi, -pi2}, -- right:  0 forward: 0 up: -1 
+      })
+   
+   
+   local error = 0 
+ 
+   for i = 1,angles:size(1) do 
+      local d = angles[i]:dist(angles_check[i])
+      -- trig functions have error of 2 sig bits
+      if d > 1e-14 then
+         print("["..i.."] "..d)
+         print(angles[i])
+         print(angles_check[i])
+         error = error + 1
+      end
+   end
+   print(string.format(" - Found %d/%d errors", error,angles:size(1))) 
+end
+
+function test.sphere_to_unit_and_back()
+   print("Testing spherical_coords_to_unit_cartesian and back")
+   local npts = 1000
+   local uc = torch.randn(npts,3)
+
+   for i = 1,npts do uc[i]:mul(1/uc[i]:norm()) end
+
+   local a = geom.unit_cartesian_to_spherical_coords(uc)
+
+   local ucp = geom.spherical_coords_to_unit_cartesian(a)
+   local error = 0
+   for i = 1,npts do 
+      local d = ucp[i]:dist(uc[i])
+      -- trig functions have error of 2 sig bits
+      if d > 1e-14 then
+         print("["..i.."] "..d)
+         print(uc[i])
+         print(a[i])
+         print(ucp[i])
+         error = error + 1
+      end
+   end
+   print(string.format(" - Found %d/%d errors", error, npts)) 
+end
+
 function test.all()
    test.quaternion_from_to()
    test.quat2rot()
@@ -414,6 +500,8 @@ function test.all()
    test.ray_face_intersection()
    test.compute_normals()
    test.spherical_coords_to_unit_cartesian()
+   -- test.unit_cartesian_to_spherical_coords()
+   test.sphere_to_unit_and_back()
 end
 
 return test
