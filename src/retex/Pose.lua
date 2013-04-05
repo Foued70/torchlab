@@ -146,7 +146,7 @@ function Pose:draw_wireframe (obj)
    psize[1] = 4
    local wimage = torch.Tensor(psize):fill(0)
    local face_verts = obj.face_verts
-   local nverts = obj.nverts_per_face
+   local nverts = obj.n_verts_per_face
    for fi = 1,face_verts:size(1) do
       local nv = nverts[fi]
       local f = face_verts[fi]:narrow(1,1,nv)

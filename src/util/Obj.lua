@@ -1,6 +1,7 @@
--- Obj can load and save a .obj file 
--- Obj can be n-gon but for now, all objs should be triangulated for opengl loading 
--- TODO: n-gon support
+-- Obj can load and save a .obj file.
+-- Viewer can show n-gon as triangulated mesh. materials will be wack.
+-- TODO: n-gon support -- connect tri to associated ngon so that viewer can show "ngon"
+-- TODO: n-gon support -- do submeshes and uvs need to be updated?
 
 local paths = require "paths"
 local geom = require "util.geom"
@@ -272,6 +273,53 @@ local function write_mtl_prop(mtlf, mtl, mtl_prop, file_prop)
     end
     mtlf:write(str.."\n") 
   end
+end
+
+function Obj:get_tris()
+  if not self.tris then 
+    if self.n_gon == 3 then
+      self.tris = self.faces[{{}, {}, 1}]
+    else
+      log.trace('triangulating')
+      local max_tris = (self.n_gon - 2) * self.n_faces
+      local tris =  torch.IntTensor(max_tris, 3):fill(1)
+      local n_verts_per_face = self.n_verts_per_face
+      local faces = self.faces
+      local tris_idx = 0    
+      -- local submeshes = self.submeshes
+      -- local submesh_count = submeshes:size(1)
+      -- local submesh_idx = 1      
+      -- local submesh_end = submeshes[submesh_idx][2]
+      
+      -- input face can be a tri, quad, or poly but output face must be a tri      
+      for face_idx=1, self.n_faces do
+        local n_verts = n_verts_per_face[face_idx]
+        local face = faces[face_idx]
+        -- Rough Fix to deal with quads and polys there may be better methods        
+        for vert_idx=1, n_verts-2 do -- number of triangles to make up the face          
+          tris_idx = tris_idx+1
+          tris[tris_idx][1] = face[1][1]
+          tris[tris_idx][2] = face[vert_idx+1][1]
+          tris[tris_idx][3] = face[vert_idx+2][1]
+        end
+        -- submeshes' start and end need to be updated
+        -- if face_idx == submesh_end then
+        --   submeshes[submesh_idx][2] = tris_idx
+        --   submesh_idx = submesh_idx+1
+        --   if submesh_idx <= submesh_count then
+        --     submeshes[submesh_idx][1] = tris_idx+1
+        --     submesh_end = submeshes[submesh_idx][2]
+        --   end          
+        -- end
+      end      
+      local trimmed_tris = torch.IntTensor(tris_idx, 3)
+      trimmed_tris[{{1, tris_idx}}] = tris[{{1, tris_idx}}]
+      self.tris = trimmed_tris      
+      -- self.submeshes = submeshes
+    end
+  end
+  
+  return self.tris
 end
 
 function Obj:save(filename, mtlname)

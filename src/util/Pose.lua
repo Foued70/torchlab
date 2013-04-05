@@ -1,3 +1,5 @@
+-- TODO: maybe kill this?
+
 local Pose = torch.class('Pose')
 
 function Pose:__init(pose_string)
