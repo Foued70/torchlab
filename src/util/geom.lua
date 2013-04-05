@@ -178,12 +178,12 @@ end
 
 -- if two quaternions are equal they will rotate a vector the same distance
 function quaternion_dist(quat1, quat2)
-   local vec1x = rotate_by_quat(xaxis, quat1)
-   local vec2x = rotate_by_quat(xaxis, quat2)
-   local vec1y = rotate_by_quat(yaxis, quat1)
-   local vec2y = rotate_by_quat(yaxis, quat2)
-   local vec1z = rotate_by_quat(zaxis, quat1)
-   local vec2z = rotate_by_quat(zaxis, quat2)
+   local vec1x = rotate_by_quat(x_axis, quat1)
+   local vec2x = rotate_by_quat(x_axis, quat2)
+   local vec1y = rotate_by_quat(y_axis, quat1)
+   local vec2y = rotate_by_quat(y_axis, quat2)
+   local vec1z = rotate_by_quat(z_axis, quat1)
+   local vec2z = rotate_by_quat(z_axis, quat2)
    return vec1x:dist(vec2x) + vec1y:dist(vec2y) + vec1z:dist(vec2z)
 end
 
