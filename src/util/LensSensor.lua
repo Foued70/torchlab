@@ -144,6 +144,8 @@ function LensSensor:add_image(...)
    self.image_w      = imgw -- px
    self.image_h      = imgh -- px
    self.aspect_ratio = aspect_ratio
+   self.inv_image_w  = 1/imgw
+   self.inv_image_h  = 1/imgh
 
    self.center_x = cx -- px
    self.center_y = cy -- px
