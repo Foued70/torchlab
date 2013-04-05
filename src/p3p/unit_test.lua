@@ -35,47 +35,36 @@ c.xyz = geom.normalize(torch.randn(3)) * 6
 c.fovx   = math.atan2(c.center_x,c.hfocal_px)
 c.fovy   = math.atan2(c.center_y,c.vfocal_px)
 
-c.quat_r = geom.quaternion_from_to(xaxis,geom.normalize(torch.mul(c.xyz,-1)))
+view_direction = geom.normalize(torch.mul(c.xyz,-1))
+c.quat_r = geom.quaternion_from_to(xaxis,view_direction)
 c.quat   = geom.quat_conjugate(c.quat_r)
+
+function c:local2global(v)
+   return geom.rotate_by_quat(v,self.quat) + self.xyz
+end
 
 function c:global2local(v)
    return geom.normalize(geom.rotate_by_quat(v - self.xyz, self.quat_r))
 end
-   
+
 function c:globalxyz2angle(pt)
-   local v = self:global2local(pt) 
+   local v = self:global2local(pt)
    local angles = torch.Tensor({torch.atan2(v[2],v[1]), torch.asin(v[3])})
    printf("pt(%f,%f,%f) v(%f,%f,%f) angle: %f %f",
           pt[1],pt[2],pt[3],v[1],v[2],v[3],angles[1],angles[2])
    return angles
 end
 
-rot_error = 0 
-trans_error = 0 
-
-for i = 1,10 do 
-   -- pick 3 random points
-   pts = pts3D[torch.LongTensor():randperm(npts):narrow(1,1,3)]
-   unit_vec = torch.Tensor(3,3)
-   unit_vec[1] = c:global2local(pts[1])
-   unit_vec[2] = c:global2local(pts[2])
-   unit_vec[3] = c:global2local(pts[3])
-   solutions = p3p.compute_poses(pts,unit_vec)
-   
-   print(unit_vec[1])
-   print(geom.normalized(pts[1]))
-   print(pts[1])
-   print(c.quat_r)
-   local trans_err = 1e16 
-   local rot_err = 1e16 
-   
-   for ui = 1,4 do 
+function check_solutions(solutions,c)
+   local trans_err = 1e16
+   local rot_err = 1e16
+   for ui = 1,4 do
       s = solutions[ui]
       trans = s[1]
       rot   = s:narrow(1,2,3)
       quat  = geom.rotation_matrix_to_quaternion(rot)
       printf("Root: [%d]", ui)
-      if quat then 
+      if quat then
          local ctrans_err = torch.dist(c.xyz,trans)
          if ctrans_err < trans_err then trans_err = ctrans_err end
          printf("+ Position (error: %f)",ctrans_err)
@@ -92,10 +81,44 @@ for i = 1,10 do
          print("skipping")
       end
    end
+   return trans_err, rot_err
+end
+
+rot_error = 0
+trans_error = 0
+
+
+for i = 1,10 do
+   -- reset camera position
+   c.xyz = geom.normalize(torch.randn(3)) * 6
+   c.quat_r = geom.quaternion_from_to(xaxis,geom.normalize(torch.mul(c.xyz,-1)))
+   c.quat   = geom.quat_conjugate(c.quat_r)
+   if true then
+      -- shoot rays through corners of camera, put in world coords
+      test_corners = torch.Tensor({{-1,-1},{-1,1},{1,-1},{1,1}})
+      test_unit    = c:img_coords_to_world(test_corners,"uv","uc")
+      test_world   = test_unit:clone()
+      for ti = 1,test_unit:size(1) do
+         test_world[ti]:mul(math.random()*6)
+         test_world[ti] = c:local2global(test_world[ti])
+      end 
+      solutions = p3p.compute_poses(test_world,test_unit)
+   else 
+      -- pick 3 random points
+      pts = pts3D[torch.LongTensor():randperm(npts):narrow(1,1,3)]
+      unit_vec    = torch.Tensor(3,3)
+      unit_vec[1] = c:global2local(pts[1])
+      unit_vec[2] = c:global2local(pts[2])
+      unit_vec[3] = c:global2local(pts[3])
+      solutions   = p3p.compute_poses(pts,unit_vec)
+   end
+
+   local trans_err, rot_err = check_solutions(solutions,c)
+
    printf("Lowest trans error: %f", trans_err)
    trans_error = trans_error + trans_err
    printf("Lowest rot error: %f", rot_err)
-   rot_error = rot_error + rot_err 
+   rot_error = rot_error + rot_err
 end
 
 printf("Total Translation Error: %f", trans_error)

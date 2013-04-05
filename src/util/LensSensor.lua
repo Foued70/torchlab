@@ -294,9 +294,13 @@ end
 --   - "pixel_space" the offsets in pixels of raw image, (0,0) in
 --      upper left corner.
 -- 
--- Output: world angles (horizontal and vertical) or (azimuth and elevation)
+-- Output: world 
 -- 
-function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
+--     - angles (default) azimuth and elevation
+-- 
+--     - "uc" or "unit_cartesian" unit cartesian vectors 
+-- 
+function LensSensor:img_coords_to_world (img_pts, pt_type, out_type)
    local normalized_pts = img_pts:clone()
 
    -- put points in normalized coordinates. 
@@ -343,7 +347,11 @@ function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
    spherical_angles[{{},1}] = azimuth
    spherical_angles[{{},2}] = elevation
    spherical_angles:cmul(normalized_pts) -- put the sign
-   return spherical_angles
+   if (out_type == "uc") or (out_type == "unit_cartesian") then
+      return geom.spherical_coords_to_unit_cartesian(spherical_angles)
+   else
+      return spherical_angles
+   end
 end
 
 return LensSensor
