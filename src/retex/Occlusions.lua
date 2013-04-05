@@ -15,7 +15,7 @@ local Ray = require 'util.Ray'
 local bihtree = require 'util.bihtree'
 local interpolate = require 'util.interpolate'
 
-local Poses = require('Poses')
+local Poses = require('retex.Poses')
 
 local Occlusions = Class()
 

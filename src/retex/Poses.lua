@@ -1,13 +1,15 @@
+-- TODO: pull relevant functions out into util classes and kill this one.
+
 require 'sys'
 require 'torch'
 require 'math'
 require 'image'
 require 'paths'
 
-local Pose = require('Pose')
+local Pose = require('retex.Pose')
 
 -- this is container class for all the poses
-local Poses = torch.class('Poses')
+local Poses = torch.class('MP_Poses')
 
 
 --

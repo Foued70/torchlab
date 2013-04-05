@@ -11,7 +11,7 @@ require 'sys'
 require 'paths'
 require 'math'
 
-local Poses = require 'Poses'
+local Poses = require 'retex.Poses'
 local loader = require 'util.loader'
 local geom = require 'util.geom'
 

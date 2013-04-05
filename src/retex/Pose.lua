@@ -1,3 +1,5 @@
+-- TODO: pull relevant functions out into util classes and kill this one.
+
 local geom = require "util.geom"
 local loader = require "util.loader"
 local util = require "util.util"
@@ -5,7 +7,7 @@ local util = require "util.util"
 local r2d = 180 / math.pi
 local d2r = math.pi / 180
 
-local Pose = torch.class('Pose')
+local Pose = torch.class('MP_Pose')
 
 function Pose:__init(poses,i)
    self.pid    = i
