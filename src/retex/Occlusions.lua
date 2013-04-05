@@ -1,3 +1,8 @@
+-- takes a posefile and targetfile and writes a .t7 to filesystem with depth map for each pose-photo
+-- example usage:
+-- occlusions = retex.Occlusions.new(posefile, targetfile, scale, packetsize)
+-- occlusions:calc()
+-- 
 -- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua. 
 
 require 'torch'
@@ -12,10 +17,6 @@ local interpolate = require 'util.interpolate'
 
 local Poses = require('Poses')
 
--- TODO: refactor output dir 
-local output_dir = paths.concat(paths.dirname(paths.thisfile()), 'output')
-sys.execute("mkdir -p " .. output_dir)
-
 local Occlusions = Class()
 
 function Occlusions:__init(posefile, targetfile, scale, packetsize)
@@ -26,11 +27,16 @@ function Occlusions:__init(posefile, targetfile, scale, packetsize)
     
   self.posefile = posefile
   self.targetfile = targetfile
+  self.output_dir = paths.concat(paths.dirname(posefile), 'occlusions')
+  sys.execute("mkdir -p " .. self.output_dir)
+  
   self.scale = scale or 4
   self.packetsize = packetsize
   if packetsize and packetsize < 1 then self.packetsize = nil end
 end
 
+-- get occlusions for each pose, trying to load occlusions from torch file
+-- if occlusions can't be found for the pose, set to nil
 function Occlusions:get()
   if not self.occlusions then
     local occlusions = {}
@@ -50,12 +56,14 @@ function Occlusions:get()
   return self.occlusions
 end
 
+-- filename to use when saving and loading occlusions for a pose
 function Occlusions:file(pose)
   local occ_file = string.format('%s-%s-p%s-s%s-depth.t7', paths.basename(self.targetfile), 
                     paths.basename(self.posefile), pose, self.scale)
-  return paths.concat(output_dir, occ_file)
+  return paths.concat(self.output_dir, occ_file)
 end
 
+-- calculate occlusions for all poses
 function Occlusions:calc()
   local poses = loader(self.posefile, Poses.new)
   local target = loader(self.targetfile, require('util.Obj').new)

@@ -10,6 +10,10 @@ CLOUDLAB_SRC = paths.dirname(debug.getinfo(1).short_src)
 
 require 'util.Class'
 
+function printf (...)
+   print(string.format(...))
+end
+
 local shell = require('shell.shell')
 _G.shell_evaluate = shell.evaluate
 _G.shell_is_complete = shell.is_complete

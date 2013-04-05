@@ -1,11 +1,10 @@
 require 'torch'
 require 'image'
 
-local util = require "util" -- need printf
 local LensSensor = require "util.LensSensor"
 local projection = require "util.projection"
 
-local Photo = Class()
+local Photo = torch.class('Photo')
 
 local REQUIRED_CALIBRATION_PAIRS = 4
 

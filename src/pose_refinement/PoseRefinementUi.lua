@@ -7,7 +7,9 @@ require 'qt'
 
 local geom = require 'util.geom'
 local libui = require 'libui'
-local config = require 'ui.pp_config'
+local Scan = require 'util.Scan'
+local GLWidget = require 'ui.GLWidget'
+local Obj = require 'util.Obj'
 
 local PoseRefinementUi = Class()
 
@@ -349,7 +351,7 @@ function PoseRefinementUi:set_pose_file()
 end
 
 function PoseRefinementUi:create_debug_camera_meshes(sweep_number)
-  local debug_model_data = require('util.Obj').new('../ui/objs/debug_forward_pointer.obj')
+  local debug_model_data = Obj.new('../ui/objs/debug_forward_pointer.obj')
 
   for i = 1, #self.scan.sweeps[sweep_number].photos do
     local camera_position = nil
@@ -382,7 +384,7 @@ function PoseRefinementUi:init_calibration()
   end
 
   log.trace("Loading scan at", sys.clock())
-  self.scan = pose_refinement.Scan.new(self.scan_folder, self.pose_file)
+  self.scan = Scan.new(self.scan_folder, self.pose_file)
   log.trace("Completed scan load at", sys.clock())
 
   log.trace("Loading model data at", sys.clock())
@@ -390,7 +392,7 @@ function PoseRefinementUi:init_calibration()
   log.trace("Completed model load at", sys.clock())
 
   collectgarbage()
-  self.gl_viewport = require('ui.GLWidget').new()
+  self.gl_viewport = GLWidget.new()
   while self.gl_viewport.initialized ~= true do
     os.execute("sleep " .. tonumber(1))
   end
@@ -405,7 +407,8 @@ function PoseRefinementUi:init_calibration()
   self.gl_viewport.renderer:create_scene('wireframe_scene')
   self.gl_viewport.renderer:activate_scene('wireframe_scene')
 
-  local billboard_data = require('util.Obj').new('../ui/objs/planeNormalized.obj')
+  local plane_file = paths.concat(paths.dirname(paths.thisfile()), 'objs/planeNormalized.obj')
+  local billboard_data = Obj.new(plane_file)
   local billboard_object = self.gl_viewport.renderer:add_object(billboard_data)
 
   local wireframe_mat_data = {name='wireframe_mat', ambient={0,0,0,1}, diffuse={0,0,0,1}, specular={0,0,0,1}, shininess={0,0,0,1}, emission={0,0,0,1}}
