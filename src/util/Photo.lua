@@ -23,6 +23,10 @@ function Photo:__init(parent_sweep, image_path)
   self.image_path = image_path
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
+  self.image_data_spherical = nil
+  self.image_w = nil
+  self.image_h = nil
+
   
   self.offset_position = nil
   self.offset_rotation = nil
@@ -82,6 +86,20 @@ function Photo:get_image()
   return self.image_data_raw
 end
 
+function Photo:get_image_rectilinear()
+  if not self.image_data_rectilinear then
+    self.image_data_rectilinear = projection.remap(self:get_image(), self:get_lens().rectilinear)
+  end
+  return self.image_data_rectilinear
+end
+
+function Photo:get_image_spherical()
+  if not self.image_data_spherical then
+    self.image_data_spherical = projection.remap(self:get_image(), self:get_lens().spherical)
+  end
+  return self.image_data_spherical
+end
+
 function Photo:get_lens()
   if not self.lens then
     sys.tic()
@@ -91,16 +109,10 @@ function Photo:get_lens()
   return self.lens
 end
 
-function Photo:get_image_rectilinear()
-  if not self.image_data_rectilinear then
-    self.image_data_rectilinear = projection.remap(self:get_image(), self:get_lens().rectilinear)
-  end
-  return self.image_data_rectilinear
-end
-
 function Photo:flush_image()
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
+  self.image_data_spherical = nil
   collectgarbage()
 end
 

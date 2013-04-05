@@ -424,9 +424,10 @@ end
 function PoseRefinementUi:update_photo_pass()
   collectgarbage()
 
-  local photo_raw_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo]:get_image())
+  local photo_spherical_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo]:get_image_spherical())
   local photo_rectilinear_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo]:get_image_rectilinear())
-  self:attach_image(1, 'dslr_photo_raw', 'Hidden', photo_raw_qt)
+  
+  self:attach_image(1, 'dslr_photo_spherical', 'Hidden', photo_spherical_qt)
   self:attach_image(2, 'dslr_photo_rectilinear', 'SourceOver', photo_rectilinear_qt)
   self.widget:update()
 end
