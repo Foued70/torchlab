@@ -21,7 +21,7 @@ function Scan:__init(scan_path, pose_file, obj_file)
   
   if paths.dirp(scan_path) then    
     self.path = scan_path
-    self.camera_id = 'nikon_D5100_w10p5mm' -- hardcoded for now, can figure it from exif data maybe?
+    self.camera_id = 'nikon_10p5mm_r2t_full' -- hardcoded for now, can figure it from exif data maybe?
     self.lens_luts = {}
     
     self:set_sweeps()
@@ -41,7 +41,8 @@ function Scan:get_lens(image_data)
   if self.lens_luts[img_data_size] == nil then
     local lens_sensor = LensSensor.new(self.camera_id, image_data)
     local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
-    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut}
+    local spherical_lut = lens_sensor:make_projection_map("spherical")
+    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut, spherical = spherical_lut}
   end
 
   return self.lens_luts[img_data_size]

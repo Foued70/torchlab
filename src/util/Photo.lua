@@ -19,6 +19,7 @@ function Photo:__init(parent_sweep, image_path)
   self.image_path = image_path
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
+  self.image_data_spherical = nil
   self.image_w = nil
   self.image_h = nil
   
@@ -65,7 +66,7 @@ function Photo:delete_calibration_pair(pair_index)
 end
 
 function Photo:image_loaded()
-  return (self.image_data_raw ~= nil) and (self.image_data_rectilinear ~= nil)
+  return (self.image_data_raw ~= nil) and (self.image_data_rectilinear ~= nil) and (self.image_data_spherical ~= nil)
 end
 
 function Photo:load_image()
@@ -73,7 +74,8 @@ function Photo:load_image()
   log.trace("Loading image from path:", "\""..self.image_path.."\"")
   self.image_data_raw = image.load(self.image_path)
   self.lens = self.sweep.scan:get_lens(self.image_data_raw)
-  self.image_data_rectilinear = projection.remap(self.image_data_raw, self.lens.rectilinear)    
+  self.image_data_rectilinear = projection.remap(self.image_data_raw, self.lens.rectilinear)
+  self.image_data_spherical = projection.remap(self.image_data_raw, self.lens.spherical)    
   self.image_w = self.image_data_raw:size(3)
   self.image_h = self.image_data_raw:size(2)
   log.trace("Completed image load in", sys.toc())
@@ -82,6 +84,7 @@ end
 function Photo:flush_image()
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
+  self.image_data_spherical = nil
   collectgarbage()
 end
 
