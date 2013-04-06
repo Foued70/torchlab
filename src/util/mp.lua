@@ -50,11 +50,16 @@ function load_scan(posefile, objfile)
     sensor.inv_vfov = 1/sensor.vfov
     
     photo.lens = {sensor = sensor}
+    -- position and rotation of the photo is exactly what the posefile says it is
+    photo.position = pose.position
+    photo.rotation = pose.rotation    
+    photo.rotation_r = torch.Tensor(4):copy(photo.rotation)
+    photo.rotation_r:narrow(1,1,3):mul(-1)
+    
     table.insert(sweep.photos, photo)
     table.insert(sweeps, sweep)
   end
   scan.sweeps = sweeps
-  scan:init_sweeps_poses()
   
   return scan
 end
