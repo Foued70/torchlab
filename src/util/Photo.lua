@@ -7,6 +7,9 @@ local projection = require "util.projection"
 local geom = require 'util.geom'
 local loader = require 'util.loader'
 
+local r2d = 180 / math.pi
+local d2r = math.pi / 180
+
 local Photo = torch.class('Photo')
 
 local REQUIRED_CALIBRATION_PAIRS = 4
@@ -237,32 +240,32 @@ function Photo:draw_wireframe()
   local wimage = torch.Tensor(psize):fill(0)
   local face_verts = obj.face_verts
   local nverts = obj.n_verts_per_face
-   for fi = 1,face_verts:size(1) do
-      local nv = nverts[fi]
-      local f = face_verts[fi]:narrow(1,1,nv)
-      local pvert = f[nv]
-      for vi = 1,nv do
-         local cvert = f[vi]
-         local dir = cvert - pvert
-         local len = torch.norm(dir)
-         if (len > 1e-8) then
-            dir = dir/len
-            step = dir * mpp
-            -- printf("step: %f,%f,%f",step[1],step[2],step[3])
-            for s = 0,len,mpp do
-               -- draw verts first
-               local u,v,x,y = self:globalxyz2uv(pvert)
-               -- printf("u: %f v: %f x: %f y %f", u, v, x, y)
-               if (u > 0) and (u < 1) and (v > 0) and (v < 1) then
-                  wimage[{1,y,x}] = 1  -- RED
-                  wimage[{4,y,x}] = 1  -- Alpha Channel
-               end
-               pvert = pvert + step 
-            end
-         end
-      end
-   end
-   return wimage
+  for fi = 1,face_verts:size(1) do
+    local nv = nverts[fi]
+    local f = face_verts[fi]:narrow(1,1,nv)
+    local pvert = f[nv]
+    for vi = 1,nv do
+       local cvert = f[vi]
+       local dir = cvert - pvert
+       local len = torch.norm(dir)
+       if (len > 1e-8) then
+          dir = dir/len
+          step = dir * mpp
+          -- printf("step: %f,%f,%f",step[1],step[2],step[3])
+          for s = 0,len,mpp do
+             -- draw verts first
+             local u,v,x,y = self:globalxyz2uv(pvert)
+             -- printf("u: %f v: %f x: %f y %f", u, v, x, y)
+             if (u > 0) and (u < 1) and (v > 0) and (v < 1) then
+                wimage[{1,y,x}] = 1  -- RED
+                wimage[{4,y,x}] = 1  -- Alpha Channel
+             end
+             pvert = pvert + step 
+          end
+       end
+    end
+  end
+  return wimage
 end
 
 return Photo
