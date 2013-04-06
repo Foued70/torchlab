@@ -37,8 +37,8 @@ function Occlusions:get()
       occlusions[i] = {}
       for j=1, #self.scan.sweeps[i].photos do
         local photo = self.scan.sweeps[i].photos[j]
-        if paths.filep(self:file(i)) then
-          occlusions[i][j] = torch.load(self:file())
+        if paths.filep(self:file(photo)) then
+          occlusions[i][j] = torch.load(self:file(photo))
           log.trace('Loaded occlusions for photo', photo.name)        
         else
           occlusions[i][j] = nil
@@ -85,9 +85,9 @@ function Occlusions:calc()
       for ri = 1,dirs:size(1) do
         for ci = 1,dirs:size(2) do
           local ray = Ray.new(position,dirs[ri][ci])
-          -- local tree_d, tree_fid = bihtree.traverse(tree,target,ray) -- turned off debugging
+          local tree_d, tree_fid = bihtree.traverse(tree,target,ray) -- turned off debugging
           -- bihtree.test_traverse(tree,target,ray)
-          local tree_d, tree_fid = self:get_occlusion_slow(ray,target)
+          -- local tree_d, tree_fid = self:get_occlusion_slow(ray,target)
           -- log.trace("traversed tree in", sys.toc())
 
           tot = tot + 1
@@ -108,7 +108,7 @@ function Occlusions:calc()
 
       image.display{image={out_tree},min=0,max=10}
 
-      local output_file = self:file(pi)
+      local output_file = self:file(photo)
       log.trace("Saving depth map:", output_file)
       torch.save(output_file, out_tree)
 
