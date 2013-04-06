@@ -11,9 +11,9 @@ local Scan = require 'util.Scan'
 local GLWidget = require 'ui.GLWidget'
 local Obj = require 'util.Obj'
 
-local PoseRefinementUi = Class()
+local Ui = Class()
 
-function PoseRefinementUi:__init()
+function Ui:__init()
   self.gl_viewport = nil
   self.viewport_size = torch.Tensor(2)
   self.viewport_vfov = nil
@@ -46,7 +46,7 @@ function PoseRefinementUi:__init()
   self.widget:show()
 end
 
-function PoseRefinementUi:init_event_handling()
+function Ui:init_event_handling()
   qt.connect(self.listener,'sigClose()',
     function()
       self.widget:deleteLater()
@@ -138,17 +138,17 @@ function PoseRefinementUi:init_event_handling()
   qt.connect(self.widget.button_delete_calibration_pair, 'clicked()', function() self:delete_last_calibration_pair() end)
 end
 
-function PoseRefinementUi:delete_last_calibration_pair()
+function Ui:delete_last_calibration_pair()
   self.scan.sweeps[self.current_sweep].photos[self.current_photo]:delete_calibration_pair(self.scan.sweeps[self.current_sweep].photos[self.current_photo].pairs_calibrated)
   self:update_ui_info()
 end
 
-function PoseRefinementUi:set_white_wall_status(status)
+function Ui:set_white_wall_status(status)
   self.scan.sweeps[self.current_sweep].photos[self.current_photo].white_wall = status
   self:update_ui_info()
 end
 
-function PoseRefinementUi:previous_camera()
+function Ui:previous_camera()
   self.highlighted_vertex = nil
   if self.current_photo > 1 then
     self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
@@ -166,7 +166,7 @@ function PoseRefinementUi:previous_camera()
   end
 end
 
-function PoseRefinementUi:next_camera()
+function Ui:next_camera()
   self.highlighted_vertex = nil
   if #self.scan.sweeps[self.current_sweep].photos >= (self.current_photo+1) then
     self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
@@ -184,7 +184,7 @@ function PoseRefinementUi:next_camera()
   end
 end
 
-function PoseRefinementUi:update_ui_info()
+function Ui:update_ui_info()
   self.widget.sweep_info:setText(string.format("%d/%d", self.current_sweep, #self.scan.sweeps)) 
   self.widget.photo_info:setText(string.format("%d/%d", self.current_photo, #self.scan.sweeps[self.current_sweep].photos)) 
 
@@ -201,7 +201,7 @@ function PoseRefinementUi:update_ui_info()
   self.widget.calibration_pair_info:setText(pair_matrix_string)
 end
 
-function PoseRefinementUi:select_vertex(mouse_x, mouse_y)
+function Ui:select_vertex(mouse_x, mouse_y)
   local click_coordinates = self:mouse_to_viewport_screenspace(mouse_x, mouse_y)
   if click_coordinates ~= nil then
     self.gl_viewport.renderer:activate_scene('viewport_scene')
@@ -229,7 +229,7 @@ function PoseRefinementUi:select_vertex(mouse_x, mouse_y)
   end
 end
 
-function PoseRefinementUi:drag_select_vertex()
+function Ui:drag_select_vertex()
   if (self.mouse_left_start == nil) or (self.mouse_left_end == nil) then return end
 
   self.gl_viewport.renderer:activate_scene('viewport_scene')
@@ -279,7 +279,7 @@ function PoseRefinementUi:drag_select_vertex()
   return selected_vertices
 end
 
-function PoseRefinementUi:select_image_coordinate(mouse_x, mouse_y)
+function Ui:select_image_coordinate(mouse_x, mouse_y)
   local image_coordinate = self:mouse_to_viewport_screenspace(mouse_x, mouse_y)
   if image_coordinate ~= nil then
     log.trace("Selected image coordinate:", image_coordinate)
@@ -288,7 +288,7 @@ function PoseRefinementUi:select_image_coordinate(mouse_x, mouse_y)
   end
 end
 
-function PoseRefinementUi:window_to_viewport_pixels(x, y, res)
+function Ui:window_to_viewport_pixels(x, y, res)
   if res == nil then
     res = torch.Tensor(2)
   end
@@ -298,7 +298,7 @@ function PoseRefinementUi:window_to_viewport_pixels(x, y, res)
   return res
 end
 
-function PoseRefinementUi:mouse_to_viewport_screenspace(mouse_x, mouse_y, res)
+function Ui:mouse_to_viewport_screenspace(mouse_x, mouse_y, res)
   if not self.gl_viewport then return nil end
 
   local viewport_pixels = self:window_to_viewport_pixels(mouse_x, mouse_y)
@@ -316,7 +316,7 @@ function PoseRefinementUi:mouse_to_viewport_screenspace(mouse_x, mouse_y, res)
   return res
 end
 
-function PoseRefinementUi:viewport_screenspace_to_viewport_pixels(screen_position)
+function Ui:viewport_screenspace_to_viewport_pixels(screen_position)
   local pixels = screen_position + 1
   torch.div(pixels, pixels, 2)
   pixels[2] = 1.0 - pixels[2] --flip y
@@ -327,7 +327,7 @@ function PoseRefinementUi:viewport_screenspace_to_viewport_pixels(screen_positio
   return pixels
 end
 
-function PoseRefinementUi:set_scan_folder()
+function Ui:set_scan_folder()
   self.scan_folder = qt.QFileDialog.getExistingDirectory(self.widget, "Select Scan Directory"):tostring()
   
   if not self.scan_folder or string.len(self.scan_folder) == 0 or not paths.dirp(self.scan_folder) then 
@@ -339,7 +339,7 @@ function PoseRefinementUi:set_scan_folder()
   return true
 end
 
-function PoseRefinementUi:set_pose_file()
+function Ui:set_pose_file()
   self.pose_file = qt.QFileDialog.getOpenFileName(self.widget, "Select Pose File", '', "Text Files (*.txt)"):tostring()
   
   if not self.pose_file or string.len(self.pose_file) == 0 or not paths.filep(self.pose_file) then 
@@ -350,7 +350,7 @@ function PoseRefinementUi:set_pose_file()
   return true
 end
 
-function PoseRefinementUi:create_debug_camera_meshes(sweep_number)
+function Ui:create_debug_camera_meshes(sweep_number)
   local debug_model_data = util.AssetManager.get_model('debug_forward_pointer')
 
   for i = 1, #self.scan.sweeps[sweep_number].photos do
@@ -365,7 +365,7 @@ function PoseRefinementUi:create_debug_camera_meshes(sweep_number)
   end
 end
 
-function PoseRefinementUi:init_calibration()
+function Ui:init_calibration()
   if (self.scan_folder == nil) then
     log.trace("Failed to start calibration. No scan folder set.")
     return false
@@ -421,7 +421,7 @@ function PoseRefinementUi:init_calibration()
   self:resize_viewport_by_photo(self.scan.sweeps[self.current_sweep].photos[self.current_photo])
 end
 
-function PoseRefinementUi:update_photo_pass()
+function Ui:update_photo_pass()
   collectgarbage()
 
   local photo_spherical_qt = qt.QImage.fromTensor(self.scan.sweeps[self.current_sweep].photos[self.current_photo]:get_image_spherical())
@@ -432,7 +432,7 @@ function PoseRefinementUi:update_photo_pass()
   self.widget:update()
 end
 
-function PoseRefinementUi:update_viewport_passes()
+function Ui:update_viewport_passes()
   --Set GL camera to match current Photo
   local photo = self.scan.sweeps[self.current_sweep].photos[self.current_photo]  
 
@@ -486,7 +486,7 @@ function PoseRefinementUi:update_viewport_passes()
   self.widget:update()
 end
 
-function PoseRefinementUi:resize_viewport_by_photo(photo)
+function Ui:resize_viewport_by_photo(photo)
   local window_width = self.widget.viewport_container.width
   local window_height = self.widget.viewport_container.height
   local window_aspect = window_width / window_height
@@ -516,7 +516,7 @@ function PoseRefinementUi:resize_viewport_by_photo(photo)
   self:resize_viewport(viewport_width, viewport_height, photo.lens.rectilinear.vfov)
 end
 
-function PoseRefinementUi:resize_viewport(width, height, vfov)
+function Ui:resize_viewport(width, height, vfov)
   self.viewport_size[1] = width
   self.viewport_size[2] = height
   self.viewport_vfov = vfov
@@ -538,7 +538,7 @@ function PoseRefinementUi:resize_viewport(width, height, vfov)
 end
 
 --Simple save function to get some calibration data to test with. 
-function PoseRefinementUi:save_calibration()
+function Ui:save_calibration()
   local save_path = qt.QFileDialog.getSaveFileName(self.widget, "Save As", '', "Lua Files (*.lua)"):tostring()
   local file = io.open(save_path, "w")
 
@@ -618,7 +618,7 @@ function PoseRefinementUi:save_calibration()
   file:close()
 end
 
-function PoseRefinementUi:update_magnifier(magnification, layer, x, y, width, height)
+function Ui:update_magnifier(magnification, layer, x, y, width, height)
   if self.magnifier == nil then
     self.magnifier = {}
   end
@@ -633,7 +633,7 @@ function PoseRefinementUi:update_magnifier(magnification, layer, x, y, width, he
   self.magnifier.source_height = height / magnification
 end
 
-function PoseRefinementUi:attach_image(layer_number, name, blend_mode, q_image)
+function Ui:attach_image(layer_number, name, blend_mode, q_image)
   local layer_data = {}
   layer_data.name = name
   layer_data.blend_mode = blend_mode
@@ -642,13 +642,13 @@ function PoseRefinementUi:attach_image(layer_number, name, blend_mode, q_image)
   self.layers[layer_number] = layer_data
 end
 
-function PoseRefinementUi:print_layer_info()
+function Ui:print_layer_info()
   for layer_number,layer_data in ipairs(self.layers) do
     log.trace("Layer", layer_number, "=", "name:", layer_data.name, "blend mode:", layer_data.blend_mode, "image:", layer_data.image) 
   end
 end
 
-function PoseRefinementUi:draw_image_layers()
+function Ui:draw_image_layers()
   for layer_number, layer_data in ipairs(self.layers) do
     if layer_data.blend_mode ~= 'Hidden' then
       self.painter:initmatrix()
@@ -664,7 +664,7 @@ function PoseRefinementUi:draw_image_layers()
   end
 end
 
-function PoseRefinementUi:draw_magnifier()
+function Ui:draw_magnifier()
   self.painter:initmatrix()
   self.painter:currentmode('SourceOver')
   
@@ -704,7 +704,7 @@ function PoseRefinementUi:draw_magnifier()
   self.painter:stroke(false)
 end
 
-function PoseRefinementUi:draw_selection_box(start_corner, end_corner)
+function Ui:draw_selection_box(start_corner, end_corner)
   self.painter:initmatrix()
   self.painter:currentmode('SourceOver')
   local start_corner_pixels = self:viewport_screenspace_to_viewport_pixels(start_corner)
@@ -734,7 +734,7 @@ function PoseRefinementUi:draw_selection_box(start_corner, end_corner)
   self.painter:fill()
 end
 
-function PoseRefinementUi:paint() 
+function Ui:paint() 
   self.painter:gbegin()
 
   self:draw_image_layers()
@@ -745,5 +745,3 @@ function PoseRefinementUi:paint()
 
   self.painter:gend()
 end
-
-return PoseRefinementUi
