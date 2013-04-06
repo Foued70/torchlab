@@ -142,6 +142,10 @@ local lens_types = {
       -- for sanity\'s sake reverse the names x <-> y
       cal_yc = 1671.45181487971,
       cal_xc = 2507.100192805156
+   },
+   matterport = {
+     name = 'Matterport "lens" placeholder',
+     lens_type = 'equirectangular'
    }
 
 }

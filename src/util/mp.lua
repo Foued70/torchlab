@@ -3,6 +3,7 @@ require 'paths'
 local Scan = require 'util.Scan'
 local Sweep = require 'util.Sweep'
 local Photo = require 'util.Photo'
+local LensSensor = require 'util.LensSensor'
 local loader = require 'util.loader'
 
 Class()
@@ -24,15 +25,31 @@ end
 
 function load_scan(posefile, objfile)  
   local scan_folder = paths.dirname(posefile)
-  local scan = Scan.new(scan_folder, posefile, objfile)  
-  local mp_poses = loader(posefile, poses)
+  local scan = Scan.new(scan_folder, posefile, objfile)    
   -- each pose in the posefile corresponds to 1 sweep with 1 photo
   local sweeps = {}
-  for i=1, #mp_poses do
-    local pose = mp_poses[i]
+  for i=1, #scan.poses do
+    local pose = scan.poses[i]
     local sweep = Sweep.new(scan, scan_folder)
     sweep.photos = {}
     local photo = Photo.new(sweep, paths.concat(scan_folder, pose.name))
+    local sensor = LensSensor.new('matterport')
+    local img = photo:get_image()
+   
+    sensor.image_w = img:size(3)
+    sensor.image_h = img:size(2)
+    sensor.inv_image_w = 1/sensor.image_w
+    sensor.inv_image_h = 1/sensor.image_h
+ 
+    sensor.center_x = sensor.image_w * pose.center_u -- px
+    sensor.center_y = sensor.image_h * (1-pose.center_v) -- px
+     
+    sensor.hfov = pose.degrees_per_px_x
+    sensor.vfov = pose.degrees_per_px_y
+    sensor.inv_hfov = 1/sensor.hfov
+    sensor.inv_vfov = 1/sensor.vfov
+    
+    photo.lens = {sensor = sensor}
     table.insert(sweep.photos, photo)
     table.insert(sweeps, sweep)
   end

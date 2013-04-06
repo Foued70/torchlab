@@ -139,7 +139,7 @@ function Photo:globalxyz2uv(pt)
    
    local lens = self:get_lens()
    local proj_x  = 0.5 + lens.sensor.center_x + (  azimuth * lens.sensor.inv_hfov)
-   local proj_y  = 0.5 + self.center_y - (elevation * lens.sensor.inv_vfov)
+   local proj_y  = 0.5 + lens.sensor.center_y - (elevation * lens.sensor.inv_vfov)
    
    -- u,v = 0,0 in upper left
    local proj_u  = proj_x * lens.sensor.inv_image_w
@@ -229,7 +229,7 @@ end
 
 function Photo:draw_wireframe()
   local obj = self.sweep.scan:get_model_data()
-  local pimage = self.image_data_raw
+  local pimage = self:get_image()
   
   local psize = pimage:size()
   psize[1] = 4

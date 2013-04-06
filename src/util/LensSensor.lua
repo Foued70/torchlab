@@ -143,6 +143,8 @@ function LensSensor:add_image(...)
       dfov*r2d, hfov*r2d,vfov*r2d)
    self.image_w      = imgw -- px
    self.image_h      = imgh -- px
+   self.inv_image_w  = 1/imgw
+   self.ing_image_h  = 1/imgh
    self.aspect_ratio = aspect_ratio
 
    self.center_x = cx -- px
