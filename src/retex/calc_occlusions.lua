@@ -22,5 +22,6 @@ cmd:text()
 -- parse input params
 local params = cmd:parse(arg)
 
-local occlusions = retex.Occlusions.new(params.posefile, params.targetfile, params.scale, params.packetsize)
+local scan = util.mp.scan(params.posefile, params.targetfile)
+local occlusions = retex.Occlusions.new(scan, params.scale, params.packetsize)
 occlusions:calc()

@@ -60,7 +60,7 @@ function load_scan(posefile, objfile)
     table.insert(sweeps, sweep)
   end
   scan.sweeps = sweeps
-  
+  log.trace('scan loaded')
   return scan
 end
 
