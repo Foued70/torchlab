@@ -115,7 +115,8 @@ function quaternion_to_rotation_matrix(quaternion, res)
    return res
 end
 
-function rotation_matrix_to_quaternion (rmat, quat)
+-- returns nil on a badly formed rotation matrix
+function rotation_matrix_to_quaternion (rmat, quat, debug)
    if (not quat) then
       quat = torch.Tensor(4)
    end
@@ -162,7 +163,9 @@ function rotation_matrix_to_quaternion (rmat, quat)
       qsign[4] = rmat[2][1] - rmat[1][2]
 
    else
-      print("Bad input perhaps not a rotation matrix?")
+      if debug then 
+         print("Bad input perhaps not a rotation matrix?")
+      end
       return nil
    end
 

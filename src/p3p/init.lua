@@ -74,7 +74,7 @@ local p3pC  = ffi.load(ffidir .. "libp3p.dylib")
 
 local p3p = {}
 
-function p3p.compute_poses (world_pts,unit_vec) 
+function p3p.compute_poses (world_pts,unit_vec,debug) 
    local xyz = world_pts
    local p1 = xyz[1]
    local p2 = xyz[2]
@@ -110,7 +110,9 @@ function p3p.compute_poses (world_pts,unit_vec)
    -- Swap first 2 vectors and worldpoints to keep theta between 0 and
    -- pi. (See paper p.2972 and Figure 4 for explanation).
    if (pf3[3] > 0) then
-      print("Swapping") 
+      if debug then 
+         print("Swapping") 
+      end
       local tmp = f1
       f1 = f2
       f2 = tmp
@@ -148,7 +150,8 @@ function p3p.compute_poses (world_pts,unit_vec)
 
    local cos_beta = f1 * f2
    if cos_beta > 1 then 
-      error("cos_beta is >1. some error in data processing")
+      print("cos_beta is >1. some error in data processing")
+      return nil
    end
    local b = (1/(1-math.pow(cos_beta,2))) -1 
    if (cos_beta < 0) then
