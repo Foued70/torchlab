@@ -15,7 +15,7 @@ local function tic(msg)
   end
 end
 
-local Obj = torch.class('Obj')
+local Obj = Class()
 
 function Obj:__init(filename)
   if filename and paths.filep(filename) then    
@@ -403,5 +403,3 @@ function Obj:save(filename, mtlname)
   
   log.trace('obj saved', filename)
 end
-
-return Obj

@@ -20,7 +20,7 @@ function Occlusions:__init(scan, scale, packetsize)
   if not scan then error('arguments invalid') end
 
   self.scan = scan
-  self.output_dir = paths.concat(paths.dirname(scan.path), 'occlusions')
+  self.output_dir = paths.concat(scan.path, 'occlusions')
   sys.execute("mkdir -p " .. self.output_dir)
   
   self.scale = scale or 4
@@ -34,14 +34,13 @@ function Occlusions:get()
   if not self.occlusions then
     local occlusions = {}
     for i=1, #self.scan.sweeps do
-      occlusions[i] = {}
       for j=1, #self.scan.sweeps[i].photos do
         local photo = self.scan.sweeps[i].photos[j]
         if paths.filep(self:file(photo)) then
-          occlusions[i][j] = torch.load(self:file(photo))
+          table.insert(occlusions, torch.load(self:file(photo)))
           log.trace('Loaded occlusions for photo', photo.name)        
         else
-          occlusions[i][j] = nil
+          table.insert(occlusions, nil)
           log.trace('No occlusions found for photo', photo.name)
         end
       end
@@ -53,7 +52,7 @@ end
 
 -- filename to use when saving and loading occlusions for a photo
 function Occlusions:file(photo)
-  local occ_file = string.format('%s-%s-s%s-depth.t7', paths.basename(self.scan.path), photo.name, self.scale)
+  local occ_file = string.format('%s-%s-s%s-depth.t7', paths.basename(self.scan.model_file), photo.name, self.scale)
   return paths.concat(self.output_dir, occ_file)
 end
 

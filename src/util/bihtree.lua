@@ -40,7 +40,7 @@ local function recurse_build(tree,sv,bb,noffset,absindex,debug)
       cindex[2] = newindex
 
       tree.leafindex = newindex + 1 -- global
-      log.trace("made a leaf at", noffset)
+      if debug then log.trace("made a leaf at", noffset) end
 
       return noffset + 1
    end
@@ -168,7 +168,7 @@ function bihtree.build(obj,debug)
    tree.nodes       = tree.nodes:narrow(1,1,noffset-1)
    tree.bbox        = obj.bbox
 
-   p(tree.nodes)
+   if debug then p(tree.nodes) end
    return tree
 
 end

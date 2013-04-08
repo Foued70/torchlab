@@ -9,7 +9,7 @@ require 'image'
 require 'qtwidget'
 require 'qtuiloader'
 
-local GLWidget = torch.class('GLWidget')
+local GLWidget = Class()
 
 local NAV_MODE = 1
 local FOCUS_MODE = 2
@@ -146,5 +146,3 @@ function GLWidget:fly_to(goal_position)
   self.renderer.animation_manager:add(self.renderer.cameras.viewport_camera.eye, eye_position, 0.5, BEZIER_START_BEHAVIORS.FAST, BEZIER_END_BEHAVIORS.SLOW)
   self:update()
 end
-
-return GLWidget

@@ -7,9 +7,9 @@ require 'qt'
 
 local geom = require 'util.geom'
 local libui = require 'libui'
-local Scan = require 'util.Scan'
-local GLWidget = require 'ui.GLWidget'
-local Obj = require 'util.Obj'
+local Scan = util.Scan
+local GLWidget = ui.GLWidget
+local Obj = util.Obj
 
 local Ui = Class()
 

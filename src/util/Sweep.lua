@@ -1,10 +1,21 @@
 require 'torch'
 local geom = require 'util.geom'
-local fs = require 'util.fs'
 local paths = require 'paths'
 local config = require 'util.config'
-local Photo = require 'util.Photo'
-local Sweep = torch.class('Sweep')
+
+local fs = util.fs
+local Photo = util.Photo
+local Sweep = Class()
+
+function Sweep:__write_keys()
+  return {'path', 'photos', 'position', 'rotation'}
+end
+
+function Sweep:__after_read()
+  for i=1, #self.photos do
+    self.photos[i].sweep = self
+  end
+end
 
 function Sweep:__init(parent_scan, sweep_dir)
   self.scan = parent_scan
@@ -127,5 +138,3 @@ function Sweep:save_wireframes_image_blacklines()
     image.save(wimagename,cimage)
   end
 end
-
-return Sweep
