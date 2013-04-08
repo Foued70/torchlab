@@ -2,23 +2,25 @@ require 'torch'
 
 local libui = require 'libui'
 local paths = require 'paths'
-local config = require 'pose_refinement.config'
+local config = require 'util.config'
 local fs = require 'util.fs'
+local loader = require 'util.loader'
+local Obj = require 'util.Obj'
+local Sweep = require 'util.Sweep'
 
-local Scan = Class()
+local Scan = torch.class('Scan')
 
 local MODEL_FILE_EXTENSION = '.obj'
 
--- scan_path: either a .lua file or a dir (required).
--- pose_file: .txt file (optional). When nil, will try to use scan_path to find model and pose.
-function Scan:__init(scan_path, pose_file)
+-- scan_path: a dir (required).
+-- pose_file: .txt file (optional). When nil, will try to use scan_path to find pose file.
+-- obj_file: .obj file (optional). When nil, will try to use pose_file or scan_path to find model
+function Scan:__init(scan_path, pose_file, obj_file)
   if not scan_path then error('arg #1 invalid, cannot be nil') end
   
-  if paths.filep(scan_path) and fs.extname(scan_path) == '.lua' then
-    self:init_from_file(scan_path)
-  elseif paths.dirp(scan_path) then    
+  if paths.dirp(scan_path) then    
     self.path = scan_path
-    self.camera_id = 'nikon_D5100_w10p5mm' -- hardcoded for now, can figure it from exif data maybe?
+    self.camera_id = 'nikon_10p5mm_r2t_full' -- hardcoded for now, can figure it from exif data maybe?
     self.lens_luts = {}
     
     self:set_sweeps()
@@ -26,20 +28,10 @@ function Scan:__init(scan_path, pose_file)
     log.trace("pose_file", pose_file)
     self:set_poses(pose_file)
 
-    self:set_model_file(pose_file)
+    self:set_model_file(obj_file or pose_file)
   else
-    error('arg #1 must be valid directory or lua file')
+    error('arg #1 must be valid directory')
   end  
-end
-
-function Scan:init_from_file(lua_file)
-  local scan = torch.load(lua_file)
-  self.path = paths.dirname(lua_file)
-  self.sweeps = scan.sweeps
-  self.poses = scan.poses
-  self.model_path = scan.model_path
-  self.camera_id = scan.camera_id
-  self.camera_settings = scan.camera_settings
 end
 
 function Scan:get_lens(image_data)
@@ -48,7 +40,8 @@ function Scan:get_lens(image_data)
   if self.lens_luts[img_data_size] == nil then
     local lens_sensor = LensSensor.new(self.camera_id, image_data)
     local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
-    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut}
+    local spherical_lut = lens_sensor:make_projection_map("spherical")
+    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut, spherical = spherical_lut}
   end
 
   return self.lens_luts[img_data_size]
@@ -83,15 +76,20 @@ function Scan:set_model_file(file_path)
   log.trace("no model file found")
 end
 
-function Scan:load_model_data()
-  log.trace("Loading "..self.model_file.." to as model data.")
-  if self.model_file ~= nil then
-    self.model_data = util.Obj.new(self.model_file)
-    return true
+function Scan:get_model_data()
+  if not self.model_file or not paths.filep(self.model_file) then 
+    log.trace('Could not get model data. No file found.')
+    return nil 
   end
-
-  log.trace("Failed to load model data. No model file set")
-  return false
+  
+  if not self.model_data then 
+    sys.tic()
+    log.trace("Loading model data from", self.model_file)    
+    self.model_data = loader(self.model_file, Obj.new)
+    log.trace('Model loaded in', sys.toc())
+  end
+  
+  return self.model_data
 end
 
 function Scan:flush_model_data()
@@ -105,7 +103,7 @@ function Scan:set_sweeps()
   self.sweeps = {}    
   for i, v in ipairs(sweeps_dirs) do
     -- make a sweep for the img dir even if there are no imgs in it b.c. assumption is that sweep idx = pose idx
-    table.insert(self.sweeps, pose_refinement.Sweep.new(self, v))
+    table.insert(self.sweeps, Sweep.new(self, v))
   end
   
   self:init_sweeps_poses()    
@@ -121,18 +119,8 @@ function Scan:set_poses(pose_file)
       log.trace('no pose file found')
       return
     end
-  end
-  
-  local f, err = io.open(pose_file, "r")
-  if err then log.trace('error opening pose file', err) return end
-  
-  self.poses = {}
-  local t = f:read("*all")
-  for line in string.gmatch(t, "[^\r\n]+") do
-    table.insert(self.poses, pose_refinement.PoseSlim.new(line))
-  end
-  f:close()
-    
+  end  
+  self.poses = util.mp.poses(pose_file)  
   self:init_sweeps_poses()
 end
 
@@ -164,7 +152,7 @@ function Scan:save(file_path)
     end
   end
   
-  local default_filename = 'scan.lua'  
+  local default_filename = 'scan.lua'
   if file_path then 
     if paths.dirp(file_path) then file_path = paths.concat(file_path, default_filename) end
   else 

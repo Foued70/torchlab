@@ -1,17 +1,19 @@
--- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua. 
+-- takes a posefile and a targetfile (obj), writes .obj, .mtl, and various .pngs to file sys
+-- also updates the obj instance for direct viewer display
+-- example usage: 
+-- tex = retex.Textures.new(posefile, targetfile, {ppm = 300})
+-- tex:make()
+-- 
+-- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua
 
 require 'torch'
 require 'sys'
 require 'paths'
 require 'math'
 
-local Poses = retex.Poses
+local Poses = require 'retex.Poses'
 local loader = require 'util.loader'
 local geom = require 'util.geom'
-
--- TODO: deal with output dir -- arc?
-local output_dir = paths.concat(paths.dirname(paths.thisfile()), 'output')
-sys.execute("mkdir -p " .. output_dir)
 
 local Textures = Class()
 
@@ -29,6 +31,9 @@ function Textures:__init(posefile, targetfile, opts)
   
   self.posefile = posefile
   self.poses = loader(posefile, Poses.new)
+  
+  self.output_dir = paths.concat(paths.dirname(posefile), 'retexture')
+  sys.execute("mkdir -p " .. self.output_dir)
   
   self.textures = {}
   self.faces = {} -- store some info about faces
@@ -66,7 +71,7 @@ function Textures:__init(posefile, targetfile, opts)
 end
 
 function Textures:load_target()
-  local obj = loader(self.targetfile, util.Obj.new)
+  local obj = loader(self.targetfile, require('util.Obj').new)
   -- delete some properties, we're going to remake these    
   obj.unified_verts = torch.Tensor(obj.n_faces*obj.n_gon, 9):fill(1)
   obj.uvs = torch.Tensor(obj.n_faces*obj.n_gon,2):fill(1)
@@ -87,8 +92,7 @@ end
 -- for a given face select the best poses we will use to color it.
 -- input: face ids <fid>
 -- FIXME redo this function.  Trace ray to each pose.
-function Textures:get_closest_poses(fid,debug)
-  log.trace('getting closest poses for face', fid)
+function Textures:get_closest_poses(fid,debug)  
   local obj = self.target
   local poses = self.poses
   
@@ -100,6 +104,8 @@ function Textures:get_closest_poses(fid,debug)
 
   local wrong_side = torch.lt(dist_to_plane,0):double()
   local invalid    = torch.sum(wrong_side)
+  
+  log.trace(invalid, 'invalid poses for face', fid)
   
   if (poses.nposes == invalid) then 
     return nil  -- all the poses are on the wrong side
@@ -150,8 +156,8 @@ end
 -- find rotatation and translation for a virutal camera centered on
 -- the face and the dimensions of a texture map
 function Textures:face_to_texture_transform_and_dimension(fid,debug)
-  log.trace('get texture transform and dimensions for face', fid)
   if not self.faces[fid] then
+    log.trace('calc texture vals for face', fid)
     local obj = self.target
   
     local face_verts = obj.face_verts[fid]
@@ -265,9 +271,8 @@ end
 -- compute_alpha(dir,d,norm)
 --  prefer smaller angle w/ respect to norm
 -- (normalize with pi/2 as that is the biggest angle)
-function Textures:compute_alpha(dir,d,norm,debug)
-  log.trace('computing alpha')
-  if debug then log.trace('dir', dir, 'd', d, 'norm', norm) end
+function Textures:compute_alpha(dir,d,norm,debug)  
+  if debug then log.trace('computing alpha - dir', dir, 'd', d, 'norm', norm) end
   if (d < self.mindist) or (d > self.maxdist) then return 0 end   
 
   -- angle 1 == perpendicular.
@@ -285,32 +290,31 @@ end
 
 -- Remap UVs: rotate each vertex into the coordinates of the new texture
 function Textures:create_uvs(fid, debug)
-  log.trace('uvs for face', fid)
   local rot,trans,dims,xrange,yrange = self:face_to_texture_transform_and_dimension(fid, debug)  
   local obj = self.target  
   local face_verts = obj.face_verts[fid]
+  log.trace(obj.n_verts_per_face[fid], 'uvs for face', fid)  
   
   for vi = 1, obj.n_verts_per_face[fid] do
     local vtrans = face_verts[vi] - trans
     vtrans = geom.rotate_by_quat(vtrans,rot)
     obj.n_uvs = obj.n_uvs + 1
-    obj.uvs[n_uvs][1] = (vtrans[dims[2]] - xrange[1])/xrange[3]
-    obj.uvs[n_uvs][2] = 1 - ((vtrans[dims[3]] - yrange[1])/yrange[3])
+    obj.uvs[obj.n_uvs][1] = (vtrans[dims[2]] - xrange[1])/xrange[3]
+    obj.uvs[obj.n_uvs][2] = 1 - ((vtrans[dims[3]] - yrange[1])/yrange[3])
     obj.faces[fid][vi][3] = obj.n_uvs
-  end
+  end  
 end
 
-function Textures:range_to_texture_dimensions(xrange, yrange)  
+function Textures:range_to_texture_dimensions(xrange, yrange, debug)  
   local widthpx  = math.floor(xrange * self.ppm + 1)
   local heightpx = math.floor(yrange * self.ppm + 1)
   local dx = xrange/widthpx
   local dy = yrange/heightpx
-  log.trace("texture dimensions - w:", widthpx, "h:", heightpx, "dx:", dx, "dy:", dy)
+  if debug then log.trace("texture dimensions - w:", widthpx, "h:", heightpx, "dx:", dx, "dy:", dy) end
   return widthpx, heightpx, dx, dy
 end
 
 function Textures:make_img(fid, debug)
-  log.trace('making image for face', fid)
   local obj         = self.target
   local nposes      = self.nposes
   local poses       = self.poses
@@ -332,8 +336,9 @@ function Textures:make_img(fid, debug)
   local rotT = geom.quat_conjugate(rot)
 
   -- 3) create the texture image which we will color, and temp variables
-  local widthpx, heightpx, dx, dy = self:range_to_texture_dimensions(xrange[3], yrange[3])
+  local widthpx, heightpx, dx, dy = self:range_to_texture_dimensions(xrange[3], yrange[3], debug)
   
+  log.trace(widthpx, 'x', heightpx, 'image for face', fid)
   -- make the temporary per pose mixing alpha and color channels
   local normal = obj.face_normals[fid]
   local alpha  = torch.zeros(nposes)
@@ -375,9 +380,9 @@ function Textures:make_img(fid, debug)
         -- check obvious out of bounds (including a buffer at top
         -- and bottom 0px for matterport textures)
         if (px < 1) or (px >= timg:size(3)) then
-          log.trace("px out of range for pose", pid, px)
+          log.trace(px, "px out of range for pose", pid, "(should not happen)")
         elseif (py < 1) or (py >= timg:size(2)) then
-          log.trace("py out of range for pose", pid, py)
+          if debug then log.trace(py, "py out of range for pose", pid) end
         -- elseif (use_masks and (pose.mask[py][px] < 1)) then
         --   printf("pose[%d] masked at %f, %f", pid, py, px)
         else  
@@ -428,44 +433,53 @@ end
 -- get file path for a face's texture
 function Textures:file(fid)
   local name = paths.basename(self.targetfile):gsub(".obj$", "_face-"..fid..".png")
-  return paths.concat(output_dir, name)
+  return paths.concat(self.output_dir, name)
 end
 
 -- save the texture for a face and update the materials and submeshes
 function Textures:save_img(fid)    
-  log.trace('saving image for face', fid)
   local texture_img = self.textures[fid]  
   local material = {
     name = "face"..fid,
-    diffuse = {0.5, 0.5, 0.5, 1},    
+    diffuse = {0.5, 0.5, 0.5, 1}    
   }
   if texture_img then
     local img_file = self:file(fid)
-    log.trace('Saving texture', img_file)
     win = image.display{image=texture_img,min=0,max=1,win=win}    
     image.save(img_file, texture_img)
-    material.diffuse_tex_path = paths.basename(img_file)
+    if paths.filep(img_file) then
+      log.trace('Texture saved for face', fid, img_file)
+      material.diffuse_tex_path = img_file
+    else
+      log.trace('No texture saved for face', fid)
+    end
+  else
+    log.trace('No texture exists for face', fid)
   end
   table.insert(self.target.materials, material)
   table.insert(self.target.submeshes, {fid, fid, #self.target.materials})
 end
 
--- update obj properties and save it
-function Textures:save_obj()
-  log.trace('saving obj')
+-- reconcile unified_verts and faces' index into unified_verts so obj can be shown in glwidget
+function Textures:update_obj()  
   local obj = self.target
-  local faces = obj.faces  
   local verts = obj.verts
   local uvs = obj.uvs
   local n_verts_per_face = obj.n_verts_per_face
   
+  local faces = obj.faces  
+  local unified_verts = obj.unified_verts
+  
   local vert_cache = {}
   local unified_verts_idx = 0
   
+  log.trace('calculating unified verts')
   for fid=1, obj.n_faces do  
+    local face = faces[fid]
+    
     for vert_i=1, n_verts_per_face[fid] do
-      local vert_idx = faces[fid][2]
-      local uv_idx = faces[fid][3]
+      local vert_idx = face[vert_i][2] -- verts idx stayed same throughout the texturing process
+      local uv_idx = face[vert_i][3] -- uv idx taken care of in create_uvs
       
       local idx = vert_cache[{vert_idx, uv_idx}]
       if not idx then
@@ -474,8 +488,9 @@ function Textures:save_obj()
         vert_cache[{vert_idx, uv_idx}] = idx
         
         unified_verts[{idx, {1, 3}}] = verts[vert_idx]:narrow(1, 1, 3)
-        unified_verts[{idx, {5, 6}}] = uvs[uv_idx]
+        unified_verts[{idx, {5, 6}}] = uvs[uv_idx]        
       end
+      face[vert_i][1] = idx 
     end
   end
   
@@ -488,11 +503,13 @@ function Textures:save_obj()
   obj.unified_verts = trimmed_unified_verts
   obj.uvs = trimmed_uvs
   obj.submeshes = torch.IntTensor(obj.submeshes)
-  
-  local objfile  = paths.concat(output_dir, paths.basename(self.targetfile))
-  local mtlfile  = objfile:sub(".obj$",".mtl")
+end
+
+function Textures:save_obj()  
+  local objfile  = paths.concat(self.output_dir, paths.basename(self.targetfile))
+  local mtlfile  = objfile:gsub(".obj$",".mtl")
   log.trace('Saving obj and mtl', objfile, mtlfile)
-  obj.save(objfile, mtlfile)
+  self.target:save(objfile, mtlfile)
 end
 
 function Textures:make()     
@@ -501,5 +518,6 @@ function Textures:make()
     self:create_uvs(fid)
     self:save_img(fid) 
   end
+  self:update_obj()
   self:save_obj()
 end

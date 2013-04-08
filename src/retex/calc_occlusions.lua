@@ -6,11 +6,11 @@ cmd:text('Compute depth maps')
 cmd:text()
 
 cmd:option('-targetfile',
-           "/Users/judyhe/Downloads/withered-dust-2012_a_06/bare-model.obj",
+           "/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen/Floored_room.obj",
            --'test/invincible-violet/retexture-tworoom.obj',
            'target obj with new geometry')
 cmd:option('-posefile',
-          "/Users/judyhe/Downloads/withered-dust-2012_a_00/scanner371_job224000_texture_info.txt",
+          "/Users/NickBrancaccio/cloudlab/src/pose_refinement/96_spring_kitchen/raw_scan/scanner371_job286000_texture_info.txt",
            -- 'models/rivercourt_3307_scan/scanner371_job224000_texture_info.txt',
            --'models/invincible-violet-3396_a_00/scanner371_job129001_texture_info.txt',
            'pose info file in same directory as the texture images')
@@ -22,5 +22,6 @@ cmd:text()
 -- parse input params
 local params = cmd:parse(arg)
 
-local occlusions = retex.Occlusions.new(params.posefile, params.targetfile, params.scale, params.packetsize)
+local scan = util.mp.scan(params.posefile, params.targetfile)
+local occlusions = retex.Occlusions.new(scan, params.scale, params.packetsize)
 occlusions:calc()

@@ -52,20 +52,11 @@ for si,sweep in pairs(data) do
       else
          if not photo.world then 
             photo.world = photo.calibration_pairs:narrow(2,1,3)
-            photo.uv = photo.calibration_pairs:narrow(2,4,2)
-            photo.angles = lens:img_coords_to_world_angle(photo.uv,"uv")
+            photo.uv    = photo.calibration_pairs:narrow(2,4,2)
+            photo.uc    = lens:img_coords_to_world(photo.uv,"uv","uc")
          end
-         pw = photo.world
-         pa = photo.angles
-         print(photo.uv)
-         r2d = 180/math.pi
-         print(pa * r2d)
-         test_corners = torch.Tensor({{-1,-1},{-1,1},{1,-1},{1,1}})
-         test_angles = lens:img_coords_to_world_angle(test_corners,"uv")
-         print("test angles")
-         print(test_angles * r2d)
-         printf("lens: hfov: %f vfov: %f", lens.hfov*r2d, lens.vfov*r2d)
-         solutions = p3p.compute_poses(photo.world,photo.angles)
+
+         solutions = p3p.compute_poses(photo.world,photo.uc)
 
          local trans_err = 1e16 
          local rot_err = 1e16 
@@ -88,6 +79,17 @@ for si,sweep in pairs(data) do
                printf(" - sweep: %f %f %f %f norm: %f",pr[1],pr[2],pr[3],pr[4],pr:norm())
                printf(" - photo: %f %f %f %f norm: %f",hr[1],hr[2],hr[3],hr[4],hr:norm())
                printf(" -   p3p: %f %f %f %f norm: %f",quat[1],quat[2],quat[3],quat[4],quat:norm())
+
+               -- new unit vectors from new position should align with the 
+               newuc = torch.Tensor(photo.uc:size())
+               for uci = 1,newuc:size(1) do 
+                  newuc[uci] = 
+                     geom.normalize(geom.rotate_by_quat(photo.world[uci] - trans, 
+                                                        geom.quat_conjugate(quat)))
+               end
+               printf("angle dist: %f", newuc:dist(photo.uc))
+               print(newuc)
+               print(photo.uc)
             else
                print("skipping")
             end

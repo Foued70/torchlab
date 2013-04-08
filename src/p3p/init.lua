@@ -74,7 +74,7 @@ local p3pC  = ffi.load(ffidir .. "libp3p.dylib")
 
 local p3p = {}
 
-function p3p.compute_poses (world_pts,camera_angles)
+function p3p.compute_poses (world_pts,unit_vec,debug) 
    local xyz = world_pts
    local p1 = xyz[1]
    local p2 = xyz[2]
@@ -88,17 +88,12 @@ function p3p.compute_poses (world_pts,camera_angles)
       return
    end
 
-   -- Carefull input is angles derived from the image
-   -- coordinates and camera calibration.  
-   -- 
    -- FIXME current code expects this data on Unit Cartesian Sphere
    -- (Directions on unit sphere in camera coordinates with optical
    -- axis at (0,0,1) ??) update to handle our internal spherical
    -- coordinates.  For now: convert azimuth and elevation to
    -- cartesian unit sphere
 
-   local unit_vec = 
-      geom.spherical_coords_to_unit_cartesian(camera_angles)
    local f1 = unit_vec[1] 
    local f2 = unit_vec[2]
    local f3 = unit_vec[3]
@@ -115,7 +110,9 @@ function p3p.compute_poses (world_pts,camera_angles)
    -- Swap first 2 vectors and worldpoints to keep theta between 0 and
    -- pi. (See paper p.2972 and Figure 4 for explanation).
    if (pf3[3] > 0) then
-      print("Swapping") 
+      if debug then 
+         print("Swapping") 
+      end
       local tmp = f1
       f1 = f2
       f2 = tmp
@@ -153,7 +150,8 @@ function p3p.compute_poses (world_pts,camera_angles)
 
    local cos_beta = f1 * f2
    if cos_beta > 1 then 
-      error("cos_beta is >1. some error in data processing")
+      print("cos_beta is >1. some error in data processing")
+      return nil
    end
    local b = (1/(1-math.pow(cos_beta,2))) -1 
    if (cos_beta < 0) then

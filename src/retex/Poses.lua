@@ -1,13 +1,15 @@
+-- TODO: pull relevant functions out into util classes and kill this one.
+
 require 'sys'
 require 'torch'
 require 'math'
 require 'image'
 require 'paths'
 
-local Pose = retex.Pose
+local Pose = require('retex.Pose')
 
 -- this is container class for all the poses
-local Poses = Class()
+local Poses = torch.class('MP_Poses')
 
 
 --
@@ -169,3 +171,5 @@ function Poses:save_wireframes_image_blacklines(obj,outdir,ext)
       image.save(wimagename,cimage)
    end
 end
+
+return Poses

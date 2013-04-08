@@ -1,4 +1,5 @@
 local projection = require "util.projection"
+local geom = require 'util.geom'
 
 local pi = math.pi
 local piover2 = math.pi * 0.5
@@ -12,7 +13,7 @@ LensSensor.default_lens_sensor = require "util.lens_sensor_types"
 
 -- combine image and lens data into a single object
 
-function LensSensor:__init(lens_sensor,img)
+function LensSensor:__init(lens_sensor,...)
 
    if not lens_sensor then
       error("Pass lens + sensor type as first arg")
@@ -42,56 +43,34 @@ function LensSensor:__init(lens_sensor,img)
       self.cal_focal_px = 1
    end
 
-   if img then
-      self:add_image(img)
-   else
-      -- compute some values off sensor data
-      local w = self.sensor_w
-      local h = self.sensor_h
-      local aspect_ratio = w/h
-      local diag_norm = math.sqrt(w*w + h*h) / (2 * self.focal)
-      local vert_norm, horz_norm = projection.derive_hw(diag_norm,aspect_ratio)
-      printf(" -- normalized : diag: %f h: %f v: %f", diag_norm, horz_norm, vert_norm)
-
-      local dfov
-      if (self.lens_type == "scaramuzza_r2t") then 
-         dfov =
-            projection.compute_diagonal_fov(diag_norm*self.cal_focal_px,
-                                            self.lens_type, self.pol)
-      else
-         dfov =
-            projection.compute_diagonal_fov(diag_norm,
-                                            self.lens_type, self.pol)
-      end
-      local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
-
-      printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
-         dfov*r2d, hfov*r2d,vfov*r2d)
-      self.aspect_ratio = aspect_ratio
-
-      self.fov  = dfov
-      self.hfov = hfov
-      self.vfov = vfov
-
-      self.diagonal_normalized   = diag_norm
-      self.horizontal_normalized = horz_norm
-      self.vertical_normalized   = vert_norm
-
+   if ... then
+      self:add_image(...)
    end
 
    return self
 
 end
 
-function LensSensor:add_image(img)
-
+function LensSensor:add_image(...)
+   
    -- recompute almost everything based on the image pixels as this is
    -- better than basing measurements on spec sheets.
-   local imgw = img:size(3)
-   local imgh = img:size(2)
-
+   local imgw,imgh
    local camw = 0
    local camh = 0
+
+   local args = {...}
+   local nargs = #args
+   if (nargs == 1) and (type(args[1]) == "userdata") then 
+      local img = args[1]
+      imgw = img:size(3)
+      imgh = img:size(2)
+   elseif (nargs == 2) then 
+      imgw = args[1]
+      imgh = args[2]
+   else 
+      error("Don't understand arguments")
+   end
 
    -- handle vertical images
    if imgw > imgh then
@@ -165,6 +144,8 @@ function LensSensor:add_image(img)
       dfov*r2d, hfov*r2d,vfov*r2d)
    self.image_w      = imgw -- px
    self.image_h      = imgh -- px
+   self.inv_image_w  = 1/imgw
+   self.inv_image_h  = 1/imgh
    self.aspect_ratio = aspect_ratio
 
    self.center_x = cx -- px
@@ -175,6 +156,8 @@ function LensSensor:add_image(img)
    self.fov  = dfov
    self.hfov = hfov
    self.vfov = vfov
+   self.inv_hfov = 1/hfov
+   self.inv_vfov = 1/vfov
 
    self.diagonal_normalized   = diag_norm
    self.horizontal_normalized = horz_norm
@@ -316,9 +299,13 @@ end
 --   - "pixel_space" the offsets in pixels of raw image, (0,0) in
 --      upper left corner.
 -- 
--- Output: world angles (horizontal and vertical) or (azimuth and elevation)
+-- Output: world 
 -- 
-function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
+--     - angles (default) azimuth and elevation
+-- 
+--     - "uc" or "unit_cartesian" unit cartesian vectors 
+-- 
+function LensSensor:img_coords_to_world (img_pts, pt_type, out_type)
    local normalized_pts = img_pts:clone()
 
    -- put points in normalized coordinates. 
@@ -350,8 +337,9 @@ function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
    ysqr:cmul(ysqr)
    local d = torch.add(xsqr,ysqr)
    d:sqrt()
-   d:mul(self.cal_focal_px) -- put d in pixel coords
-
+   if self.cal_focal_px then 
+      d:mul(self.cal_focal_px) -- put d in pixel coords
+   end
    -- keep track of the sign
    normalized_pts:sign()
 
@@ -365,7 +353,12 @@ function LensSensor:img_coords_to_world_angle (img_pts, pt_type)
    spherical_angles[{{},1}] = azimuth
    spherical_angles[{{},2}] = elevation
    spherical_angles:cmul(normalized_pts) -- put the sign
-   return spherical_angles
+
+   if (out_type == "uc") or (out_type == "unit_cartesian") then
+      return geom.spherical_coords_to_unit_cartesian(spherical_angles)
+   else
+      return spherical_angles
+   end
 end
 
 return LensSensor

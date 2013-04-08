@@ -20,11 +20,11 @@ function Object.create_mesh(widget, obj_data)
 
   local submeshes = {}
   for i = 1, obj_data.submeshes:size()[1] do
-    local sub = obj_data.submeshes[i]
+    local sub = obj_data.submeshes[i]    
     table.insert(submeshes, {start = sub[1], length = sub[2] - sub[1] + 1, material = materials[sub[3]]})
   end
 
-  return require('ui.Mesh').new(obj_data.unified_verts, obj_data.faces[{{}, {}, 1}], submeshes)
+  return require('ui.Mesh').new(obj_data.unified_verts, obj_data:get_tris(), submeshes)
 end
 
 function Object:paint(context)

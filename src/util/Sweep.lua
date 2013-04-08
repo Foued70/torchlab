@@ -2,9 +2,9 @@ require 'torch'
 local geom = require 'util.geom'
 local fs = require 'util.fs'
 local paths = require 'paths'
-local config = require 'pose_refinement.config'
-local Sweep = Class()
-
+local config = require 'util.config'
+local Photo = require 'util.Photo'
+local Sweep = torch.class('Sweep')
 
 function Sweep:__init(parent_scan, sweep_dir)
   self.scan = parent_scan
@@ -18,7 +18,7 @@ function Sweep:set_photos()
   
   self.photos = {}
   for i, f in ipairs(fs.files_only(img_dir, unpack(config.img_extensions))) do
-    table.insert(self.photos, pose_refinement.Photo.new(self, f))
+    table.insert(self.photos, Photo.new(self, f))
   end
 end
 
@@ -41,8 +41,14 @@ function Sweep:set_pose(pose)
     end
     geom.normalize(offset_rotation)
 
-   photo.offset_position = offset_position
-   photo.offset_rotation = offset_rotation
+    -- TODO: figure out when/how these should be set when p3p is added
+    -- offset is relative to the sweep
+    photo.offset_position = offset_position
+    photo.offset_rotation = offset_rotation
+    
+    photo.position, photo.rotation = self:calculate_camera_world(i)
+    photo.rotation_r = torch.Tensor(4):copy(photo.rotation)
+    photo.rotation_r:narrow(1,1,3):mul(-1)
   end
 end
 
@@ -81,6 +87,45 @@ function Sweep:calculate_camera_world(photo_number)
   geom.normalize(final_rotation)
   
   return position, final_rotation 
+end
+
+function Sweep:save_wireframes_red_alpha()   
+  local ext = '_wireframe.png'
+  local dir = paths.concat(self.path, 'wireframe')
+  sys.execute("mkdir -p " .. dir)
+  
+  for pi = 1,self.photos do
+    local photo = self.photos[pi]
+    local wimage = photo:draw_wireframe()
+    image.display(wimage)
+    -- save
+    local photo_ext = fs.extname(photo.name)
+    local wimagename = paths.concat(dir, photo.name:gsub(photo_ext,ext))
+    log.trace("Saving:", wimagename)
+    image.save(wimagename,wimage)
+  end
+end
+
+function Sweep:save_wireframes_image_blacklines()
+  local ext = '_wireframe_RGB.png'
+  local dir = paths.concat(self.path, 'wireframe_RGB')
+  sys.execute("mkdir -p " .. dir)
+  
+  for pi = 1,self.photos do 
+    local photo = self.photos[pi]
+    local wimage = photo:draw_wireframe()
+    -- invert 0 and 1 in red channel
+    wimage = wimage[1]:mul(-1):add(1)
+    local cimage = photo.image:clone()
+    cimage[1]:cmul(wimage)
+    cimage[2]:cmul(wimage)
+    cimage[3]:cmul(wimage)
+    image.display(cimage) 
+    local photo_ext = fs.extname(photo.name)
+    local wimagename = paths.concat(dir, photo.name:gsub(photo_ext,ext))
+    log.trace("Saving:", wimagename)
+    image.save(wimagename,cimage)
+  end
 end
 
 return Sweep
