@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-ver=188b7e90207531d3e8968b5e179e1332f8b53445
+ver=54f82c2fd7eb3a93d8e0b6ba646ecc227ccb4ce6
 
 git_clone=$(build_dir)/deps/torch
 # git_clone=/Users/dustin/proj/torch
@@ -41,3 +41,4 @@ $(git_clone):
 clean:
 	rm -f $(install)*
 	rm -rf $(git_clone)
+	rm -rf $(install_root)/share/torch/lua/torch
