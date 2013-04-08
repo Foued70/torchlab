@@ -49,6 +49,8 @@ end
 function Scan:get_lens(image_data)
   local img_data_ptr, img_data_size = libui.double_storage_info(image_data)
 
+  if not self.lens_luts then self.lens_luts = {} end
+      
   if self.lens_luts[img_data_size] == nil then
     local lens_sensor = LensSensor.new(self.camera_id, image_data)
     local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
@@ -145,18 +147,18 @@ function Scan:init_sweeps_poses()
   end
 end
 
--- take a number from 1 to total # of photos across all sweeps and get the photo at that number
-function Scan:get_photo(idx)
-  local pos = 0
-  for i=1, #self.sweeps do
-    for j=1, #self.sweeps[i].photos do
-      pos = pos + 1
-      
-      if pos == idx then 
-        return self.sweeps[i].photos[j]
+function Scan:get_photos()
+  if not self.photos then
+    local photos = {}
+    for i=1, #self.sweeps do
+      for j=1, #self.sweeps[i].photos do
+        table.insert(photos, self.sweeps[i].photos[j])
       end
     end
+    self.photos = photos
   end
+  
+  return self.photos
 end
 
 function Scan:get_pose(idx)

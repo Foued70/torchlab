@@ -17,24 +17,6 @@ cmd:text()
 -- parse input params
 params = cmd:parse(arg)
 
-local tex = retex.Textures.new(params.posefile, params.targetfile, {scale = params.scale})
+local scan = util.mp.scan(params.posefile, params.targetfile)
+local tex = retex.Textures.new(scan, {scale = params.scale})
 tex:make()
-
--- for fid = 1, tex.target.n_faces do
---   tex:create_uvs(fid)
---   local material = {
---     name = "face"..fid,
---     diffuse = {0.5, 0.5, 0.5, 1},
---     diffuse_tex_path = paths.basename(tex:file(fid))    
---   }
---   table.insert(tex.target.materials, material)
---   table.insert(tex.target.submeshes, {fid, fid, #tex.target.materials})
--- end
--- tex:update_obj()
--- glw = require('ui.GLWidget').new()
--- while not glw.initialized do
---   os.execute("sleep "..tonumber(1))
--- end
--- 
--- glw.renderer:add_object(tex.target)
--- glw:update()

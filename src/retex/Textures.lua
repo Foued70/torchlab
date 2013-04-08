@@ -1,10 +1,8 @@
--- takes a posefile and a targetfile (obj), writes .obj, .mtl, and various .pngs to file sys
+-- takes a scan and writes .obj, .mtl, and various .pngs to file sys
 -- also updates the obj instance for direct viewer display
 -- example usage: 
--- tex = retex.Textures.new(posefile, targetfile, {ppm = 300})
+-- tex = retex.Textures.new(scan, {ppm = 300})
 -- tex:make()
--- 
--- TODO: instead of posefile and targetfile, pass scan.lua or folder with scan.lua
 
 require 'torch'
 require 'sys'
@@ -20,17 +18,11 @@ local Textures = Class()
 local pi = math.pi
 local pi2 = pi/2
 
-function Textures:__init(posefile, targetfile, opts)
-  if not posefile or not targetfile then error('arguments invalid') end
-  if not paths.filep(posefile) or not paths.filep(targetfile) then 
-    error('pose file or target file does not exist') 
-  end  
+function Textures:__init(scan, opts)
+  if not scan then error('arguments invalid') end
   
-  self.targetfile = targetfile
+  self.scan = scan
   self:load_target() 
-  
-  self.posefile = posefile
-  self.poses = loader(posefile, Poses.new)
   
   self.output_dir = paths.concat(paths.dirname(posefile), 'retexture')
   sys.execute("mkdir -p " .. self.output_dir)
@@ -41,7 +33,7 @@ function Textures:__init(posefile, targetfile, opts)
   local defaults = {
     scale = 4, -- scale at which to process 4 = 1/4 resolution
     ppm = 150,  -- pixels per meter    
-    nposes = 8, -- max number of poses to consider per texture
+    nphotos = 8, -- max number of photos to consider per texture
     mindist = 0.7, -- min distance to scanner
     ideal = 1.5, -- meters for fade
     maxdist = 50,
@@ -71,7 +63,7 @@ function Textures:__init(posefile, targetfile, opts)
 end
 
 function Textures:load_target()
-  local obj = loader(self.targetfile, require('util.Obj').new)
+  local obj = self.scan:get_model_data()
   -- delete some properties, we're going to remake these    
   obj.unified_verts = torch.Tensor(obj.n_faces*obj.n_gon, 9):fill(1)
   obj.uvs = torch.Tensor(obj.n_faces*obj.n_gon,2):fill(1)
@@ -83,41 +75,58 @@ end
 
 function Textures:load_occlusions()
   -- assumes occlusions have been calculated already
-  local occlusions = retex.Occlusions.new(self.posefile, self.targetfile, self.scale)
+  local occlusions = retex.Occlusions.new(self.scan, self.scale)
   self.occlusions = occlusions:get()
 end
 
--- + ----------------
--- get_closest_poses()
--- for a given face select the best poses we will use to color it.
--- input: face ids <fid>
--- FIXME redo this function.  Trace ray to each pose.
-function Textures:get_closest_poses(fid,debug)  
-  local obj = self.target
-  local poses = self.poses
+function Textures:get_positions()  
+  if not self.positions then 
+    local scan = self.scan
+    local photos = scan:get_photos()
+    local positions = torch.Tensor(#photos, 3)
+    for i=1, #photos do
+      positions[i] = photos[i].position
+    end
+    
+    self.positions = positions
+  end
   
-  --  a) find poses which are on the correct side of the face normal
+  return self.positions
+end
+
+-- + ----------------
+-- get_closest_photos()
+-- for a given face select the best photos we will use to color it.
+-- input: face ids <fid>
+-- FIXME redo this function.  Trace ray to each photo.
+function Textures:get_closest_photos(fid,debug)
+  local obj = self.target
+  
+  -- get a table of the photos' positions
+  local positions = self:get_positions()
+  
+  --  a) find photos which are on the correct side of the face normal
   local normal = obj.face_normals[fid]
   local d = obj.face_center_dists[fid]
   
-  local dist_to_plane = torch.mv(poses.xyz,normal) + d
+  local dist_to_plane = torch.mv(positions,normal) + d
 
   local wrong_side = torch.lt(dist_to_plane,0):double()
   local invalid    = torch.sum(wrong_side)
   
-  log.trace(invalid, 'invalid poses for face', fid)
+  log.trace(invalid, 'invalid photos for face', fid)
   
-  if (poses.nposes == invalid) then 
-    return nil  -- all the poses are on the wrong side
+  if (positions:size(1) == invalid) then 
+    return nil  -- all the photos are on the wrong side
   end
    
   wrong_side:mul(1e6):add(1)
 
   -- b) who are closest (to the face center)
   local center = obj.face_centers[fid]
-  local dirs   = poses.xyz:clone()
+  local dirs   = positions:clone()
 
-  for pi = 1,poses.nposes do
+  for pi = 1,positions:size(1) do
     dirs[pi]:add(-1,center)
   end
 
@@ -133,21 +142,21 @@ function Textures:get_closest_poses(fid,debug)
    end
    
    --  Reconsider: decisions c and d happen when coloring.
-   --  c) reject poses where the camera is too close.  Can reject just on
+   --  c) reject photos where the camera is too close.  Can reject just on
    --     the face center as we prefer whole face to be colored by a
-   --     single pose.
+   --     single photo.
 
    --  d) make sure that at least one vertex of face falls within the
-   --     poses view. (not sure we need this) reject some fully occluded poses.
+   --     photos view. (not sure we need this) reject some fully occluded photos.
    
-   -- just look at nposes per face
-   local limit = math.min(self.nposes, poses.nposes-invalid)
+   -- just look at nphotos per face
+   local limit = math.min(self.nphotos, positions:size(1)-invalid)
    return sidx:narrow(1,1,limit)
 end
 
-function Textures:test_get_closest_poses()
+function Textures:test_get_closest_photos()
   for fid = 1,self.target.n_faces do
-    get_closest_poses(fid,true)
+    get_closest_photos(fid,true)
   end
 end
 
@@ -316,16 +325,16 @@ end
 
 function Textures:make_img(fid, debug)
   local obj         = self.target
-  local nposes      = self.nposes
-  local poses       = self.poses
+  local nphotos     = self.nphotos
+  local photos      = self.scan:get_photos()
   local occlusions  = self.occlusions
   local scale_inv   = self.scale_inv
   
   -- Retexture Algo:
-  -- 1) get closest poses:
-  local closest_poses = self:get_closest_poses(fid, debug)
-  if not closest_poses then
-    log.trace('No valid poses found for face', fid)
+  -- 1) get closest photos:
+  local closest_photos = self:get_closest_photos(fid, debug)
+  if not closest_photos then
+    log.trace('No valid photos found for face', fid)
     return 
   end
   
@@ -339,10 +348,11 @@ function Textures:make_img(fid, debug)
   local widthpx, heightpx, dx, dy = self:range_to_texture_dimensions(xrange[3], yrange[3], debug)
   
   log.trace(widthpx, 'x', heightpx, 'image for face', fid)
-  -- make the temporary per pose mixing alpha and color channels
+  sys.tic()
+  -- make the temporary per photo mixing alpha and color channels
   local normal = obj.face_normals[fid]
-  local alpha  = torch.zeros(nposes)
-  local color  = torch.zeros(nposes,3)
+  local alpha  = torch.zeros(nphotos)
+  local color  = torch.zeros(nphotos,3)
   local v      = torch.zeros(3)
 
   -- texture image
@@ -361,36 +371,36 @@ function Textures:make_img(fid, debug)
       --  inverse from texture coords to global
       v = geom.rotate_by_quat(v,rotT) + trans
       local found = 0
-      -- loop through closest poses
-      for pi = 1,closest_poses:size(1) do
-        local pid  = closest_poses[pi]
-        local pose = poses[pid]
-        local timg = pose.image
-        local pt   = pose.xyz
+      -- loop through closest photos
+      for pi = 1,closest_photos:size(1) do        
+        local pid  = closest_photos[pi]
+        local photo = photos[pid]
+        local timg = photo:get_image()
+        local pt   = photo.position
         local p_occ = nil
         
         if occlusions then
           p_occ = occlusions[pid]
         end
         
-        --  get uv of global coordinate in the pose
-        local pu,pv,px,py = pose:globalxyz2uv(v)
+        --  get uv of global coordinate in the photo
+        local pu,pv,px,py = photo:globalxyz2uv(v)
         if debug then log.trace("pid:", pid, 'py', py, 'px', px) end
         
         -- check obvious out of bounds (including a buffer at top
         -- and bottom 0px for matterport textures)
         if (px < 1) or (px >= timg:size(3)) then
-          log.trace(px, "px out of range for pose", pid, "(should not happen)")
+          log.trace(px, "px out of range for photo", pid, "(should not happen)")
         elseif (py < 1) or (py >= timg:size(2)) then
-          if debug then log.trace(py, "py out of range for pose", pid) end
-        -- elseif (use_masks and (pose.mask[py][px] < 1)) then
-        --   printf("pose[%d] masked at %f, %f", pid, py, px)
+          if debug then log.trace(py, "py out of range for photo", pid) end
+        -- elseif (use_masks and (photo.mask[py][px] < 1)) then
+        --   printf("photo[%d] masked at %f, %f", pid, py, px)
         else  
-          -- compute alpha (mixing) for this pose. (see. func. compute_alpha())
-          local dir  = v - pt -- from pose to surface
+          -- compute alpha (mixing) for this photo. (see. func. compute_alpha())
+          local dir  = v - pt -- from photo to surface
           local dist = dir:norm()
           local not_occluded = true
-          -- check occlusion (look up in ray traced pose mask)
+          -- check occlusion (look up in ray traced photo mask)
           if p_occ then
             local opx = math.max(1,math.floor(px*scale_inv + 0.5))
             local opy = math.max(1,math.floor(py*scale_inv + 0.5))
@@ -406,10 +416,10 @@ function Textures:make_img(fid, debug)
             alpha[found] = self:compute_alpha(dir,dist,normal,debug)
           end
         end
-        if found >= nposes then break end
+        if found >= nphotos then break end
       end
 
-      -- 5) blend colors from different poses using alpha (use max per
+      -- 5) blend colors from different photos using alpha (use max per
       --    pixel as we go for now)
       local s = alpha:sum()
       if (s > 0) then
@@ -424,7 +434,7 @@ function Textures:make_img(fid, debug)
     end -- end w
     y = y + dy
   end -- end h
-
+  log.trace('texture for face', fid, 'created in', sys.toc())
   -- 6) store new texture file
   -- not sure about saving to disk, or saving in object.
   self.textures[fid] = fimg
