@@ -10,9 +10,17 @@ local loader = require 'util.loader'
 local r2d = 180 / math.pi
 local d2r = math.pi / 180
 
-local Photo = torch.class('Photo')
+local Photo = Class()
 
 local REQUIRED_CALIBRATION_PAIRS = 4
+
+function Photo:__write_keys()
+  return {
+    'calibration_pairs', 'pairs_calibrated', 'vertex_set', 'image_coordinate_set', 
+    'white_wall', 'name', 'image_path', 'offset_position', 'offset_rotation', 
+    'rotation', 'rotation_r', 'position'
+  }
+end
 
 function Photo:__init(parent_sweep, image_path)
   self.sweep = parent_sweep
@@ -27,9 +35,6 @@ function Photo:__init(parent_sweep, image_path)
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
   self.image_data_spherical = nil
-  self.image_w = nil
-  self.image_h = nil
-
   
   self.offset_position = nil
   self.offset_rotation = nil
@@ -267,5 +272,3 @@ function Photo:draw_wireframe()
   end
   return wimage
 end
-
-return Photo

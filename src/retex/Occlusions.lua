@@ -20,7 +20,7 @@ function Occlusions:__init(scan, scale, packetsize)
   if not scan then error('arguments invalid') end
 
   self.scan = scan
-  self.output_dir = paths.concat(paths.dirname(scan.path), 'occlusions')
+  self.output_dir = paths.concat(scan.path, 'occlusions')
   sys.execute("mkdir -p " .. self.output_dir)
   
   self.scale = scale or 4
@@ -34,14 +34,13 @@ function Occlusions:get()
   if not self.occlusions then
     local occlusions = {}
     for i=1, #self.scan.sweeps do
-      occlusions[i] = {}
       for j=1, #self.scan.sweeps[i].photos do
         local photo = self.scan.sweeps[i].photos[j]
         if paths.filep(self:file(photo)) then
-          occlusions[i][j] = torch.load(self:file(photo))
+          table.insert(occlusions, torch.load(self:file(photo)))
           log.trace('Loaded occlusions for photo', photo.name)        
         else
-          occlusions[i][j] = nil
+          table.insert(occlusions, nil)
           log.trace('No occlusions found for photo', photo.name)
         end
       end
@@ -53,12 +52,24 @@ end
 
 -- filename to use when saving and loading occlusions for a photo
 function Occlusions:file(photo)
-  local occ_file = string.format('%s-%s-s%s-depth.t7', paths.basename(self.scan.path), photo.name, self.scale)
+  local occ_file = string.format('%s-%s-s%s-depth.t7', paths.basename(self.scan.model_file), photo.name, self.scale)
   return paths.concat(self.output_dir, occ_file)
 end
 
--- calculate occlusions for all photos
-function Occlusions:calc()  
+function Occlusions:test_setup()
+  local target = self.scan:get_model_data()
+  local occlusions = {}
+  
+  sys.tic()
+  local tree = bihtree.build(target)
+  log.trace("Built tree in", sys.toc())
+
+  return tree
+end
+
+
+-- calculate occlusions for all poses
+function Occlusions:calc()
   local target = self.scan:get_model_data()
   local occlusions = {}
   
@@ -81,14 +92,26 @@ function Occlusions:calc()
       local tot = 0
       local totmiss = 0
       local position = photo.position
+
+      local log_progress = true
+      local percent_complete = 0
       
       for ri = 1,dirs:size(1) do
         for ci = 1,dirs:size(2) do
+          
+          if log_progress then
+            local current_progress = ((ri-1)*dirs:size(2) + ci) / (dirs:size(1)*dirs:size(2)) * 100
+            current_progress = math.floor(current_progress)
+
+            if current_progress > percent_complete then
+              percent_complete = current_progress 
+              log.trace("Computing depth map for photo", photo.name, percent_complete.."%")
+            end
+          end
+
           local ray = Ray.new(position,dirs[ri][ci])
           local tree_d, tree_fid = bihtree.traverse(tree,target,ray) -- turned off debugging
-          -- bihtree.test_traverse(tree,target,ray)
-          -- local tree_d, tree_fid = self:get_occlusion_slow(ray,target)
-          -- log.trace("traversed tree in", sys.toc())
+          --bihtree.test_traverse(tree,target,ray)
 
           tot = tot + 1
           out_tree[ri][ci] = tree_d
@@ -121,7 +144,7 @@ end
 
 -- Intentionally very slow.  Checks _all_ the faces. Returns closest
 -- intersection. Used for debugging the aggregates.
-function Occlusions:get_occlusion_slow(ray,obj,debug)
+function Occlusions.get_occlusion_slow(ray,obj,debug)
    local mindepth        = math.huge
    local fid             = 0
    local nverts_per_face = obj.n_verts_per_face

@@ -7,9 +7,9 @@ require 'qt'
 
 local geom = require 'util.geom'
 local libui = require 'libui'
-local Scan = require 'util.Scan'
-local GLWidget = require 'ui.GLWidget'
-local Obj = require 'util.Obj'
+local Scan = util.Scan
+local GLWidget = ui.GLWidget
+local Obj = util.Obj
 
 local Ui = Class()
 
@@ -149,45 +149,46 @@ function Ui:set_white_wall_status(status)
 end
 
 function Ui:previous_camera()
-  self.highlighted_vertex = nil
-  if self.current_photo > 1 then
-    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
-    self.current_photo = self.current_photo - 1 
-    self:update_photo_pass()
-    self:update_viewport_passes()
-    self:update_ui_info()
-  elseif self.current_sweep > 1 then
-    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
+  self.highlighted_vertex = nil  
+  if not self.scan or not self.scan.sweeps then return end
+  
+  self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()  
+  if self.current_photo == 1 then
     self.current_sweep = self.current_sweep - 1
     self.current_photo = #self.scan.sweeps[self.current_sweep].photos
-    self:update_photo_pass()
-    self:update_viewport_passes()
-    self:update_ui_info()
+  else
+    self.current_photo = self.current_photo - 1
   end
+  
+  self:update_photo_pass()
+  self:update_viewport_passes()
+  self:update_ui_info()
 end
 
 function Ui:next_camera()
   self.highlighted_vertex = nil
-  if #self.scan.sweeps[self.current_sweep].photos >= (self.current_photo+1) then
-    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
-    self.current_photo = self.current_photo + 1 
-    self:update_photo_pass()
-    self:update_viewport_passes()
-    self:update_ui_info()
-  elseif #self.scan.sweeps > self.current_sweep then
-    self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()
-    self.current_sweep = self.current_sweep + 1
+  if not self.scan or not self.scan.sweeps then return end
+  
+  self.scan.sweeps[self.current_sweep].photos[self.current_photo]:flush_image()      
+  if self.current_photo == #self.scan.sweeps[self.current_sweep].photos then
+    self.current_sweep = self.current_sweep+1
     self.current_photo = 1
-    self:update_photo_pass()
-    self:update_viewport_passes()
-    self:update_ui_info()
+  else
+    self.current_photo = self.current_photo+1
   end
+  
+  self:update_photo_pass()
+  self:update_viewport_passes()
+  self:update_ui_info()
 end
 
 function Ui:update_ui_info()
   self.widget.sweep_info:setText(string.format("%d/%d", self.current_sweep, #self.scan.sweeps)) 
-  self.widget.photo_info:setText(string.format("%d/%d", self.current_photo, #self.scan.sweeps[self.current_sweep].photos)) 
-
+  self.widget.photo_info:setText(string.format("%d/%d", self.current_photo, #self.scan.sweeps[self.current_sweep].photos))  
+  local last_sweep = #self.scan.sweeps
+  local last_photo = #self.scan.sweeps[last_sweep].photos
+  self.widget.button_next:setDisabled(self.current_sweep == last_sweep and self.current_photo == last_photo)
+  self.widget.button_previous:setDisabled(self.current_photo == 1 and self.current_sweep == 1)
   
   local pair_matrix = self.scan.sweeps[self.current_sweep].photos[self.current_photo].calibration_pairs
 

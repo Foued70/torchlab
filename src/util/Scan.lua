@@ -3,14 +3,26 @@ require 'torch'
 local libui = require 'libui'
 local paths = require 'paths'
 local config = require 'util.config'
-local fs = require 'util.fs'
 local loader = require 'util.loader'
-local Obj = require 'util.Obj'
-local Sweep = require 'util.Sweep'
 
-local Scan = torch.class('Scan')
+local fs = util.fs
+local Obj = util.Obj
+local Sweep = util.Sweep
+local LensSensor = util.LensSensor
+
+local Scan = Class()
 
 local MODEL_FILE_EXTENSION = '.obj'
+
+function Scan:__write_keys()
+  return {'path', 'camera_id', 'sweeps', 'poses', 'model_file'}
+end
+
+function Scan:__after_read()
+  for i=1, #self.sweeps do
+    self.sweeps[i].scan = self
+  end
+end
 
 -- scan_path: a dir (required).
 -- pose_file: .txt file (optional). When nil, will try to use scan_path to find pose file.
@@ -37,6 +49,8 @@ end
 function Scan:get_lens(image_data)
   local img_data_ptr, img_data_size = libui.double_storage_info(image_data)
 
+  if not self.lens_luts then self.lens_luts = {} end
+      
   if self.lens_luts[img_data_size] == nil then
     local lens_sensor = LensSensor.new(self.camera_id, image_data)
     local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
@@ -133,6 +147,20 @@ function Scan:init_sweeps_poses()
   end
 end
 
+function Scan:get_photos()
+  if not self.photos then
+    local photos = {}
+    for i=1, #self.sweeps do
+      for j=1, #self.sweeps[i].photos do
+        table.insert(photos, self.sweeps[i].photos[j])
+      end
+    end
+    self.photos = photos
+  end
+  
+  return self.photos
+end
+
 function Scan:get_pose(idx)
   -- try to get the pose at the idx but if that pose does not exist, try each idx-1 until arriving at the first pose
   if idx == 1 then return self.poses[1] end  
@@ -141,17 +169,7 @@ function Scan:get_pose(idx)
 end
 
 -- file_path: save in a certain location or with certain file name (optional)
-function Scan:save(file_path)  
-  -- don't save the model data
-  self:flush_model_data()
-  
-  -- don't save the image data in a Photo
-  for i, sweep in ipairs(self.sweeps) do
-    for j, photo in ipairs(sweep.photos) do 
-      photo:flush_image()
-    end
-  end
-  
+function Scan:save(file_path)
   local default_filename = 'scan.lua'
   if file_path then 
     if paths.dirp(file_path) then file_path = paths.concat(file_path, default_filename) end
@@ -161,5 +179,3 @@ function Scan:save(file_path)
   
   torch.save(file_path, self)
 end
-
-return Scan

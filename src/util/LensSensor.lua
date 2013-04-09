@@ -7,7 +7,7 @@ local r2d = 180 / pi
 local d2r = pi / 180
 
 -- stores fixed information about lens+sensors which we glean from spec sheets and elsewhere.
-local LensSensor = torch.class("LensSensor")
+local LensSensor = Class()
 
 LensSensor.default_lens_sensor = require "util.lens_sensor_types"
 
@@ -360,5 +360,3 @@ function LensSensor:img_coords_to_world (img_pts, pt_type, out_type)
       return spherical_angles
    end
 end
-
-return LensSensor

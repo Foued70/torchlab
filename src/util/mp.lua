@@ -1,9 +1,9 @@
 require 'paths'
 
-local Scan = require 'util.Scan'
-local Sweep = require 'util.Sweep'
-local Photo = require 'util.Photo'
-local LensSensor = require 'util.LensSensor'
+local Scan = util.Scan
+local Sweep = util.Sweep
+local Photo = util.Photo
+local LensSensor = util.LensSensor
 local loader = require 'util.loader'
 
 Class()
