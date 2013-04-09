@@ -127,21 +127,20 @@ end
 
 
 project_through_corners = false
-jitter_image_coords     = true
+jitter_image_coords     = false -- true
 jitter_amount           = 0 -- 1e-2
-sample_size             = 100
+sample_size             = 1000
 
 debug_solutions = false
 
-for ji = -10,0,0.1 do 
+for ji = -5,0,0.1 do 
    jitter_amount = 10 ^ ji
--- for jitter_amount = 0.001,0.5, 0.001 do 
 
-   rot_error    = 0
-   trans_error  = 0
+   rot_error    = torch.Tensor(sample_size)
+   trans_error  = torch.Tensor(sample_size)
    reproj_error = 0
-   skipped      = 0
-
+   error_i = 0
+   
    for i = 1,sample_size do
       -- reset camera position
       c.xyz = geom.normalize(torch.randn(3)) * 6
@@ -165,8 +164,6 @@ for ji = -10,0,0.1 do
          -- jitter
          if jitter_image_coords then 
             test_corners:add(torch.randn(test_corners:size()):mul(jitter_amount))
-            -- test_corners[test_corners:gt(1)]  = 1
-            -- test_corners[test_corners:lt(-1)] = -1
             test_unit    = c:img_coords_to_world(test_corners,"uv","uc") 
          else
             -- jitter unit vectors directly
@@ -195,28 +192,23 @@ for ji = -10,0,0.1 do
       if solutions then 
          local trans_err, rot_err, reproj_err, bs = check_solutions(solutions,c,debug_solutions)
          if bs > 0 then
-            trans_error  = trans_error  + trans_err
-            rot_error    = rot_error    + rot_err
+            error_i = error_i + 1
+            trans_error[error_i]  = trans_err
+            rot_error[error_i]    = rot_err
             reproj_error = reproj_error + reproj_err
             if print_sample_error then 
                printf("Lowest trans error : %f", trans_err)
                printf("Lowest rot error   : %f", rot_err)
                printf("Lowest reproj error: %f", reproj_err)
             end
-         else
-            skipped = skipped + 1
          end
-      else
-         skipped = skipped + 1
       end
    end
-   not_skipped = sample_size - skipped
-   printf("%e trans: %e rot: %e skipped: %2.2f", 
+   trans_error = trans_error:narrow(1,1,error_i)
+   rot_error = rot_error:narrow(1,1,error_i):mul(1/3) -- average error per vector
+   printf("%e trans: %e %e %e %e rot: %e %e %e %e skipped: %2.2f", 
           jitter_amount, 
-          trans_error / not_skipped, 
-          rot_error / not_skipped, 
-          skipped / sample_size)
-   -- printf("Total Translation Error : %f", trans_error)
-   -- printf("Total Rotation Error    : %f", rot_error)
-   -- printf("Total Reprojection Error: %f", reproj_error)
+          trans_error:mean(), trans_error:std(),trans_error:min(), trans_error:max(),
+          rot_error:mean(), rot_error:std(), rot_error:min(), rot_error:max(),
+          1 - (error_i / sample_size))
 end
