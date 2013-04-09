@@ -441,7 +441,7 @@ end
 
 -- get file path for a face's texture
 function Textures:file(fid)
-  local name = paths.basename(self.targetfile):gsub(".obj$", "_face-"..fid..".png")
+  local name = paths.basename(self.scan.model_file):gsub(".obj$", "_face-"..fid..".png")
   return paths.concat(self.output_dir, name)
 end
 
@@ -515,7 +515,7 @@ function Textures:update_obj()
 end
 
 function Textures:save_obj()  
-  local objfile  = paths.concat(self.output_dir, paths.basename(self.targetfile))
+  local objfile  = paths.concat(self.output_dir, paths.basename(self.scan.model_file))
   local mtlfile  = objfile:gsub(".obj$",".mtl")
   log.trace('Saving obj and mtl', objfile, mtlfile)
   self.target:save(objfile, mtlfile)
