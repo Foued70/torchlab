@@ -23,7 +23,7 @@ function Textures:__init(scan, opts)
   self.scan = scan
   self:load_target() 
   
-  self.output_dir = paths.concat(paths.dirname(posefile), 'retexture')
+  self.output_dir = paths.concat(scan.path, 'retexture')
   sys.execute("mkdir -p " .. self.output_dir)
   
   self.textures = {}
