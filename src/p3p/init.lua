@@ -1,5 +1,5 @@
 require 'torchffi'
-local geom = require 'util.geom'
+local geom = util.geom
 
 -- Reimplementation in torch/C of Laurent Kneip's code. Could also have
 -- used Pierre Moulon's openMVG (https://github.com/openMVG/openMVG) but

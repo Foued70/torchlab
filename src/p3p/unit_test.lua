@@ -1,7 +1,7 @@
 util       = require 'util'
 geom       = util.geom
 p3p        = require "p3p"
-LensSensor = require "util.LensSensor"
+LensSensor = util.LensSensor
 
 -- receate the tests from Kneip's paper
 -- 1000 random points in roughly 4x4x4

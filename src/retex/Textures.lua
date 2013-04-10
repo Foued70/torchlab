@@ -10,7 +10,7 @@ require 'paths'
 require 'math'
 
 local loader = require 'util.loader'
-local geom = require 'util.geom'
+local geom = util.geom
 
 local Textures = Class()
 

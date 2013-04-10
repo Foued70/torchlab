@@ -1,5 +1,5 @@
-local projection = require "util.projection"
-local geom = require 'util.geom'
+local projection = util.projection
+local geom = util.geom
 
 local pi = math.pi
 local piover2 = math.pi * 0.5

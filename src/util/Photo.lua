@@ -2,9 +2,9 @@ require 'torch'
 require 'image'
 require 'paths'
 
-local LensSensor = require "util.LensSensor"
-local projection = require "util.projection"
-local geom = require 'util.geom'
+local LensSensor = util.LensSensor
+local projection = util.projection
+local geom = util.geom
 local loader = require 'util.loader'
 
 local r2d = 180 / math.pi
@@ -17,7 +17,7 @@ local REQUIRED_CALIBRATION_PAIRS = 4
 function Photo:__write_keys()
   return {
     'calibration_pairs', 'pairs_calibrated', 'vertex_set', 'image_coordinate_set', 
-    'white_wall', 'name', 'image_path', 'offset_position', 'offset_rotation', 
+    'white_wall', 'name', 'image_path', 'offset_position', 'offset_rotation', 'lens',
     'rotation', 'rotation_r', 'position'
   }
 end
@@ -208,10 +208,11 @@ function Photo:compute_dirs(scale)
 end
 
 function Photo:dirs_file(scale, ps)
-  local f = 'photo-'..self.name..'_s'..scale  
-  if ps then f = f .."_-_grid_".. ps end  
-  f = f..'-dirs.t7'
-  return f
+  local f = string.format('%s-%s-%s-s%s-', 
+    paths.basename(self.sweep.scan.model_file), paths.basename(self.sweep.scan.pose_file), self.name, scale)
+  
+  if ps then f = f .."-grid".. ps end  
+  return f..'dirs.t7'
 end
 
 function Photo:build_dirs(scale,ps)  

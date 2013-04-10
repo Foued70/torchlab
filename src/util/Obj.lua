@@ -4,7 +4,7 @@
 -- TODO: n-gon support -- do submeshes and uvs need to be updated?
 
 local paths = require "paths"
-local geom = require "util.geom"
+local geom = util.geom
 
 local _t = sys.clock()
 local function tic(msg)

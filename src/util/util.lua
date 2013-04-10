@@ -1,10 +1,10 @@
-local util = {}
+Class()
 
 -- Like unfold but produces contiguous chunks which would replicate
 -- data in overlaps.  Start with a less general version which takes
 -- h,w,dims matrix as input and outputs r,c,s1*s2,dims as
 -- output. (Contiguous unfold useful for bilateral filtering also).
-function util.grid_contiguous (m,s1,s2)
+function grid_contiguous (m,s1,s2)
    local uf = m:unfold(1,s1,s1):unfold(2,s2,s2)
    local out = torch.Tensor(uf:size(1),uf:size(2),uf:size(4)*uf:size(5),uf:size(3))
    for r = 1,uf:size(1) do
@@ -17,7 +17,7 @@ end
 
 -- need C code for this
 
-function util.select_by_index(ind,mat)
+function select_by_index(ind,mat)
    local nelem = ind:size(1)
    -- allow for any dimension as long as we index by the first
    local shape = mat:size()
@@ -35,7 +35,7 @@ end
 -- <val> value for which we want pointer into list where everything
 --       before pointer is < val and after >= val
 
-function util.get_index_lt_val(vals,val)
+function get_index_lt_val(vals,val)
    local idx  = math.ceil(vals:size(1)*0.5)
    local cval = vals[idx]
    local pval = vals[idx-1]
@@ -91,6 +91,3 @@ function util.get_index_lt_val(vals,val)
    end
    return idx,count
 end
-
-
-return util

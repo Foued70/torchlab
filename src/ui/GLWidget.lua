@@ -1,7 +1,7 @@
 local libui = require 'libui'
 local gl = require 'ui.gl'
 local key = require 'ui.key'
-local geom = require 'util.geom'
+local geom = util.geom
 
 require 'qt'
 require 'qttorch'

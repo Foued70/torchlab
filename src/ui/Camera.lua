@@ -1,5 +1,5 @@
 local gl = require 'ui.gl'
-local geom = require 'util.geom'
+local geom = util.geom
 
 local Camera = torch.class('Camera')
 

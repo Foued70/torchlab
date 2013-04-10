@@ -1,4 +1,4 @@
-local geom = require 'util.geom'
+local geom = util.geom
 
 local MatrixStack = torch.class('MatrixStack')
 

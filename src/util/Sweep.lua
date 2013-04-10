@@ -1,5 +1,5 @@
 require 'torch'
-local geom = require 'util.geom'
+local geom = util.geom
 local paths = require 'paths'
 local config = require 'util.config'
 

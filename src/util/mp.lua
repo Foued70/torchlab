@@ -9,22 +9,33 @@ local loader = require 'util.loader'
 Class()
 
 function scan_name(posefile, objfile)
-  return string.format('%s-%s-mp-scan.t7', paths.basename(posefile), 
-                    paths.basename(objfile))
+  local sn = ""
+  if objfile then
+    sn = paths.basename(objfile)
+  end
+  return string.format("%s-%s-mp-scan.t7", sn, paths.basename(posefile))
 end
 
--- takes a posefile path and obj path and return a scan object
+-- takes a posefile or scan folder path and obj path and return a scan object
 -- images must be in the same folder as the posefile
 -- useful for testing retexturing on mp data
 -- for example: 
 -- scan = util.mp.scan(posefile, objfile)
 -- tex = retex.Textures(scan)
-function scan(posefile, objfile)
-  return loader(scan_name(posefile, objfile), load_scan, posefile, objfile)
+function scan(file_or_dirpath, objfile)  
+  -- return load_scan(file_or_dirpath, objfile)
+  return loader(scan_name(file_or_dirpath, objfile), load_scan, file_or_dirpath, objfile)  
 end
 
-function load_scan(posefile, objfile)  
-  local scan_folder = paths.dirname(posefile)
+function load_scan(file_or_dirpath, objfile)
+  local scan_folder = file_or_dirpath
+  local posefile = nil
+  
+  if paths.filep(file_or_dirpath) then
+    scan_folder = paths.dirname(file_or_dirpath)
+    posefile = file_or_dirpath
+  end
+
   local scan = Scan.new(scan_folder, posefile, objfile)    
   -- each pose in the posefile corresponds to 1 sweep with 1 photo
   local sweeps = {}
