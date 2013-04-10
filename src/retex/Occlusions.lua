@@ -50,6 +50,7 @@ function Occlusions:get(force_calc)
         end
       end
     end
+    self.occlusions = occlusions
   end
   
   return self.occlusions
@@ -138,12 +139,25 @@ function Occlusions:calc_for_photo(photo)
   interpolate.math_huge(out_tree)
   log.trace("Interpolation done", sys.toc())
 
-  image.display{image={out_tree},min=0,max=10}
+  image.display{image={out_tree},min=0,max=10,legend=photo.name}
 
   local output_file = self:file(photo)
   log.trace("Saving depth map:", output_file)
   torch.save(output_file, out_tree)  
   return out_tree
+end
+
+function Occlusions:show(force_calc)
+  local occlusions = self:get()
+  local photos = self.scan:get_photos()
+  
+  for i=1, #occlusions do
+    if occlusions[i] then
+      image.display{image={occlusions[i]}, min=0, max=10, legend=photos[i].name}
+    elseif force_calc then
+      self:calc_for_photo(photos[i])
+    end
+  end
 end
 
 -- calculate occlusions for all poses
