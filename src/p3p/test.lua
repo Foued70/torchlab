@@ -1,8 +1,8 @@
 require 'image'
 
-local geom = util.geom
-local p3p = require 'p3p'
 local LensSensor = util.LensSensor
+local geom       = require 'util.geom' -- not a class so needs to be required explicitly
+local p3p        = require 'p3p'
 
 
 -- top level filenames
@@ -13,27 +13,26 @@ cmd:text()
 cmd:text('Compute Perspective 3 points algorithm')
 cmd:text()
 cmd:text('Options')
-cmd:option('-posefile',
-           -- '../data/test/texture_swap/scanner371_job224000_texture_info.txt',
-           "../data/models/rivercourt_3307_scan/scanner371_job224000_texture_info.txt",
+cmd:option('-data_file',
+           "Kitchen_calibration_4_3_13.lua",
            'pose info file in same directory as the texture images')
-cmd:option('-outdir','output/')
+cmd:option("-lens_type", "nikon_10p5mm_r2t_full","data for image dewarping")
+
 cmd:text()
 
 -- parse input params
 params = cmd:parse(arg)
 
 -- temp load data from ui
-data = dofile("Kitchen_calibration_4_3_13.lua")
+data = dofile(params.data_file)
 
 img = image.load(data[1][1].image_path)
 
 -- load lens calibration
-lens = LensSensor.new("nikon_10p5mm_r2t_full",img)
--- lens = LensSensor.new("nikon_D5100_w10p5mm",img)
+lens = LensSensor.new(params.lens_type,img)
 
-rot_error = 0 
-trans_error = 0 
+rot_error   = torch.Tensor(3)
+trans_error = torch.Tensor(3)
 
 for si,sweep in pairs(data) do 
    -- matterport pose

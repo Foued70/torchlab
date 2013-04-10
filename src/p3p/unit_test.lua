@@ -1,4 +1,4 @@
-local geom       = require 'util.geom'
+local geom       = require 'util.geom' -- not a class so needs to be required explicitly
 local p3p        = require "p3p"
 local LensSensor = util.LensSensor
 
