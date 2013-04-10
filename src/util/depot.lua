@@ -1,7 +1,7 @@
 local json = require "json"
 local paths = require "paths"
-local qs = require "util/qs"
-local request = require "util/request"
+local qs = require "util.qs"
+local request = require "util.request"
 local host = "http://depot.floored.com/"
 local asset_dir = paths.concat(paths.dirname(paths.thisfile())..'/../assets')..'/'
 

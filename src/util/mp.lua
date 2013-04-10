@@ -9,22 +9,33 @@ local loader = require 'util.loader'
 Class()
 
 function scan_name(posefile, objfile)
-  return string.format('%s-%s-mp-scan.t7', paths.basename(posefile), 
-                    paths.basename(objfile))
+  local sn = ""
+  if objfile then
+    sn = paths.basename(objfile)
+  end
+  return string.format("%s-%s-mp-scan.t7", sn, paths.basename(posefile))
 end
 
--- takes a posefile path and obj path and return a scan object
+-- takes a posefile or scan folder path and obj path and return a scan object
 -- images must be in the same folder as the posefile
 -- useful for testing retexturing on mp data
 -- for example: 
 -- scan = util.mp.scan(posefile, objfile)
 -- tex = retex.Textures(scan)
-function scan(posefile, objfile)
-  return loader(scan_name(posefile, objfile), load_scan, posefile, objfile)
+function scan(file_or_dirpath, objfile)  
+  -- return load_scan(file_or_dirpath, objfile)
+  return loader(scan_name(file_or_dirpath, objfile), load_scan, file_or_dirpath, objfile)  
 end
 
-function load_scan(posefile, objfile)  
-  local scan_folder = paths.dirname(posefile)
+function load_scan(file_or_dirpath, objfile)
+  local scan_folder = file_or_dirpath
+  local posefile = nil
+  
+  if paths.filep(file_or_dirpath) then
+    scan_folder = paths.dirname(file_or_dirpath)
+    posefile = file_or_dirpath
+  end
+
   local scan = Scan.new(scan_folder, posefile, objfile)    
   -- each pose in the posefile corresponds to 1 sweep with 1 photo
   local sweeps = {}
@@ -43,11 +54,12 @@ function load_scan(posefile, objfile)
  
     sensor.center_x = sensor.image_w * pose.center_u -- px
     sensor.center_y = sensor.image_h * (1-pose.center_v) -- px
-     
-    sensor.hfov = pose.degrees_per_px_x
-    sensor.vfov = pose.degrees_per_px_y
-    sensor.inv_hfov = 1/sensor.hfov
-    sensor.inv_vfov = 1/sensor.vfov
+    
+    sensor.rad_per_px_x = math.rad(pose.degrees_per_px_x)
+    sensor.rad_per_px_y = math.rad(pose.degrees_per_px_y)
+    
+    sensor.px_per_rad_x = 1/sensor.rad_per_px_x
+    sensor.px_per_rad_y = 1/sensor.rad_per_px_y
     
     photo.lens = {sensor = sensor}
     -- position and rotation of the photo is exactly what the posefile says it is
@@ -71,6 +83,7 @@ end
 
 -- <texture filename> <qx> <qy> <qz> <qw> <tx> <ty> <tz> <center u>
 -- <center v> <degrees per px x> <degrees per px y> 
+-- origin of uv is bottom left
 function load_poses(posefile)
   if not paths.filep(posefile) then return nil end
   

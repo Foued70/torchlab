@@ -1,9 +1,9 @@
 require 'math'
 
-local geom = require 'util/geom'
+local geom = util.geom
 
 -- Ray primitive.  This class is intentionally light weight.
-local Ray = torch.class('Ray')
+local Ray = Class()
 
 function Ray:__init(o,d) 
    -- origin starting point of the ray
@@ -33,8 +33,6 @@ function Ray:__init(o,d)
 end
 
 -- function returns the xyz value for the endpoint of a ray of length t 
-function Ray:__call(t)
+function Ray:endpoint(t)
    return self.origin + (self.dir * t)
 end
-
-return Ray

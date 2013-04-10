@@ -1,6 +1,6 @@
-local interpolate = {}
+Class()
 
-function interpolate.math_huge(m)
+function math_huge(m)
    local k = 1
    while (m:max() == math.huge) do
       print("pass: "..k)
@@ -32,5 +32,3 @@ function interpolate.math_huge(m)
       end
    end
 end
-
-return interpolate

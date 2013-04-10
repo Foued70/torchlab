@@ -1,13 +1,13 @@
-local geom = require 'util.geom'
-local Ray  = require 'util.Ray'
+Class()
 
-local intersect = {}
+local geom = util.geom
+local Ray = util.Ray
 
 -- pt (point) is the intersection between the ray and the plane of the
 -- polygon verts are the vertices of the polygon dims are the
 -- precomputed dominant dimensions in which we flatten the polygon to
 -- compute
-function intersect.point_in_polygon(pt,verts,dims,center)
+function point_in_polygon(pt,verts,dims,center)
    -- fudge to move points slightly towards the center
    local eps = 1e-2 -- 1cm 
    if center then
@@ -43,7 +43,7 @@ end
 -- not even the two bounds of a slab and not the 3 slabs of a bbox.
 -- It is important to keep track of the direction of the ray and
 -- whether the bound is a max or a min.
-function intersect.ray_boundary(ray,ray_mint,ray_maxt,c_dim,c_val,c_ismax)
+function ray_boundary(ray,ray_mint,ray_maxt,c_dim,c_val,c_ismax)
    local t1 = ((c_val - ray.origin[c_dim]) * ray.invdir[c_dim])
    local ray_ispos = (ray.sign[c_dim] == 1)
    local dir = (c_ismax and  ray_ispos) or (not c_ismax and not ray_ispos)
@@ -74,7 +74,7 @@ function intersect.ray_boundary(ray,ray_mint,ray_maxt,c_dim,c_val,c_ismax)
    
 end
 
-function intersect.ray_interval(ray,dim,imin,imax)
+function ray_interval(ray,dim,imin,imax)
    local tnear = (imin - ray.origin[dim]):cmul(ray.invdir[dim])
    local tfar  = (imax - ray.origin[dim]):cmul(ray.invdir[dim])
 
@@ -93,7 +93,7 @@ function intersect.ray_interval(ray,dim,imin,imax)
    return true, t0,t1
 end
 
-function intersect.ray_polygon(ray,obj,fid,debug)
+function ray_polygon(ray,obj,fid,debug)
    local orig = ray.origin
    local  dir = ray.dir
    local norm = obj.face_normals[fid]
@@ -111,13 +111,13 @@ function intersect.ray_polygon(ray,obj,fid,debug)
       printf("  - %d %f", fid, t)
       -- printf("  - bbox\n%s", obj.face_bboxes[fid]:resize(2,3))
    end
-   local intersection = ray(t)
+   local intersection = ray:endpoint(t)
    -- precompute
    local _,ds   = torch.sort(torch.abs(obj.face_normals[fid]))
    local nverts = obj.n_verts_per_face[fid]
    local verts  = obj.face_verts[fid]:narrow(1,1,nverts)
    local center = obj.face_centers[fid]
-   local found  = intersect.point_in_polygon(intersection,verts,ds,center)
+   local found  = point_in_polygon(intersection,verts,ds,center)
    if debug then
       printf("  - %s", found)
    end
@@ -129,7 +129,7 @@ function intersect.ray_polygon(ray,obj,fid,debug)
 end
 
 -- intersection with Axis-aligned bbox (see pbrt book p.194)
-function intersect.ray_bbox(ray,bbox)
+function ray_bbox(ray,bbox)
    local bbmin = bbox:narrow(1,1,3)
    local bbmax = bbox:narrow(1,4,3)
    local tnear = (bbmin - ray.origin):cmul(ray.invdir)
@@ -151,5 +151,3 @@ function intersect.ray_bbox(ray,bbox)
    end
    return true, t0,t1
 end
-
-return intersect

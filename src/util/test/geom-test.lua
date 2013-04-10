@@ -1,11 +1,10 @@
 require 'torch'
 require 'sys'
 
-local util = require 'util'
 local geom = util.geom
 
 local test = {}
-test.data = require "util.test.geom-data"
+test.data = require "util.test.data.geom-data"
 
 function test.quaternion_from_to()
    print("Testing quaternion angle btw. 2 vectors")

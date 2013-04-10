@@ -9,10 +9,11 @@ require 'paths'
 require 'math'
 
 local loader = require 'util.loader'
-local Ray = require 'util.Ray'
-local bihtree = require 'util.bihtree'
-local interpolate = require 'util.interpolate'
-local intersect = require 'util.intersect'
+local Ray = util.Ray
+local intersect = util.intersect
+local bihtree = util.bihtree
+local interpolate = util.interpolate
+
 
 local Occlusions = Class()
 
@@ -29,22 +30,27 @@ function Occlusions:__init(scan, scale, packetsize)
 end
 
 -- get occlusions for each photo, trying to load occlusions from torch file
--- if occlusions can't be found for the pose, set to nil
-function Occlusions:get()
+-- if occlusions can't be found for the pose, set to nil or calc them if flag to calc is set
+function Occlusions:get(force_calc)
   if not self.occlusions then
-    local occlusions = {}
-    for i=1, #self.scan.sweeps do
-      for j=1, #self.scan.sweeps[i].photos do
-        local photo = self.scan.sweeps[i].photos[j]
-        if paths.filep(self:file(photo)) then
-          table.insert(occlusions, torch.load(self:file(photo)))
-          log.trace('Loaded occlusions for photo', photo.name)        
+    local occlusions = {}    
+    local photos = self.scan:get_photos()
+    for i=1, #photos do
+      local photo = photos[i]      
+      if paths.filep(self:file(photo)) then
+        table.insert(occlusions, torch.load(self:file(photo)))
+        log.trace('Loaded occlusions for photo', photo.name)        
+      else
+        if force_calc then
+          table.insert(occlusions, self:calc_for_photo(photo))
+          log.trace('Calculating occlusions for', photo.name)
         else
           table.insert(occlusions, nil)
-          log.trace('No occlusions found for photo', photo.name)
+          log.trace('No occlusions found for photo', photo.name)        
         end
       end
     end
+    self.occlusions = occlusions
   end
   
   return self.occlusions
@@ -52,7 +58,8 @@ end
 
 -- filename to use when saving and loading occlusions for a photo
 function Occlusions:file(photo)
-  local occ_file = string.format('%s-%s-s%s-depth.t7', paths.basename(self.scan.model_file), photo.name, self.scale)
+  local occ_file = string.format('%s-%s-%s-s%s-depth.t7', 
+    paths.basename(self.scan.model_file), paths.basename(self.scan.pose_file), photo.name, self.scale)
   return paths.concat(self.output_dir, occ_file)
 end
 
@@ -67,76 +74,99 @@ function Occlusions:test_setup()
   return tree
 end
 
+function Occlusions:get_tree()
+  if not self.tree then
+    sys.tic()
+    self.tree = bihtree.build(self:get_target())
+    log.trace('built tree in', sys.toc())
+  end
+  
+  return self.tree
+end
+
+function Occlusions:get_target()
+  if not self.target then
+    self.target = self.scan:get_model_data()
+  end
+  return self.target
+end
+
+function Occlusions:calc_for_photo(photo)
+  local target    = self:get_target()
+  local tree      = self:get_tree()
+  
+  local dirs      = photo:get_dirs(self.scale,self.packetsize)
+  local out_tree  = torch.Tensor(dirs:size(1),dirs:size(2))
+  local fid_tree  = torch.LongTensor(dirs:size(1),dirs:size(2))
+  
+  sys.tic()
+  log.trace("Computing depth map for photo", photo.name, 'at scale 1/'..self.scale)
+  
+  local tot = 0
+  local totmiss = 0
+  local position = photo.position
+
+  local percent_complete = 0
+  local dirs_dim1 = dirs:size(1)
+  local dirs_dim2 = dirs:size(2)
+  local total_dirs = dirs_dim1 * dirs_dim2
+  
+  for ri = 1,dirs_dim1 do
+    for ci = 1,dirs_dim2 do      
+      local current_progress = math.floor(((ri-1)*dirs_dim2 + ci) / (total_dirs) * 100)
+
+      if current_progress > percent_complete then
+        percent_complete = current_progress 
+        log.trace("Computing depth map for photo", photo.name, percent_complete.."%")
+      end
+
+      local ray = Ray.new(position,dirs[ri][ci])
+      local tree_d, tree_fid = bihtree.traverse(tree,target,ray) 
+
+      tot = tot + 1
+      out_tree[ri][ci] = tree_d
+      fid_tree[ri][ci] = tree_fid
+      if (tree_d == math.huge) then
+        totmiss = totmiss + 1
+      end
+    end
+  end
+  
+  log.trace("Done computing depth map for photo", photo.name, sys.toc())
+  
+  log.trace("Interpolating for", totmiss, "missed edges out of", tot)
+  sys.tic()
+  interpolate.math_huge(out_tree)
+  log.trace("Interpolation done", sys.toc())
+
+  image.display{image={out_tree},min=0,max=10,legend=photo.name}
+
+  local output_file = self:file(photo)
+  log.trace("Saving depth map:", output_file)
+  torch.save(output_file, out_tree)  
+  return out_tree
+end
+
+function Occlusions:show(force_calc)
+  local occlusions = self:get()
+  local photos = self.scan:get_photos()
+  
+  for i=1, #occlusions do
+    if occlusions[i] then
+      image.display{image={occlusions[i]}, min=0, max=10, legend=photos[i].name}
+    elseif force_calc then
+      self:calc_for_photo(photos[i])
+    end
+  end
+end
 
 -- calculate occlusions for all poses
 function Occlusions:calc()
-  local target = self.scan:get_model_data()
-  local occlusions = {}
+  local occlusions = {}  
+  local photos = self.scan:get_photos()
   
-  sys.tic()
-  local tree = bihtree.build(target)
-  log.trace("Built tree in", sys.toc())
-  
-  for i=1, #self.scan.sweeps do
-    occlusions[i] = {}
-    for j=1, #self.scan.sweeps[i].photos do
-      local photo     = self.scan.sweeps[i].photos[j]
-      local dirs      = photo:get_dirs(self.scale,self.packetsize)
-      
-      local out_tree  = torch.Tensor(dirs:size(1),dirs:size(2))
-      local fid_tree  = torch.LongTensor(dirs:size(1),dirs:size(2))
-      
-      sys.tic()
-      log.trace("Computing depth map for photo", photo.name, '('..i..'/'..j..') at scale 1/'..self.scale)
-      
-      local tot = 0
-      local totmiss = 0
-      local position = photo.position
-
-      local log_progress = true
-      local percent_complete = 0
-      
-      for ri = 1,dirs:size(1) do
-        for ci = 1,dirs:size(2) do
-          
-          if log_progress then
-            local current_progress = ((ri-1)*dirs:size(2) + ci) / (dirs:size(1)*dirs:size(2)) * 100
-            current_progress = math.floor(current_progress)
-
-            if current_progress > percent_complete then
-              percent_complete = current_progress 
-              log.trace("Computing depth map for photo", photo.name, percent_complete.."%")
-            end
-          end
-
-          local ray = Ray.new(position,dirs[ri][ci])
-          local tree_d, tree_fid = bihtree.traverse(tree,target,ray) -- turned off debugging
-          --bihtree.test_traverse(tree,target,ray)
-
-          tot = tot + 1
-          out_tree[ri][ci] = tree_d
-          fid_tree[ri][ci] = tree_fid
-          if (tree_d == math.huge) then
-            totmiss = totmiss + 1
-          end
-        end
-      end
-      
-      log.trace("Computing depth map for photo", photo.name, '('..i..'/'..j..') in', sys.toc())      
-      log.trace("Interpolating for", totmiss, "missed edges out of", tot)
-
-      sys.tic()
-      interpolate.math_huge(out_tree)
-      log.trace("Interpolation done", sys.toc())
-
-      image.display{image={out_tree},min=0,max=10}
-
-      local output_file = self:file(photo)
-      log.trace("Saving depth map:", output_file)
-      torch.save(output_file, out_tree)
-
-      occlusions[i][j] = out_tree
-    end
+  for i=1, #photos do    
+    occlusions[i] = self:calc_for_photo(photos[i])
   end
   
   self.occlusions = occlusions

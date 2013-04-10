@@ -1,4 +1,3 @@
-local util = require 'util'
 local intersect = util.intersect
 local geom = util.geom
 

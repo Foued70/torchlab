@@ -21,6 +21,8 @@ function dirs_only(dir_path, prefix, show_hidden)
   return dirs
 end
 
+-- find all the files in a directory
+-- optionally pass file extension if you only want files of that type
 function files_only(dir_path, ...)
   if not paths.dirp(dir_path) then return end
   

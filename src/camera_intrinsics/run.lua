@@ -1,8 +1,7 @@
 require 'image'
 
-local util = require "util" -- need printf
-local LensSensor = require "util.LensSensor"
-local projection = require "util.projection"
+local LensSensor = util.LensSensor
+local projection = util.projection
 
 -- top level filenames
 

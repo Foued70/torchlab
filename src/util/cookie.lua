@@ -1,7 +1,7 @@
 -- https://github.com/dvv/luvit-curl/blob/master/lib/cookie.lua
 -- https://github.com/mikeal/request/tree/master/vendor/cookie
 
-local _ = require "util/underscore"
+local _ = require "util.underscore"
 
 local strptime = function(str, format)
   return str:find('2013') and 2000000000 or 0

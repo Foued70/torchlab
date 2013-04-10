@@ -1,13 +1,13 @@
 require 'torch'
 require 'sys'
 
-local util  = require 'util'
-local Poses = util.Poses
-local geom  = util.geom
+local geom = util.geom
+local Ray = util.Ray
 
 local test  = {}
-
-test.data = require 'util.test.pose-data'
+test.data = require 'util.test.data.photo-data'
+scan = util.mp.scan(paths.concat(paths.dirname(paths.thisfile()), 'data'))
+photos = scan:get_photos()
 
 -- FIXME check serious numerical issues which are hopefully due to the
 -- precision at which the groundtruth is copied from blender
@@ -17,19 +17,19 @@ function test.global2local ()
    local e      = 0
    local maxerr = 0
    local cnt    = 0
-   local poses  = test.data.poses
 
-   local gxyz   = test.data.xyz
+   local gxyz   = test.data.global_positions
    local result = test.data.result_global2local
    sys.tic()
-   for i = 1,poses.nposes do
-      local pose = poses[i]
+   for i = 1, #photos do
+      local photo = photos[i]      
       for j = 1,gxyz:size(1) do
          cnt = cnt + 1
-         local t   = pose:global2local(gxyz[j]):narrow(1,1,3)
+         local t   = photo:global2local(gxyz[j]):narrow(1,1,3)
          local gt  = result[i][j]
          local er  = torch.abs(gt - t)
          local err = torch.max(er)
+         p(err)
          if err > maxerr then maxerr = err end
          if err > 1e-1 then 
             e = e + 1
@@ -50,15 +50,14 @@ function test.globalxyz2uv ()
    local maxuverr = 0
    local maxpxerr = 0
    local cnt      = 0
-   local poses    = test.data.poses
-   local gxyz     = test.data.xyz
+   local gxyz     = test.data.global_positions
    local result   = test.data.result_globalxyz2uv
    sys.tic()
-   for i = 1,poses.nposes do
-      local pose = poses[i]
+   for i = 1,#photos do
+      local photo = photos[i]
       for j = 1,gxyz:size(1) do
          cnt = cnt + 1
-         local t     = torch.Tensor({pose:globalxyz2uv(gxyz[j])})
+         local t     = torch.Tensor({photo:globalxyz2uv(gxyz[j])})
          local gt    = result[i][j]
          local er    = torch.abs(gt - t)
          local uverr = torch.max(er:narrow(1,1,2))
@@ -86,17 +85,16 @@ function test.localxy2globalray ()
    local e      = 0
    local maxerr = 0
    local cnt    = 0
-   local poses  = test.data.poses
 
-   local gxyz   = test.data.xyz
+   local gxyz   = test.data.global_positions
    sys.tic()
-   for i = 1,poses.nposes do
-      local pose = poses[i]
+   for i = 1,#photos do
+      local photo = photos[i]
       for j = 1,gxyz:size(1) do
          cnt = cnt + 1
          local gtxyz  = gxyz[j]
-         local t      = torch.Tensor({pose:globalxyz2uv(gtxyz)})
-         local pt,dir = pose:localxy2globalray(t[3],t[4])
+         local t      = torch.Tensor({photo:globalxyz2uv(gtxyz)})
+         local pt,dir = photo:localxy2globalray(t[3],t[4])
          local gdir   = geom.normalize(gtxyz - pt)
          local er     = torch.abs(dir:narrow(1,1,3) -gdir)
          local err, argerr = torch.max(er,1)
@@ -118,25 +116,26 @@ function test.localxy2globalray ()
                        e,cnt, maxerr,sys.toc()))
 end
 
--- tests 2globalray in context of poses
-function test.localxy2globalray_pose ()
-   print("Testing localxy2globalray_poses") 
-   local poses  = test.data.poses
+-- tests 2globalray in context of photos
+function test.localxy2globalray_photo ()
+   print("Testing localxy2globalray_photos") 
    -- matterport textures go beyond 360 
-   local over = torch.floor((poses.w - poses.px[1] * 1/360)*0.5 + 0.5)
-   for pi = 1,poses.nposes do
-      local pose = poses[pi]
+   for pi = 1,#photos do
+      local photo = photos[pi]
       local yerr = 0
       local xerr = 0
       local tot  = 0
-      local w  = pose.w
-      local h  = pose.h
+      local lens = photo:get_lens().sensor
+      local w  = lens.image_w
+      local h  = lens.image_h
+      
+      local over = math.floor((w - lens.hfov * 1/360)*0.5 + 0.5)
       for y = 1,h,100 do 
-         for x = over[pi],w-over[pi],100 do 
-            local pt, dir = pose:localxy2globalray(x, y)
-            local r = Ray(pt,dir)
+         for x = over,w-over,100 do 
+            local pt, dir = photo:localxy2globalray(x, y)
+            local r = Ray.new(pt,dir)
             local vec = r(10)
-            local u,v,nx,ny = pose:globalxyz2uv(vec)
+            local u,v,nx,ny = photo:globalxyz2uv(vec)
             local nx = math.floor(nx)
             local ny = math.floor(ny) 
             if (y ~= ny) then
@@ -153,24 +152,20 @@ function test.localxy2globalray_pose ()
    end
 end 
 
-function test.compute_dirs_offbyone(poses,pi,scale)
+function test.compute_dirs_offbyone()
    print("Testing compute directions off by one")
-   if not poses then
-      poses = test.data.poses
-   end
-   if not pi then pi = 1 end
-   if not scale then scale = 16 end
+   local photo = photos[1]
+   local scale = 16
    local invscale = 1/scale
-   local pose = poses[pi] 
-
-   local dirs  = pose:compute_dirs(scale)
+   local lens = photo:get_lens().sensor
+   local dirs  = photo:compute_dirs(scale)
    local err   = 0
    sys.tic()
-   local outh  = pose.h*invscale
-   local outw  = pose.w*invscale
+   local outh  = lens.image_h*invscale
+   local outw  = lens.image_w*invscale
    for h = 1,outh do
       for w = 1,outw do
-         local pt,dir = pose:localxy2globalray((w-1)*scale,(h-1)*scale) 
+         local pt,dir = photo:localxy2globalray((w-1)*scale,(h-1)*scale) 
          if torch.max(torch.abs(dir:narrow(1,1,3) - dirs[h][w])) > 1e-8 then
             err = err + 1
          end
@@ -179,34 +174,32 @@ function test.compute_dirs_offbyone(poses,pi,scale)
    printf("-- %d/%d Errors in %2.2fs", err, outh*outw, sys.toc()) 
 end
 
-function test.compute_dirs_deep(poses)
-   local Ray = require 'util.Ray'
+function test.compute_dirs_deep()   
    print("Testing compute directions")
-   if not poses then
-      poses = test.data.poses
-   end
+   
    for _,scale in pairs{16,8,4,2,1} do
       printf("Scale = %d",scale)
       local invscale = 1/scale
-      for pi = 1,poses.nposes do 
-         local pose = poses[pi]
-         local pt = pose.xyz
+      for pi = 1,#photos do 
+         local photo = photos[pi]
+         local pt = photo.position
+         local lens = photo:get_lens().sensor
          -- matterport textures go beyond 360 
-         local over = torch.floor((pose.w - pose.px[1] * 1/360)*0.5 + 0.5)
+         local over = torch.floor((lens.image_w - lens.hfov * 1/360)*0.5 + 0.5)
    
-         local dirs  = pose:compute_dirs(scale)
+         local dirs  = photo:compute_dirs(scale)
          local xerr  = 0
          local yerr  = 0
          local tot   = 0
          sys.tic()
-         local outh  = pose.h*invscale
-         local outw  = pose.w*invscale
+         local outh  = lens.image_h*invscale
+         local outw  = lens.image_w*invscale
          for h = 1,outh do
             for w = over[pi]+1,outw-over[pi] do
                local dir = dirs[h][w]
-               local r = Ray(pt,dir)
+               local r = Ray.new(pt,dir)
                local v = r(1)
-               local u,v,x,y = pose:globalxyz2uv(v)
+               local u,v,x,y = photo:globalxyz2uv(v)
                x = x*invscale
                y = y*invscale
                if (math.abs(h - y) > 1) then
@@ -230,7 +223,7 @@ function test.all()
    test.global2local()
    test.globalxyz2uv()
    test.localxy2globalray()
-   test.localxy2globalray_pose()
+   test.localxy2globalray_photo()
    test.compute_dirs_offbyone()
 --    test.compute_dirs_deep()
 end

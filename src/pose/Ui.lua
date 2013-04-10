@@ -5,7 +5,7 @@ require 'qtuiloader'
 require 'qtwidget'
 require 'qt'
 
-local geom = require 'util.geom'
+local geom = util.geom
 local libui = require 'libui'
 local Scan = util.Scan
 local GLWidget = ui.GLWidget

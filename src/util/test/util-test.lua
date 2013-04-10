@@ -1,15 +1,13 @@
 require 'torch'
 require 'sys'
 
-local util = require 'util'
-
 local test = {}
 
 function test.grid_contiguous()
    print("Testing grid contiguous")
    local ww  = 4
    local m   = torch.randn(32,32,3)
-   local ufm = util.grid_contiguous(m,ww,ww)
+   local ufm = util.util.grid_contiguous(m,ww,ww)
    local err = 0
    local errc = 0
    for r = 1,ufm:size(1) do 
@@ -33,7 +31,7 @@ function test.get_index_lt_val()
    local nr = r:size(1)
    
    function eval_test(r,val,verbose)
-      local idx,count = util.get_index_lt_val(r,val)
+      local idx,count = util.util.get_index_lt_val(r,val)
       local err = 0
       if (idx > 1) then
          local cval = r[idx-1]

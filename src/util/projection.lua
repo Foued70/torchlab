@@ -1,4 +1,4 @@
-setfenv(1, setmetatable({}, {__index = _G}))
+Class()
 
 local piover2 = math.pi*0.5
 
@@ -309,5 +309,3 @@ function make_index(xmap,ymap,mask)
 
    return index_map
 end
-
-return (getfenv())

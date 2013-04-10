@@ -15,7 +15,7 @@ local Scan = Class()
 local MODEL_FILE_EXTENSION = '.obj'
 
 function Scan:__write_keys()
-  return {'path', 'camera_id', 'sweeps', 'poses', 'model_file'}
+  return {'path', 'camera_id', 'sweeps', 'poses', 'model_file', 'pose_file'}
 end
 
 function Scan:__after_read()
@@ -133,7 +133,8 @@ function Scan:set_poses(pose_file)
       log.trace('no pose file found')
       return
     end
-  end  
+  end
+  self.pose_file = pose_file
   self.poses = util.mp.poses(pose_file)  
   self:init_sweeps_poses()
 end

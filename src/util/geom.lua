@@ -1,7 +1,7 @@
-setfenv(1, setmetatable({}, {__index = _G}))
-
 require 'torch'
 require 'dok'
+
+Class()
 
 local axes   = torch.eye(3)
 
@@ -494,7 +494,3 @@ function ray_face_intersection(...)
       return nil,3
    end
 end
-
-
-return (getfenv())
-

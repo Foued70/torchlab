@@ -1,9 +1,8 @@
 require 'image'
 
-local util = require 'util'
 local geom = util.geom
 local p3p = require 'p3p'
-local LensSensor = require "util.LensSensor"
+local LensSensor = util.LensSensor
 
 
 -- top level filenames

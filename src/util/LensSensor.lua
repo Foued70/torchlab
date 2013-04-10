@@ -1,5 +1,5 @@
-local projection = require "util.projection"
-local geom = require 'util.geom'
+local projection = util.projection
+local geom = util.geom
 
 local pi = math.pi
 local piover2 = math.pi * 0.5
@@ -158,6 +158,13 @@ function LensSensor:add_image(...)
    self.vfov = vfov
    self.inv_hfov = 1/hfov
    self.inv_vfov = 1/vfov
+   
+   -- resolution dependent version of hfov, vfov, inv_hfov, inv_fov. used in azimuth and elevation calcs
+   -- TODO: rewrite azimuth and elevation to use hfov, vfov, etc instead
+   self.rad_per_px_x = 2*hfov/imgw
+   self.rad_per_px_y = 2*vfov/imgh
+   self.px_per_rad_x = 1/self.rad_per_px_x
+   self.px_per_rad_y = 1/self.rad_per_px_y
 
    self.diagonal_normalized   = diag_norm
    self.horizontal_normalized = horz_norm
