@@ -1,7 +1,6 @@
-util       = require 'util'
-geom       = util.geom
-p3p        = require "p3p"
-LensSensor = util.LensSensor
+local geom       = require 'util.geom'
+local p3p        = require "p3p"
+local LensSensor = util.LensSensor
 
 -- receate the tests from Kneip's paper
 -- 1000 random points in roughly 4x4x4
@@ -128,7 +127,7 @@ end
 
 project_through_corners = false
 jitter_image_coords     = false -- true
-jitter_amount           = 0 -- 1e-2
+jitter_3D_pts           = true
 sample_size             = 1000
 
 debug_solutions = false
@@ -165,6 +164,8 @@ for ji = -5,0,0.1 do
          if jitter_image_coords then 
             test_corners:add(torch.randn(test_corners:size()):mul(jitter_amount))
             test_unit    = c:img_coords_to_world(test_corners,"uv","uc") 
+         elseif jitter_3D_pts then
+            test_world:add(torch.randn(test_world:size()):mul(jitter_amount))
          else
             -- jitter unit vectors directly
             test_unit:add(torch.randn(test_unit:size()):mul(jitter_amount))
