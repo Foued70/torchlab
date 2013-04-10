@@ -7,9 +7,6 @@ local projection = util.projection
 local geom = util.geom
 local loader = require 'util.loader'
 
-local r2d = 180 / math.pi
-local d2r = math.pi / 180
-
 local Photo = Class()
 
 local REQUIRED_CALIBRATION_PAIRS = 4
@@ -141,13 +138,14 @@ end
 function Photo:globalxyz2uv(pt)
    -- xyz in pose coordinates
    local v       = self:global2local(pt)
-   local azimuth = -r2d * torch.atan2(v[2],v[1])
+   local azimuth = -torch.atan2(v[2],v[1])
    local norm    = geom.normalize(v)
-   local elevation = r2d * torch.asin(norm[3])
+   local elevation = torch.asin(norm[3])
    
+   -- TODO: calc proj_x and proj_y with inv_hfov and inv_vfov and kill px_per_rad_x, px_per_rad_y?
    local lens = self:get_lens()
-   local proj_x  = 0.5 + lens.sensor.center_x + (  azimuth * lens.sensor.inv_hfov)
-   local proj_y  = 0.5 + lens.sensor.center_y - (elevation * lens.sensor.inv_vfov)
+   local proj_x  = 0.5 + lens.sensor.center_x + (  azimuth * lens.sensor.px_per_rad_x)
+   local proj_y  = 0.5 + lens.sensor.center_y - (elevation * lens.sensor.px_per_rad_y)
    
    -- u,v = 0,0 in upper left
    local proj_u  = proj_x * lens.sensor.inv_image_w
@@ -160,10 +158,10 @@ end
 function Photo:localxy2globalray(x,y)
   local lens = self:get_lens()
   
-  local azimuth   = (x - lens.sensor.center_x) * lens.sensor.hfov
-  local elevation = (lens.sensor.center_y - y) * lens.sensor.vfov
-  azimuth   = - d2r * azimuth
-  elevation =   d2r * elevation
+  -- TODO: calc azimuth and elevation with hfov and vfov and kill rad_per_px_x, rad_per_px_y?
+  local azimuth   = -(x - lens.sensor.center_x) * lens.sensor.rad_per_px_x
+  local elevation = (lens.sensor.center_y - y) * lens.sensor.rad_per_px_y
+  
   local dir = torch.Tensor(3)
   -- local direction
   local h =       torch.cos(elevation)

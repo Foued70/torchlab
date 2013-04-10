@@ -54,11 +54,12 @@ function load_scan(file_or_dirpath, objfile)
  
     sensor.center_x = sensor.image_w * pose.center_u -- px
     sensor.center_y = sensor.image_h * (1-pose.center_v) -- px
-     
-    sensor.hfov = pose.degrees_per_px_x
-    sensor.vfov = pose.degrees_per_px_y
-    sensor.inv_hfov = 1/sensor.hfov
-    sensor.inv_vfov = 1/sensor.vfov
+    
+    sensor.rad_per_px_x = math.rad(pose.degrees_per_px_x)
+    sensor.rad_per_px_y = math.rad(pose.degrees_per_px_y)
+    
+    sensor.px_per_rad_x = 1/sensor.rad_per_px_x
+    sensor.px_per_rad_y = 1/sensor.rad_per_px_y
     
     photo.lens = {sensor = sensor}
     -- position and rotation of the photo is exactly what the posefile says it is
@@ -82,6 +83,7 @@ end
 
 -- <texture filename> <qx> <qy> <qz> <qw> <tx> <ty> <tz> <center u>
 -- <center v> <degrees per px x> <degrees per px y> 
+-- origin of uv is bottom left
 function load_poses(posefile)
   if not paths.filep(posefile) then return nil end
   
