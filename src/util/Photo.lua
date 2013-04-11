@@ -159,15 +159,24 @@ function Photo:localxy2globalray(x,y)
   local lens = self:get_lens()
   
   -- TODO: calc azimuth and elevation with hfov and vfov and kill rad_per_px_x, rad_per_px_y?
-  local azimuth   = -(x - lens.sensor.center_x) * lens.sensor.rad_per_px_x
+  local azimuth   = (x - lens.sensor.center_x) * lens.sensor.rad_per_px_x  
   local elevation = (lens.sensor.center_y - y) * lens.sensor.rad_per_px_y
   
   local dir = torch.Tensor(3)
   -- local direction
-  local h =       torch.cos(elevation)
+  local h =       torch.cos(elevation)  
+    
   dir[3]  =       torch.sin(elevation) -- z'
-  dir[2]  =   h * torch.sin(azimuth)   -- y'
-  dir[1]  =   h * torch.cos(azimuth)   -- x'
+  dir[2]  =   h * torch.cos(azimuth)   -- y'
+  dir[1]  =   h * torch.sin(azimuth)   -- x'
+  
+  -- TODO: fix this fix for matterport 
+  if lens.sensor.name == 'matterport' then
+    azimuth = -azimuth -- mp flips their textures horizontally 
+    dir[2]  =   h * torch.sin(azimuth)   -- y'
+    dir[1]  =   h * torch.cos(azimuth)   -- x'
+  end
+  
   geom.normalize(dir)
   -- return point and direction rotated to global coordiante
   return self.position, geom.rotate_by_quat(dir,self.rotation)

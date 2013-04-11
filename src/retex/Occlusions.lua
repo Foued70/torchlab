@@ -63,17 +63,6 @@ function Occlusions:file(photo)
   return paths.concat(self.output_dir, occ_file)
 end
 
-function Occlusions:test_setup()
-  local target = self.scan:get_model_data()
-  local occlusions = {}
-  
-  sys.tic()
-  local tree = bihtree.build(target)
-  log.trace("Built tree in", sys.toc())
-
-  return tree
-end
-
 function Occlusions:get_tree()
   if not self.tree then
     sys.tic()
@@ -150,11 +139,11 @@ end
 function Occlusions:show(force_calc)
   local occlusions = self:get()
   local photos = self.scan:get_photos()
-  
-  for i=1, #occlusions do
+    
+  for i=1, #photos do
     if occlusions[i] then
       image.display{image={occlusions[i]}, min=0, max=10, legend=photos[i].name}
-    elseif force_calc then
+    elseif force_calc then      
       self:calc_for_photo(photos[i])
     end
   end
@@ -165,7 +154,7 @@ function Occlusions:calc()
   local occlusions = {}  
   local photos = self.scan:get_photos()
   
-  for i=1, #photos do    
+  for i=1, #photos do
     occlusions[i] = self:calc_for_photo(photos[i])
   end
   
@@ -174,33 +163,35 @@ end
 
 -- Intentionally very slow.  Checks _all_ the faces. Returns closest
 -- intersection. Used for debugging the aggregates.
-function Occlusions.get_occlusion_slow(ray,obj,debug)
-   local mindepth        = math.huge
-   local fid             = 0
-   local nverts_per_face = obj.n_verts_per_face
-   local face_verts      = obj.face_verts
-   local normals         = obj.face_normals
-   local ds              = obj.face_center_dists
-   -- exhausting loop through all faces
-   for fi = 1,obj.n_faces do
-      local nverts = nverts_per_face[fi]
-      local verts  = face_verts[fi]:narrow(1,1,nverts)      
-      local normal = normals[fi]
-      local d      = ds[fi]
+function Occlusions:get_occlusion_slow(ray,debug)
+  local obj = self:get_target()
+  
+  local mindepth        = math.huge
+  local fid             = 0
+  local nverts_per_face = obj.n_verts_per_face
+  local face_verts      = obj.face_verts
+  local normals         = obj.face_normals
+  local ds              = obj.face_center_dists
+  -- exhausting loop through all faces
+  for fi = 1,obj.n_faces do
+    local nverts = nverts_per_face[fi]
+    local verts  = face_verts[fi]:narrow(1,1,nverts)      
+    local normal = normals[fi]
+    local d      = ds[fi]
 
       
-      local testd = intersect.ray_polygon(ray,obj,fi,debug)
-      local bstr  = " "
-      if testd and (testd < mindepth) then
-         bstr = "*"
-         mindepth = testd
-         fid = fi
-      end
-      if debug then 
-         if not testd then testd = math.huge end
-         printf("%s[%05d] : %f", bstr,fi,testd)
-      end
+    local testd = intersect.ray_polygon(ray,obj,fi,debug)
+    local bstr  = " "
+    if testd and (testd < mindepth) then
+      bstr = "*"
+      mindepth = testd
+      fid = fi
+    end
+    if debug then 
+      if not testd then testd = math.huge end
+      printf("%s[%05d] : %f", bstr,fi,testd)
+    end
       
-   end
-   return mindepth,fid
+  end
+  return mindepth,fid
 end
