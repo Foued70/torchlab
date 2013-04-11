@@ -30,6 +30,11 @@ function trace(...)
   trace_x(3, gray, ...)
 end
 
+-- allows printf style formating
+function tracef(fmt,...)
+   trace_x(3, gray, string.format(fmt,...))
+end
+
 function trace_x(level, color_func, ...)
   if TRACE then
     local info = debug.getinfo(level)
@@ -39,7 +44,8 @@ function trace_x(level, color_func, ...)
     local delim = ''
     for i, o in ipairs({...}) do
       local str = tostring(o)
-      -- if the string hace newlines in it, assume it wants to start on it's own line (like torck tensors)
+      -- if the string has newlines in it, assume it wants to start
+      -- on it's own line (like torch tensors)
       if str:match('\n') then 
         rest = rest..'\n'..str
         delim = '' -- assume this ends with a newline, so no delim for the next one
