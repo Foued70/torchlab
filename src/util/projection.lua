@@ -18,7 +18,7 @@ function remap(img, map)
    local nelem  = lookup:nElement()
    -- fast 1D remap
    if (lookup:nDimension() ~= 1) then
-      print("ERROR map should be 1D Tensor")
+      log.error("map should be 1D Tensor")
       return nil
    end
 
@@ -39,7 +39,7 @@ function remap(img, map)
 
    elseif (ndim == 3) then
       -- n channel (RGB) (n x h x w)
-      printf("output image size: %d x %d", img:size(1), nelem)
+      log.tracef("output image size: %d x %d", img:size(1), nelem)
       out:resize(img:size(1),nelem)
 
       for d = 1,img:size(1) do -- loop through channels
@@ -58,7 +58,7 @@ end
 
 
 
-function compute_diagonal_fov(diagonal_normalized,lens_type,params,debug)
+function compute_diagonal_fov(diagonal_normalized,lens_type,params)
    local convert = false
    if (type(diagonal_normalized) == "number") then 
       diagonal_normalized = torch.Tensor({diagonal_normalized})
@@ -68,7 +68,7 @@ function compute_diagonal_fov(diagonal_normalized,lens_type,params,debug)
    if (lens_type == "rectilinear") then
       dfov = torch.atan(diagonal_normalized)   -- diag in rad
    elseif (lens_type == "scaramuzza_r2t") then
-      if debug then print(" -- using scaramuzza calibration") end
+      log.trace(" -- using scaramuzza calibration")
       local d2 = diagonal_normalized:clone()
       dfov = torch.Tensor(d2:size()):fill(params[-1])
       for i = params:size(1)-1,1,-1 do 
@@ -78,10 +78,10 @@ function compute_diagonal_fov(diagonal_normalized,lens_type,params,debug)
       -- using ideal thoby to compute fov for scaramuzza's original
       -- code which does not solve for theta. Can remove this eventually.
    elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
-      if debug then print(" -- using lens type: thoby") end
+      log.trace(" -- using lens type: thoby")
       -- thoby : theta = asin((r/f)/(k1 * f))/k2
       if (diagonal_normalized:max() > k1) then 
-         error("diagonal too large for thoby")
+         log.error("diagonal too large for thoby")
       else
          dfov = torch.asin(diagonal_normalized/k1)/k2
       end
@@ -158,8 +158,9 @@ end
 -- based on final projection type create a map of angles which need to
 -- be looked up in the original image.
 function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
-   printf("fov: %f hfov: %f vfov: %f mapw: %d maph: %d",fov,hfov,vfov,mapw,maph)
+   
    local lambda,phi,theta_map, output_map
+   
    if (proj_type == "rectilinear") then
       -- limit the fov to roughly 120 degrees
       if fov > max_rad_rectilinear then
@@ -242,29 +243,23 @@ function sphere_to_camera(theta_map,lens_type,params)
       -- uses a negative offset from focal point.
       theta:add(-piover2) 
       local theta_pow = theta:clone()
-      
-      printf("theta start: max: %f min: %f",theta_pow:max(), theta_pow:min())
       r_map:fill(params[-1]) -- rho = invpol[0]
       
       for i = params:size(1)-1,1,-1 do          
          r_map:add(theta_pow * params[i]) -- coefficients of inverse poly.
          theta_pow:cmul(theta)        -- powers of theta
-      end
-      printf("rho out: max: %f min: %f",r_map:max(), r_map:min())
-   elseif (lens_type == "scaramuzza_r2t") then
-      local theta     = theta_map:clone()
-      local theta_pow = theta:clone()
+      end 
+   elseif lens_type:gmatch("scaramuzza_r2t") then
+      local theta_pow = theta_map:clone()
       
-      printf("theta start: max: %f min: %f",theta_pow:max(), theta_pow:min())
       r_map:fill(params[-1]) -- rho = invpol[0]
       
       for i = params:size(1)-1,1,-1 do          
          r_map:add(theta_pow * params[i]) -- coefficients of inverse poly.
-         theta_pow:cmul(theta)        -- powers of theta
-      end
-      printf("rho out: max: %f min: %f",r_map:max(), r_map:min())
+         theta_pow:cmul(theta_map)        -- powers of theta
+      end 
    else
-      print("ERROR don't understand lens_type")
+      log.error("don't understand lens_type")
       return nil
    end
    return r_map
@@ -283,9 +278,15 @@ function make_mask(xmap,ymap,imgw,imgh)
 end
 
 -- convert the x and y index into a single 1D offset (y * stride + x)
-function make_index(xmap,ymap,mask)
+function make_index(xmap,ymap,mask,stride)
 
-   local stride = xmap:size(2)
+   -- CAREFUL stride is in the original raw image not in the
+   -- projection which can be scaled if xmap:size() is not equal to
+   -- the size original image in which we index this function will
+   -- return all the wrong values.
+   if not stride then 
+      stride = xmap:size(2)
+   end
 
    -- CAREFUL must floor before multiplying by stride or does not make sense.
    -- -0.5 then floor is equivalient to adding 0.5 -> floor -> -1 before multiply by stride.
