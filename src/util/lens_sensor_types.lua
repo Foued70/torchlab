@@ -144,7 +144,7 @@ local lens_types = {
       cal_xc = 2507.100192805156
    },
    matterport = {
-     name = 'Matterport "lens" placeholder',
+     name = 'matterport',
      lens_type = 'equirectangular'
    }
 
