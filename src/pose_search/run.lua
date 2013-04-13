@@ -1,7 +1,11 @@
 require 'image'
+require 'nn'
+
 LensSensor = util.LensSensor
 projection = util.projection
 -- mp = util.mp
+
+d2r = math.pi / 180
 
 -- COPY from util/mp.lua until things are settled
 -- <texture filename> <qx> <qy> <qz> <qw> <tx> <ty> <tz> <center u>
@@ -89,6 +93,9 @@ sweep_dir  = scan_dir .. params.sweep_prefix
 -- load lens calibration
 lens = LensSensor.new(params.lens_type)
 
+preprocess = nn.Sequential()
+preprocess:add(nn.SpatialContrastiveNormalization(1,image.gaussian(9)))
+
 -- Could loop over sweeps here.
 
 -- load sweeps
@@ -103,23 +110,32 @@ if #matter_texture_fname > 0 then
 end
 
 matter_texture = image.load(matter_texture_fname)
+mpout  = preprocess:forward(image.rgb2lab(matter_texture):narrow(1,1,1))
+mpvfov = d2r * 0.5 * 512 * poses[1].degrees_per_px_y
+image.display(mpout)
 
 -- DSLR images
 
 sweep_image_fname = file_match(sweep_dir .. sweep_no, ".jpg")
 
--- do matching
-img = image.load(sweep_image_fname[1])
+for ii = 1,#sweep_image_fname do 
+   
+   rawimg = image.load(sweep_image_fname[ii])
 
-lens:add_image(img)
+   if ii == 1 then
+      lens:add_image(rawimg)
 
-map = lens:make_projection_map("rectilinear",0.1, true)
+      -- find proper size for projection to match matterport fov
 
-imgout = projection.remap(img,map)
+      scale = (512 / lens.image_h ) * ( lens.vfov / mpvfov)
 
-img = nil
-collectgarbage()
-image.display(imgout)
 
--- for ii = 2,#sweep_image_fname do 
---    img = image.load
+      map = lens:make_projection_map("sphere",scale)
+   end
+
+   imgout = preprocess:forward(image.rgb2lab(projection.remap(rawimg,map)):narrow(1,1,1)):clone()
+
+   rawimg = nil
+   collectgarbage()
+   image.display(imgout)
+end
