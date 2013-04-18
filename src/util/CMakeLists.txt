@@ -1,5 +1,10 @@
-cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
-cmake_policy(VERSION 2.6)
-include(../common.cmake REQUIRED)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6 FATAL_ERROR)
+CMAKE_POLICY(VERSION 2.6)
 
-add_torch_package(util "" "" "Floored 3D utils")
+INCLUDE(../common.cmake REQUIRED)
+
+SET(src util.c)
+
+ADD_TORCH_PACKAGE(util "${src}" "" "Floored 3D utils")
+
+TARGET_LINK_LIBRARIES(util TH)

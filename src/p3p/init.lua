@@ -1,5 +1,6 @@
-require 'torchffi'
-local geom = util.geom
+local geom      = util.geom
+local ffi_utils = require 'util.ffi'
+local ffi       = require 'ffi'
 
 -- Reimplementation in torch/C of Laurent Kneip's code. Could also have
 -- used Pierre Moulon's openMVG (https://github.com/openMVG/openMVG) but
@@ -60,17 +61,15 @@ local geom = util.geom
 --                   -1 if world points aligned
 
 -- Load the C versions of intermediate functions
-ffi.cdef[[
-            int solveQuartic(double *factors, double *realRoots);
-            int computeFactors(double *factors, double *pointData);
-            int backSubstitute(double *solutions, double *pointData, double *realRoots);
-            
-         ]]
+ffi.cdef
+[[
+    int solveQuartic(double *factors, double *realRoots);
+    int computeFactors(double *factors, double *pointData);
+    int backSubstitute(double *solutions, double *pointData, double *realRoots); 
+]]
 
--- FIXME make this loading cleaner for other ffi projects
--- ffi doesn't look in the right place by default
-local ffidir = paths.install_lib .. "/torch/lua/"
-local p3pC  = ffi.load(ffidir .. "libp3p.dylib")
+local p3plib = ffi_utils.lib_path("p3p")
+local p3pC   = ffi.load(p3plib)
 
 local p3p = {}
 

@@ -64,17 +64,17 @@ local function recurse_build(tree,sv,bb,noffset,absindex,debug)
    end
 
    -- b) split: on grid as in BIH paper.
-   --
+   -- 
    -- Carsten Wächter & Alexander Keller (2006)
    -- Instant Ray Tracing: The Bounding Interval Hierarchy
-   --
+   -- 
    -- We want to create empty space between intervals and not use the
    -- faces themselves to pick the split plane.  Intervals will fit
    -- the objects and objects with equal values will go to the same
    -- child.
 
    -- b1) choose split plane in the middle of the range
-   --
+   -- 
    -- FIXME could do an SAH (with count of emptiness) here and
    -- optimize traversal
    
@@ -87,9 +87,9 @@ local function recurse_build(tree,sv,bb,noffset,absindex,debug)
    -- b2) get index into sorted vals s.t.
    --      - all vals from index and below are < splitval
    --      - all vals above index are >= splitval
-   local splitright = util.util.get_index_lt_val(vals,splitval)
-   local splitleft  = splitright-1
-
+   local splitleft  = vals:lt(splitval):sum()
+   local splitright = splitleft + 1
+   
    -- book keeping
    --  - keep track of absolute indices in to face array
    local absindex1 = absindex[{{1,splitleft}}]
@@ -100,10 +100,10 @@ local function recurse_build(tree,sv,bb,noffset,absindex,debug)
    local elems2    = indexes[{{splitright,nverts}}]
 
    -- b3) find new points lists
-   local sv1       = sv[elems1] -- util.util.select_by_index(elems1,sv)
-   local sv2       = sv[elems2] -- util.util.select_by_index(elems2,sv)
-   local bb1       = bb[elems1] -- util.util.select_by_index(elems1,bb)   
-   local bb2       = bb[elems2] -- util.util.select_by_index(elems2,bb)
+   local sv1       = sv[elems1] 
+   local sv2       = sv[elems2] 
+   local bb1       = bb[elems1] 
+   local bb2       = bb[elems2] 
 
    -- c) record: this node is a split node
    local node      = tree.nodes[noffset]

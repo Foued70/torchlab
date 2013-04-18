@@ -108,16 +108,16 @@ function LensSensor:add_image(...)
 
    -- Currently unused, crop_radius would allow us to look at a region
    -- inside image boundaries such as when the image circle is less
-   -- than the sensor width or height.
+   -- than the sensor width or height (not full frame)
    if self.crop_radius then
-      -- I don't understand why we divide by the vertical fov (in most
-      -- cases we have square pixels, aspect ratio is 1).
+      -- Divide by the vertical fov b/c that is the shorter dimension
+      -- and closer to the circle in a rectangle, but does raise a
+      -- question about the aspect ratio.
       diag_norm   = self.crop_radius / vfocal_px
    end
 
-   printf(" -- normalized : diag: %f h: %f v: %f",
-      diag_norm,
-      horz_norm, vert_norm)
+   log.tracef(" -- normalized : diag: %f h: %f v: %f",
+      diag_norm, horz_norm, vert_norm)
 
    -- FIXME clean this up. Special case for calibration
    -- reset center based on the calibration
@@ -140,7 +140,7 @@ function LensSensor:add_image(...)
 
    local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
 
-   printf(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
+   log.tracef(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
       dfov*r2d, hfov*r2d,vfov*r2d)
    self.image_w      = imgw -- px
    self.image_h      = imgh -- px
@@ -159,8 +159,9 @@ function LensSensor:add_image(...)
    self.inv_hfov = 1/hfov
    self.inv_vfov = 1/vfov
    
-   -- resolution dependent version of hfov, vfov, inv_hfov, inv_fov. used in azimuth and elevation calcs
-   -- TODO: rewrite azimuth and elevation to use hfov, vfov, etc instead
+   -- resolution dependent version of hfov, vfov, inv_hfov,
+   -- inv_fov. used in azimuth and elevation calcs TODO: rewrite
+   -- azimuth and elevation to use hfov, vfov, etc instead
    self.rad_per_px_x = 2*hfov/imgw
    self.rad_per_px_y = 2*vfov/imgh
    self.px_per_rad_x = 1/self.rad_per_px_x
@@ -241,11 +242,10 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    -- +++++
    local r_map =
       projection.sphere_to_camera(theta_map, lens_type, self.invpol)
-   printf("r_map: max: %f min: %f", r_map:max(), r_map:min())
    
    -- +++++
    -- (3) make the ratio (new divided by old) by which we scale the
-      --     pixel offsets (in normalized coordinates) in the output
+   --     pixel offsets (in normalized coordinates) in the output
    --     image to coordinates in the original image.
    -- +++++
    r_map:cdiv(output_map)
@@ -268,13 +268,13 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    -- +++++++
 
    local mask = projection.make_mask(xmap,ymap,imgw,imgh)
-   printf("Masking %d/%d lookups (out of bounds)", mask:sum(),mask:nElement())
-
+   log.tracef("Masking %d/%d lookups (out of bounds)", mask:sum(),mask:nElement())
    -- +++++++
    -- (6) convert the x and y index into a single 1D offset (y * stride + x)
+   --     Note: stride is the final dimension of the original image.
    -- +++++++
 
-   local index_map = projection.make_index(xmap,ymap,mask)
+   local index_map = projection.make_index(xmap,ymap,mask,imgw)
 
    -- +++++++
    -- (7) output map object
@@ -312,7 +312,7 @@ end
 -- 
 --     - "uc" or "unit_cartesian" unit cartesian vectors 
 -- 
-function LensSensor:img_coords_to_world (img_pts, pt_type, out_type)
+function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
    local normalized_pts = img_pts:clone()
 
    -- put points in normalized coordinates. 
