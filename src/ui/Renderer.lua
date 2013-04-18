@@ -6,7 +6,7 @@ local geom = util.geom
 local Shader = require 'ui.Shader'
 local MatrixStack = require 'ui.MatrixStack'
 
-local Renderer = torch.class('Renderer')
+local Renderer = Class()
 
 function Renderer:__init(parent, width, height)
   self.parent = parent
@@ -21,6 +21,9 @@ function Renderer:__init(parent, width, height)
   self.texture_manager = require('ui.TextureManager').new()
   self.animation_manager = require('ui.AnimationManager').new()
 
+  self:create_scene('viewport_scene')
+  self:activate_scene('viewport_scene')
+
   log.trace("Renderer Constructed")
 end
 
@@ -30,9 +33,6 @@ function Renderer:init(viewport_width, viewport_height)
 
   self:create_camera('raycast_camera', viewport_width, viewport_height, (math.pi/4))  
   self:create_shaders()
-
-  self:create_scene('viewport_scene')
-  self:activate_scene('viewport_scene')
 end
 
 function Renderer:render()
@@ -88,8 +88,9 @@ function Renderer:render()
   end
 end
 
-function Renderer:create_camera(name, width, height, vfov, eye, center)
-  local camera = require('ui.Camera').new(self, name)
+function Renderer:create_camera(name, width, height, vfov, eye, center, camera_class)
+  camera_class = camera_class or ui.UpCamera
+  local camera = camera_class.new(self, name)
 
   local camera_width = width or self.cameras.viewport_camera.width
   local camera_height = height or self.cameras.viewport_camera.height
@@ -98,7 +99,9 @@ function Renderer:create_camera(name, width, height, vfov, eye, center)
   local camera_center = center or torch.Tensor({0,1,0})
 
   camera.vfov = camera_vfov
+  log.trace(camera_width, camera_height)
   camera:resize(camera_width, camera_height)
+  log.trace()
   camera:set_eye(camera_eye[1], camera_eye[2], camera_eye[3])
   camera:set_center(camera_center[1], camera_center[2], camera_center[3])
   camera:update()
@@ -120,8 +123,7 @@ function Renderer:create_scene(scene_name)
     log.trace(scene_name .. " already exists! No scene created.")
     return
   end
-  local objects = {}
-  self.scenes[scene_name] = objects
+  self.scenes[scene_name] = {}
 end
 
 function Renderer:activate_scene(scene_name)
@@ -134,9 +136,9 @@ function Renderer:activate_scene(scene_name)
 end
 
 function Renderer:create_shader(name)
-  log.trace("Creating shader:", name)
+  -- log.trace("Creating shader:", name)
   self.shaders[name] = Shader.new(name)
-  log.trace("Shader", name, "created")
+  -- log.trace("Shader", name, "created")
 end
 
 function Renderer:create_shaders()
@@ -147,7 +149,7 @@ function Renderer:create_shaders()
 end
 
 function Renderer:add_object(data_obj)
-  local object = require('ui.Object').new(self, data_obj)
+  local object = ui.Object.new(self, data_obj)
   table.insert(self.active_scene, object)
   return object
 end

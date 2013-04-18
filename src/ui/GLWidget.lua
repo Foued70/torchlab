@@ -14,37 +14,54 @@ local GLWidget = Class()
 local NAV_MODE = 1
 local FOCUS_MODE = 2
 
-function GLWidget:__init()
+function GLWidget:__init(gl_init_callback)
+  self.gl_init_callback = gl_init_callback
   self.initialized = false
-  libui.attach_qt(self)
 
-  self.renderer = require('ui.Renderer').new(self)
+  self.renderer = ui.Renderer.new(self)
   self.mode = NAV_MODE
+
+  libui.attach_qt(self)
+  while self.initialized ~= true do
+    os.execute("sleep 1")
+  end
+  collectgarbage()
 end
 
 function GLWidget:init(qt_widget)
   log.info("OpenGL "..gl.GetString(gl.VERSION).." GLSL "..gl.GetString(gl.SHADING_LANGUAGE_VERSION))
   self.qt_widget = qt_widget
+
+  if self.gl_init_callback then self.gl_init_callback(self) end
 end
 
 function GLWidget:update()
   libui.update_gl(self.qt_widget)
 end
 
+function GLWidget:resize_widget(width, height)
+  libui.widget_resize(self.qt_widget, width, height)
+end
+
 function GLWidget:resize(width, height)
   log.trace("resize")
   if self.initialized == false then
     self.renderer:init(width, height)
-    self.initialized = true
   end
   
   if self.renderer.cameras.viewport_camera ~= nil then
     self.renderer.cameras.viewport_camera:resize(width, height)
   end
+
+  -- this is the last thing that happens after the widget is created
+  self.initialized = true
 end
 
 function GLWidget:paint()
-  if not self.initialized then return end
+  if not self.initialized then 
+    log.info('not ready to paint')
+    return 
+  end
 
   self.renderer:render()
 end
