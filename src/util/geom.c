@@ -1,21 +1,17 @@
-#ifndef TH_GENERIC_FILE
-#define TH_GENERIC_FILE "generic/geom.c"
-#else
-
 #include <TH.h>
 
-void THTensor_(rotate_by_quat)(THTensor *result, 
-                               THTensor *vectors, 
-                               THTensor *quat)
+void rotate_by_quat(THDoubleTensor *result, 
+                    THDoubleTensor *vectors, 
+                    THDoubleTensor *quat)
 {
 
-  THTensor_(resizeAs)(result, vectors);
+  THDoubleTensor_resizeAs(result, vectors);
   
-  real *res = THTensor_(data)(result);
-  real *v   = THTensor_(data)(vectors);
-  real *q   = THTensor_(data)(quat);
+  double *res = THDoubleTensor_data(result);
+  double *v   = THDoubleTensor_data(vectors);
+  double *q   = THDoubleTensor_data(quat);
   
-  real x1, y1, z1;
+  double x1, y1, z1;
   long i;
   long stride = vectors->stride[0];
   /* Allows function to accept a 3 element vector rather than resize to 1x3 */
@@ -23,7 +19,7 @@ void THTensor_(rotate_by_quat)(THTensor *result,
     stride = vectors->size[0];
   } 
 #pragma omp parallel for private(i,x1,y1,z1)
-  for (i = 0; i < THTensor_(nElement)(vectors); i += stride)
+  for (i = 0; i < THDoubleTensor_nElement(vectors); i += stride)
     {
       x1 = q[1]*v[i+2] - q[2]*v[i+1];
       y1 = q[2]*v[i]   - q[0]*v[i+2];
@@ -35,20 +31,20 @@ void THTensor_(rotate_by_quat)(THTensor *result,
     }
 }
 
-void THTensor_(rotate_translate)(THTensor *result, 
-                                 THTensor *vectors,
-                                 THTensor *trans,
-                                 THTensor *quat)
+void rotate_translate(THDoubleTensor *result, 
+                      THDoubleTensor *vectors,
+                      THDoubleTensor *trans,
+                      THDoubleTensor *quat)
 {
 
-  THTensor_(resizeAs)(result, vectors);
+  THDoubleTensor_resizeAs(result, vectors);
   
-  real *res = THTensor_(data)(result);
-  real *v   = THTensor_(data)(vectors);
-  real *q   = THTensor_(data)(quat);
-  real *t   = THTensor_(data)(trans);
+  double *res = THDoubleTensor_data(result);
+  double *v   = THDoubleTensor_data(vectors);
+  double *q   = THDoubleTensor_data(quat);
+  double *t   = THDoubleTensor_data(trans);
   
-  real x1, y1, z1;
+  double x1, y1, z1;
   long i;
   long stride = vectors->stride[0];
   /* Allows function to accept a 3 element vector rather than resize to 1x3 */
@@ -56,7 +52,7 @@ void THTensor_(rotate_translate)(THTensor *result,
     stride = vectors->size[0];
   } 
 #pragma omp parallel for private(i,x1,y1,z1)
-  for (i = 0; i < THTensor_(nElement)(vectors); i += stride)
+  for (i = 0; i < THDoubleTensor_nElement(vectors); i += stride)
     {
       x1 = q[1]*v[i+2] - q[2]*v[i+1];
       y1 = q[2]*v[i]   - q[0]*v[i+2];
@@ -68,20 +64,20 @@ void THTensor_(rotate_translate)(THTensor *result,
     }
 }
 
-void THTensor_(translate_rotate)(THTensor *result, 
-                                 THTensor *vectors,
-                                 THTensor *trans, 
-                                 THTensor *quat)
+void translate_rotate(THDoubleTensor *result, 
+                      THDoubleTensor *vectors,
+                      THDoubleTensor *trans, 
+                      THDoubleTensor *quat)
 {
 
-  THTensor_(resizeAs)(result, vectors);
+  THDoubleTensor_resizeAs(result, vectors);
   
-  real *res = THTensor_(data)(result);
-  real *v   = THTensor_(data)(vectors);
-  real *q   = THTensor_(data)(quat);
-  real *t   = THTensor_(data)(trans);
+  double *res = THDoubleTensor_data(result);
+  double *v   = THDoubleTensor_data(vectors);
+  double *q   = THDoubleTensor_data(quat);
+  double *t   = THDoubleTensor_data(trans);
   
-  real x1, y1, z1;
+  double x1, y1, z1;
   long i;
   long stride = vectors->stride[0];
   /* Allows function to accept a 3 element vector rather than resize to 1x3 */
@@ -89,7 +85,7 @@ void THTensor_(translate_rotate)(THTensor *result,
     stride = vectors->size[0];
   } 
 #pragma omp parallel for private(i,x1,y1,z1)
-  for (i = 0; i < THTensor_(nElement)(vectors); i += stride)
+  for (i = 0; i < THDoubleTensor_nElement(vectors); i += stride)
     {
       res[i]   =   v[i] + t[0];
       res[i+1] = v[i+1] + t[1];
@@ -104,5 +100,3 @@ void THTensor_(translate_rotate)(THTensor *result,
       res[i+2] += 2 * (q[3]*z1 + q[0]*y1 - q[1]*x1);
     }
 }
-
-#endif

@@ -122,7 +122,7 @@ function test.rotation_by_quatC()
       local gt  = groundt:narrow(1,offset,nvecs) 
       offset = offset + nvecs
 
-      util.util.rotate_by_quatC(out,vecs,q)
+      util.geom.rotate_by_quatC(out,vecs,q)
 
       local d = out - gt
       local ce  = d:abs():max()
@@ -171,7 +171,7 @@ function test.rotate_translateC()
       local gt  = groundt:narrow(1,offset,nvecs) 
       offset = offset + nvecs
 
-      util.util.rotate_translateC(out,vecs,vecs[i],q)
+      util.geom.rotate_translateC(out,vecs,vecs[i],q)
 
       local d = out - gt
       local ce  = d:abs():max()
@@ -221,7 +221,7 @@ function test.translate_rotateC()
       local gt  = groundt:narrow(1,offset,nvecs) 
       offset = offset + nvecs
 
-      util.util.translate_rotateC(out,vecs,vecs[i],q)
+      util.geom.translate_rotateC(out,vecs,vecs[i],q)
 
       local d = out - gt
       local ce  = d:abs():max()
@@ -627,7 +627,7 @@ function test.all()
    test.rot2quat()
    test.rotation_by_mat()
    test.rotation_by_quat()
-   if util.util.rotate_by_quatC then 
+   if util.geom.rotate_by_quatC then 
       test.rotation_by_quatC()
       test.rotate_translateC()
       test.translate_rotateC() 
