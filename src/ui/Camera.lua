@@ -1,37 +1,19 @@
 local gl = require 'ui.gl'
 local geom = util.geom
 
-local Camera = torch.class('Camera')
-
-local Z_AXIS_POS = torch.Tensor({0,0,1})
-local Z_AXIS_NEG = torch.Tensor({0,0,-1})
-
-local function memlog(label, x)
-  local s = x:storage()
-  p(label)
-  p(("%.4f %.4f %.4f %.4f"):format(s[1], s[2], s[3], s[4]))
-  p(("%.4f %.4f %.4f %.4f"):format(s[5], s[6], s[7], s[8]))
-  p(("%.4f %.4f %.4f %.4f"):format(s[9], s[10], s[11], s[12]))
-  p(("%.4f %.4f %.4f %.4f"):format(s[13], s[14], s[15], s[16]))
-  p('')
-end
-
-local function vlog(label, x)
-  p(("%-10s %.4f %.4f %.4f "):format(label, x[1], x[2], x[3]))
-end
+local Camera = Class()
 
 function Camera:__init(widget, name)
   self.widget = widget
   self.name = name
   self.eye = torch.Tensor({0,0,0})
-  self.center = torch.Tensor({0,1,0})
   self.clip_near = 0.0001
   self.clip_far = 1000
   self.vfov = math.pi / 4 -- 45 degrees
 
-  -- intermediate direction vectors
-  self.look_dir = torch.Tensor({0,1,0})
-  self.up_dir = torch.Tensor({0,0,1})
+  -- direction vectors
+  self.look_dir  = torch.Tensor({0,1,0})
+  self.up_dir    = torch.Tensor({0,0,1})
   self.right_dir = torch.Tensor({1,0,0})
 
   self.projection_matrix = torch.Tensor(4,4):t()
@@ -47,8 +29,8 @@ function Camera:resize(width, height)
   self.height = height
 
   self:update_projection_matrix()
-  self:rebuild_buffers()
   log.trace(self.name, " resized to:", self.width, self.height)
+  self:rebuild_buffers()
 end
 
 function Camera:update_projection_matrix()
@@ -62,9 +44,6 @@ function Camera:update_projection_matrix()
   self.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
   self.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
   self.projection_matrix[{4,3}] = -1
-
-  --self.projection_matrix = context.projection_matrix:double()
-  -- memlog('projection_matrix', context.projection_matrix)
 end
 
 function Camera:rebuild_buffers()
@@ -89,86 +68,8 @@ function Camera:update_matrix(context)
   self.model_view_matrix = context.model_view_matrix:double()
 end
 
-function Camera:update()
-  -- look direction
-  torch.add(self.look_dir, self.center, -1, self.eye) -- look_dir = center - eye
-  geom.normalize(self.look_dir)
-  
-  local up
-  -- calculate a temporary up
-  if geom.eq(self.look_dir, Z_AXIS_POS) or geom.eq(self.look_dir, Z_AXIS_NEG) then
-    -- use our last up value but make it horizontal
-    self.up_dir[3] = 0
-    up = self.up_dir
-    geom.normalize(up)
-  else
-    up = Z_AXIS_POS
-  end
+function Camera:update() end -- virtual
 
-  torch.cross(self.right_dir, self.look_dir, up) -- right_dir = look_dir X up
-  geom.normalize(self.right_dir)
-
-  torch.cross(self.up_dir, self.right_dir, self.look_dir)
-end
-
--- move eye in camera space
-function Camera:move_eye(x, y, z)
-  -- assume we don't need an update here, but maybe we do?
-  torch.add(self.eye, self.eye, x, self.right_dir)
-  torch.add(self.eye, self.eye, y, self.up_dir)
-
-  -- don't let eye move past center
-  if self:eye_dist() - z > 0 then
-    torch.add(self.eye, self.eye, z, self.look_dir)
-  end
-
-  -- move the center, but not along the line of sight, for now
-  -- the z direction changes the range
-  -- __center += forwardDir * _z;
-  torch.add(self.center, self.center, x, self.right_dir)
-  torch.add(self.center, self.center, y, self.up_dir)
-end
-
-
-function Camera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
-  local x_angle = x * radians_per_unit
-  local y_angle = y * radians_per_unit
-
-  -- Move a so that b is at the origin
-  torch.add(a, a, -1, b)
-  
-  -- Rotate around a horizontal axis (y rotation)
-  local z_axis_angle = math.acos(torch.dot(unit_a, Z_AXIS_POS))
-
-  if z_axis_angle - y_angle < 0 then
-    -- this would take us past vertical (up), so lock to Z up
-    torch.mul(a, Z_AXIS_POS, a:norm())
-    -- rotate up for x instead of eye
-    geom.rotate_axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
-  elseif z_axis_angle - y_angle > math.pi then
-    -- this would take us past vertical (down), so lock to Z down
-    torch.mul(a, Z_AXIS_NEG, a:norm())
-    -- rotate up for x instead of eye
-    geom.rotate_axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
-  else
-    geom.rotate_axis_angle(a, self.right_dir, y_angle);
-    geom.rotate_axis_angle(a, Z_AXIS_POS, x_angle);
-  end
-  
-  -- move a back into position
-  torch.add(a, a, b)
-
-  self:update()
-end
-
-function Camera:rotate_center_around_eye(x, y)
-  self:rotate_a_around_b(self.center, self.eye, self.look_dir, x, y, 0.001)
-end
-
-
-function Camera:rotate_eye_around_center(x, y)
-  self:rotate_a_around_b(self.eye, self.center, -self.look_dir, x, y, 0.02)
-end
 
 function Camera:screen_to_world(screen_position)  
   screen_position:resize(4,1)
@@ -224,26 +125,36 @@ function Camera:screen_to_pixel(screen_position)
   return pixels
 end
 
+
 function Camera:set_eye(x, y, z)
   self.eye[1] = x
   self.eye[2] = y
   self.eye[3] = z
 end
 
-function Camera:set_center(x, y, z)
-  self.center[1] = x
-  self.center[2] = y
-  self.center[3] = z
+function Camera:set_look_dir(x, y, z)
+  self.look_dir[1] = x
+  self.look_dir[2] = y
+  self.look_dir[3] = z
 end
 
-function Camera:set_up(x, y, z)
+function Camera:set_up_dir(x, y, z)
   self.up_dir[1] = x
   self.up_dir[2] = y
   self.up_dir[3] = z
 end
 
-function Camera:eye_dist()
-  return geom.dist(self.eye, self.center)
+function Camera:set_right_dir(x, y, z)
+  self.right_dir[1] = x
+  self.right_dir[2] = y
+  self.right_dir[3] = z
 end
 
-return Camera
+
+function Camera:rotate(rotation_quat)
+  geom.rotate_by_quat(self.look_dir, self.look_dir, rotation_quat)
+  geom.rotate_by_quat(self.up_dir, self.up_dir, rotation_quat)
+  geom.rotate_by_quat(self.right_dir, self.right_dir, rotation_quat)
+end
+
+

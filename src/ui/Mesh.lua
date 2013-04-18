@@ -1,7 +1,7 @@
 local gl = require 'ui.gl'
 local libui = require 'libui'
 
-local Mesh = torch.class('Mesh')
+local Mesh = Class()
 
 function Mesh:__init(verts, faces, submeshes)
   self.verts = verts
@@ -109,12 +109,14 @@ function Mesh:paint(context)
       submesh.material:use(context)
     end
 
+    sys.tic()
     gl.DrawElements(
         gl.TRIANGLES,
         submesh.length * 3,
         gl.UNSIGNED_INT,
         gl.uint_ptr(nil) + ((submesh.start - 1) * 3)
     )
+    -- print(submesh.start, sys.toc() / submesh.length)
     gl.check_errors()
 
   end

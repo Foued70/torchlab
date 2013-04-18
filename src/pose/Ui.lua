@@ -387,10 +387,6 @@ function Ui:init_calibration()
 
   collectgarbage()
   self.gl_viewport = GLWidget.new()
-  while self.gl_viewport.initialized ~= true do
-    os.execute("sleep " .. tonumber(1))
-  end
-  collectgarbage()
 
   libui.make_current(self.gl_viewport.qt_widget)
   libui.hide_widget(self.gl_viewport.qt_widget)

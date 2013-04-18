@@ -43,6 +43,7 @@ function _G.Class(parent)
   class.__classname__ = name
   class.__filename__ = filename
   class.__mod_time__ = sys.fstat(filename)
+  class.__super__ = parent
 
   function class.new(...)
     local inst = setmetatable({}, class.__instance_mt__)
