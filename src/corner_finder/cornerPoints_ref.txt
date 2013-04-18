@@ -1,0 +1,6 @@
+-- The code below saves the checkerboard corner points identified by OpenCV 
+-- in a Torch tensor with the dimensions: 
+-- [number of images used in calibration] x [number of corners in checkerboard pattern] x [2 (corresponding to the x and y pixel positions] 
+
+local cornerPoints = {{{712,148.133},{669.569,447.144},{996.491,431.773}},{{996.491,431.773},{1201.81,132.292},{1270.92,443.812}},{{1201.81,132.293},{1270.92,443.812},{1569.21,364.074}},{{1453.26,83.531},{1793.12,226.337},{1461.17,315.985}},{{1671.43,284.836},{2018.69,105.886},{1934.78,351.845}},{{47.1836,253.814},{128.241,106.013},{358.354,372.871}},{{206.101,348.083},{365.476,8.48773},{669.569,447.144}},{{510.754,181.346},{358.354,372.871},{669.57,447.144}}};
+return cornerPoints;
