@@ -15,15 +15,37 @@ if paths.filep(utillib) then
           void THTensor_rotate_by_quat(THTensor *result,
                                        THTensor *vectors,
                                        THTensor *quat);
+
+          void THTensor_rotate_translate(THTensor *result, 
+                                           THTensor *vectors, 
+                                           THTensor *trans,
+                                           THTensor *quat);
+          
+          void THTensor_translate_rotate(THTensor *result, 
+                                           THTensor *vectors, 
+                                           THTensor *trans,
+                                           THTensor *quat);
        ]]
+
       -- load low level c functions
       ffi.cdef(ffi_utils.generate_function_float_types(function_templates))
 
       -- don't want to call C functions directly
       local C  = ffi.load(utillib)
 
-      function rotate_by_quatC (out, vec, q)
-         C.THDoubleTensor_rotate_by_quat(torch.cdata(out), torch.cdata(vec), torch.cdata(q))
+      -- either there is a way to stick function on torch.DoubleTensor
+      -- for automatic type cast or we just do everything in doubles.
+      function rotate_by_quatC (out, vec, quat)
+         C.THDoubleTensor_rotate_by_quat(torch.cdata(out), torch.cdata(vec), 
+                                         torch.cdata(quat))
+      end
+      function rotate_translateC (out, vec, trans, quat)
+         C.THDoubleTensor_rotate_translate(torch.cdata(out), torch.cdata(vec), 
+                                           torch.cdata(trans), torch.cdata(quat))
+      end
+      function translate_rotateC (out, vec, trans, quat)
+         C.THDoubleTensor_translate_rotate(torch.cdata(out), torch.cdata(vec), 
+                                           torch.cdata(trans), torch.cdata(quat))
       end
 end
 
