@@ -1,4 +1,4 @@
-local geom       = require 'util.geom' -- not a class so needs to be required explicitly
+local geom       = util.geom 
 local p3p        = require "p3p"
 local LensSensor = util.LensSensor
 
@@ -153,7 +153,7 @@ for ji = -5,0,0.1 do
             -- shoot rays through random points in image
             test_corners = torch.rand(4,2):mul(2):add(-1)
          end
-         test_unit    = c:img_coords_to_world(test_corners,"uv","uc")
+         test_unit    = c:image_coords_to_angles(test_corners,"uv","uc")
          test_world   = test_unit:clone()
          -- project random distances in front of camera
          for ti = 1,test_unit:size(1) do
@@ -163,7 +163,7 @@ for ji = -5,0,0.1 do
          -- jitter
          if jitter_image_coords then 
             test_corners:add(torch.randn(test_corners:size()):mul(jitter_amount))
-            test_unit    = c:img_coords_to_world(test_corners,"uv","uc") 
+            test_unit    = c:image_coords_to_angles(test_corners,"uv","uc") 
          elseif jitter_3D_pts then
             test_world:add(torch.randn(test_world:size()):mul(jitter_amount))
          else

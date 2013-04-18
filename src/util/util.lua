@@ -29,7 +29,6 @@ end
 
 -- end of loading C backend test
 
-
 -- Like unfold but produces contiguous chunks which would replicate
 -- data in overlaps.  Start with a less general version which takes
 -- h,w,dims matrix as input and outputs r,c,s1*s2,dims as
