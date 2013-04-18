@@ -36,3 +36,8 @@ end
 function Ray:endpoint(t)
    return self.origin + (self.dir * t)
 end
+
+-- function returns the xyz value for the endpoint of a ray of length t 
+function Ray:__call(t)
+   return self:endpoint(t)
+end
