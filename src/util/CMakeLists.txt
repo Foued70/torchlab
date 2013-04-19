@@ -3,8 +3,8 @@ CMAKE_POLICY(VERSION 2.6)
 
 INCLUDE(../common.cmake REQUIRED)
 
-SET(src util.c)
+SET(src geom.c)
 
-ADD_TORCH_PACKAGE(util "${src}" "" "Floored 3D utils")
+ADD_TORCH_PACKAGE(geom "${src}" "" "Floored 3D utils")
 
-TARGET_LINK_LIBRARIES(util TH)
+TARGET_LINK_LIBRARIES(geom TH)
