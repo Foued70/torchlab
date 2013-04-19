@@ -2,7 +2,7 @@ local gl = require 'ui.gl'
 local ffi = require 'ffi'
 local libui = require 'libui'
 
-local Shader = torch.class('Shader')
+local Shader = Class()
 
 local function read(filename)
   io.input(CLOUDLAB_SRC..'/ui/shaders/'..filename)
@@ -223,6 +223,4 @@ function Shader:set_uniform_matrix(name, matrix)
   gl.check_errors()
 end
 
-
-return Shader
 

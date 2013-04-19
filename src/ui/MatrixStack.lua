@@ -1,6 +1,6 @@
 local geom = util.geom
 
-local MatrixStack = torch.class('MatrixStack')
+local MatrixStack = Class()
 
 function MatrixStack:__init()
   -- we use transposed matrices because opengl wants column major in memory and torch is row major
@@ -61,5 +61,3 @@ function MatrixStack:for_gl()
     self.model_view_projection_matrix 
 end
 
-
-return MatrixStack

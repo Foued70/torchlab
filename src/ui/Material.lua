@@ -1,7 +1,7 @@
 local gl = require 'ui.gl'
 local libui = require 'libui'
 
-local Material = torch.class('Material')
+local Material = Class()
 
 local function format_image(img)
   if not img or img:size()[1] ~= 3 then return img end
@@ -23,7 +23,7 @@ function Material:__init(widget, mtl_data)
   self.shininess = mtl_data.shininess
   self.emission = {0,0,0,1} --mtl_data.emission
 
-  self.shader = require('ui.Shader').shaders.textured
+  self.shader = ui.Shader.shaders.textured
   self.textures = {}
 
   if mtl_data.diffuse_tex_path then
@@ -68,6 +68,4 @@ function Material:set_textures()
   end
   return true
 end
-
-return Material
 

@@ -1,6 +1,6 @@
 local libui = require 'libui'
 
-local Timer = torch.class('Timer')
+local Timer = Class()
 
 function Timer:__init()
   self.previous = nil
@@ -36,4 +36,3 @@ function Timer:get_time_seconds()
 	return sys.clock()
 end
 
-return Timer

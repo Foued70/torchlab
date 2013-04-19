@@ -3,7 +3,7 @@ local gl = require 'ui.gl'
 
 require 'image' -- fucking image global
 
-local TextureManager = torch.class('TextureManager')
+local TextureManager = Class()
 
 local function format_image(img)
   if not img or img:size()[1] ~= 3 then return img end
@@ -117,4 +117,3 @@ function TextureManager:create_from_image(image_path)
   return self.textures[image_path]
 end
 
-return TextureManager

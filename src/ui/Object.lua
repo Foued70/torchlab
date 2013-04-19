@@ -14,7 +14,7 @@ end
 function Object.create_mesh(widget, obj_data)
   local materials = {}
   for _, mtl_data in ipairs(obj_data.materials) do
-    local material = require('ui.Material').new(widget, mtl_data)
+    local material = ui.Material.new(widget, mtl_data)
     table.insert(materials, material)
   end
 
@@ -54,5 +54,3 @@ function Object:get_triangle(triangle_id)
   return verts, center, normal
 end
 
-
-return Object

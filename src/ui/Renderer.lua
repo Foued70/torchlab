@@ -3,9 +3,6 @@ local gl = require 'ui.gl'
 local key = require 'ui.key'
 local geom = util.geom
 
-local Shader = require 'ui.Shader'
-local MatrixStack = require 'ui.MatrixStack'
-
 local Renderer = Class()
 
 function Renderer:__init(parent, width, height)
@@ -17,9 +14,9 @@ function Renderer:__init(parent, width, height)
 
   self.materials = {}
   self.shaders = {}
-  self.context = MatrixStack.new()
-  self.texture_manager = require('ui.TextureManager').new()
-  self.animation_manager = require('ui.AnimationManager').new()
+  self.context = ui.MatrixStack.new()
+  self.texture_manager = ui.TextureManager.new()
+  self.animation_manager = ui.AnimationManager.new()
 
   self:create_scene('viewport_scene')
   self:activate_scene('viewport_scene')
@@ -137,7 +134,7 @@ end
 
 function Renderer:create_shader(name)
   -- log.trace("Creating shader:", name)
-  self.shaders[name] = Shader.new(name)
+  self.shaders[name] = ui.Shader.new(name)
   -- log.trace("Shader", name, "created")
 end
 
@@ -159,7 +156,7 @@ function Renderer:add_material(material)
 end
 
 function Renderer:create_material(data_mat, shader, textures)
-  local material = require('ui.Material').new(self, data_mat)
+  local material = ui.Material.new(self, data_mat)
   material:set_shader(shader)
   for t = 1, #textures do
     material:attach_texture(textures[t], t-1)
@@ -254,4 +251,3 @@ function Renderer:pick_vertices(screen_position_top_left, screen_position_bottom
   return nil
 end
 
-return Renderer
