@@ -1,6 +1,6 @@
-local gl = require 'ui.gl'
+local gl = ui.gl
 
-local Object = torch.class('Object')
+local Object = Class()
 
 function Object:__init(widget, obj_data)
   self.widget = widget;
@@ -14,7 +14,7 @@ end
 function Object.create_mesh(widget, obj_data)
   local materials = {}
   for _, mtl_data in ipairs(obj_data.materials) do
-    local material = require('ui.Material').new(widget, mtl_data)
+    local material = ui.Material.new(widget, mtl_data)
     table.insert(materials, material)
   end
 
@@ -24,7 +24,7 @@ function Object.create_mesh(widget, obj_data)
     table.insert(submeshes, {start = sub[1], length = sub[2] - sub[1] + 1, material = materials[sub[3]]})
   end
 
-  return require('ui.Mesh').new(obj_data.unified_verts, obj_data:get_tris(), submeshes)
+  return ui.Mesh.new(obj_data.unified_verts, obj_data:get_tris(), submeshes)
 end
 
 function Object:paint(context)
@@ -54,5 +54,3 @@ function Object:get_triangle(triangle_id)
   return verts, center, normal
 end
 
-
-return Object

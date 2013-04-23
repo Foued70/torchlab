@@ -9,8 +9,7 @@ install=$(install_root)/bin/torch
 
 packages = \
 	image \
-	xlua \
-	torchffi
+	xlua 
 
 pkgs = $(addprefix $(install_root)/share/torch/lua/,$(packages))
 

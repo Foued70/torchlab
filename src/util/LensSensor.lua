@@ -117,8 +117,7 @@ function LensSensor:add_image(...)
    end
 
    log.tracef(" -- normalized : diag: %f h: %f v: %f",
-      diag_norm,
-      horz_norm, vert_norm)
+      diag_norm, horz_norm, vert_norm)
 
    -- FIXME clean this up. Special case for calibration
    -- reset center based on the calibration
@@ -313,7 +312,7 @@ end
 -- 
 --     - "uc" or "unit_cartesian" unit cartesian vectors 
 -- 
-function LensSensor:img_coords_to_world (img_pts, pt_type, out_type)
+function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
    local normalized_pts = img_pts:clone()
 
    -- put points in normalized coordinates. 

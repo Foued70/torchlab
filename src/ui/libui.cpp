@@ -49,6 +49,15 @@ int libui_update_gl(lua_State* L) {
   return 0;
 }
 
+int libui_widget_resize(lua_State* L) {
+  GLWidget* glWidget = (GLWidget*)lua_touserdata(L, 1);
+  int w = luaL_checkinteger(L, 2);
+  int h = luaL_checkinteger(L, 3);
+  glWidget->resize(w, h);
+
+  return 0;
+}
+
 int libui_make_current(lua_State* L) {
   GLWidget* glWidget = (GLWidget*)lua_touserdata(L, 1);
   glWidget->makeCurrent();
@@ -97,6 +106,7 @@ static const luaL_reg libui_init[] =
   // {"display", libui_display},
   {"attach_qt", libui_attach_qt},
   {"update_gl", libui_update_gl},
+  {"widget_resize", libui_widget_resize},
   {"make_current", libui_make_current},
   {"hide_widget", libui_hide_widget},
   {"int_storage_info", libui_int_storage_info},

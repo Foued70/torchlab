@@ -103,6 +103,143 @@ function test.rotation_by_quat()
                        e,res:size(1),maxerr,sys.toc()))
 end
 
+function test.rotation_by_quatC()
+   print("Testing rotation with quaternion (C version)")
+   local e      = 0
+   local maxerr = 0
+   local vecs   = test.data.vec
+   local nvecs  = vecs:size(1)
+   local quats  = test.data.quat
+   local nquats = quats:size(1)
+   local res    = torch.Tensor(nvecs*nquats,3)
+   local groundt = test.data.result_rot_by_quat
+   local i      = 1
+   local offset = 1
+   sys.tic()
+   for i = 1,nquats do
+      local q   = quats[i]
+      local out = res:narrow(1,offset,nvecs)
+      local gt  = groundt:narrow(1,offset,nvecs) 
+      offset = offset + nvecs
+
+      util.geom.rotate_by_quatC(out,vecs,q)
+
+      local d = out - gt
+      local ce  = d:abs():max()
+      if (ce > maxerr) then maxerr = ce end
+      if (ce > 1e-3) then
+         printf("error: %f",ce)
+         printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3])
+         printf("should be: (%f,%f,%f)",
+                test.data.result_rot_by_quat[i][1],
+                test.data.result_rot_by_quat[i][2],
+                test.data.result_rot_by_quat[i][3])
+         e = e + 1
+      end 
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,res:size(1),maxerr,sys.toc()))
+end
+
+function test.rotate_translateC()
+   print("Testing rotation with quaternion then translation (C version)")
+   local e      = 0
+   local maxerr = 0
+   local vecs   = test.data.vec
+   local nvecs  = vecs:size(1)
+   local quats  = test.data.quat
+   local nquats = quats:size(1)
+   local res    = torch.Tensor(nvecs*nquats,3)
+   local groundt = res:clone()
+   local i      = 1
+   local offset = 1
+
+   sys.tic()
+   for j = 1,nquats do
+      local q = quats[j]
+      for k = 1,nvecs do
+         groundt[i] = vecs[j] + geom.rotate_by_quat(vecs[k],q)
+         i = i + 1
+      end
+   end
+   print(string.format(" - built ground truth in %2.4fs", sys.toc()))
+
+   sys.tic()
+   for i = 1,nquats do
+      local q   = quats[i]
+      local out = res:narrow(1,offset,nvecs)
+      local gt  = groundt:narrow(1,offset,nvecs) 
+      offset = offset + nvecs
+
+      util.geom.rotate_translateC(out,vecs,vecs[i],q)
+
+      local d = out - gt
+      local ce  = d:abs():max()
+      if (ce > maxerr) then maxerr = ce end
+      if (ce > 1e-3) then
+         printf("error: %f",ce)
+         printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3])
+         printf("should be: (%f,%f,%f)",
+                test.data.result_rot_by_quat[i][1],
+                test.data.result_rot_by_quat[i][2],
+                test.data.result_rot_by_quat[i][3])
+         e = e + 1
+      end 
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,res:size(1),maxerr,sys.toc()))
+end
+
+function test.translate_rotateC()
+   print("Testing translation then rotation with quaternion (C version)")
+   local e      = 0
+   local maxerr = 0
+   local vecs   = test.data.vec
+   local nvecs  = vecs:size(1)
+   local quats  = test.data.quat
+   local nquats = quats:size(1)
+   local res    = torch.Tensor(nvecs*nquats,3)
+   local i      = 1
+   local offset = 1
+   local groundt = res:clone()
+
+   sys.tic()
+   for j = 1,nquats do
+      local q = quats[j]
+      for k = 1,nvecs do
+         local v   = vecs[k] + vecs[j]
+         geom.rotate_by_quat(groundt[i],v,q)
+         i = i + 1
+      end
+   end
+   print(string.format(" - built ground truth in %2.4fs", sys.toc()))
+
+   sys.tic()
+   for i = 1,nquats do
+      local q   = quats[i]
+      local out = res:narrow(1,offset,nvecs)
+      local gt  = groundt:narrow(1,offset,nvecs) 
+      offset = offset + nvecs
+
+      util.geom.translate_rotateC(out,vecs,vecs[i],q)
+
+      local d = out - gt
+      local ce  = d:abs():max()
+      if (ce > maxerr) then maxerr = ce end
+      if (ce > 1e-3) then
+         printf("error: %f",ce)
+         printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3])
+         printf("should be: (%f,%f,%f)",
+                test.data.result_rot_by_quat[i][1],
+                test.data.result_rot_by_quat[i][2],
+                test.data.result_rot_by_quat[i][3])
+         e = e + 1
+      end 
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,res:size(1),maxerr,sys.toc()))
+end
+
 function test.quat_product()
    print("Testing composition of rotations with quaternion")
    local e = 0
@@ -490,6 +627,11 @@ function test.all()
    test.rot2quat()
    test.rotation_by_mat()
    test.rotation_by_quat()
+   if util.geom.rotate_by_quatC then 
+      test.rotation_by_quatC()
+      test.rotate_translateC()
+      test.translate_rotateC() 
+   end
    test.quat_product()
    test.x_rotation()
    test.y_rotation()

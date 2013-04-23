@@ -3,6 +3,54 @@ require 'dok'
 
 Class()
 
+-- Below is a test for loading C backends using ffi
+local ffi_utils = require 'util.ffi'
+
+local ffi = ffi_utils.ffi
+
+
+
+local geomlib = ffi_utils.lib_path("geom")
+
+if paths.filep(geomlib) then
+    -- load low level c functions
+   ffi.cdef[[
+void rotate_by_quat(THDoubleTensor *result,
+                    THDoubleTensor *vectors,
+                    THDoubleTensor *quat);
+
+void rotate_translate(THDoubleTensor *result, 
+                      THDoubleTensor *vectors, 
+                      THDoubleTensor *trans,
+                      THDoubleTensor *quat);
+                
+void translate_rotate(THDoubleTensor *result, 
+                      THDoubleTensor *vectors, 
+                      THDoubleTensor *trans,
+                      THDoubleTensor *quat);
+            ]]
+
+      -- don't want to call C functions directly
+      local C  = ffi.load(geomlib)
+
+      -- either there is a way to stick function on torch.DoubleTensor
+      -- for automatic type cast or we just do everything in doubles.
+      function rotate_by_quatC (out, vec, quat)
+         C.rotate_by_quat(torch.cdata(out), torch.cdata(vec), 
+                          torch.cdata(quat))
+      end
+      function rotate_translateC (out, vec, trans, quat)
+         C.rotate_translate(torch.cdata(out), torch.cdata(vec), 
+                            torch.cdata(trans), torch.cdata(quat))
+      end
+      function translate_rotateC (out, vec, trans, quat)
+         C.translate_rotate(torch.cdata(out), torch.cdata(vec), 
+                            torch.cdata(trans), torch.cdata(quat))
+      end
+end
+
+-- end of loading C backend test
+
 local axes   = torch.eye(3)
 
 x_axis = axes[1]

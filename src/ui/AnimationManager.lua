@@ -1,6 +1,6 @@
 local libui = require 'libui'
 
-local AnimationManager = torch.class('AnimationManager')
+local AnimationManager = Class()
 
 BEZIER_START_BEHAVIORS = {
 	["LINEAR"]	= torch.Tensor({0.5, 0.5}),
@@ -15,7 +15,7 @@ BEZIER_END_BEHAVIORS = {
 }
 
 function AnimationManager:__init()
-  self.timer = require('ui.Timer').new()
+  self.timer = ui.Timer.new()
   self.animations = {}
 end
 
@@ -104,4 +104,3 @@ function AnimationManager:needsAnimating()
 	return false 
 end
 
-return AnimationManager

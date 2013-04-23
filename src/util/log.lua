@@ -14,7 +14,7 @@ function cyan(str)   return color('36', str) end
 
 function error(...)
   local arg = {...}
-  print(red('(EE)')..' '..(arg[1] or 'nil'), select(2, ...))
+  print(red('(EE)')..' '..tostring(arg[1]), select(2, ...))
 
   local tb = debug.traceback()
   tb = tb:match('[^\n]*\n[^\n]*\n(.*)')
@@ -23,7 +23,7 @@ end
 
 function info(...)
   local arg = {...}
-  print(green('(II)')..' '..(arg[1] or 'nil'), select(2, ...))
+  print(green('(II)')..' '..(arg[1] or 'nil'), select(2, ...) or '')
 end
 
 function trace(...)

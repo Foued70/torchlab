@@ -1,8 +1,7 @@
 local gl = require 'ui.gl'
 local libui = require 'libui'
-local Material = require 'ui.Material'
 
-local FrameBuffer = torch.class('FrameBuffer')
+local FrameBuffer = Class()
 
 function FrameBuffer:__init(widget, name, width, height)
   self.widget = widget
@@ -209,7 +208,4 @@ end
 function FrameBuffer:unbind()
   gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 end
-
-return FrameBuffer
-
 
