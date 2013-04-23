@@ -327,6 +327,7 @@ function LensSensor:img_coords_to_world (img_pts, pt_type, out_type)
       normalized_pts[{{},1}]:add(xoff):mul(self.horizontal_normalized)
       normalized_pts[{{},2}]:add(yoff):mul(self.vertical_normalized)
       
+    -- FIXME -- the following is placeholder
    elseif (pt_type == "pixel_space") then
       normalized_pts[{{},1}]:mul(self.horizontal_normalized)
       normalized_pts[{{},2}]:mul(self.vertical_normalized)
