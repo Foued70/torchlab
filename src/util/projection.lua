@@ -157,7 +157,7 @@ end
 
 -- based on final projection type create a map of angles which need to
 -- be looked up in the original image.
-function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
+function projection_to_equirectangular(fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
    
    local lambda,phi,theta_map, output_map
    
@@ -176,10 +176,10 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
       output_map = make_pythagorean_map(lambda,phi)
       theta_map = output_map:clone():atan()
    else
+      -- default projection
       -- this is called equirectangular or plate carree
-      -- default is to project to sphere
       -- create horizontal (lambda) and vertical angles (phi) x,y lookup
-      --  in spherical map from -radians,radians at resolution mapw and
+      --  in equirectangular map indexed by azimuth and elevation from -radians,radians at resolution mapw and
       --  maph.  Equal steps in angles.
       lambda = torch.linspace(-hfov,hfov,mapw)
       phi    = torch.linspace(-vfov,vfov,maph)
@@ -190,7 +190,7 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
 
 end
 
-function sphere_to_camera(theta_map,lens_type,params)
+function equirectangular_to_camera(theta_map,lens_type,params)
    local r_map = theta_map:clone() -- copy
 
    if (lens_type == "rectilinear") then

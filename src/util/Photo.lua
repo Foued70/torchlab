@@ -35,7 +35,7 @@ function Photo:__init(parent_sweep, image_path)
   self.image_path = image_path
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
-  self.image_data_spherical = nil
+  self.image_data_equirectangular = nil
   
   self.offset_position = nil
   self.offset_rotation = nil
@@ -95,13 +95,6 @@ function Photo:get_image()
   return self.image_data_raw
 end
 
-function Photo:get_image_cylindrical()
-  if not self.image_data_cylindrical then
-    self.image_data_cylindrical = projection.remap(self:get_image(), self:get_lens().cylindrical)
-  end
-  return self.image_data_cylindrical
-end
-
 function Photo:get_image_rectilinear()
   if not self.image_data_rectilinear then
     self.image_data_rectilinear = projection.remap(self:get_image(), self:get_lens().rectilinear)
@@ -109,11 +102,11 @@ function Photo:get_image_rectilinear()
   return self.image_data_rectilinear
 end
 
-function Photo:get_image_spherical()
-  if not self.image_data_spherical then
-    self.image_data_spherical = projection.remap(self:get_image(), self:get_lens().spherical)
+function Photo:get_image_equirectangular()
+  if not self.image_data_equirectangular then
+    self.image_data_equirectangular = projection.remap(self:get_image(), self:get_lens().equirectangular)
   end
-  return self.image_data_spherical
+  return self.image_data_equirectangular
 end
 
 function Photo:get_lens()
@@ -128,7 +121,7 @@ end
 function Photo:flush_image()
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
-  self.image_data_spherical = nil
+  self.image_data_equirectangular = nil
   collectgarbage()
 end
 

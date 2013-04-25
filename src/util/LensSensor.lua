@@ -172,8 +172,8 @@ function LensSensor:add_image(...)
    self.vertical_normalized   = vert_norm
 end
 
--- Maps a camera image + lens to a unit sphere (azimuth and elevation)
--- or through sphere to other projections.
+-- Maps a camera image + lens to equirectangular map (azimuth and elevation)
+-- or through this map to other projections.
 -- 
 -- Output is a map structure with a lookup table which can be used to
 -- generate the projection from the original image.
@@ -194,14 +194,12 @@ end
 -- 
 -- Projection types:
 -- 
---  + sphere
+--  + equirectangular
 --  + rectilinear
---  + cylindrical
---  + cylindrical_vert
 function LensSensor:make_projection_map (proj_type,scale,debug)
 
    if not proj_type then
-      proj_type = "sphere"
+      proj_type = "equirectangular"
    end
 
    if not scale then
@@ -233,15 +231,15 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
 
    local lambda, phi, 
    theta_map, output_map, 
-   mapw, maph = projection.projection_to_sphere(fov,hfov,vfov, 
-                                                mapw,maph,aspect_ratio, 
-                                                proj_type)
+   mapw, maph = projection.projection_to_equirectangular(fov,hfov,vfov, 
+                                                         mapw,maph,aspect_ratio, 
+                                                         proj_type)
       
    -- +++++ 
    -- (2) replace theta for each entry in map with r 
    -- +++++
    local r_map =
-      projection.sphere_to_camera(theta_map, lens_type, self.invpol)
+      projection.equirectangular_to_camera(theta_map, lens_type, self.invpol)
    
    -- +++++
    -- (3) make the ratio (new divided by old) by which we scale the
@@ -357,7 +355,7 @@ function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
    local diagonal_angles = 
       projection.compute_diagonal_fov(d, self.lens_type, self.pol)
 
-   -- convert diagonal angle to spherical coordinates
+   -- convert diagonal angle to equirectangular (spherical) angles
    local elevation,azimuth = projection.derive_hw(diagonal_angles,self.aspect_ratio) 
    local spherical_angles = torch.Tensor(elevation:size(1),2)
    spherical_angles[{{},1}] = azimuth

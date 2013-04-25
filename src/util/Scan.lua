@@ -56,9 +56,8 @@ function Scan:get_lens(image_data)
   if self.lens_luts[img_data_size] == nil then
     local lens_sensor = LensSensor.new(self.camera_id, image_data)
     local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
-    local spherical_lut = lens_sensor:make_projection_map("spherical")
-    local cylindrical_lut = lens_sensor:make_projection_map("cylindrical_vert")
-    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut, spherical = spherical_lut, cylindrical = cylindrical_lut}
+    local equirectangular_lut = lens_sensor:make_projection_map("equirectangular")
+    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut, equirectangular = equirectangular_lut}
   end
 
   return self.lens_luts[img_data_size]
