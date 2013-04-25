@@ -175,37 +175,8 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
       phi      = torch.linspace(-vrange,vrange,maph)
       output_map = make_pythagorean_map(lambda,phi)
       theta_map = output_map:clone():atan()
-   elseif (proj_type == "cylindrical") then
-      -- limit the vfov to roughly 120 degrees
-      if vfov > 1 then
-         vfov = 1
-         maph = mapw * (vfov / hfov)
-      end
-      -- set up size of the output table
-      local vrange = torch.tan(vfov)
-      local hrange = hfov
-      -- equal steps in normalized coordinates
-      lambda   = torch.linspace(-hrange,hrange,mapw)
-      phi      = torch.linspace(-vrange,vrange,maph)
-      output_map = make_pythagorean_map(lambda,phi)
-      lambda:atan()
-      theta_map = make_pythagorean_map(lambda,phi)
-   elseif (proj_type == "cylindrical_vert") then
-      -- limit the hfov to roughly 120 degrees
-      if hfov > 1 then
-         hfov = 1
-         mapw = maph * (hfov/vfov)
-      end
-      -- set up size of the output table
-      local vrange = vfov
-      local hrange = torch.tan(hfov)
-      -- equal steps in normalized coordinates
-      lambda   = torch.linspace(-hrange,hrange,mapw)
-      phi      = torch.linspace(-vrange,vrange,maph)
-      output_map = make_pythagorean_map(lambda,phi)
-      phi:atan()
-      theta_map = make_pythagorean_map(lambda,phi)
    else
+      -- this is called equirectangular or plate carree
       -- default is to project to sphere
       -- create horizontal (lambda) and vertical angles (phi) x,y lookup
       --  in spherical map from -radians,radians at resolution mapw and
