@@ -2,6 +2,14 @@ local geom       = util.geom
 local p3p        = require "p3p"
 local LensSensor = util.LensSensor
 
+average_distance        = 3
+project_through_corners = false
+jitter_image_coords     = true
+jitter_3D_pts           = false -- true
+sample_size             = 1000
+
+debug_solutions = false
+
 -- receate the tests from Kneip's paper
 -- 1000 random points in roughly 4x4x4
 npts = 1000
@@ -26,7 +34,7 @@ yaxis = axes[2]
 zaxis = axes[3]
 
 -- using one of our lens objects
-c = LensSensor.new("nikon_10p5mm_r2t_full",640,480)
+c = LensSensor.new("nikon_10p5mm_r2t_full",4928,3264)
 
 -- camera at random point on sphere of radius 6
 c.xyz = geom.normalize(torch.randn(3)) * 6
@@ -124,14 +132,6 @@ function check_solutions(solutions,c,debug)
    return trans_err, rot_err, reprojection_err, best_solution
 end
 
-
-project_through_corners = false
-jitter_image_coords     = false -- true
-jitter_3D_pts           = true
-sample_size             = 1000
-
-debug_solutions = false
-
 for ji = -5,0,0.1 do 
    jitter_amount = 10 ^ ji
 
@@ -157,7 +157,7 @@ for ji = -5,0,0.1 do
          test_world   = test_unit:clone()
          -- project random distances in front of camera
          for ti = 1,test_unit:size(1) do
-            test_world[ti]:mul(math.random()*6)
+            test_world[ti]:mul(math.random()*average_distance)
             test_world[ti] = c:local2global(test_world[ti])
          end 
          -- jitter
