@@ -141,7 +141,7 @@ function test.rotation_by_quatC()
                        e,res:size(1),maxerr,sys.toc()))
 end
 
-function test.rotate_translateC()
+function test.rotate_translate()
    print("Testing rotation with quaternion then translation (C version)")
    local e      = 0
    local maxerr = 0
@@ -190,7 +190,7 @@ function test.rotate_translateC()
                        e,res:size(1),maxerr,sys.toc()))
 end
 
-function test.translate_rotateC()
+function test.translate_rotate()
    print("Testing translation then rotation with quaternion (C version)")
    local e      = 0
    local maxerr = 0
@@ -629,8 +629,8 @@ function test.all()
    test.rotation_by_quat()
    if util.geom.rotate_by_quatC then 
       test.rotation_by_quatC()
-      test.rotate_translateC()
-      test.translate_rotateC() 
+      test.rotate_translate()
+      test.translate_rotate() 
    end
    test.quat_product()
    test.x_rotation()
