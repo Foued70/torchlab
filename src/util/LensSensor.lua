@@ -327,8 +327,11 @@ function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
       normalized_pts[{{},2}]:add(yoff):mul(self.vertical_normalized)
       
    elseif (pt_type == "pixel_space") then
-      normalized_pts[{{},1}]:mul(self.horizontal_normalized)
-      normalized_pts[{{},2}]:mul(self.vertical_normalized)
+      
+      normalized_pts[{{},1}]:add(-self.center_x)
+      normalized_pts[{{},2}]:add(-self.center_y)
+      normalized_pts[{{},1}]:mul(self.horizontal_normalized / self.image_w)
+      normalized_pts[{{},2}]:mul(self.vertical_normalized / self.image_h)
       
    else -- normalized
       -- do nothing
