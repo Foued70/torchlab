@@ -58,7 +58,7 @@ end
 
 
 
-function compute_diagonal_fov(diagonal_normalized,lens_type,params)
+function compute_diagonal_fov(diagonal_normalized,lens_type,params,debug)
    local convert = false
    if (type(diagonal_normalized) == "number") then 
       diagonal_normalized = torch.Tensor({diagonal_normalized})
@@ -68,7 +68,9 @@ function compute_diagonal_fov(diagonal_normalized,lens_type,params)
    if (lens_type == "rectilinear") then
       dfov = torch.atan(diagonal_normalized)   -- diag in rad
    elseif (lens_type == "scaramuzza_r2t") then
-      log.trace(" -- using scaramuzza calibration")
+      if debug then
+         log.trace(" -- using scaramuzza calibration")
+      end
       local d2 = diagonal_normalized:clone()
       dfov = torch.Tensor(d2:size()):fill(params[-1])
       for i = params:size(1)-1,1,-1 do 
@@ -78,7 +80,9 @@ function compute_diagonal_fov(diagonal_normalized,lens_type,params)
       -- using ideal thoby to compute fov for scaramuzza's original
       -- code which does not solve for theta. Can remove this eventually.
    elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
-      log.trace(" -- using lens type: thoby")
+      if debug then 
+         log.trace(" -- using lens type: thoby")
+      end
       -- thoby : theta = asin((r/f)/(k1 * f))/k2
       if (diagonal_normalized:max() > k1) then 
          log.error("diagonal too large for thoby")
@@ -157,7 +161,7 @@ end
 
 -- based on final projection type create a map of angles which need to
 -- be looked up in the original image.
-function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
+function projection_to_equirectangular(fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
    
    local lambda,phi,theta_map, output_map
    
@@ -175,40 +179,11 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
       phi      = torch.linspace(-vrange,vrange,maph)
       output_map = make_pythagorean_map(lambda,phi)
       theta_map = output_map:clone():atan()
-   elseif (proj_type == "cylindrical") then
-      -- limit the vfov to roughly 120 degrees
-      if vfov > 1 then
-         vfov = 1
-         maph = mapw * (vfov / hfov)
-      end
-      -- set up size of the output table
-      local vrange = torch.tan(vfov)
-      local hrange = hfov
-      -- equal steps in normalized coordinates
-      lambda   = torch.linspace(-hrange,hrange,mapw)
-      phi      = torch.linspace(-vrange,vrange,maph)
-      output_map = make_pythagorean_map(lambda,phi)
-      lambda:atan()
-      theta_map = make_pythagorean_map(lambda,phi)
-   elseif (proj_type == "cylindrical_vert") then
-      -- limit the hfov to roughly 120 degrees
-      if hfov > 1 then
-         hfov = 1
-         mapw = maph * (hfov/vfov)
-      end
-      -- set up size of the output table
-      local vrange = vfov
-      local hrange = torch.tan(hfov)
-      -- equal steps in normalized coordinates
-      lambda   = torch.linspace(-hrange,hrange,mapw)
-      phi      = torch.linspace(-vrange,vrange,maph)
-      output_map = make_pythagorean_map(lambda,phi)
-      phi:atan()
-      theta_map = make_pythagorean_map(lambda,phi)
    else
-      -- default is to project to sphere
+      -- default projection
+      -- this is called equirectangular or plate carree
       -- create horizontal (lambda) and vertical angles (phi) x,y lookup
-      --  in spherical map from -radians,radians at resolution mapw and
+      --  in equirectangular map indexed by azimuth and elevation from -radians,radians at resolution mapw and
       --  maph.  Equal steps in angles.
       lambda = torch.linspace(-hfov,hfov,mapw)
       phi    = torch.linspace(-vfov,vfov,maph)
@@ -219,7 +194,7 @@ function projection_to_sphere (fov,hfov,vfov,mapw,maph,aspect_ratio,proj_type)
 
 end
 
-function sphere_to_camera(theta_map,lens_type,params)
+function equirectangular_to_camera(theta_map,lens_type,params)
    local r_map = theta_map:clone() -- copy
 
    if (lens_type == "rectilinear") then

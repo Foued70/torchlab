@@ -13,40 +13,40 @@ local ffi = ffi_utils.ffi
 local geomlib = ffi_utils.lib_path("geom")
 
 if paths.filep(geomlib) then
-    -- load low level c functions
+   -- load low level c functions
    ffi.cdef[[
-void rotate_by_quat(THDoubleTensor *result,
-                    THDoubleTensor *vectors,
-                    THDoubleTensor *quat);
+               void rotate_by_quat(THDoubleTensor *result,
+                                   THDoubleTensor *vectors,
+                                   THDoubleTensor *quat);
 
-void rotate_translate(THDoubleTensor *result, 
-                      THDoubleTensor *vectors, 
-                      THDoubleTensor *trans,
-                      THDoubleTensor *quat);
-                
-void translate_rotate(THDoubleTensor *result, 
-                      THDoubleTensor *vectors, 
-                      THDoubleTensor *trans,
-                      THDoubleTensor *quat);
+               void rotate_translate(THDoubleTensor *result,
+                                     THDoubleTensor *vectors,
+                                     THDoubleTensor *trans,
+                                     THDoubleTensor *quat);
+
+               void translate_rotate(THDoubleTensor *result,
+                                     THDoubleTensor *vectors,
+                                     THDoubleTensor *trans,
+                                     THDoubleTensor *quat);
             ]]
 
-      -- don't want to call C functions directly
-      local C  = ffi.load(geomlib)
+   -- don't want to call C functions directly
+   local C  = ffi.load(geomlib)
 
-      -- either there is a way to stick function on torch.DoubleTensor
-      -- for automatic type cast or we just do everything in doubles.
-      function rotate_by_quatC (out, vec, quat)
-         C.rotate_by_quat(torch.cdata(out), torch.cdata(vec), 
-                          torch.cdata(quat))
-      end
-      function rotate_translateC (out, vec, trans, quat)
-         C.rotate_translate(torch.cdata(out), torch.cdata(vec), 
-                            torch.cdata(trans), torch.cdata(quat))
-      end
-      function translate_rotateC (out, vec, trans, quat)
-         C.translate_rotate(torch.cdata(out), torch.cdata(vec), 
-                            torch.cdata(trans), torch.cdata(quat))
-      end
+   -- either there is a way to stick function on torch.DoubleTensor
+   -- for automatic type cast or we just do everything in doubles.
+   function rotate_by_quatC (out, vec, quat)
+      C.rotate_by_quat(torch.cdata(out), torch.cdata(vec),
+                       torch.cdata(quat))
+   end
+   function rotate_translateC (out, vec, trans, quat)
+      C.rotate_translate(torch.cdata(out), torch.cdata(vec),
+                         torch.cdata(trans), torch.cdata(quat))
+   end
+   function translate_rotateC (out, vec, trans, quat)
+      C.translate_rotate(torch.cdata(out), torch.cdata(vec),
+                         torch.cdata(trans), torch.cdata(quat))
+   end
 end
 
 -- end of loading C backend test
@@ -211,7 +211,7 @@ function rotation_matrix_to_quaternion (rmat, quat, debug)
       qsign[4] = rmat[2][1] - rmat[1][2]
 
    else
-      if debug then 
+      if debug then
          print("Bad input perhaps not a rotation matrix?")
       end
       return nil
@@ -390,7 +390,7 @@ function unit_cartesian_to_spherical_coords(uc)
    local z = uc[{{},3}]
 
    local angles = torch.Tensor(uc:size(1),2)
-   
+
    angles[{{},1}] = torch.atan2(x,y) -- azimuth
    angles[{{},2}] = torch.asin(z)   -- elevation
 
@@ -408,13 +408,13 @@ function spherical_coords_to_unit_cartesian(angles)
 
    local azimuth   = angles[{{},1}]
    local elevation = angles[{{},2}]
-   
+
    local unit_vec = torch.Tensor(angles:size(1),3)
    local cos_elevation = torch.cos(elevation)
-   
-   -- right = sin(azimuth) * cos(elevation) 
+
+   -- right = sin(azimuth) * cos(elevation)
    unit_vec[{{},1}]  = torch.sin(azimuth):cmul(cos_elevation)
-   -- forward = cos(azimuth) * cos(elevation) 
+   -- forward = cos(azimuth) * cos(elevation)
    unit_vec[{{},2}]  = torch.cos(azimuth):cmul(cos_elevation)
    -- up = sin(elevation)  or cos(pi/2 - elevation) == cos(polar)
    unit_vec[{{},3}]  = torch.sin(elevation)
