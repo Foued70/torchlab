@@ -569,6 +569,7 @@ function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
       normalized_pts[{{},1}]:add(xoff):mul(self.horizontal_normalized)
       normalized_pts[{{},2}]:add(yoff):mul(self.vertical_normalized)
       
+    -- FIXME -- the following is placeholder
    elseif (pt_type == "pixel_space") then
       -- 1) move 0,0 to optical center of image
       normalized_pts[{{},1}]:add(-self.center_x)
