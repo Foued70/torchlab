@@ -2,25 +2,29 @@ require 'image'
 
 image_plus_alpha = image.load('full-360-masked-hdr-downsampled-small.png')
 
--- image_plus_alpha = image_plus_alpha:narrow(2,100,100):narrow(3,100,100)
-batch_size = 1000
-window_size = 5
-ws = window_size
-
+image_plus_alpha = image_plus_alpha:narrow(2,100,200):narrow(3,100,100)
 
 -- three levels of context
 -- pixel  : no context only the pixel
 -- patch  : a window around the pixel (eg. 5x5)
 -- lookup : a set of windows (eg. 10x10 of 5x5)
 
+batch_size = 10
+window_size = 25
+ws = window_size
+
+timer = ui.Timer.new()
+
 -- size of area in which to find matching patches (in pixels)
 lookup_size_h = 100
-lookup_size_w = 200
+lookup_size_w = 50
+
+n_random_patches = 2
 
 ctr = math.ceil(ws*0.5)
 half = ws * ws * 0.5 
 
-channel_mix  = torch.Tensor({4,2,2})
+channel_mix  = torch.Tensor({40,20,20})
 
 -- channel_mix:mul(1/channel_mix:sum())
 
@@ -35,7 +39,8 @@ image_h      = pano_rgb:size(2)
 image_w      = pano_rgb:size(3)
 pano_lab     = image.rgb2lab(pano_rgb)
 
-mask_patches = mask:unfold(1,ws,1):unfold(2,ws,1)
+-- views into the mask which gets up dated
+mask_patches = tofill:unfold(1,ws,1):unfold(2,ws,1)
 
 mps          = mask_patches:size()
 
@@ -249,17 +254,27 @@ end
 function fill_patches (mask_index,debug)
 
    collectgarbage()
-     
+
+   local timer = torch.Timer.new()
+   
+   local t0 = timer:time()     
    n_patches = mask_index:size(1)
    mask_hw   = index_to_hw(mask_index,image_w)
    patch_hw  = px_to_patch(mask_hw,image_h,image_w,ws,ws)
    lookup_hw = px_to_patch(mask_hw,image_h,image_w,
                                  lookup_size_h,lookup_size_w)
 
-
+   local t1 = timer:time()
+   local s1 = t1.real - t0.real
+   local s2 = 0 
+   local s3 = 0
+   local s4 = 0
+   local s5 = 0
+   local s6 = 0
    sys.tic()
    for pi = 1,mask_index:size(1) do
       
+      local t2 = timer:time()
       mask_h  = mask_hw[1][pi]
       mask_w  = mask_hw[2][pi] 
 
@@ -277,7 +292,7 @@ function fill_patches (mask_index,debug)
       -- extract patch
       patch = pano_patches[{{},patch_h,patch_w,{},{}}]:clone()
       
-      -- prepare mask
+      -- prepare mask patch we are copying into (gets updated as we go)
       patch_mask = mask_patches[{patch_h,patch_w,{},{}}]:clone()
       patch_mask:cmul(image.gaussian(ws))      
       
@@ -287,7 +302,11 @@ function fill_patches (mask_index,debug)
 
       lookup      = pano_lookup[{{},lookup_h,lookup_w,{},{}}]:unfold(2,ws,1):unfold(3,ws,1)
 
+      -- mask of lookup we are coping from (only original image)
       lookup_mask = mask_lookup[{lookup_h,lookup_w,{},{}}]:unfold(1,ws,1):unfold(2,ws,1)
+
+      local t3 = timer:time()
+      s2 = s2 +  t3.real - t2.real
 
       -- TODO: make get_centers handle the 3 channels
       lookup_centers1 = get_centers(pano_lookup[{1,lookup_h,lookup_w,{},{}}],ws,ws)
@@ -310,6 +329,9 @@ function fill_patches (mask_index,debug)
       
       patch_mask = patch_mask:reshape(1,ws,ws):expand(n_lookup_w,ws,ws) 
       distances  = torch.Tensor(n_lookup_h,n_lookup_w)
+
+      local t4 = timer:time()
+      s3 = s3 + t4.real - t3.real
 
       for c = 1,n_lookup_h do
          -- find overlap of masks
@@ -349,22 +371,33 @@ function fill_patches (mask_index,debug)
 
       distances:resize(n_lookup_tot)
 
-      dst,dsti = distances:sort()
-      
+      n_found = distances:lt(ws * ws):sum()
+      n_found = n_found > n_random_patches and n_random_patches or n_found
+      n_found = n_found > 1 and n_found or 1
+
+      local t5 = timer:time()
+      s4 = s4 + t5.real - t4.real
+      -- randomize the input to get around bad implementation of torch.sort()
+      rand_index = torch.randperm(distances:size(1)):long()
+      rand_dist  = distances[rand_index]
+      dst,dsti   = rand_dist:sort()
+
+      local t6 = timer:time()
+      s5 = s5 + t6.real - t5.real
       -- matching patch index in lookup table
-      patch_index = dsti:narrow(1,1,30)
+      patch_index = rand_index[dsti:narrow(1,1,n_found)]
 
       lookup_patch_hw = index_to_hw(patch_index,n_lookup_w)
 
       -- pick random patch from top n
-      ri = 1 -- math.random(10)
+      ri = math.random(n_found)
 
       if debug_visual then
-         -- display patch + 10 best match
-         dpatches = torch.Tensor(31,3,ws,ws):zero()
+         -- display patch + n_random_patches best matches
+         dpatches = torch.Tensor(n_found+1,3,ws,ws):zero()
          dpatches[1]:copy(patch)
          j = 2
-         for i = 1,30 do 
+         for i = 1,n_found do 
             dpatches[j]:copy(lookup[{{},lookup_patch_hw[1][i],lookup_patch_hw[2][i],{},{}}])
             j = j + 1
          end
@@ -392,23 +425,29 @@ function fill_patches (mask_index,debug)
              lookup_centers3[lookup_patch_hw[1]][lookup_patch_hw[2]])
          print("** COPIED zero value **")
          print(mask_patches[lookup_patch_hw[1]][lookup_patch_hw[2]])
+         printf("index: %d",ri)
+         print(distances[ri])
       end
       -- update mask
       tofill[mask_h][mask_w] = 1
-      
+      local t7 = timer:time()
+      s6 = s6 + t7.real - t6.real
    end
    printf(" - processed %d patches in %2.4fs", n_patches, sys.toc())
-
+   print("time:")
+   printf(" - setup                %2.4fs",s1)
+   print("in loop:")
+   printf(" - extract data         %2.4fs",s2)
+   printf(" - get_centers, expand  %2.4fs",s3)
+   printf(" - compute distances    %2.4fs",s4)
+   printf(" - sort                 %2.4fs",s5)
+   printf(" - apply                %2.4fs",s6)
 end
 
 mask_index = find_patches(tofill,ws)
-rgb_copy = pano_rgb:clone()
 
 while mask_index do 
-   dm,index_win = display_mask_index(mask_index,image_h,image_w,index_win,3)
-   rgb_copy[1]:add(dm)
    fill_patches(mask_index)
    mask_index = find_patches(tofill,ws)
-   win = image.display{win=win,image={rgb_copy,pano_rgb},zoom=3}
-   -- mask_win = image.display{win=mask_win, image=mask, zoom=3}
+   win = image.display{win=win,image={pano_rgb},zoom=3}
 end
