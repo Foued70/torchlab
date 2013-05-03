@@ -6,6 +6,13 @@ local piover2 = math.pi * 0.5
 local r2d = 180 / pi
 local d2r = pi / 180
 
+-- thoby constants
+local k1 = 1.47
+local k2 = 0.713
+
+-- rectilinear max fov in radians
+local max_rad_rectilinear = 1
+
 -- stores fixed information about lens+sensors which we glean from spec sheets and elsewhere.
 local LensSensor = Class()
 
@@ -106,42 +113,44 @@ function LensSensor:add_image(...)
    local diag_norm = math.sqrt(horz_norm*horz_norm +
                                vert_norm*vert_norm)
 
-   -- Currently unused, crop_radius would allow us to look at a region
-   -- inside image boundaries such as when the image circle is less
-   -- than the sensor width or height (not full frame)
-   if self.crop_radius then
-      -- Divide by the vertical fov b/c that is the shorter dimension
-      -- and closer to the circle in a rectangle, but does raise a
-      -- question about the aspect ratio.
-      diag_norm   = self.crop_radius / vfocal_px
-   end
-
+   local dfov,hfov,vfov
+   
    log.tracef(" -- normalized : diag: %f h: %f v: %f",
       diag_norm, horz_norm, vert_norm)
 
-   -- FIXME clean this up. Special case for calibration
+   -- TODO clean this up. Special case for calibrated lenses.
    -- reset center based on the calibration
-   if (self.lens_type:gmatch("scaramuzza")()) then   
+   if self.lens_type:gmatch("scaramuzza")() then   
       -- calibrated center in raw image space
       cx = imgw * (self.cal_xc / self.cal_width)
       cy = imgh * (self.cal_yc / self.cal_height)
    end
 
-   local dfov 
-   if (self.lens_type == "scaramuzza_r2t") then
-      dfov = 
-         projection.compute_diagonal_fov(diag_norm*self.cal_focal_px,
-                                         self.lens_type, self.pol)
+   if self.lens_type:gmatch("opencv")() then
+      -- TODO: check that we keep track of the different focal points
+      -- all the way through
+      hfocal_px = self.fx
+      vfocal_px = self.fy
+      horz_norm = self.cx / self.fx
+      vert_norm = self.cy / self.fy
+      diag_norm = math.sqrt(cx*cx + cy*cy)
+      dfov = math.atan(diag_norm)
+      hfov = math.atan(horz_norm)
+      vfov = math.atan(vert_norm)
    else
-      dfov = 
-         projection.compute_diagonal_fov(diag_norm,
-                                         self.lens_type, self.pol)
+      if (self.lens_type == "scaramuzza_r2t") then
+         dfov = self:radial_distance_to_angle(diag_norm*self.cal_focal_px)
+      else
+         dfov = self:radial_distance_to_angle(diag_norm)
+         
+      end
+      
+      vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
    end
-
-   local vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
-
+   
    log.tracef(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
       dfov*r2d, hfov*r2d,vfov*r2d)
+
    self.image_w      = imgw -- px
    self.image_h      = imgh -- px
    self.inv_image_w  = 1/imgw
@@ -170,6 +179,177 @@ function LensSensor:add_image(...)
    self.diagonal_normalized   = diag_norm
    self.horizontal_normalized = horz_norm
    self.vertical_normalized   = vert_norm
+end
+
+function LensSensor:radial_distance_to_angle(radial_normalized,debug)
+   --,lens_type,params,debug)
+   local angle
+   local convert = false
+   local lens_type = self.lens_type
+
+   if (type(radial_normalized) == "number") then 
+      radial_normalized = torch.Tensor({radial_normalized})
+      convert = true
+   end
+   if (lens_type == "rectilinear") then
+      angle = torch.atan(radial_normalized)   -- diag in rad
+   elseif (lens_type == "scaramuzza_r2t") then
+      if debug then
+         log.trace(" -- using scaramuzza calibration")
+      end
+      local pol = self.pol
+      local d2 = radial_normalized:clone()
+      angle = torch.Tensor(d2:size()):fill(pol[-1])
+      for i = pol:size(1)-1,1,-1 do 
+         angle = angle + d2 * pol[i]
+         d2:cmul(radial_normalized)
+      end
+      -- using ideal thoby to compute fov for scaramuzza's original
+      -- code which does not solve for theta. Can remove this eventually.
+   elseif (lens_type == "thoby") or (lens_type == "scaramuzza") then
+      if debug then 
+         log.trace(" -- using lens type: thoby")
+      end
+      -- thoby : theta = asin((r/f)/(k1 * f))/k2
+      if (radial_normalized:max() > k1) then 
+         log.error("diagonal too large for thoby")
+      else
+         angle = torch.asin(radial_normalized/k1)/k2
+      end
+   elseif (lens_type == "equal_angle") then
+      angle = radial_normalized
+
+   elseif (lens_type =="equal_area") then
+      if( radial_normalized:max() <= 2 ) then
+         angle = 2 * torch.asin( 0.5 * radial_normalized )
+      end
+      if( torch.sum(angle:eq(0)) > 0) then
+         error( "equal-area FOV too large" )
+      end
+
+   elseif (lens_type == "stereographic") then
+      angle = 2 * torch.atan(radial_normalized*0.5 )
+
+   elseif (lens_type == "orthographic") then
+      if( radial_normalized:max() <= 1 ) then
+         angle = torch.asin( radial_normalized )
+      end
+      if( torch.sum(angle:eq(0)) > 0) then
+         error( "orthographic FOV too large" )
+      end
+
+   else
+      error("don't understand self lens model requested")
+   end
+   if convert then 
+      angle = angle[1]
+   end
+   return angle
+end
+
+-- Based on final projection type create a quantized map of angles
+-- (dimensions mapw x maph) which need to be looked up in the original
+-- image.
+-- 
+-- Creates four tensors:
+-- 
+--    self.lambda
+--    sel.phi
+--    self.theta_map
+--    self.output_map
+-- 
+-- TODO: add other projection types
+function LensSensor:projection_to_equirectangular_map(proj_type,maph,mapw)
+      
+   local lambda, phi, output_map, theta_map
+   local fov, vfov, hfov, drange, hrange, vrange
+   if (proj_type == "rectilinear") then
+      fov = self.fov
+      -- limit the fov to roughly 120 degrees
+      if fov > max_rad_rectilinear then
+         fov = max_rad_rectilinear
+         vfov,hfov = projection.derive_hw(fov,self.aspect_ratio)
+      end
+      -- set up size of the output table
+      drange = torch.tan(fov)
+      vrange,hrange = projection.derive_hw(drange,self.aspect_ratio)
+      -- equal steps in normalized coordinates
+      lambda     = torch.linspace(-hrange,hrange,mapw)
+      phi        = torch.linspace(-vrange,vrange,maph)
+      output_map = projection.make_pythagorean_map(lambda,phi)
+      theta_map  = output_map:clone():atan()
+   else
+      -- Default projection : equirectangular or "plate carree". Create
+      -- horizontal (lambda) and vertical angles (phi) x,y lookup in
+      -- equirectangular map indexed by azimuth and elevation from
+      -- -radians,radians at resolution mapw and maph.  Equal steps in
+      -- angles.
+      lambda     = torch.linspace(-self.hfov,self.hfov,mapw)
+      phi        = torch.linspace(-self.vfov,self.vfov,maph)
+      output_map = projection.make_pythagorean_map(lambda,phi)
+      theta_map  = output_map
+   end
+
+   -- this is the output (stored in LensSensor)
+   self.lambda     = lambda
+   self.phi        = phi
+   self.theta_map  = theta_map
+   self.output_map = output_map
+
+end
+
+-- Note: a calibrated camera is a type of projection
+function LensSensor:equirectangular_map_to_projection()
+   if not self.theta_map then 
+      error("call projection_to_equirectangular_map first")
+   end
+
+   local r_map = self.theta_map:clone() -- copy
+
+   -- TODO this should be broken out into separate classes as Dustin
+   -- is doing.  Totally see it now.
+   if (self.lens_type == "rectilinear") then
+      -- rectilinear : (1/f) * r' = tan(theta)
+      r_map:tan()
+   elseif (self.lens_type == "thoby") then
+      -- thoby       : (1/f) * r' = k1 * sin(k2*theta)
+      r_map:mul(k2):sin():mul(k1)
+   elseif (self.lens_type == "stereographic") then
+      --  + stereographic             : r = 2 * f * tan(theta/2)
+      r_map:mul(0.5):tan():mul(2)
+   elseif (self.lens_type == "orthographic") then
+      --  + orthographic              : r = f * sin(theta)
+      r_map:sin()
+   elseif (self.lens_type == "equisolid") then
+      --  + equisolid                 : r = 2 * f * sin(theta/2)
+      r_map:mul(0.5):sin():mul(2)
+   elseif (self.lens_type == "scaramuzza") then
+      local theta     = self.theta_map:clone()
+      -- we use a positive angle from optical center, but scaramuzza
+      -- uses a negative offset from focal point.
+      theta:add(-piover2) 
+      local theta_pow = theta:clone()
+      local invpol    = self.invpol
+      r_map:fill(invpol[-1]) -- rho = invpol[0]
+      
+      for i = params:size(1)-1,1,-1 do          
+         r_map:add(theta_pow * invpol[i]) -- coefficients of inverse poly.
+         theta_pow:cmul(theta)            -- powers of theta
+      end 
+   elseif self.lens_type:gmatch("scaramuzza_r2t") then
+      local theta_pow = self.theta_map:clone()
+      local invpol = self.invpol
+      r_map:fill(invpol[-1]) -- rho = invpol[0]
+      
+      for i = invpol:size(1)-1,1,-1 do          
+         r_map:add(theta_pow * invpol[i]) -- coefficients of inverse poly.
+         theta_pow:cmul(self.theta_map)   -- powers of theta
+      end 
+   else
+      log.error("don't understand lens_type")
+      return nil
+   end
+   return r_map
 end
 
 -- Maps a camera image + lens to equirectangular map (azimuth and elevation)
@@ -209,7 +389,7 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    local lens_type = self.lens_type
 
    -- +++++
-   -- (0).a image dimensions
+   -- (0.1) image dimensions
    -- +++++
    local imgw = self.image_w
    local imgh = self.image_h
@@ -217,61 +397,126 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    local fov  = self.fov
    local hfov = self.hfov
    local vfov = self.vfov
-   local aspect_ratio = self.aspect_ratio
+   local aspect_ratio = self.aspect_ratio -- w/h
 
    -- +++++
-   -- find dimension of the map
+   -- (0.2) find dimension of the map
    -- +++++
    local mapw = math.floor(imgw * scale)
-   local maph = math.floor(mapw * (vfov/hfov))
+   local maph = math.floor(mapw / aspect_ratio)
 
-   -- +++++
-   -- (1) create map of diagonal angles from optical center
-   -- +++++
 
-   local lambda, phi, 
-   theta_map, output_map, 
-   mapw, maph = projection.projection_to_equirectangular(fov,hfov,vfov, 
-                                                         mapw,maph,aspect_ratio, 
-                                                         proj_type)
+   local xmap, ymap
       
-   -- +++++ 
-   -- (2) replace theta for each entry in map with r 
-   -- +++++
-   local r_map =
-      projection.equirectangular_to_camera(theta_map, lens_type, self.invpol)
    
-   -- +++++
-   -- (3) make the ratio (new divided by old) by which we scale the
-   --     pixel offsets (in normalized coordinates) in the output
-   --     image to coordinates in the original image.
-   -- +++++
-   r_map:cdiv(output_map)
+   if self.lens_type:gmatch("opencv")() then
+      -- opencv calibration operates on x and y directly (as these are
+      -- all rectilinear projections).
+
+      local lambda     = torch.linspace(-self.hfov,self.hfov,mapw)
+      local phi        = torch.linspace(-self.vfov,self.vfov,maph)
+      
+      -- opencv assumes an image plane
+      -- lambda:tan()
+      -- phi:tan()
+
+      local theta_map = projection.make_pythagorean_map(lambda,phi)
+
+      xmap = lambda:repeatTensor(maph,1)
+      ymap = phi:repeatTensor(mapw,1):t():contiguous()
+      
+      -- r in opencv equations is 
+      local theta_sqr = theta_map:clone():cmul(theta_map)
+
+      local temp = theta_sqr:clone()
+      
+      local radial_distortion = torch.ones(maph,mapw)
+
+      for ri = 1,self.radial_coeff:size(1)-1 do 
+         radial_distortion:add(temp * self.radial_coeff[ri])
+         temp:cmul(theta_sqr)
+      end
+      radial_distortion:add(temp * self.radial_coeff[-1])
+
+      local xpyp = torch.cmul(xmap,ymap)
+
+      local temp = torch.cmul(xmap,xmap)
+
+      -- x'( 1 + k1*r^2 + k2*r^4 + k3*r^6)
+      xmap:cmul(radial_distortion)
+      -- + 2 * p1 * x'y'
+      xmap:add(xpyp * ( 2 * self.tangential_coeff[1]))
+      -- + p2 * (r^2 + 2*x'^2)
+      temp:mul(2):add(theta_sqr):mul(self.tangential_coeff[2])
+      xmap:add(temp)
+
+      local temp = torch.cmul(ymap,ymap)
+
+      -- x'( 1 + k1*r^2 + k2*r^4 + k3*r^6)
+      ymap:cmul(radial_distortion)
+      -- + 2 * p2 * x'y'
+      xmap:add(xpyp * ( 2 * self.tangential_coeff[2]))
+      -- + p1 * (r^2 + 2*y'^2)
+      temp:mul(2):add(theta_sqr):mul(self.tangential_coeff[1])
+      xmap:add(temp)
+
+      temp = nil
+      radial_distortion = nil
+      theta_sqr = nil
+      collectgarbage()
+      
+   else
+      -- most projections express the distortion along the diagonal
+
+      -- +++++
+      -- (1) create map of diagonal angles from optical center
+      -- +++++
+      
+      self:projection_to_equirectangular_map(proj_type,maph,mapw)
+      
+      -- +++++
+      -- (2) create 2D map of x and y indices into the original image for
+      --     each location in the output image.
+      -- +++++
+      xmap = self.lambda:repeatTensor(maph,1)
+      ymap = self.phi:repeatTensor(mapw,1):t():contiguous()
+
+      -- +++++ 
+      -- (3) transform xmap and ymap to lookups through camera distortion
+      -- +++++
+
+      -- (3.1) replace theta (diagonal angle) for each entry in map with r 
+      local r_map = self:equirectangular_map_to_projection()
+      
+      -- (3.2) make the ratio (new divided by old) by which we scale the
+      --       pixel offsets (in normalized coordinates) in the output
+      --       image to coordinates in the original image.
+      r_map:cdiv(self.output_map)
+      
+      -- (3.3) put xmap and ymap from normalized coordinates to pixel
+      --       coordinates 
+      xmap:cmul(r_map)
+      ymap:cmul(r_map)
+   end
    
-   -- +++++
-   -- (4) create map of x and y indices into the original image for
-   --     each location in the output image.
-   -- +++++
-   local xmap = lambda:repeatTensor(maph,1)
-   local ymap = phi:repeatTensor(mapw,1):t():contiguous()
-
-   -- +++++++
-   -- (4) put xmap and ymap from normalized coordinates to pixel coordinates
-   -- +++++++
-   xmap:cmul(r_map):mul(self.hfocal_px):add(self.center_x)
-   ymap:cmul(r_map):mul(self.vfocal_px):add(self.center_y)
-
+   -- +++++++ 
+   -- (4) Apply the camera matrix to return normalized coordinates to
+   -- image pixel coordinates.
+   -- +++++++ 
+   xmap:mul(self.hfocal_px):add(self.center_x)
+   ymap:mul(self.vfocal_px):add(self.center_y)
+   
    -- +++++++
    -- (5) make mask for out of bounds values
-   -- +++++++
-
+   -- +++++++ 
    local mask = projection.make_mask(xmap,ymap,imgw,imgh)
-   log.tracef("Masking %d/%d lookups (out of bounds)", mask:sum(),mask:nElement())
+   log.tracef("Masking %d/%d lookups (out of bounds)", 
+              mask:sum(),mask:nElement())
+
    -- +++++++
    -- (6) convert the x and y index into a single 1D offset (y * stride + x)
    --     Note: stride is the final dimension of the original image.
    -- +++++++
-
    local index_map = projection.make_index(xmap,ymap,mask,imgw)
 
    -- +++++++
@@ -325,9 +570,10 @@ function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
       normalized_pts[{{},2}]:add(yoff):mul(self.vertical_normalized)
       
    elseif (pt_type == "pixel_space") then
-      
+      -- 1) move 0,0 to optical center of image
       normalized_pts[{{},1}]:add(-self.center_x)
       normalized_pts[{{},2}]:add(-self.center_y)
+      -- 2) transform into normalized coordinates
       normalized_pts[{{},1}]:mul(self.horizontal_normalized / self.image_w)
       normalized_pts[{{},2}]:mul(self.vertical_normalized / self.image_h)
       
@@ -353,7 +599,7 @@ function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
 
    -- apply the lens transform
    local diagonal_angles = 
-      projection.compute_diagonal_fov(d, self.lens_type, self.pol)
+      projection.radial_distance_to_angle(d, self.lens_type, self.pol)
 
    -- convert diagonal angle to equirectangular (spherical) angles
    local elevation,azimuth = projection.derive_hw(diagonal_angles,self.aspect_ratio) 
