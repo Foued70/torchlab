@@ -146,8 +146,28 @@ local lens_types = {
    matterport = {
      name = 'matterport',
      lens_type = 'equirectangular'
-   }
+   },
 
+   sigma_10_20mm = {
+      name = "sigma_10-20mm",
+      lens_type = "opencv_calibration",
+
+      -- copied from exif info
+      sensor_w = 23.6, -- mm
+      sensor_h = 15.6, -- mm
+
+      focal    = 10, -- mm
+
+      -- calibrationData
+      fx = 2145.99, -- this is the focal we need to keep
+      fy = 2142.91, 
+      cx = 2451.41, 
+      cy = 1696.76, 
+      -- k1,k2,k3 in opencv docs
+      radial_coeff = torch.Tensor({-0.0113617, 0.020205, -0.0153622}),
+      -- p1, p2 in opencv docs
+      tangential_coeff = torch.Tensor({0.00176747, -0.00192791})
+   }
 }
 
 return lens_types

@@ -1,10 +1,14 @@
 require 'image'
 require 'paths'
+require 'math'
 
 local LensSensor = util.LensSensor
 local projection = util.projection
+local Ray = util.Ray
 local geom = util.geom
+local bihtree = util.bihtree
 local loader = require 'util.loader'
+local interpolate = util.interpolate
 
 local Photo = Class()
 
@@ -30,7 +34,7 @@ function Photo:__init(parent_sweep, image_path)
   self.image_path = image_path
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
-  self.image_data_spherical = nil
+  self.image_data_equirectangular = nil
   
   self.offset_position = nil
   self.offset_rotation = nil
@@ -97,11 +101,11 @@ function Photo:get_image_rectilinear()
   return self.image_data_rectilinear
 end
 
-function Photo:get_image_spherical()
-  if not self.image_data_spherical then
-    self.image_data_spherical = projection.remap(self:get_image(), self:get_lens().spherical)
+function Photo:get_image_equirectangular()
+  if not self.image_data_equirectangular then
+    self.image_data_equirectangular = projection.remap(self:get_image(), self:get_lens().equirectangular)
   end
-  return self.image_data_spherical
+  return self.image_data_equirectangular
 end
 
 function Photo:get_lens()
@@ -116,7 +120,7 @@ end
 function Photo:flush_image()
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
-  self.image_data_spherical = nil
+  self.image_data_equirectangular = nil
   collectgarbage()
 end
 
@@ -131,35 +135,50 @@ function Photo:local2global(v)
    return geom.rotate_by_quat(v,self.rotation) + self.position
 end
 
--- Intrinsic parameters: from camera xyz to 
 -- FIXME optimize (in C) these funcs.
 -- FIXME simplify number of ops.
-function Photo:globalxyz2uv(pt)
-   -- xyz in pose coordinates
-   local v       = self:global2local(pt)
-   local azimuth = -torch.atan2(v[2],v[1])
-   local norm    = geom.normalize(v)
-   local elevation = torch.asin(norm[3])
-   
-   -- TODO: calc proj_x and proj_y with inv_hfov and inv_vfov and kill px_per_rad_x, px_per_rad_y?
-   local lens = self:get_lens()
-   local proj_x  = 0.5 + lens.sensor.center_x + (  azimuth * lens.sensor.px_per_rad_x)
-   local proj_y  = 0.5 + lens.sensor.center_y - (elevation * lens.sensor.px_per_rad_y)
-   
-   -- u,v = 0,0 in upper left
-   local proj_u  = proj_x * lens.sensor.inv_image_w
-   local proj_v  = 1 - (proj_y * lens.sensor.inv_image_h)
-   return proj_u, proj_v, proj_x, proj_y
-end
-
--- for pixel xy (0,0 in top left, w,h in bottom right) to point +
--- direction ray for intersection work
-function Photo:localxy2globalray(x,y)
+-- this is the inverse of local_xy_to_global_rot + self.position
+function Photo:global_xyz_to_2d(pt)
   local lens = self:get_lens()
   
+  -- xyz in photo coordinates  
+  local v       = self:global2local(pt)  
+  local azimuth = torch.atan2(v[1],v[2])
+  local norm    = geom.normalize(v)
+  local elevation = torch.asin(norm[3])  
+  
+  -- TODO: fix this mp fix
+  if lens.sensor.name == 'matterport' then
+    azimuth = -torch.atan2(v[2],v[1])
+  end
+  
+  -- TODO: calc proj_x and proj_y with inv_hfov and inv_vfov and kill px_per_rad_x, px_per_rad_y?
+  -- 0.5 because we're looking at the middle of a pixel
+  local proj_x  = -0.5 + lens.sensor.center_x + (  azimuth * lens.sensor.px_per_rad_x)
+  local proj_y  = -0.5 + lens.sensor.center_y - (elevation * lens.sensor.px_per_rad_y)
+   
+  -- u,v = 0,0 in upper left
+  local proj_u  = proj_x * lens.sensor.inv_image_w
+  local proj_v  = proj_y * lens.sensor.inv_image_h
+
+  -- matterport thinks that uv is in the bottom left
+  if lens.sensor.name == 'matterport' then
+    proj_v = 1 - (proj_y * lens.sensor.inv_image_h)
+  end
+  return proj_u, proj_v, proj_x, proj_y
+end
+
+
+-- for pixel xy (0,0 in top left, w,h in bottom right) to 
+-- direction ray for intersection work
+function Photo:local_xy_to_global_rot(x, y)
+  local lens = self:get_lens()
+
   -- TODO: calc azimuth and elevation with hfov and vfov and kill rad_per_px_x, rad_per_px_y?
-  local azimuth   = (x - lens.sensor.center_x) * lens.sensor.rad_per_px_x  
-  local elevation = (lens.sensor.center_y - y) * lens.sensor.rad_per_px_y
+  -- 0.5 because we're looking at the middle of a pixel
+  local azimuth   = (x + 0.5 - lens.sensor.center_x) * lens.sensor.rad_per_px_x    
+  -- same as elevation = - (y + 0.5 - lens.sensor.center_y) * lens.sensor_rad_per_px_y
+  local elevation = (lens.sensor.center_y - (y+0.5)) * lens.sensor.rad_per_px_y
   
   local dir = torch.Tensor(3)
   -- local direction
@@ -178,7 +197,7 @@ function Photo:localxy2globalray(x,y)
   
   geom.normalize(dir)
   -- return point and direction rotated to global coordiante
-  return self.position, geom.rotate_by_quat(dir,self.rotation)
+  return geom.rotate_by_quat(dir,self.rotation)
 end
 
 function Photo:compute_dirs(scale)
@@ -202,7 +221,7 @@ function Photo:compute_dirs(scale)
   local inw = 0
   for h = 1,outh do
     for w = 1,outw do
-      local _,dir = self:localxy2globalray(inw,inh)
+      local dir = self:local_xy_to_global_rot(inw,inh)
       dirs[h][w]:copy(dir:narrow(1,1,3))
       cnt = cnt + 1
       inw = inw + scale
@@ -214,11 +233,7 @@ function Photo:compute_dirs(scale)
 end
 
 function Photo:dirs_file(scale, ps)
-  local f = string.format('%s-%s-%s-s%s-', 
-    paths.basename(self.sweep.scan.model_file), paths.basename(self.sweep.scan.pose_file), self.name, scale)
-  
-  if ps then f = f .."-grid".. ps end  
-  return f..'dirs.t7'
+  return self:file(scale, ps, 'dirs')
 end
 
 function Photo:build_dirs(scale,ps)  
@@ -266,7 +281,7 @@ function Photo:draw_wireframe()
           -- printf("step: %f,%f,%f",step[1],step[2],step[3])
           for s = 0,len,mpp do
              -- draw verts first
-             local u,v,x,y = self:globalxyz2uv(pvert)
+             local u,v,x,y = self:global_xyz_to_2d(pvert)
              -- printf("u: %f v: %f x: %f y %f", u, v, x, y)
              if (u > 0) and (u < 1) and (v > 0) and (v < 1) then
                 wimage[{1,y,x}] = 1  -- RED
@@ -278,4 +293,89 @@ function Photo:draw_wireframe()
     end
   end
   return wimage
+end
+
+function Photo:file(scale, ps, filetype)
+  local f = string.format('%s-%s-%s-s%s-', 
+    paths.basename(self.sweep.scan.model_file), paths.basename(self.sweep.scan.pose_file), self.name, scale)
+    
+  if ps then f = f .."-grid".. ps end  
+  return f..filetype..'.t7'
+end
+
+function Photo:depth_map_file(scale, ps)
+  return self:file(scale, ps, 'depth')
+end
+
+function Photo:build_depth_map(scale, packetsize)  
+  local target    = self.sweep.scan:get_model_data()
+  local tree      = self.sweep.scan:get_bihtree()
+
+  local dirs      = self:get_dirs(scale, packetsize)
+  local out_tree  = torch.Tensor(dirs:size(1),dirs:size(2))
+  local fid_tree  = torch.LongTensor(dirs:size(1),dirs:size(2))
+
+  sys.tic()
+  log.trace("Computing depth map for photo", self.name, 'at scale 1/'..scale)
+
+  local tot = 0
+  local totmiss = 0
+  local position = self.position
+
+  local percent_complete = 0
+  local dirs_dim1 = dirs:size(1)
+  local dirs_dim2 = dirs:size(2)
+  local total_dirs = dirs_dim1 * dirs_dim2
+
+  for ri = 1,dirs_dim1 do
+    for ci = 1,dirs_dim2 do      
+      local current_progress = math.floor(((ri-1)*dirs_dim2 + ci) / (total_dirs) * 100)
+
+      if current_progress > percent_complete then
+        percent_complete = current_progress 
+        log.trace("Computing depth map for photo", self.name, percent_complete.."%")
+      end
+
+      local ray = Ray.new(position,dirs[ri][ci])
+      local tree_d, tree_fid = bihtree.traverse(tree,target,ray) 
+
+      tot = tot + 1
+      out_tree[ri][ci] = tree_d
+      fid_tree[ri][ci] = tree_fid
+      if (tree_d == math.huge) then
+        totmiss = totmiss + 1
+      end
+    end
+  end
+
+  log.trace("Done computing depth map for photo", self.name, sys.toc())
+
+  log.trace("Interpolating for", totmiss, "missed edges out of", tot)
+  sys.tic()
+  interpolate.math_huge(out_tree)
+  log.trace("Interpolation done", sys.toc())
+
+  image.display{image={out_tree},min=0,max=10,legend=self.name}
+  
+  return out_tree
+end
+
+function Photo:get_depth_map(scale, packetsize, only_cached)
+  if not self.depth_map then
+    if packetsize and packetsize < 1 then packetsize = nil end    
+    local filepath = paths.concat(self.sweep.path, self:depth_map_file(scale, packetsize))
+    
+    if paths.filep(filepath) then
+      self.depth_map = torch.load(filepath)
+    else
+      if only_cached then
+        self.depth_map = nil
+      else
+        self.depth_map = self:build_depth_map(scale, packetsize)
+        torch.save(filepath, self.depth_map)
+      end
+    end    
+  end
+  
+  return self.depth_map
 end

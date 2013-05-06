@@ -9,6 +9,8 @@ local fs = util.fs
 local Obj = util.Obj
 local Sweep = util.Sweep
 local LensSensor = util.LensSensor
+local interest = util.intersect
+local bihtree = util.bihtree
 
 local Scan = Class()
 
@@ -54,8 +56,8 @@ function Scan:get_lens(image_data)
   if self.lens_luts[img_data_size] == nil then
     local lens_sensor = LensSensor.new(self.camera_id, image_data)
     local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
-    local spherical_lut = lens_sensor:make_projection_map("spherical")
-    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut, spherical = spherical_lut}
+    local equirectangular_lut = lens_sensor:make_projection_map("equirectangular")
+    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut, equirectangular = equirectangular_lut}
   end
 
   return self.lens_luts[img_data_size]
@@ -111,6 +113,16 @@ function Scan:flush_model_data()
   collectgarbage()
 end
 
+function Scan:get_bihtree()
+  if not self.bihtree then
+    sys.tic()
+    self.bihtree = bihtree.build(self:get_model_data())
+    log.trace('built tree in', sys.toc())
+  end
+
+  return self.bihtree
+end
+
 function Scan:set_sweeps()  
   local sweeps_dirs = fs.dirs_only(self.path, config.sweep_folder_prefix)
   if not sweeps_dirs or #sweeps_dirs == 0 then log.trace('no sweeps dirs') return end
@@ -162,11 +174,66 @@ function Scan:get_photos()
   return self.photos
 end
 
+function Scan:get_depth_maps(scale, packetsize, only_cached)
+  if not self.depth_maps then
+    photos = self:get_photos()
+    local depth_maps = {}
+    for i=1, #photos do
+      table.insert(depth_maps, photos[i]:get_depth_map(scale, packetsize, only_cached))
+    end
+    self.depth_maps = depth_maps
+  end
+  return self.depth_maps
+end
+
+function Scan:show_depth_maps(scale, packetsize, only_cached)  
+  local photos = self:get_photos()
+  for i=1, #photos do
+    local map = photos[i]:get_depth_map(scale, packetsize, only_cached)
+    if map then image.display{image={map}, min=0, max=10, legend=photos[i].name} end
+  end
+end
+
 function Scan:get_pose(idx)
   -- try to get the pose at the idx but if that pose does not exist, try each idx-1 until arriving at the first pose
   if idx == 1 then return self.poses[1] end  
   if self.poses[idx] then return self.poses[idx] end
   return self:get_pose(idx-1)  
+end
+
+-- Intentionally very slow.  Checks _all_ the faces. Returns closest
+-- intersection. Used for debugging the aggregates.
+function Scan:get_occlusions_slow(ray,debug)
+  local obj = self:get_model_data()
+  
+  local mindepth        = math.huge
+  local fid             = 0
+  local nverts_per_face = obj.n_verts_per_face
+  local face_verts      = obj.face_verts
+  local normals         = obj.face_normals
+  local ds              = obj.face_center_dists
+  -- exhausting loop through all faces
+  for fi = 1,obj.n_faces do
+    local nverts = nverts_per_face[fi]
+    local verts  = face_verts[fi]:narrow(1,1,nverts)      
+    local normal = normals[fi]
+    local d      = ds[fi]
+
+      
+    local testd = intersect.ray_polygon(ray,obj,fi,debug)
+    local bstr  = " "
+    if testd and (testd < mindepth) then
+      bstr = "*"
+      mindepth = testd
+      fid = fi
+    end
+    if debug then 
+      if not testd then testd = math.huge end
+      printf("%s[%05d] : %f", bstr,fi,testd)
+    end
+      
+  end
+  return mindepth,fid
 end
 
 -- file_path: save in a certain location or with certain file name (optional)

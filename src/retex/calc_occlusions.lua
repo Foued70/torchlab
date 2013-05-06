@@ -24,8 +24,8 @@ local params = cmd:parse(arg)
 
 -- mp scan
 --local scan = util.mp.scan(params.posefile, params.targetfile)
+--params.scale = 4
 
 -- floored scan
 local scan = util.Scan.new('/Users/judyhe/Downloads/96_spring_kitchen')
-local occlusions = retex.Occlusions.new(scan, params.scale, params.packetsize)
-occlusions:calc()
+scan:get_depth_maps(params.scale, params.packetsize)
