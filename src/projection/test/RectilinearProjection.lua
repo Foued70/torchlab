@@ -15,10 +15,19 @@ local angles = torch.Tensor({
   {pi/4,pi/4}
 })
 
-local unit_coords = rp.angles_to_coords(angles)
-p(unit_coords)
-p(rp.coords_to_angles(unit_coords))
+p("angles:")
+p(angles)
+
+local angles = angles:t():contiguous()
+
+local unit_coords = rp:angles_to_coords(angles)
+p("unit coords:")
+p(unit_coords:t())
+p("coords to angles:")
+p(rp:coords_to_angles(unit_coords):t())
 
 local pixels = rp:angles_to_pixels(angles)
-p(pixels)
-p(rp:pixels_to_angles(pixels))
+p("pixels:")
+p(pixels:t())
+p("pixels to angles:")
+p(rp:pixels_to_angles(pixels):t())
