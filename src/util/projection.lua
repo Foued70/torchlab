@@ -91,7 +91,9 @@ function make_pythagorean_map (lambda,phi,noneuclidean)
 end
 
 -- make mask for out of bounds values
-function make_mask(xmap,ymap,imgw,imgh)
+function make_mask(map,imgw,imgh)
+   local xmap = map[1]
+   local ymap = map[2]
    local mask = xmap:ge(1) + xmap:lt(imgw)  -- out of bound in xmap
    mask = mask + ymap:ge(1) + ymap:lt(imgh) -- out of bound in ymap
    -- reset mask to 0 and 1 (valid parts of mask must pass all 4
@@ -103,8 +105,10 @@ function make_mask(xmap,ymap,imgw,imgh)
 end
 
 -- convert the x and y index into a single 1D offset (y * stride + x)
-function make_index(xmap,ymap,mask,stride)
-
+function make_index(map,mask,stride)
+   local xmap = map[1]
+   local ymap = map[2]
+   
    -- CAREFUL stride is in the original raw image not in the
    -- projection which can be scaled if xmap:size() is not equal to
    -- the size original image in which we index this function will

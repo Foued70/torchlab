@@ -1,3 +1,4 @@
+local projection_util = util.projection
 local Projection = Class()
 
 function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_center_y)
@@ -62,3 +63,44 @@ function Projection:angles_to_pixels(angles, pixels)
    return pixels
 end
 
+-- 
+function Projection:angles_to_pixels_map(scale,hfov,vfov)
+   -- make map of angles
+   scale  = scale or 1
+   mapw   = self.width * scale
+   maph   = self.height * scale
+
+   hfov   = hfov or self.hfov
+   vfov   = vfov or self.vfov
+
+   half_hfov = hfov * 0.5
+   half_vfov = vfov * 0.5
+
+   lambda = torch.linspace(-half_hfov,half_hfov,mapw):resize(1,mapw):expand(maph,mapw)
+   phi    = torch.linspace(-half_vfov,half_vfov,maph):resize(1,maph):expand(mapw,maph)
+
+   angles = torch.Tensor(2,mapw,maph)
+   angles[1]:copy(lambda)
+   angles[2]:copy(phi:t())
+
+   pixels  = self:angles_to_pixels(angles)
+
+   -- +++++++
+   -- make mask for out of bounds values
+   -- +++++++ 
+   mask = projection_util.make_mask(pixels,self.width,self.height)
+   log.tracef("Masking %d/%d lookups (out of bounds)", mask:sum(),mask:nElement())
+
+   -- +++++++
+   -- convert the x and y values into a single 1D offset (y * stride + x)
+   -- +++++++
+   
+   index_map = projection_util.make_index(pixels,mask,self.width)
+   
+   return {
+      lookup_table     = index_map, -- 1D LongTensor for fast lookups
+      mask             = mask,      -- ByteTensor invalid locations marked with 1
+      height           = maph,      -- height of the output map
+      width            = mapw       -- width of the output map
+          }
+end
