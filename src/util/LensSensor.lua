@@ -129,14 +129,24 @@ function LensSensor:add_image(...)
    if self.lens_type:gmatch("opencv")() then
       -- TODO: check that we keep track of the different focal points
       -- all the way through
-      hfocal_px = self.fx
-      vfocal_px = self.fy
-      horz_norm = self.cx / self.fx
-      vert_norm = self.cy / self.fy
+      if imgw > imgh then
+         hfocal_px = self.fx
+         vfocal_px = self.fy
+         horz_norm = self.cx / self.fx
+         vert_norm = self.cy / self.fy
+         hfov = math.atan(horz_norm)
+         vfov = math.atan(vert_norm)
+      else -- image is vertical
+         hfocal_px = self.fy
+         vfocal_px = self.fx
+         horz_norm = self.cy / self.fy
+         vert_norm = self.cx / self.fx
+         hfov = math.atan(horz_norm)
+         vfov = math.atan(vert_norm)
+      end
       diag_norm = math.sqrt(cx*cx + cy*cy)
       dfov = math.atan(diag_norm)
-      hfov = math.atan(horz_norm)
-      vfov = math.atan(vert_norm)
+         
    else
       if (self.lens_type == "scaramuzza_r2t") then
          dfov = self:radial_distance_to_angle(diag_norm*self.cal_focal_px)
@@ -247,19 +257,38 @@ function LensSensor:radial_distance_to_angle(radial_normalized,debug)
    return angle
 end
 
+-- theta = f(r) functions 
+-- 
+-- take equal steps in 2 dimensions of the output map r
+-- 
 -- Based on final projection type create a quantized map of angles
 -- (dimensions mapw x maph) which need to be looked up in the original
 -- image.
 -- 
 -- Creates four tensors:
 -- 
---    self.lambda
---    sel.phi
---    self.theta_map
---    self.output_map
+--    self.lambda      : angles row
+--    sel.phi          : angles col
+--    self.theta_map   : 2D map of diagonal distances in angles
+--    self.output_map  : 2D map of diagonals in output space
 -- 
--- TODO: add other projection types
-function LensSensor:projection_to_equirectangular_map(proj_type,maph,mapw)
+function LensSensor:output_to_equirectangular_map(proj_type,maph,mapw)
+
+   -- TODO: add other projection types
+   -- TODO this should be broken out into separate classes as Dustin
+   -- is doing.  Totally see it now.
+   --    if (self.lens_type == "rectilinear") then
+   --       -- rectilinear : (1/f) * r' = tan(theta)
+   --       r_map:tan()
+   --    elseif (self.lens_type == "stereographic") then
+   --       --  + stereographic             : r = 2 * f * tan(theta/2)
+   --       r_map:mul(0.5):tan():mul(2)
+   --    elseif (self.lens_type == "orthographic") then
+   --       --  + orthographic              : r = f * sin(theta)
+   --       r_map:sin()
+   --    elseif (self.lens_type == "equisolid") then
+   --       --  + equisolid                 : r = 2 * f * sin(theta/2)
+   --       r_map:mul(0.5):sin():mul(2)
       
    local lambda, phi, output_map, theta_map
    local fov, vfov, hfov, drange, hrange, vrange
@@ -298,31 +327,18 @@ function LensSensor:projection_to_equirectangular_map(proj_type,maph,mapw)
 
 end
 
+-- r = f(theta) functions
 -- Note: a calibrated camera is a type of projection
-function LensSensor:equirectangular_map_to_projection()
+function LensSensor:equirectangular_map_to_input()
    if not self.theta_map then 
-      error("call projection_to_equirectangular_map first")
+      error("call output_to_equirectangular_map first")
    end
 
    local r_map = self.theta_map:clone() -- copy
 
-   -- TODO this should be broken out into separate classes as Dustin
-   -- is doing.  Totally see it now.
-   if (self.lens_type == "rectilinear") then
-      -- rectilinear : (1/f) * r' = tan(theta)
-      r_map:tan()
-   elseif (self.lens_type == "thoby") then
+   if (self.lens_type == "thoby") then
       -- thoby       : (1/f) * r' = k1 * sin(k2*theta)
       r_map:mul(k2):sin():mul(k1)
-   elseif (self.lens_type == "stereographic") then
-      --  + stereographic             : r = 2 * f * tan(theta/2)
-      r_map:mul(0.5):tan():mul(2)
-   elseif (self.lens_type == "orthographic") then
-      --  + orthographic              : r = f * sin(theta)
-      r_map:sin()
-   elseif (self.lens_type == "equisolid") then
-      --  + equisolid                 : r = 2 * f * sin(theta/2)
-      r_map:mul(0.5):sin():mul(2)
    elseif (self.lens_type == "scaramuzza") then
       local theta     = self.theta_map:clone()
       -- we use a positive angle from optical center, but scaramuzza
@@ -406,27 +422,46 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    local maph = math.floor(mapw / aspect_ratio)
 
 
-   local xmap, ymap
+   -- +++++
+   -- (1) create map of diagonal angles from optical center, this is
+   --     the output projection. 
+   -- +++++
+   
+   self:output_to_equirectangular_map(proj_type,maph,mapw)
+
+   -- +++++
+   -- (2) create map from equirectangular to the input pixels
+   -- +++++
+
+   local map, xmap, ymap
       
+   -- +++++
+   -- (2) create 2D map of x and y indices into the original image for
+   --     each location in the output image.
+   -- +++++
+   map  = torch.Tensor(2,maph,mapw)
+   map[1]:copy(self.lambda:reshape(1,mapw):expand(maph,mapw))
+   map[2]:copy(self.phi:repeatTensor(mapw,1):t())
+      
+   xmap = map[1]
+   ymap = map[2]
+   
    
    if self.lens_type:gmatch("opencv")() then
-      -- opencv calibration operates on x and y directly (as these are
-      -- all rectilinear projections).
 
-      local lambda     = torch.linspace(-self.hfov,self.hfov,mapw)
-      local phi        = torch.linspace(-self.vfov,self.vfov,maph)
-      
-      -- opencv assumes an image plane
-      -- lambda:tan()
-      -- phi:tan()
+      -- opencv produces the perfect rectilinear projection so map the
+      -- equirectangular lookup table to rectilinear before further
+      -- processing.
+      -- self.lambda:tan()
+      -- self.phi:tan()
 
-      local theta_map = projection.make_pythagorean_map(lambda,phi)
+      -- recompute the theta's
+      -- self.theta_map = projection.make_pythagorean_map(self.lambda,self.phi)
 
-      xmap = lambda:repeatTensor(maph,1)
-      ymap = phi:repeatTensor(mapw,1):t():contiguous()
-      
+      -- opencv uses x and y terms explicitly as well as the diagonal
+   
       -- r in opencv equations is 
-      local theta_sqr = theta_map:clone():cmul(theta_map)
+      local theta_sqr = self.theta_map:clone():cmul(self.theta_map)
 
       local temp = theta_sqr:clone()
       
@@ -460,6 +495,7 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
       temp:mul(2):add(theta_sqr):mul(self.tangential_coeff[1])
       xmap:add(temp)
 
+
       temp = nil
       radial_distortion = nil
       theta_sqr = nil
@@ -468,25 +504,13 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    else
       -- most projections express the distortion along the diagonal
 
-      -- +++++
-      -- (1) create map of diagonal angles from optical center
-      -- +++++
-      
-      self:projection_to_equirectangular_map(proj_type,maph,mapw)
-      
-      -- +++++
-      -- (2) create 2D map of x and y indices into the original image for
-      --     each location in the output image.
-      -- +++++
-      xmap = self.lambda:repeatTensor(maph,1)
-      ymap = self.phi:repeatTensor(mapw,1):t():contiguous()
 
       -- +++++ 
       -- (3) transform xmap and ymap to lookups through camera distortion
       -- +++++
 
       -- (3.1) replace theta (diagonal angle) for each entry in map with r 
-      local r_map = self:equirectangular_map_to_projection()
+      local r_map = self:equirectangular_map_to_input()
       
       -- (3.2) make the ratio (new divided by old) by which we scale the
       --       pixel offsets (in normalized coordinates) in the output
@@ -509,15 +533,14 @@ function LensSensor:make_projection_map (proj_type,scale,debug)
    -- +++++++
    -- (5) make mask for out of bounds values
    -- +++++++ 
-   local mask = projection.make_mask(xmap,ymap,imgw,imgh)
-   log.tracef("Masking %d/%d lookups (out of bounds)", 
-              mask:sum(),mask:nElement())
+   local mask = projection.make_mask(map,imgw,imgh)
+   log.tracef("Masking %d/%d lookups (out of bounds)", mask:sum(),mask:nElement())
 
    -- +++++++
    -- (6) convert the x and y index into a single 1D offset (y * stride + x)
    --     Note: stride is the final dimension of the original image.
    -- +++++++
-   local index_map = projection.make_index(xmap,ymap,mask,imgw)
+   local index_map = projection.make_index(map,mask,imgw)
 
    -- +++++++
    -- (7) output map object

@@ -8,12 +8,10 @@ local projection = util.projection
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text()
-cmd:text('Compute depth maps')
+cmd:text('Compute image projections')
 cmd:text()
 cmd:text('Options')
-cmd:option('-imagesdir',
-           'images/',
-           'directory with the images to load')
+cmd:option('-imagesdir', 'images/', 'directory with the images to load')
 cmd:option('-lenstype', 'sigma_10_20mm', 'lenstype as collected in lens_sensor_types eg. nikon_10p5mm_r2t_full')
 cmd:text()
 
@@ -82,13 +80,14 @@ for i = 1,#images do
    collectgarbage()
    printf(" + (collect garbage) : %2.4fs",sys.toc())
    
-   rimg_scale = image.scale(routput_image,
-                            routput_image:size(3)*0.2,
-                            routput_image:size(2)*0.2)
+   display_h = img:size(2)*0.2
+   display_w = img:size(3)*0.2
+            
+   img_scale  = image.scale(img,display_w,display_h)
+
+   rimg_scale = image.scale(routput_image,display_w,display_h)
    
-   simg_scale = image.scale(soutput_image,
-                            soutput_image:size(3)*0.2,
-                            soutput_image:size(2)*0.2)
+   simg_scale = image.scale(soutput_image,display_w,display_h)
    
-   image.display{image={rimg_scale,simg_scale}}
+   image.display{image={img_scale,rimg_scale,simg_scale}}
 end
