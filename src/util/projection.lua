@@ -4,14 +4,15 @@ Class()
 -- image is 3 x map dims
 -- now map is 1D (this is faster)
 function remap(img, map)
-   local out    = torch.Tensor()
-   local lookup = map.lookup_table
-   local mask   = map.mask
-   local nelem  = lookup:nElement()
-   -- fast 1D remap
+   local out     = torch.Tensor()
+   local lookup  = map.lookup_table
+   local mask    = map.mask
+   local nelem   = lookup:nElement()
+   local outsize = lookup:size()
+   -- indexing has to be 1D TODO: allow multi dimensional index
    if (lookup:nDimension() ~= 1) then
-      log.error("map should be 1D Tensor")
-      return nil
+      lookup = lookup:reshape(lookup:nElement())
+      mask   = mask:reshape(mask:nElement())
    end
 
    local ndim     = img:nDimension()
@@ -19,31 +20,25 @@ function remap(img, map)
    if (ndim == 2) then
       -- single channel 2D
 
-      local imgh = img:size(1)
-      local imgw = img:size(2)
-
-      img:resize(imgh * imgw)
-      out = img[lookup] -- uses new indexing feature
+      out = img:reshape(img:nElement())[lookup]
       out[mask] = 0  -- erase out of bounds
 
-      img:resize(imgh,imgw)
-      out:resize(map.height,map.width)
+      out:resize(outsize)
 
    elseif (ndim == 3) then
       -- n channel (RGB) (n x h x w)
-      log.tracef("output image size: %d x %d", img:size(1), nelem)
       out:resize(img:size(1),nelem)
 
       for d = 1,img:size(1) do -- loop through channels
          local imgd = img[d]
-         imgd:resize(imgd:size(1)*imgd:size(2))
+         imgd:resize(imgd:nElement())
 
-         out[d] = imgd[lookup]
+         out[d]       = imgd[lookup]
          out[d][mask] = 0
 
       end
       -- make output 3 x H x W
-      out:resize(img:size(1),map.height,map.width)
+      out:resize(img:size(1),outsize[1],outsize[2])
    end
    return out
 end
@@ -94,8 +89,8 @@ end
 function make_mask(map,imgw,imgh)
    local xmap = map[1]
    local ymap = map[2]
-   local mask = xmap:ge(1) + xmap:lt(imgw)  -- out of bound in xmap
-   mask = mask + ymap:ge(1) + ymap:lt(imgh) -- out of bound in ymap
+   local mask = xmap:ge(1) + xmap:le(imgw)  -- out of bound in xmap
+   mask = mask + ymap:ge(1) + ymap:le(imgh) -- out of bound in ymap
    -- reset mask to 0 and 1 (valid parts of mask must pass all 4
    -- tests).  We need the mask to reset bad pixels so the 1s are the
    -- out of bound pixels we want to replace
@@ -133,9 +128,6 @@ function make_index(map,mask,stride)
    end
 
    local index_map = outmap:long() -- round (+0.5 above) and floor
-
-   -- make 1D
-   index_map:resize(index_map:nElement())
 
    return index_map
 end

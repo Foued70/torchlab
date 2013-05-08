@@ -63,7 +63,6 @@ function Projection:angles_to_pixels(angles, pixels)
    return pixels
 end
 
--- 
 function Projection:angles_map(scale,hfov,vfov)
    -- make map of angles
    scale  = scale or 1
@@ -79,20 +78,34 @@ function Projection:angles_map(scale,hfov,vfov)
    lambda = torch.linspace(-half_hfov,half_hfov,mapw):resize(1,mapw):expand(maph,mapw)
    phi    = torch.linspace(-half_vfov,half_vfov,maph):resize(1,maph):expand(mapw,maph)
 
-   angles = torch.Tensor(2,mapw,maph)
+   angles = torch.Tensor(2,maph,mapw)
    angles[1]:copy(lambda)
    angles[2]:copy(phi:t())
    return angles
 end
 
-function Projection:angles_to_pixels_map(scale,hfov,vfov)
+function Projection:pixels_map(scale)
+   -- make map of angles
+   scale  = scale or 1
+
+   mapw   = self.width * scale
+   maph   = self.height * scale
+
+
+   x = torch.linspace(1,mapw,mapw):resize(1,mapw):expand(maph,mapw)
+   y = torch.linspace(1,maph,maph):resize(1,maph):expand(mapw,maph)
+
+   pixels = torch.Tensor(2,mapw,maph)
+   pixels[1]:copy(x)
+   pixels[2]:copy(y:t())
+   return pixels
+end
+
+function Projection:angles_map_to_pixels(scale,hfov,vfov)
    return self:angles_to_pixels(self:angles_map(scale,hfov,vfov))
 end
 
-function Projection:angles_to_pixels_lookup_map(scale,hfov,vfov)
-
-   pixels = self:angles_to_pixels_map(scale,hfov,vfov)
-
+function Projection:pixels_to_lookup(pixels)
    -- +++++++
    -- make mask for out of bounds values
    -- +++++++ 
@@ -106,9 +119,30 @@ function Projection:angles_to_pixels_lookup_map(scale,hfov,vfov)
    index_map = projection_util.make_index(pixels,mask,self.width)
    
    return {
-      lookup_table     = index_map, -- 1D LongTensor for fast lookups
-      mask             = mask,      -- ByteTensor invalid locations marked with 1
-      height           = maph,      -- height of the output map
-      width            = mapw       -- width of the output map
+      lookup_table = index_map, -- LongTensor for fast lookups
+      mask         = mask,      -- ByteTensor invalid locations marked with 1
+      stride       = self.width -- stride (width) of input image
           }
+end
+
+function Projection:angles_map_to_lookup(scale,hfov,vfov)
+
+   return self:pixels_to_lookup(self:angles_map_to_pixels(scale,hfov,vfov))
+
+end
+
+function Projection:lookup_to_pixels(map)
+   index_map = map.lookup_table
+   stride    = map.stride
+
+   pixels = torch.Tensor(2,index_map:size(1),index_map:size(2))
+   xmap = pixels[1]
+   ymap = pixels[2]
+
+   xmap:copy(index_map):apply(function (x) return math.mod(x,stride) end)
+   xmap[xmap:eq(0)] = stride
+   ymap:copy(index_map):mul(1/stride):ceil()
+
+return pixels
+
 end

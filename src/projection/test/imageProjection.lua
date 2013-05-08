@@ -45,18 +45,19 @@ img = image.load(images[1])
 local width = img:size(3)
 local height = img:size(2)
 
-local hfov = (97/180) * pi 
-local vfov = (74/180) * pi
+-- images are vertical
+local vfov = (97/180) * pi 
+local hfov = (74/180) * pi
  
-local rp = projection.RectilinearProjection.new(width,height,hfov,vfov)
+proj = projection.RectilinearProjection.new(width,height,hfov,vfov)
 
 local scale  = 1/5
 
 p("Testing Image Projection")
 
 sys.tic()
-map  = rp:angles_to_pixels_lookup_map(scale)
-local perElement = map.width * map.height
+map  = proj:angles_map_to_lookup(scale)
+local perElement = map.lookup_table:nElement()
 
 time = sys.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
