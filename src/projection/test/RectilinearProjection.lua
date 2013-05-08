@@ -1,33 +1,48 @@
 local pi = math.pi
+local pi2 = pi * 0.5
 
-local rp = projection.RectilinearProjection.new(800,600, pi/2)
+local width = 4000
+local height = 3000
 
-local angles = torch.Tensor({
-  {0,0},
-  {0,pi/2},
-  {0,pi/4},
-  {0,-pi/2},
-  {0,-pi/4},
-  {pi/2,0},
-  {pi/4,0},
-  {-pi/2,0},
-  {-pi/4,0},
-  {pi/4,pi/4}
-})
+local hfov = pi2
+local vfov = pi2 * height / width
+ 
+local rp = projection.RectilinearProjection.new(width,height, hfov,vfov)
 
-p("angles:")
-p(angles)
+local lambda = torch.linspace(-hfov,hfov,width):resize(1,width):expand(height,width)
+local phi    = torch.linspace(-vfov,vfov,height):resize(1,height):expand(width,height)
 
-local angles = angles:t():contiguous()
+local angles = torch.Tensor(2,height,width)
+angles[1]:copy(phi:t())
+angles[2]:copy(lambda)
 
+local perElement = 1/angles[1]:nElement()
+
+p("Testing Rectilinear projection")
+sys.tic()
 local unit_coords = rp:angles_to_coords(angles)
-p("unit coords:")
-p(unit_coords:t())
-p("coords to angles:")
-p(rp:coords_to_angles(unit_coords):t())
+time = sys.toc()
+printf(" - angles to coords %2.4fs, %2.4es per px", time, time*perElement)
+sys.tic()
+local unit_angles = rp:coords_to_angles(unit_coords)
+time = sys.toc()
+printf(" - coords to angles %2.4fs, %2.4es per px", time, time*perElement)
 
+local err = unit_angles - angles
+err:abs()
+printf(" - unit -> angle error (> 1e-15) : %d/%d , mean: %f", err:gt(1e-15):sum(), err[1]:nElement(), err:mean())
+
+sys.tic()
 local pixels = rp:angles_to_pixels(angles)
-p("pixels:")
-p(pixels:t())
-p("pixels to angles:")
-p(rp:pixels_to_angles(pixels):t())
+time = sys.toc()
+printf(" - angles to pixels %2.4fs %2.4es per px", time, time*perElement)
+sys.tic()
+local pixels_angles = rp:pixels_to_angles(pixels)
+time = sys.toc()
+printf(" - pixels to angles %2.4fs, %2.4es per px", time, time*perElement)
+
+local err = pixels_angles - angles
+err:abs()
+printf(" - pixels -> angle error (> 1e-15) : %d/%d , mean: %f", err:gt(1e-15):sum(), err[1]:nElement(), err:mean())
+
+
