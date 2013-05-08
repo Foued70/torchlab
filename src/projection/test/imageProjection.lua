@@ -50,13 +50,12 @@ local vfov = (74/180) * pi
  
 local rp = projection.RectilinearProjection.new(width,height,hfov,vfov)
 
--- make map of angles
-local scale  = 1/4
+local scale  = 1/5
 
 p("Testing Image Projection")
 
 sys.tic()
-map  = rp:angles_to_pixels_map(scale)
+map  = rp:angles_to_pixels_lookup_map(scale)
 local perElement = map.width * map.height
 
 time = sys.toc()

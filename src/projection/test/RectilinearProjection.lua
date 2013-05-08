@@ -9,12 +9,7 @@ local vfov = pi2 * height / width
  
 local rp = projection.RectilinearProjection.new(width,height, hfov,vfov)
 
-local lambda = torch.linspace(-hfov,hfov,width):resize(1,width):expand(height,width)
-local phi    = torch.linspace(-vfov,vfov,height):resize(1,height):expand(width,height)
-
-local angles = torch.Tensor(2,height,width)
-angles[1]:copy(phi:t())
-angles[2]:copy(lambda)
+local angles = rp:angles_map()
 
 local perElement = 1/angles[1]:nElement()
 

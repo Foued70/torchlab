@@ -64,7 +64,7 @@ function Projection:angles_to_pixels(angles, pixels)
 end
 
 -- 
-function Projection:angles_to_pixels_map(scale,hfov,vfov)
+function Projection:angles_map(scale,hfov,vfov)
    -- make map of angles
    scale  = scale or 1
    mapw   = self.width * scale
@@ -82,8 +82,16 @@ function Projection:angles_to_pixels_map(scale,hfov,vfov)
    angles = torch.Tensor(2,mapw,maph)
    angles[1]:copy(lambda)
    angles[2]:copy(phi:t())
+   return angles
+end
 
-   pixels  = self:angles_to_pixels(angles)
+function Projection:angles_to_pixels_map(scale,hfov,vfov)
+   return self:angles_to_pixels(self:angles_map(scale,hfov,vfov))
+end
+
+function Projection:angles_to_pixels_lookup_map(scale,hfov,vfov)
+
+   pixels = self:angles_to_pixels_map(scale,hfov,vfov)
 
    -- +++++++
    -- make mask for out of bounds values
