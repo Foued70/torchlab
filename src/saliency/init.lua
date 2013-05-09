@@ -32,6 +32,9 @@ function saliency.high_entropy_features (...)
    )
 
    local t = torch.Timer()
+   if img:dim() == 2 then 
+      img = img:reshape(1,img:size(1),img:size(2))
+   end
    local w  = img:size(3)
    local h  = img:size(2)
    local ii = torch.Tensor(img:size(1),h,w,nbins)
