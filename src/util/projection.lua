@@ -3,16 +3,18 @@ Class()
 
 -- image is 3 x map dims
 -- now map is 1D (this is faster)
-function remap(img, map)
+function remap(img, index1D_and_mask)
    local out     = torch.Tensor()
-   local lookup  = map.lookup_table
-   local mask    = map.mask
-   local nelem   = lookup:nElement()
-   local outsize = lookup:size()
-   -- indexing has to be 1D TODO: allow multi dimensional index
-   if (lookup:nDimension() ~= 1) then
-      lookup = lookup:reshape(lookup:nElement())
-      mask   = mask:reshape(mask:nElement())
+   local index1D = index1D_and_mask.index1D
+   local mask    = index1D_and_mask.mask
+   local nelem   = index1D:nElement()
+   local outsize = index1D:size()
+
+   -- indexing has to be 1D, reshape only changes size locally
+   -- TODO: allow multi dimensional index, in low level torch code
+   if (index1D:nDimension() ~= 1) then
+      index1D = index1D:reshape(index1D:nElement())
+      mask    = mask:reshape(mask:nElement())
    end
 
    local ndim     = img:nDimension()
@@ -20,7 +22,7 @@ function remap(img, map)
    if (ndim == 2) then
       -- single channel 2D
 
-      out = img:reshape(img:nElement())[lookup]
+      out = img:reshape(img:nElement())[index1D]
       out[mask] = 0  -- erase out of bounds
 
       out:resize(outsize)
@@ -33,7 +35,7 @@ function remap(img, map)
          local imgd = img[d]
          imgd:resize(imgd:nElement())
 
-         out[d]       = imgd[lookup]
+         out[d]       = imgd[index1D]
          out[d][mask] = 0
 
       end

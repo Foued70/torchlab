@@ -49,15 +49,18 @@ local height = img:size(2)
 local vfov = (97/180) * pi 
 local hfov = (74/180) * pi
  
-proj = projection.RectilinearProjection.new(width,height,hfov,vfov)
+proj_from = projection.RectilinearProjection.new(width,height,hfov,vfov)
+proj_to   = projection.SphericalProjection.new(width,height,hfov,vfov)
 
 local scale  = 1/5
 
 p("Testing Image Projection")
 
 sys.tic()
-map  = proj:angles_map_to_lookup(scale)
-local perElement = map.lookup_table:nElement()
+angle_map      = proj_to:angles_map(scale)
+index_and_mask = proj_from:angles_to_index1D_and_mask(angle_map)
+
+local perElement = index_and_mask.index1D:nElement()
 
 time = sys.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
@@ -65,7 +68,7 @@ sys.tic()
 
 for i = 1,#images do 
    img = image.load(images[i])
-   img_out = projection_util.remap(img,map)
+   img_out = projection_util.remap(img,index_and_mask)
    time = sys.toc()
    printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
    sys.tic()

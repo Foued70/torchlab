@@ -12,12 +12,13 @@ function RectilinearProjection:__init(width, height,
   -- How to get to normalized coordinates
   self.units_per_pixel_x = math.tan(self.hfov*0.5)/self.center[1]
   self.units_per_pixel_y = math.tan(self.vfov*0.5)/self.center[2]
+
 end
 
 
 -- coords - coords in normalized coordinates, 0,0 center
 -- angles (optional) - azimuth, elevation from 0,0 center of projection
-function RectilinearProjection:coords_to_angles(coords, angles)
+function coords_to_angles(coords, angles)
   angles = angles or torch.Tensor(coords:size())
 
   local azimuth = torch.atan(coords[1])
@@ -30,7 +31,7 @@ end
 
 -- angles - azimuth, elevation from 0,0 center of projection
 -- coords (optional) - coords in normalized coordinates
-function RectilinearProjection:angles_to_coords(angles, coords)
+function angles_to_coords(angles, coords)
    coords = coords or torch.Tensor(angles:size())
 
   local azimuth   = angles[1]

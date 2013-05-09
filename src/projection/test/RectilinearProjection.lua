@@ -15,11 +15,11 @@ local perElement = 1/angles[1]:nElement()
 
 p("Testing Rectilinear projection")
 sys.tic()
-local unit_coords = rp:angles_to_coords(angles)
+local unit_coords = rp.angles_to_coords(angles)
 time = sys.toc()
 printf(" - angles to coords %2.4fs, %2.4es per px", time, time*perElement)
 sys.tic()
-local unit_angles = rp:coords_to_angles(unit_coords)
+local unit_angles = rp.coords_to_angles(unit_coords)
 time = sys.toc()
 printf(" - coords to angles %2.4fs, %2.4es per px", time, time*perElement)
 
