@@ -66,6 +66,7 @@ function Projection:angles_to_pixels(angles, pixels)
 end
 
 -- grid of pixels equally spaced
+-- TODO allow offsets so that the map is not always from 1,width and 1,height
 function Projection:pixels_map(scale)
    -- make map of angles
    scale  = scale or 1
@@ -73,16 +74,17 @@ function Projection:pixels_map(scale)
    local mapw   = self.width * scale
    local maph   = self.height * scale
 
-   local x = torch.linspace(1,mapw,mapw):resize(1,mapw):expand(maph,mapw)
-   local y = torch.linspace(1,maph,maph):resize(1,maph):expand(mapw,maph)
+   local x = torch.linspace(1,self.width,mapw):resize(1,mapw):expand(maph,mapw)
+   local y = torch.linspace(1,self.height,maph):resize(1,maph):expand(mapw,maph)
 
-   local pixels = torch.Tensor(2,mapw,maph)
+   local pixels = torch.Tensor(2,maph,mapw)
    pixels[1]:copy(x)
    pixels[2]:copy(y:t())
    return pixels
 end
 
 -- grid of angles to equally spaced pixels
+-- TODO allow offsets so that the map is not always from 1,width and 1,height
 function Projection:angles_map(scale)
    return self:pixels_to_angles(self:pixels_map(scale))
 end

@@ -68,17 +68,19 @@ proj_from  = projection.CalibratedProjection.new(width,height,
                                                  lens.tangential_coeff
                                                 )
 
-proj_to   = projection.SphericalProjection.new(width,height,proj_from.hfov,proj_from.vfov)
+proj_to_sphere   = projection.SphericalProjection.new(width,height,proj_from.hfov,proj_from.vfov)
+proj_to_rect     = projection.RectilinearProjection.new(width,height,proj_from.hfov,proj_from.vfov)
 
 local scale  = 1/5
 
 p("Testing Calibrated Image Projection")
 
 sys.tic()
-angle_map      = proj_to:angles_map(scale)
-index_and_mask = proj_from:angles_to_index1D_and_mask(angle_map)
-
-local perElement = index_and_mask.index1D:nElement()
+sphere_map     = proj_to_sphere:angles_map(scale)
+rect_map       = proj_to_rect:angles_map(scale)
+sphere_index_and_mask = proj_from:angles_to_index1D_and_mask(sphere_map)
+rect_index_and_mask   = proj_from:angles_to_index1D_and_mask(rect_map)
+local perElement = sphere_index_and_mask.index1D:nElement()
 
 time = sys.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
@@ -86,12 +88,13 @@ sys.tic()
 
 for i = 1,#images do 
    img = image.load(images[i])
-   img_out = projection_util.remap(img,index_and_mask)
+   simg_out = projection_util.remap(img,sphere_index_and_mask)
+   rimg_out = projection_util.remap(img,rect_index_and_mask)
    time = sys.toc()
    printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
    sys.tic()
 
-   img_scale = img_out:clone()
+   img_scale = simg_out:clone()
    image.scale(img,img_scale)
-   image.display{image={img_scale,img_out}}
+   image.display{image={img_scale,rimg_out,simg_out}}
 end

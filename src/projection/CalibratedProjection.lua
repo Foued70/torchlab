@@ -9,7 +9,7 @@ function CalibratedProjection:__init(width, height,
    __super__.__init(self,
                     width, height,
                     nil, nil,
-                    pixel_center_x, pixel_center_y)
+                    pixel_center_x+1, pixel_center_y+1)
 
 
    -- How to get to normalized coordinates
@@ -17,8 +17,8 @@ function CalibratedProjection:__init(width, height,
    self.units_per_pixel_y = 1/fy
 
    -- Need to compute fov  from the "intrinsic parameters" we get from opencv
-   self.hfov = 2 * math.atan2(pixel_center_x,fx)
-   self.vfov = 2 * math.atan2(pixel_center_y,fy)
+   self.hfov = 2 * math.atan2(self.center[1],fx)
+   self.vfov = 2 * math.atan2(self.center[2],fy)
 
    self.radial_coeff     = radial_coeff
    self.tangential_coeff = tangential_coeff
@@ -52,12 +52,12 @@ function CalibratedProjection:angles_to_coords(angles, coords)
    coords[1] = torch.tan(azimuth)
    coords[2] = torch.tan(elevation):cdiv(torch.cos(azimuth))
 
-   local xpp = coords[1]
-   local ypp = coords[2]
-
-
-   local xp = angles[1]
-   local yp = angles[2]
+   -- then we apply the opencv distortion from perfect rectilinear to
+   -- actual image plane rectilinear.
+   local xp = coords[1]
+   local yp = coords[2]
+   
+   local xpyp = torch.cmul(xp,yp)
 
    local xp_sqr = torch.cmul(xp,xp)
    local yp_sqr = torch.cmul(yp,yp)
@@ -69,14 +69,20 @@ function CalibratedProjection:angles_to_coords(angles, coords)
 
    local radial_distortion = torch.ones(r_sqr:size())
 
+   -- don't use these variable names anymore
+   xp = nil 
+   yp = nil
+
+   local xpp = coords[1]
+   local ypp = coords[2]
+
    for ri = 1,self.radial_coeff:size(1)-1 do
       radial_distortion:add(r_pow * self.radial_coeff[ri])
       r_pow:cmul(r_sqr)
    end
    radial_distortion:add(r_pow * self.radial_coeff[-1])
 
-   local xpyp = torch.cmul(xp,yp)
-
+   
 
    -- x'( 1 + k1*r^2 + k2*r^4 + k3*r^6)
    xpp:cmul(radial_distortion)
@@ -92,7 +98,7 @@ function CalibratedProjection:angles_to_coords(angles, coords)
    ypp:add(xpyp * ( 2 * self.tangential_coeff[2]))
    -- + p1 * (r^2 + 2*y'^2)
    yp_sqr:mul(2):add(r_sqr):mul(self.tangential_coeff[1])
-   xpp:add(yp_sqr)
+   ypp:add(yp_sqr)
 
    -- getting out of memory errors so make sure the locals are collected
    r_pow = nil
