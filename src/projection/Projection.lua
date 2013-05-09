@@ -4,7 +4,7 @@ local Projection = Class()
 function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_center_y)
    self.width = width or 100
    self.height = height or 100
-   
+
    -- in radians
    self.hfov = hfov or 1
    self.vfov = vfov or 1
@@ -15,13 +15,20 @@ function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_cent
    self.center = {pixel_center_x, pixel_center_y}
 
    -- every projection must implement these
-   self.units_per_pixel_x = nil 
-   self.units_per_pixel_y = nil 
+   self.units_per_pixel_x = nil
+   self.units_per_pixel_y = nil
 
-   -- every projection must also implement the low level functions
-   -- self.coords_to_angles(coords, angles)
-   -- self.angles_to_coords(angles, coords)
+end
 
+-- every projection must implement these low level functions.  they
+-- are instance functions because some projections (such as the
+-- calibrated ones) need access to instance variables
+function Projection:coords_to_angles(coords, angles)
+   error("Not implemented")
+end
+
+function Projection:angles_to_coords(angles, coords)
+   error("Not implemented")
 end
 
 -- pixels - pixels from 0,0 in the upper left to width,height in the lower right
@@ -37,7 +44,7 @@ function Projection:pixels_to_angles(pixels, angles)
    coords[2]:add(-self.center[2]):mul(self.units_per_pixel_y)
 
    -- convert unit sphere projection coords to angles
-   self.coords_to_angles(coords,angles)
+   self:coords_to_angles(coords,angles)
 
    return angles
 end
@@ -48,7 +55,7 @@ end
 function Projection:angles_to_pixels(angles, pixels)
    pixels = pixels or torch.Tensor(angles:size())
 
-   self.angles_to_coords(angles, pixels)
+   self:angles_to_coords(angles, pixels)
 
    -- convert from unit sphere coords to pixels
    -- move 0,0 to the upper left corner
@@ -66,7 +73,6 @@ function Projection:pixels_map(scale)
    local mapw   = self.width * scale
    local maph   = self.height * scale
 
-
    local x = torch.linspace(1,mapw,mapw):resize(1,mapw):expand(maph,mapw)
    local y = torch.linspace(1,maph,maph):resize(1,maph):expand(mapw,maph)
 
@@ -81,7 +87,7 @@ function Projection:angles_map(scale)
    return self:pixels_to_angles(self:pixels_map(scale))
 end
 
--- 
+--
 function Projection:pixels_to_index1D_and_mask(pixels)
    -- make mask for out of bounds values
    local mask = projection_util.make_mask(pixels,self.width,self.height)
@@ -89,7 +95,7 @@ function Projection:pixels_to_index1D_and_mask(pixels)
 
    -- convert the x and y values into a single 1D offset (y * stride + x)
    local index1D = projection_util.make_index(pixels,mask,self.width)
-   
+
    return {
       index1D      = index1D,   -- LongTensor for fast lookups
       mask         = mask,      -- ByteTensor invalid locations marked with 1
@@ -113,6 +119,6 @@ function Projection:index1D_and_mask_to_pixels(map)
    xmap[xmap:eq(0)] = stride
    ymap:copy(index1D):mul(1/stride):ceil()
 
-return pixels
+   return pixels
 
 end
