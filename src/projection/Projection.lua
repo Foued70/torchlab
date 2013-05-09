@@ -9,17 +9,11 @@ function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_cent
    self.hfov = hfov or 1
    self.vfov = vfov or 1
 
-   if not pixel_center_x then 
-      pixel_center_x = self.width/2
-   end
-
-   if not pixel_center_y then 
-      pixel_center_y = self.height/2
-   end
+   pixel_center_x = pixel_center_x or self.width/2
+   pixel_center_y = pixel_center_y or self.height/2
 
    self.center = {pixel_center_x, pixel_center_y}
 
-   -- default to equirectangular (where units = radians)
    self.units_per_pixel_x = self.hfov/self.width
    self.units_per_pixel_y = self.vfov/self.height
 
