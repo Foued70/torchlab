@@ -6,19 +6,20 @@ function CalibratedProjection:__init(width, height,
                                      pixel_center_x, pixel_center_y,
                                      radial_coeff, tangential_coeff)
 
+   -- some careful work arounds to reuse the Projection class
    __super__.__init(self,
                     width, height,
                     nil, nil,
                     pixel_center_x+1, pixel_center_y+1)
 
+   -- Need to compute fov  from the "intrinsic parameters" we get from opencv
+   self.hfov = 2 * math.atan2(self.center[1],fx)
+   self.vfov = 2 * math.atan2(self.center[2],fy)
 
    -- How to get to normalized coordinates
    self.units_per_pixel_x = 1/fx
    self.units_per_pixel_y = 1/fy
 
-   -- Need to compute fov  from the "intrinsic parameters" we get from opencv
-   self.hfov = 2 * math.atan2(self.center[1],fx)
-   self.vfov = 2 * math.atan2(self.center[2],fy)
 
    self.radial_coeff     = radial_coeff
    self.tangential_coeff = tangential_coeff

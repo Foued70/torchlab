@@ -15,21 +15,26 @@ function SphericalProjection:__init(width, height,
 end
 
 -- override the angles_map
-function SphericalProjection:angles_map(scale,hfov,vfov)
+function SphericalProjection:angles_map(scale,hfov,vfov, hoffset, voffset)
    --   make map of angles
    scale  = scale or 1
    
-   local mapw   = self.width * scale
-   local maph   = self.height * scale
-   
    hfov   = hfov or self.hfov
    vfov   = vfov or self.vfov
-   
+
+   hoffset = hoffset or 0
+   voffset = voffset or 0
+
+   print(hoffset,voffset)
+
+   local mapw   = self.width * scale
+   local maph   = self.height * scale
+      
    local half_hfov = hfov * 0.5
    local half_vfov = vfov * 0.5
    
-   local lambda = torch.linspace(-half_hfov,half_hfov,mapw):resize(1,mapw):expand(maph,mapw)
-   local phi    = torch.linspace(-half_vfov,half_vfov,maph):resize(1,maph):expand(mapw,maph)
+   local lambda = torch.linspace(hoffset-half_hfov,hoffset+half_hfov,mapw):resize(1,mapw):expand(maph,mapw)
+   local phi    = torch.linspace(voffset-half_vfov,voffset+half_vfov,maph):resize(1,maph):expand(mapw,maph)
                                                                                                                                                      
    local angles = torch.Tensor(2,maph,mapw)
 

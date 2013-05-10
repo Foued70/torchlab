@@ -66,16 +66,19 @@ function Projection:angles_to_pixels(angles, pixels)
 end
 
 -- grid of pixels equally spaced
--- TODO allow offsets so that the map is not always from 1,width and 1,height
-function Projection:pixels_map(scale)
+function Projection:pixels_map(scale, from_x, to_x, from_y, to_y)
    -- make map of angles
-   scale  = scale or 1
-
+   scale  = scale  or 1
+   from_x = from_x or 1
+   to_x   = to_x   or self.width
+   from_y = from_y or 1
+   to_y   = to_y   or self.height
+   
    local mapw   = self.width * scale
    local maph   = self.height * scale
 
-   local x = torch.linspace(1,self.width,mapw):resize(1,mapw):expand(maph,mapw)
-   local y = torch.linspace(1,self.height,maph):resize(1,maph):expand(mapw,maph)
+   local x = torch.linspace(from_x,to_x,mapw):resize(1,mapw):expand(maph,mapw)
+   local y = torch.linspace(from_y,to_y,maph):resize(1,maph):expand(mapw,maph)
 
    local pixels = torch.Tensor(2,maph,mapw)
    pixels[1]:copy(x)
@@ -84,9 +87,26 @@ function Projection:pixels_map(scale)
 end
 
 -- grid of angles to equally spaced pixels
--- TODO allow offsets so that the map is not always from 1,width and 1,height
-function Projection:angles_map(scale)
-   return self:pixels_to_angles(self:pixels_map(scale))
+function Projection:angles_map(scale, hfov, vfov, hoffset, voffset)
+   hfov    = hfov    or self.hfov
+   vfov    = vfov    or self.vfov
+   hoffset = hoffset or 0
+   voffset = voffset or 0
+   local angles
+   if (hfov ~= self.hfov) or (vfov ~= self.vfov) or (hoffset ~= 0) or (voffset ~=0) then
+      local half_width  = width * 0.5
+      local half_height = height * 0.5
+      local center_x = center[1] + hoffset
+      local center_y = center[2] + voffset
+      local from_x = center_x - half_width
+      local to_x   = center_x + half_width
+      local from_y = center_y - half_width
+      local to_y   = center_y - half_width
+      angles = self:pixels_to_angles(self:pixels_map(scale, from_x, to_x, from_y, to_y))
+   else
+      angles = self:pixels_to_angles(self:pixels_map(scale))
+   end
+   return angles
 end
 
 --
