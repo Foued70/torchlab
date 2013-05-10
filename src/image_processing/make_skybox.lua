@@ -52,6 +52,8 @@ proj_to = {}
 angle_maps  = {}
 index_and_masks = {}
 centers = {{0,0},{pi2,0},{pi,0},{-pi2,0},{0,pi2},{0,-pi2}}
+-- this naming comes from unity and is from the outside looking in
+names   = {"front", "left", "back", "right", "down", "up"}
 for _,off in ipairs(centers) do 
 
    proj   = projection.GnomonicProjection.new(out_size,out_size,
@@ -96,7 +98,7 @@ sys.tic()
 
 for i,idx in ipairs(index_and_masks) do 
    local face = projection_util.remap(img,idx)
-   local outf = out_file .."_"..i..".jpg"
+   local outf = out_file .."_"..names[i]..".jpg"
    image.display(face)
    printf(" - saving: %s", outf)
    image.save(outf,face)
