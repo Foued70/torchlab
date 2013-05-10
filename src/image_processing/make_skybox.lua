@@ -1,9 +1,10 @@
 local projection_util = util.projection
 require 'image'
 
+sys.tic()
+
 pi = math.pi
 pi2 = pi * 0.5
-
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text()
@@ -11,7 +12,7 @@ cmd:text('Compute skybox projections')
 cmd:text()
 cmd:text('Options')
 cmd:option('-imagefile', '', '360x180 equirectangular image for skybox')
-cmd:option('-outfile', '', 'basename for 6 output images for skybox')
+cmd:option('-outfile', 'skybox', 'basename for 6 output images for skybox')
 cmd:option('-size', '1024', 'size in pixels of side of skybox cube')
 cmd:text()
 
@@ -41,10 +42,11 @@ out_fov  = pi2
 
 proj_from = projection.SphericalProjection.new(width,height, hfov,vfov,cx,cy)
 
-
 p("Creating Skybox Projection")
-
+time_prep = sys.toc()
+printf(" - load image in %2.4fs", time_prep)
 sys.tic()
+
 -- make a skybox
 proj_to = {}
 angle_maps  = {}
@@ -64,16 +66,13 @@ for _,off in ipairs(centers) do
    local x = angles[1]
    local y = angles[2]
 
-   printf("%f < x > %f %f < y > %f", 
-          x:min(), x:max(),
-          y:min(), y:max())
    local sign = torch.sign(angles)
    angles:abs()
    
    yover = angles[2]:gt(pi2)
    n_yover = yover:sum()
-   printf(" - fixing %d pixels", n_yover)
    if (n_yover > 0) then 
+      printf(" - fixing %d pixels", n_yover)
       -- come back down as much as you went over
       y[yover] = y[yover]:mul(-1):add(pi)
       -- spin x around to the other side of the globe
@@ -81,33 +80,31 @@ for _,off in ipairs(centers) do
    end
    xover = angles[1]:gt(pi)
    n_xover = xover:sum()
-   printf(" - fixing %d pixels", n_xover)
    if (n_xover > 0) then
+      printf(" - fixing %d pixels", n_xover)
       x[xover] = x[xover]:add(-2*pi)
    end
 
    angles:cmul(sign)
-   printf("%f < x > %f %f < y > %f", 
-          angles[1]:min(), angles[1]:max(),
-          angles[2]:min(), angles[2]:max())
    table.insert(index_and_masks,
                 proj_from:angles_to_index1D_and_mask(angles))
 end
 
-local perElement = index_and_masks[1].index1D:nElement()
-
-time = sys.toc()
-printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
+time_map = sys.toc()
+printf(" - make map %2.4fs", time_map)
 sys.tic()
 
 for i,idx in ipairs(index_and_masks) do 
    local face = projection_util.remap(img,idx)
-   local outf = out_file .."_"..i..".png"
+   local outf = out_file .."_"..i..".jpg"
    image.display(face)
    printf(" - saving: %s", outf)
    image.save(outf,face)
 end
 
-time = sys.toc()
-printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
+time_reproject = sys.toc()
+printf(" - reproject %2.4fs", time_reproject)
 sys.tic()
+
+
+printf(" - Total %2.4fs", time_prep + time_map + time_reproject)
