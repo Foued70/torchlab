@@ -18,7 +18,7 @@ function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_cent
    self.units_per_pixel_y = nil
 
 end
-
+   
 -- every projection must implement these low level functions.  they
 -- are instance functions because some projections (such as the
 -- calibrated ones) need access to instance variables
@@ -37,7 +37,7 @@ function Projection:pixels_to_angles(pixels, angles)
    angles:resize(pixels:size())
 
    local coords = pixels:clone()
-
+   
    -- move 0,0 to the center
    -- convert to unit sphere coords
    coords[1]:add(-self.center[1]):mul(self.units_per_pixel_x)
@@ -70,45 +70,32 @@ end
 function Projection:pixels_map(scale, from_x, to_x, from_y, to_y)
    -- make map of angles
    scale  = scale  or 1
+   
+   local mapw   = self.width * scale
+   local maph   = self.height * scale
+
+   local pixels = torch.Tensor(2,maph,mapw)
+   
    from_x = from_x or 1
    to_x   = to_x   or self.width
    from_y = from_y or 1
    to_y   = to_y   or self.height
    
-   local mapw   = self.width * scale
-   local maph   = self.height * scale
-
+   
    local x = torch.linspace(from_x,to_x,mapw):resize(1,mapw):expand(maph,mapw)
    local y = torch.linspace(from_y,to_y,maph):resize(1,maph):expand(mapw,maph)
-
-   local pixels = torch.Tensor(2,maph,mapw)
+   
    pixels[1]:copy(x)
    pixels[2]:copy(y:t())
+   
    return pixels
 end
 
 -- grid of angles to equally spaced pixels
-function Projection:angles_map(scale, hfov, vfov, hoffset, voffset)
+function Projection:angles_map(scale,pixels_map)
    scale   = scale   or 1
-   hfov    = hfov    or self.hfov
-   vfov    = vfov    or self.vfov
-   hoffset = hoffset or 0
-   voffset = voffset or 0
-   local angles
-   if (hfov ~= self.hfov) or (vfov ~= self.vfov) or (hoffset ~= 0) or (voffset ~=0) then
-      local half_width  = width * 0.5
-      local half_height = height * 0.5
-      local center_x = center[1] + hoffset
-      local center_y = center[2] + voffset
-      local from_x = center_x - half_width
-      local to_x   = center_x + half_width
-      local from_y = center_y - half_width
-      local to_y   = center_y - half_width
-      angles = self:pixels_to_angles(self:pixels_map(scale, from_x, to_x, from_y, to_y))
-   else
-      angles = self:pixels_to_angles(self:pixels_map(scale))
-   end
-   return angles
+   pixels_map = pixels_map or self:pixels_map(scale)
+   return self:pixels_to_angles(pixels_map)
 end
 
 -- 

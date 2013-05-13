@@ -89,12 +89,12 @@ for i,c in ipairs(centers) do
    gp:set_lambda_phi(c[1],c[2])
    angles = gp:angles_map()
    sys.tic()
-   unit_coords = gp:angles_to_coords(angles)
+   gp:angles_to_coords(angles,unit_coords)
    time = sys.toc()
    printf(" - Time Gnomonic angles to coords")
    printf("   %2.4fs, %2.4es per px", time, time*perElement)
    sys.tic()
-   unit_angles = gp:coords_to_angles(unit_coords)
+   gp:coords_to_angles(unit_coords,unit_angles)
    time = sys.toc()
    printf(" - Time Gnomonic coords to angles")
    printf("   %2.4fs, %2.4es per px", time, time*perElement)
@@ -106,12 +106,13 @@ for i,c in ipairs(centers) do
 
 
    sys.tic()
-   pixels = gp:angles_to_pixels(angles)
+   gp:angles_to_pixels(angles,pixels)
    time = sys.toc()
    printf(" - Time Gnomonic angles to pixels")
    printf("   %2.4fs %2.4es per px", time, time*perElement)
    sys.tic()
-   pixels_angles = gp:pixels_to_angles(pixels)
+   
+   gp:pixels_to_angles(pixels,pixels_angles)
    time = sys.toc()
    printf(" - Time Gnomonic pixels to angles")
    printf("   %2.4fs, %2.4es per px", time, time*perElement)
@@ -121,12 +122,8 @@ for i,c in ipairs(centers) do
    printf(" - Error Gnomonic pixels -> angle (self) error (> 1e-15)")
    printf("   %d/%d , max: %e", err:gt(1e-15):sum(), err[1]:nElement(), err:max())
    
-   angles = nil
-   unit_coords = nil
-   unit_angles = nil
-   pixels = nil
-   pixels_angles = nil
-   err = nil
-   collectgarbage()
+    angles = nil
+    err = nil
+    collectgarbage()
 end
 
