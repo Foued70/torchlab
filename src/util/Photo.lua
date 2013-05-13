@@ -3,7 +3,7 @@ require 'paths'
 require 'math'
 
 local LensSensor = util.LensSensor
-local projection = util.projection
+local projection = projection.util
 local Ray = util.Ray
 local geom = util.geom
 local bihtree = util.bihtree

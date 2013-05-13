@@ -1,15 +1,11 @@
-local projection_util = util.projection
 require 'image'
 
-lens_data = require 'util.lens_sensor_types'
-
-local pi = math.pi
-local pi2 = pi * 0.5
+local lens_data = require 'util.lens_sensor_types'
 
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text()
-cmd:text('Compute image projections')
+cmd:text('Compare calibrated to rectilinear projections')
 cmd:text()
 cmd:text('Options')
 cmd:option('-imagesdir', 'images/', 'directory with the images to load')
@@ -44,11 +40,12 @@ collectgarbage()
 
 img = image.load(images[1])
 
-local width = img:size(3)
-local height = img:size(2)
+width = img:size(3)
+height = img:size(2)
  
 lens = lens_data.sigma_10_20mm 
 
+-- handle the vertical images correctly
 if width < height then
    fx = lens.fy
    fy = lens.fx
@@ -61,26 +58,33 @@ else
    cy = lens.cy
 end
 
-proj_from  = projection.CalibratedProjection.new(width,height,
+proj_cal  = projection.CalibratedProjection.new(width,height,
                                                  fx, fy,
                                                  cx, cy,
                                                  lens.radial_coeff,
                                                  lens.tangential_coeff
                                                 )
 
-proj_to_sphere   = projection.SphericalProjection.new(width,height,proj_from.hfov,proj_from.vfov)
-proj_to_rect     = projection.RectilinearProjection.new(width,height,proj_from.hfov,proj_from.vfov)
+proj_sphere   = projection.SphericalProjection.new(width,height,
+                                                   proj_cal.hfov,proj_cal.vfov)
+proj_rect     = projection.RectilinearProjection.new(width,height,
+                                                     proj_cal.hfov,proj_cal.vfov)
 
 local scale  = 1/5
 
 p("Testing Calibrated Image Projection")
 
 sys.tic()
-sphere_map     = proj_to_sphere:angles_map(scale)
-rect_map       = proj_to_rect:angles_map(scale)
-sphere_index_and_mask = proj_from:angles_to_index1D_and_mask(sphere_map)
-rect_index_and_mask   = proj_from:angles_to_index1D_and_mask(rect_map)
-local perElement = sphere_index_and_mask.index1D:nElement()
+
+cal_to_sphere         = projection.Remap.new(proj_cal,proj_sphere)
+rect_to_sphere        = projection.Remap.new(proj_rect,proj_sphere)
+-- do not need to call get_index_and_mask explicitly as it will be
+-- called when needed on the first call to remap, but by calling it
+-- here we can compute the timing information.
+index_and_mask_sphere = cal_to_sphere:get_index_and_mask(scale)
+index_and_mask_rect   = rect_to_sphere:get_index_and_mask(scale)
+
+perElement = index_and_mask_sphere.index1D:nElement()
 
 time = sys.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
@@ -88,13 +92,11 @@ sys.tic()
 
 for i = 1,#images do 
    img = image.load(images[i])
-   simg_out = projection_util.remap(img,sphere_index_and_mask)
-   rimg_out = projection_util.remap(img,rect_index_and_mask)
+   cal_img_out = cal_to_sphere:remap(img)
+   rect_img_out = rect_to_sphere:remap(img)
    time = sys.toc()
    printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
    sys.tic()
 
-   img_scale = simg_out:clone()
-   image.scale(img,img_scale)
-   image.display{image={img_scale,rimg_out,simg_out}}
+   image.display{image={cal_img_out,rect_img_out}}
 end

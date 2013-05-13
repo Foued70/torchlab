@@ -1,4 +1,3 @@
-local projection_util = util.projection
 require 'image'
 
 local pi = math.pi
@@ -54,12 +53,16 @@ proj_to   = projection.SphericalProjection.new(width,height,hfov,vfov)
 
 local scale  = 1/5
 
+
 p("Testing Image Projection")
 
 sys.tic()
-angle_map      = proj_to:angles_map(scale)
-index_and_mask = proj_from:angles_to_index1D_and_mask(angle_map)
 
+rect_to_sphere = projection.Remap.new(proj_from,proj_to)
+-- do not need to call get_index_and_mask explicitly as it will be
+-- called when needed on the first call to remap, but by calling it
+-- here we can compute the timing information.
+index_and_mask = rect_to_sphere:get_index_and_mask(scale)
 local perElement = index_and_mask.index1D:nElement()
 
 time = sys.toc()
@@ -68,7 +71,7 @@ sys.tic()
 
 for i = 1,#images do 
    img = image.load(images[i])
-   img_out = projection_util.remap(img,index_and_mask)
+   img_out = rect_to_sphere:remap(img)
    time = sys.toc()
    printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
    sys.tic()

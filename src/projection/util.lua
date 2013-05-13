@@ -1,5 +1,6 @@
 Class()
-
+local pi = math.pi
+local pi2 = math.pi*0.5
 
 -- image is 3 x map dims
 -- now map is 1D (this is faster)
@@ -44,9 +45,6 @@ function remap(img, index1D_and_mask)
    end
    return out
 end
-
-
-
 
 function derive_hw(diag,aspect_ratio)
    -- horizontal and diagonal fov's are useful for size of our lookup
@@ -132,4 +130,18 @@ function make_index(map,mask,stride)
    local index_map = outmap:long() -- round (+0.5 above) and floor
 
    return index_map
+end
+
+-- inplace recenter angles to fall in range -pi,pi
+function recenter_angles(angles)
+   local sign = torch.sign(angles)
+   angles:abs()
+
+   local over   = angles:gt(pi)
+   local n_over = over:sum()
+   if (n_over > 0) then
+      printf(" - fixing %d pixels", n_over)
+      angles[over] = angles[over]:add(-2*pi)
+   end
+   angles:cmul(sign)
 end

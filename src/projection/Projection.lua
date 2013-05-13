@@ -1,4 +1,3 @@
-local projection_util = util.projection
 local Projection = Class()
 
 function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_center_y)
@@ -106,17 +105,19 @@ function Projection:angles_map(scale, hfov, vfov, hoffset, voffset)
    else
       angles = self:pixels_to_angles(self:pixels_map(scale))
    end
+   -- make sure angles fall between -pi, pi
+   projection.util.recenter_angles(angles)
    return angles
 end
 
 --
 function Projection:pixels_to_index1D_and_mask(pixels)
    -- make mask for out of bounds values
-   local mask = projection_util.make_mask(pixels,self.width,self.height)
+   local mask = projection.util.make_mask(pixels,self.width,self.height)
    log.tracef("Masking %d/%d pixel locations (out of bounds)", mask:sum(),mask:nElement())
 
    -- convert the x and y values into a single 1D offset (y * stride + x)
-   local index1D = projection_util.make_index(pixels,mask,self.width)
+   local index1D = projection.util.make_index(pixels,mask,self.width)
 
    return {
       index1D      = index1D,   -- LongTensor for fast lookups

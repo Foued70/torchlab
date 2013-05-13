@@ -1,4 +1,3 @@
-local projection_util = util.projection
 require 'image'
 
 sys.tic()
@@ -61,33 +60,7 @@ for _,off in ipairs(centers) do
                                               out_size/2,out_size/2,
                                               off[1],off[2])
    table.insert(proj_to,proj)
-   angle_map = proj:angles_map()
-   table.insert(angle_maps, angle_map)
-
-   local angles = angle_map:clone()
-   local x = angles[1]
-   local y = angles[2]
-
-   local sign = torch.sign(angles)
-   angles:abs()
-   
-   yover = angles[2]:gt(pi2)
-   n_yover = yover:sum()
-   if (n_yover > 0) then 
-      printf(" - fixing %d pixels", n_yover)
-      -- come back down as much as you went over
-      y[yover] = y[yover]:mul(-1):add(pi)
-      -- spin x around to the other side of the globe
-      x[yover] = x[yover]:add(pi)
-   end
-   xover = angles[1]:gt(pi)
-   n_xover = xover:sum()
-   if (n_xover > 0) then
-      printf(" - fixing %d pixels", n_xover)
-      x[xover] = x[xover]:add(-2*pi)
-   end
-
-   angles:cmul(sign)
+   angles = proj:angles_map()
    table.insert(index_and_masks,
                 proj_from:angles_to_index1D_and_mask(angles))
 end
@@ -97,7 +70,7 @@ printf(" - make map %2.4fs", time_map)
 sys.tic()
 
 for i,idx in ipairs(index_and_masks) do 
-   local face = projection_util.remap(img,idx)
+   local face = projection.util.remap(img,idx)
    local outf = out_file .."_"..names[i]..".jpg"
    image.display(face)
    printf(" - saving: %s", outf)

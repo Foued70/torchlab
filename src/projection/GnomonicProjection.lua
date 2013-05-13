@@ -1,10 +1,10 @@
 local GnomonicProjection = Class(projection.Projection)
 
 -- The Gnomonic Projection is a more general version of the
--- rectilinear projection, which allows tangent point of plane to
+-- RectilinearProjection which allows tangent point of plane to
 -- touch other parts of the sphere.  This is necessary for creating
 -- the zenith and nadir shots of a cube map for a skybox for example.
---
+-- 
 -- If you don't pass a lambda or phi parameter then you should use a
 -- Rectilinear projection which is equivalient and less computation.
 
@@ -31,6 +31,10 @@ function GnomonicProjection:__init(width, height,
    self.cos_phi1    = math.cos(self.phi1)
 end
 
+function GnomonicProjection:set_lambda_phi(lambda,phi)
+   self.lambda0 = lambda 
+   self.phi1    = phi
+end
 
 -- coords - coords in normalized coordinates, 0,0 center
 -- angles (optional) - azimuth, elevation from 0,0 center of projection
@@ -111,7 +115,7 @@ function GnomonicProjection:angles_to_coords(angles, coords)
    -- (sin(phi1) * sin(phi)) + ( cos_phi * cos(azimuth - lambda0))
    cosc:add(torch.mul(y,self.cos_phi1))
 
-   x:copy(azimuth):add(-self.lambda0):cmul(cos_phi):cdiv(cosc)
+   x:copy(azimuth):add(-self.lambda0):sin():cmul(cos_phi):cdiv(cosc)
 
    y:mul(-self.sin_phi1)
    y:add(sin_phi:mul(self.cos_phi1))
