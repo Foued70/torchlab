@@ -34,6 +34,7 @@ end
 -- angles (optional) - azimuth, elevation from 0,0 center of projection
 function Projection:pixels_to_angles(pixels, angles)
    angles = angles or torch.Tensor(pixels:size())
+   angles:resize(pixels:size())
 
    local coords = pixels:clone()
 
@@ -53,6 +54,7 @@ end
 -- pixels (optional) - pixels from 0,0 in the upper left to width,height in the lower right
 function Projection:angles_to_pixels(angles, pixels)
    pixels = pixels or torch.Tensor(angles:size())
+   pixels:resize(angles:size())
 
    self:angles_to_coords(angles, pixels)
 
@@ -87,6 +89,7 @@ end
 
 -- grid of angles to equally spaced pixels
 function Projection:angles_map(scale, hfov, vfov, hoffset, voffset)
+   scale   = scale   or 1
    hfov    = hfov    or self.hfov
    vfov    = vfov    or self.vfov
    hoffset = hoffset or 0
@@ -105,42 +108,47 @@ function Projection:angles_map(scale, hfov, vfov, hoffset, voffset)
    else
       angles = self:pixels_to_angles(self:pixels_map(scale))
    end
-   -- make sure angles fall between -pi, pi
-   projection.util.recenter_angles(angles)
    return angles
 end
 
---
-function Projection:pixels_to_index1D_and_mask(pixels)
+-- 
+-- index1D : (LongTensor) for fast lookups
+--  stride : (number) stride (width) of input image
+--    mask : (ByteTensor) invalid locations marked with 1
+function Projection:pixels_to_index1D_and_mask(pixels, index1D, mask)
+
+   local stride = self.width
+   local max_x  = self.width
+   local max_y  = self.height
+
+   index1D = index1D or torch.LongTensor(pixels[1]:size())
+   mask    =    mask or torch.ByteTensor(pixels[1]:size())
+
    -- make mask for out of bounds values
-   local mask = projection.util.make_mask(pixels,self.width,self.height)
+   projection.util.make_mask(pixels,max_x,max_y,mask)
    log.tracef("Masking %d/%d pixel locations (out of bounds)", mask:sum(),mask:nElement())
 
    -- convert the x and y values into a single 1D offset (y * stride + x)
-   local index1D = projection.util.make_index(pixels,mask,self.width)
+   index1D,stride = projection.util.make_index(pixels,mask,index1D)
 
-   return {
-      index1D      = index1D,   -- LongTensor for fast lookups
-      mask         = mask,      -- ByteTensor invalid locations marked with 1
-      stride       = self.width -- stride (width) of input image
-          }
+   return index1D,stride, mask
 end
 
-function Projection:angles_to_index1D_and_mask(angles)
-   return self:pixels_to_index1D_and_mask(self:angles_to_pixels(angles))
+function Projection:angles_to_index1D_and_mask(angles, index1D, mask)
+
+   index1D = index1D or torch.LongTensor(pixels[1]:size())
+   mask    =    mask or torch.ByteTensor(pixels[1]:size())
+
+   local pixels = self:angles_to_pixels(angles)
+   return self:pixels_to_index1D_and_mask(pixels,index1D,mask)
+
 end
 
-function Projection:index1D_and_mask_to_pixels(map)
+function Projection:index1D_and_mask_to_pixels(map,pixels)
    local index1D = map.index1D
    local stride  = map.stride
 
-   local pixels = torch.Tensor(2,index1D:size(1),index1D:size(2))
-   local xmap   = pixels[1]
-   local ymap   = pixels[2]
-
-   xmap:copy(index1D):apply(function (x) return math.mod(x,stride) end)
-   xmap[xmap:eq(0)] = stride
-   ymap:copy(index1D):mul(1/stride):ceil()
+   projection.util.index1D_to_xymap(index1D, stride, pixels)
 
    return pixels
 

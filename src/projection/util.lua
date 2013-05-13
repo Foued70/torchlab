@@ -86,9 +86,9 @@ function make_pythagorean_map (lambda,phi,noneuclidean)
 end
 
 -- make mask for out of bounds values
-function make_mask(map,imgw,imgh)
-   local xmap = map[1]
-   local ymap = map[2]
+function make_mask(pixel_map,imgw,imgh)
+   local xmap = pixel_map[1]
+   local ymap = pixel_map[2]
    local mask = xmap:ge(1) + xmap:le(imgw)  -- out of bound in xmap
    mask = mask + ymap:ge(1) + ymap:le(imgh) -- out of bound in ymap
    -- reset mask to 0 and 1 (valid parts of mask must pass all 4
@@ -100,17 +100,17 @@ function make_mask(map,imgw,imgh)
 end
 
 -- convert the x and y index into a single 1D offset (y * stride + x)
-function make_index(map,mask,stride)
-   local xmap = map[1]
-   local ymap = map[2]
-   
+function make_index(pixel_map,mask,index1D,stride)
+   local xmap = pixel_map[1]
+   local ymap = pixel_map[2]
+   index1D = index1D or torch.LongTensor(ymap:size())
+   index1D:resizeAs(ymap)
+
    -- CAREFUL stride is in the original raw image not in the
    -- projection which can be scaled if xmap:size() is not equal to
    -- the size original image in which we index this function will
    -- return all the wrong values.
-   if not stride then 
-      stride = xmap:size(2)
-   end
+   stride = stride or xmap:size(2)
 
    -- CAREFUL must floor before multiplying by stride or does not make sense.
    -- -0.5 then floor is equivalient to adding 0.5 -> floor -> -1 before multiply by stride.
@@ -127,9 +127,26 @@ function make_index(map,mask,stride)
       outmap[mask] = 1
    end
 
-   local index_map = outmap:long() -- round (+0.5 above) and floor
+   index1D:copy(outmap) -- conversion to long rounds (+0.5 added above and floor)
 
-   return index_map
+   return index1D,stride
+end
+
+function index1D_to_xymap (index1D, stride, pixels)
+   local size = {2} 
+   for i = 1,index1D:dim() do table.insert(size, index1D:size(i)) end
+   size = torch.LongTensor(size):storage()
+   pixels = pixels or torch.Tensor(size)
+   pixels:resize(size)
+
+   local xmap   = pixels[1]
+   local ymap   = pixels[2]
+
+   xmap:copy(index1D):apply(function (x) return math.mod(x,stride) end)
+   xmap[xmap:eq(0)] = stride
+   ymap:copy(index1D):mul(1/stride):ceil()
+
+   return pixels
 end
 
 -- inplace recenter angles to fall in range -pi,pi

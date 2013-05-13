@@ -1,17 +1,21 @@
-pi = math.pi
-pi2 = pi * 0.5
+local pi = math.pi
+local pi2 = pi * 0.5
 
-width  = 4000
-height = 3000
+local width  = 4000
+local height = 3000
 
-hfov = pi2 
-vfov = hfov * height / width
+local hfov = pi2 
+local vfov = hfov * height / width
  
-gp = projection.GnomonicProjection.new(width,height, hfov,vfov)
-rp = projection.RectilinearProjection.new(width,height, hfov,vfov)
+local gp = projection.GnomonicProjection.new(width,height, hfov,vfov)
+local rp = projection.RectilinearProjection.new(width,height, hfov,vfov)
 
-angles = gp:angles_map()
-angles_rp = rp:angles_map()
+local angles = gp:angles_map()
+local angles_rp = rp:angles_map()
+
+local unit_coords, unit_coords_rp
+local pixels, pixels_rp, pixels_angles
+local time, err
 
 perElement = 1/angles[1]:nElement()
 
@@ -73,12 +77,17 @@ err:abs()
 printf(" - Error pixels Gnomonic vs Rect. error (> 1e-11)")
 printf("   %d/%d , max: %e", err:gt(1e-11):sum(), err[1]:nElement(), err:max())
 
+angles_rp = nil
+pixels_rp = nil
+unit_coords_rp = nil
+collectgarbage()
 
-centers = {{0,0},{pi2,0},{pi,0},{-pi2,0},{0,pi2},{0,-pi2}}
+centers = {{pi2,0},{pi,0},{-pi2,0},{0,0},{0,pi2},{0,-pi2}}
 
 for i,c in ipairs(centers) do 
    printf("Testing Gnomonic projection off axis (%f,%f)", c[1],c[2])
    gp:set_lambda_phi(c[1],c[2])
+   angles = gp:angles_map()
    sys.tic()
    unit_coords = gp:angles_to_coords(angles)
    time = sys.toc()
@@ -112,5 +121,12 @@ for i,c in ipairs(centers) do
    printf(" - Error Gnomonic pixels -> angle (self) error (> 1e-15)")
    printf("   %d/%d , max: %e", err:gt(1e-15):sum(), err[1]:nElement(), err:max())
    
+   angles = nil
+   unit_coords = nil
+   unit_angles = nil
+   pixels = nil
+   pixels_angles = nil
+   err = nil
+   collectgarbage()
 end
 
