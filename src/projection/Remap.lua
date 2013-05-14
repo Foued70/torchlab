@@ -7,7 +7,7 @@ end
 
 function Remap:get_index_and_mask (force)
    if force or (not self.index1D) then
-      local angle_map     = self.projection_to:angles_map()
+      local angle_map = self.projection_to:angles_map()
       self.index1D, self.stride, self.mask =
          self.projection_from:angles_to_index1D_and_mask(angle_map)
    end
