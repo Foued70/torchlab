@@ -47,30 +47,27 @@ printf(" - load image in %2.4fs", time_prep)
 sys.tic()
 
 -- make a skybox
-proj_to = {}
-angle_maps  = {}
-index_and_masks = {}
 centers = {{0,0},{pi2,0},{pi,0},{-pi2,0},{0,pi2},{0,-pi2}}
 -- this naming comes from unity and is from the outside looking in
 names   = {"front", "left", "back", "right", "down", "up"}
+
+remappers = {}
 for _,off in ipairs(centers) do 
 
-   proj   = projection.GnomonicProjection.new(out_size,out_size,
-                                              out_fov,out_fov,
-                                              out_size/2,out_size/2,
-                                              off[1],off[2])
-   table.insert(proj_to,proj)
-   angles = proj:angles_map()
-   table.insert(index_and_masks,
-                proj_from:angles_to_index1D_and_mask(angles))
+   local proj_to = projection.GnomonicProjection.new(out_size,out_size,
+                                               out_fov,out_fov,
+                                               out_size/2,out_size/2,
+                                               off[1],off[2])
+   
+   table.insert(remappers, projection.Remap.new(proj_from,proj_to))
 end
 
 time_map = sys.toc()
 printf(" - make map %2.4fs", time_map)
 sys.tic()
 
-for i,idx in ipairs(index_and_masks) do 
-   local face = projection.util.remap(img,idx)
+for i,r in ipairs(remappers) do 
+   local face = r:remap(img)
    local outf = out_file .."_"..names[i]..".jpg"
    image.display(face)
    printf(" - saving: %s", outf)

@@ -25,8 +25,6 @@ function SphericalProjection:angles_map(scale,hfov,vfov, hoffset, voffset)
    hoffset = hoffset or 0
    voffset = voffset or 0
 
-   print(hoffset,voffset)
-
    local mapw   = self.width * scale
    local maph   = self.height * scale
       

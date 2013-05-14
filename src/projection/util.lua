@@ -4,46 +4,59 @@ local pi2 = math.pi*0.5
 
 -- image is 3 x map dims
 -- now map is 1D (this is faster)
-function remap(img, index1D_and_mask)
-   local out     = torch.Tensor()
-   local index1D = index1D_and_mask.index1D
-   local mask    = index1D_and_mask.mask
-   local nelem   = index1D:nElement()
-   local outsize = index1D:size()
+function remap(img, index1D, stride, mask, out_image)
+   out_image          = out_image or torch.Tensor()
+   local index_n_elem = index1D:nElement()
+   local index_size   = index1D:size()
+   local index_dim    = index1D:nDimension()
+   local image_dim    = img:nDimension()
 
-   -- indexing has to be 1D, reshape only changes size locally
+   -- indexing has to be 1D, reshape only changes the size locally
    -- TODO: allow multi dimensional index, in low level torch code
-   if (index1D:nDimension() ~= 1) then
-      index1D = index1D:reshape(index1D:nElement())
-      mask    = mask:reshape(mask:nElement())
-   end
-
-   local ndim     = img:nDimension()
-
-   if (ndim == 2) then
-      -- single channel 2D
-
-      out = img:reshape(img:nElement())[index1D]
-      out[mask] = 0  -- erase out of bounds
-
-      out:resize(outsize)
-
-   elseif (ndim == 3) then
-      -- n channel (RGB) (n x h x w)
-      out:resize(img:size(1),nelem)
-
-      for d = 1,img:size(1) do -- loop through channels
-         local imgd = img[d]
-         imgd:resize(imgd:nElement())
-
-         out[d]       = imgd[index1D]
-         out[d][mask] = 0
-
+   if (index_dim ~= 1) then
+      index1D = index1D:reshape(index_n_elem)
+      if mask then 
+         if (mask:nElement() ~= index_n_elem) then
+            error("mask not same size as index1D")
+         else
+            mask    = mask:reshape(index_n_elem)
+         end
       end
-      -- make output 3 x H x W
-      out:resize(img:size(1),outsize[1],outsize[2])
    end
-   return out
+   
+   if (image_dim == 2) then
+      -- single channel 2D, out_image has same dimensions as index
+      out_image:resize(index_n_elem)
+      -- flatten copy of img, apply the index and copy into out_image 
+      out_image = img:reshape(img:nElement())[index1D]
+      if mask then 
+         out_image[mask] = 0  -- erase out of bounds values
+      end
+      -- unflatten out_image to the original dimensions of the index
+      out_image:resize(index_size)
+
+   elseif (image_dim == 3) then
+      local n_slices = img:size(1)
+      local input_elements_per_slice = img[1]:nElement()
+
+      -- n channel (RGB) (n x h * w)
+      out_image:resize(n_slices,index_n_elem)
+
+      for d = 1,n_slices do -- loop through channels one at a time
+         local imgd = img[d]
+         -- flatten
+         imgd:resize(input_elements_per_slice)
+
+         out_image[d]    = imgd[index1D]
+         if mask then 
+            out_image[d][mask] = 0 -- erase out of bounds values
+         end
+      end
+      -- make output 3 x H x W (or n_slices by whatever)
+      out_size = util.util.add_slices(n_slices, index_size)
+      out_image:resize(out_size)
+   end
+   return out_image
 end
 
 function derive_hw(diag,aspect_ratio)
@@ -86,10 +99,12 @@ function make_pythagorean_map (lambda,phi,noneuclidean)
 end
 
 -- make mask for out of bounds values
-function make_mask(pixel_map,imgw,imgh)
+function make_mask(pixel_map,imgw,imgh,mask)
    local xmap = pixel_map[1]
    local ymap = pixel_map[2]
-   local mask = xmap:ge(1) + xmap:le(imgw)  -- out of bound in xmap
+   mask = mask or torch.ByteTensor(xmap:size())
+   mask:resize(xmap:size())
+   mask:copy(xmap:ge(1) + xmap:le(imgw))    -- out of bound in xmap
    mask = mask + ymap:ge(1) + ymap:le(imgh) -- out of bound in ymap
    -- reset mask to 0 and 1 (valid parts of mask must pass all 4
    -- tests).  We need the mask to reset bad pixels so the 1s are the
@@ -100,42 +115,40 @@ function make_mask(pixel_map,imgw,imgh)
 end
 
 -- convert the x and y index into a single 1D offset (y * stride + x)
-function make_index(pixel_map,mask,index1D,stride)
+function make_index(pixel_map,stride,mask,index1D)
    local xmap = pixel_map[1]
    local ymap = pixel_map[2]
    index1D = index1D or torch.LongTensor(ymap:size())
-   index1D:resizeAs(ymap)
+   index1D:resize(ymap:size())
 
    -- CAREFUL stride is in the original raw image not in the
    -- projection which can be scaled if xmap:size() is not equal to
    -- the size original image in which we index this function will
    -- return all the wrong values.
-   stride = stride or xmap:size(2)
+   stride = stride or error("must pass stride")
 
    -- CAREFUL must floor before multiplying by stride or does not make sense.
    -- -0.5 then floor is equivalient to adding 0.5 -> floor -> -1 before multiply by stride.
-   local outmap = ymap:clone():add(-0.5):floor()
+   local output_map = ymap:clone():add(-0.5):floor()
 
    -- ymap -1 so that multiply by stride makes sense (imgw is the stride)
    -- to map (1,1) ::  y = 0  * stride + x = 1 ==> 1
    -- to map (2,1) ::  y = 1  * stride + x = 1 ==> stride + 1 etc.
 
-   outmap:mul(stride):add(xmap + 0.5)
+   output_map:mul(stride):add(xmap + 0.5)
 
    -- remove spurious out of bounds from output
    if mask then
-      outmap[mask] = 1
+      output_map[mask] = 1
    end
 
-   index1D:copy(outmap) -- conversion to long rounds (+0.5 added above and floor)
+   index1D:copy(output_map) -- conversion to long rounds (+0.5 added above and floor)
 
-   return index1D,stride
+   return index1D 
 end
 
 function index1D_to_xymap (index1D, stride, pixels)
-   local size = {2} 
-   for i = 1,index1D:dim() do table.insert(size, index1D:size(i)) end
-   size = torch.LongTensor(size):storage()
+   local size = util.util.add_slices(2,index1D:size())
    pixels = pixels or torch.Tensor(size)
    pixels:resize(size)
 

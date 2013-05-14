@@ -6,7 +6,7 @@ function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_cent
 
    -- in radians
    self.hfov = hfov or 1
-   self.vfov = vfov or 1
+   self.vfov = vfov or (self.hfov * self.height / self.width)
 
    pixel_center_x = pixel_center_x or self.width/2
    pixel_center_y = pixel_center_y or self.height/2
@@ -45,6 +45,9 @@ function Projection:pixels_to_angles(pixels, angles)
 
    -- convert unit sphere projection coords to angles
    self:coords_to_angles(coords,angles)
+
+   -- make sure the angles lie between -pi and pi
+   projection.util.recenter_angles(angles)
 
    return angles
 end
@@ -111,32 +114,38 @@ function Projection:pixels_to_index1D_and_mask(pixels, index1D, mask)
    index1D = index1D or torch.LongTensor(pixels[1]:size())
    mask    =    mask or torch.ByteTensor(pixels[1]:size())
 
+   
    -- make mask for out of bounds values
-   projection.util.make_mask(pixels,max_x,max_y,mask)
+   mask = projection.util.make_mask(pixels,max_x,max_y,mask)
    log.tracef("Masking %d/%d pixel locations (out of bounds)", mask:sum(),mask:nElement())
 
-   -- convert the x and y values into a single 1D offset (y * stride + x)
-   index1D,stride = projection.util.make_index(pixels,mask,index1D)
 
-   return index1D,stride, mask
+   -- convert the x and y values into a single 1D offset (y * stride + x)
+   index1D = projection.util.make_index(pixels,stride,mask,index1D)
+
+   return index1D, stride, mask
 end
 
 function Projection:angles_to_index1D_and_mask(angles, index1D, mask)
 
-   index1D = index1D or torch.LongTensor(pixels[1]:size())
-   mask    =    mask or torch.ByteTensor(pixels[1]:size())
-
+   index1D = index1D or torch.LongTensor(angles[1]:size())
+   mask    =    mask or torch.ByteTensor(angles[1]:size())
+   
    local pixels = self:angles_to_pixels(angles)
    return self:pixels_to_index1D_and_mask(pixels,index1D,mask)
 
 end
 
-function Projection:index1D_and_mask_to_pixels(map,pixels)
-   local index1D = map.index1D
-   local stride  = map.stride
+function Projection:index1D_and_mask_to_pixels(index1D,stride,mask,pixels)
 
-   projection.util.index1D_to_xymap(index1D, stride, pixels)
+   return projection.util.index1D_to_xymap(index1D, stride, pixels)
 
-   return pixels
+end
+
+
+function Projection:index1D_and_mask_to_angles(index1D,stride,mask,angles)
+
+   local pixels = projection.util.index1D_to_xymap(index1D, stride)
+   return self:pixels_to_angles(pixels,angles)
 
 end

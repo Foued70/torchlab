@@ -7,16 +7,17 @@ function Remap:__init(projection_from, projection_to)
 end
 
 function Remap:get_index_and_mask (scale)
-   if (not self.index_and_mask) or (scale ~= self.scale) then 
-      self.scale          = scale
+   if (not self.index1D) or (scale ~= self.scale) then
+      self.scale          = scale or 1
       local angle_map     = self.projection_to:angles_map(scale)
-      self.index_and_mask = self.projection_from:angles_to_index1D_and_mask(angle_map)
+      self.index1D, self.stride, self.mask =
+         self.projection_from:angles_to_index1D_and_mask(angle_map)
    end
-   return self.index_and_mask
+   return self.index1D, self.stride, self.mask
 end
 
 function Remap:remap(img,scale)
    scale = scale or self.scale
-   local index_and_mask = self:get_index_and_mask(scale)
-   return projection.util.remap(img,index_and_mask)
+   self:get_index_and_mask(scale)
+   return projection.util.remap(img, self.index1D, self.stride, self.mask)
 end
