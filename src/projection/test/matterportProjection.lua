@@ -1,5 +1,6 @@
-local projection_util = util.projection
 require 'image'
+
+sys.tic()
 
 local pi = math.pi
 local pi2 = pi * 0.5
@@ -11,12 +12,16 @@ cmd:text('Compute image projections')
 cmd:text()
 cmd:text('Options')
 cmd:option('-scandir', 'images/', 'directory with the images to load')
+cmd:option('-outfile', 'skybox', 'basename for 6 output images for skybox')
+cmd:option('-size', '1024', 'size in pixels of side of skybox cube')
 cmd:text()
 
 -- parse input params
 params = cmd:parse(arg)
 
 scandir  = params.scandir
+out_size   = params.size
+out_file   = params.outfile
 
 -- load images
 if not images then
@@ -60,47 +65,42 @@ out_size = 512
 
 proj_from = projection.SphericalProjection.new(width,height, hfov,vfov,cx,cy)
 
-proj_to   = projection.RectilinearProjection.new(out_size,out_size,out_fov,out_fov)
-
-angle_map = proj_to:angles_map()
-
-p("Testing Image Projection")
-
+p("Creating Skybox Projection")
+time_prep = sys.toc()
+printf(" - load image in %2.4fs", time_prep)
 sys.tic()
+
 -- make a skybox
-index_and_masks = {}
 centers = {{0,0},{pi2,0},{pi,0},{-pi2,0},{0,pi2},{0,-pi2}}
+-- this naming comes from unity and is from the outside looking in
+names   = {"front", "left", "back", "right", "down", "up"}
+
+remappers = {}
 for _,off in ipairs(centers) do 
-   local angles = angle_map:clone()
-   angles[1]:add(off[1])
-   angles[2]:add(off[2])
-   local sign = torch.sign(angles)
-   angles:abs()
-   angles[1][angles[1]:gt(pi)] =  
-      angles[1][angles[1]:gt(pi)]:add(-2*pi)
-   angles[2][angles[2]:gt(pi2)] = 
-      angles[2][angles[2]:gt(pi2)]:add(-pi)
-   angles:cmul(sign)
-   table.insert(index_and_masks,
-                proj_from:angles_to_index1D_and_mask(angles))
+
+   local proj_to = projection.GnomonicProjection.new(out_size,out_size,
+                                               out_fov,out_fov,
+                                               out_size/2,out_size/2,
+                                               off[1],off[2])
+   
+   table.insert(remappers, projection.Remap.new(proj_from,proj_to))
 end
 
-local perElement = index_and_masks[1].index1D:nElement()
-
-time = sys.toc()
-printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
+time_map = sys.toc()
+printf(" - make map %2.4fs", time_map)
 sys.tic()
 
-for i = 1,#images do
-   img = image.load(images[i])
-   img_out = {}
-   for _,idx in ipairs(index_and_masks) do 
-      table.insert(img_out, projection_util.remap(img,idx))
-   end
-
-   time = sys.toc()
-   printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
-   sys.tic()
-
-   image.display{image=img_out,nrow=4}
+for i,r in ipairs(remappers) do 
+   local face = r:remap(img)
+   local outf = out_file .."_"..names[i]..".jpg"
+   image.display(face)
+   printf(" - saving: %s", outf)
+   image.save(outf,face)
 end
+
+time_reproject = sys.toc()
+printf(" - reproject %2.4fs", time_reproject)
+sys.tic()
+
+
+printf(" - Total %2.4fs", time_prep + time_map + time_reproject)
