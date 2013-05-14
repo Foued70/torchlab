@@ -21,18 +21,22 @@ function StereographicProjection:__init(width, height,
    self.units_per_pixel_x = math.tan(self.hfov*0.5)/width
    self.units_per_pixel_y = math.tan(self.vfov*0.5)/height
    
-   self.lambda0 = lambda or 0
-   self.phi1    = phi or 0
+   lambda = lambda or 0
+   phi    = phi or 0
+   
+   self:set_lambda_phi(lambda, phi)
 
-   self.sin_lambda0 = math.sin(self.lambda0)
-   self.cos_lambda0 = math.cos(self.lambda0)
-   self.sin_phi1    = math.sin(self.phi1)
-   self.cos_phi1    = math.cos(self.phi1)
 end
 
 function StereographicProjection:set_lambda_phi(lambda,phi)
    self.lambda0 = lambda 
    self.phi1    = phi
+
+   self.sin_lambda0 = math.sin(self.lambda0)
+   self.cos_lambda0 = math.cos(self.lambda0)
+   self.sin_phi1    = math.sin(self.phi1)
+   self.cos_phi1    = math.cos(self.phi1)
+
 end
 
 -- coords - coords in normalized coordinates, 0,0 center

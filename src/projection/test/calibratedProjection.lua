@@ -43,6 +43,8 @@ img = image.load(images[1])
 width = img:size(3)
 height = img:size(2)
  
+local scale  = 1/5
+
 lens = lens_data.sigma_10_20mm 
 
 -- handle the vertical images correctly
@@ -58,19 +60,22 @@ else
    cy = lens.cy
 end
 
+
 proj_cal  = projection.CalibratedProjection.new(width,height,
                                                  fx, fy,
                                                  cx, cy,
                                                  lens.radial_coeff,
                                                  lens.tangential_coeff
                                                 )
+proj_rect     = 
+   projection.RectilinearProjection.new(width,height,
+                                        proj_cal.hfov,proj_cal.vfov)
 
-proj_sphere   = projection.SphericalProjection.new(width,height,
-                                                   proj_cal.hfov,proj_cal.vfov)
-proj_rect     = projection.RectilinearProjection.new(width,height,
-                                                     proj_cal.hfov,proj_cal.vfov)
+proj_sphere   = 
+   projection.SphericalProjection.new(scale*width,scale*height,
+                                      proj_cal.hfov,proj_cal.vfov,
+                                      cx,cy)
 
-local scale  = 1/5
 
 p("Testing Calibrated Image Projection")
 
@@ -81,8 +86,8 @@ rect_to_sphere        = projection.Remap.new(proj_rect,proj_sphere)
 -- do not need to call get_index_and_mask explicitly as it will be
 -- called when needed on the first call to remap, but by calling it
 -- here we can compute the timing information.
-index1D_sphere = cal_to_sphere:get_index_and_mask(scale)
-index1D_rect   = rect_to_sphere:get_index_and_mask(scale)
+index1D_sphere = cal_to_sphere:get_index_and_mask()
+index1D_rect   = rect_to_sphere:get_index_and_mask()
 
 perElement = index1D_sphere:nElement()
 
