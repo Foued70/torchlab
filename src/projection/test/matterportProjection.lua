@@ -2,8 +2,7 @@ require 'image'
 
 sys.tic()
 
-local pi = math.pi
-local pi2 = pi * 0.5
+local d2r = math.pi / 180
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -52,47 +51,28 @@ img = image.load(images[1])
 
 local width      = img:size(3)
 local height     = img:size(2)
--- images are vertical
 
-hfov = poses[1].degrees_per_px_x * width * math.pi / 180
-vfov = poses[1].degrees_per_px_y * height * math.pi / 180
-cx   = width * poses[1].center_u
+hfov = poses[1].degrees_per_px_x * width * d2r
+vfov = poses[1].degrees_per_px_y * height * d2r
+cx   = width  * poses[1].center_u
 cy   = height * poses[1].center_v
-pi       = math.pi
-pi2      = math.pi/2
-out_fov  = pi2
-out_size = 512
 
 proj_from = projection.SphericalProjection.new(width,height, hfov,vfov,cx,cy)
 
-p("Creating Skybox Projection")
 time_prep = sys.toc()
 printf(" - load image in %2.4fs", time_prep)
 sys.tic()
 
--- make a skybox
-centers = {{0,0},{pi2,0},{pi,0},{-pi2,0},{0,pi2},{0,-pi2}}
--- this naming comes from unity and is from the outside looking in
-names   = {"front", "left", "back", "right", "down", "up"}
-
-remappers = {}
-for _,off in ipairs(centers) do 
-
-   local proj_to = projection.GnomonicProjection.new(out_size,out_size,
-                                               out_fov,out_fov,
-                                               out_size/2,out_size/2,
-                                               off[1],off[2])
-   
-   table.insert(remappers, projection.Remap.new(proj_from,proj_to))
-end
+p("Creating Skybox Projection")
+cmap = projection.CubeMap.new(proj_from,out_size)
 
 time_map = sys.toc()
 printf(" - make map %2.4fs", time_map)
 sys.tic()
 
-for i,r in ipairs(remappers) do 
-   local face = r:remap(img)
-   local outf = out_file .."_"..names[i]..".jpg"
+faces = cmap:remap(img)
+for name,face in pairs(faces) do 
+   local outf = out_file .."_"..name..".jpg"
    image.display(face)
    printf(" - saving: %s", outf)
    image.save(outf,face)
