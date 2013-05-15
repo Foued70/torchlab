@@ -1,3 +1,5 @@
+Class()
+
 require 'image'
 
 sys.tic()
