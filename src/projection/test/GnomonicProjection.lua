@@ -1,21 +1,19 @@
-local pi = math.pi
-local pi2 = pi * 0.5
+Class()
 
-local width  = 4000
-local height = 3000
+pi = math.pi
+pi2 = pi * 0.5
 
-local hfov = pi2 
-local vfov = hfov * height / width
+width  = 4000
+height = 3000
+
+hfov = pi2 
+vfov = hfov * height / width
  
-local gp = projection.GnomonicProjection.new(width,height, hfov,vfov)
-local rp = projection.RectilinearProjection.new(width,height, hfov,vfov)
+gp = projection.GnomonicProjection.new(width,height, hfov,vfov)
+rp = projection.RectilinearProjection.new(width,height, hfov,vfov)
 
-local angles = gp:angles_map()
-local angles_rp = rp:angles_map()
-
-local unit_coords, unit_coords_rp
-local pixels, pixels_rp, pixels_angles
-local time, err
+angles = gp:angles_map()
+angles_rp = rp:angles_map()
 
 perElement = 1/angles[1]:nElement()
 

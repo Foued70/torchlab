@@ -1,3 +1,5 @@
+Class()
+
 require 'image'
 
 sys.tic()
@@ -60,11 +62,14 @@ cy   = height * poses[1].center_v
 out_fov  = pi/1.05
 out_c    = out_size * 0.5
 
-proj_sphere = projection.SphericalProjection.new(width,height, hfov,vfov,cx,cy)
+proj_sphere = 
+   projection.SphericalProjection.new(width,height, hfov,vfov,cx,cy)
 -- forward
-proj_stereo = projection.StereographicProjection.new(out_size,out_size,out_fov,out_fov,nil,nil,0,0)
+proj_stereo = 
+   projection.StereographicProjection.new(out_size,out_size,out_fov,out_fov,nil,nil,0,0)
 -- little world
-proj_little = projection.StereographicProjection.new(out_size,out_size,out_fov,out_fov,nil,nil,0,pi2)
+proj_little = 
+   projection.StereographicProjection.new(out_size,out_size,out_fov,out_fov,nil,nil,0,pi2)
 
 time_prep = sys.toc()
 printf(" - prep in %2.4fs", time_prep)

@@ -1,7 +1,9 @@
+Class()
+
 require 'image'
 
-local pi = math.pi
-local pi2 = pi * 0.5
+pi = math.pi
+pi2 = pi * 0.5
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -31,7 +33,7 @@ if not images then
          printf("--- Skipping .DS_Store file")
          
       elseif (f:gmatch("jpg$")() or f:gmatch("png$")()) then
-         local imgfile = imagesdir.."/"..f
+         imgfile = imagesdir.."/"..f
          table.insert(images, imgfile)
          printf("Found : %s", imgfile)
       end
@@ -41,13 +43,13 @@ collectgarbage()
 
 img = image.load(images[1])
 
-local width  = img:size(3)
-local height = img:size(2)
-local scale  = 1/5
+width  = img:size(3)
+height = img:size(2)
+scale  = 1/5
 
 -- images are vertical
-local vfov = (97/180) * pi 
-local hfov = (74/180) * pi
+vfov = (97/180) * pi 
+hfov = (74/180) * pi
  
 proj_from = projection.RectilinearProjection.new(width,height,hfov,vfov)
 proj_to   = projection.SphericalProjection.new(width*scale,height*scale,hfov,vfov)
@@ -61,7 +63,7 @@ rect_to_sphere = projection.Remap.new(proj_from,proj_to)
 -- called when needed on the first call to remap, but by calling it
 -- here we can compute the timing information.
 index1D = rect_to_sphere:get_index_and_mask()
-local perElement = index1D:nElement()
+perElement = index1D:nElement()
 time = sys.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
 sys.tic()

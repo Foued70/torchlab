@@ -1,6 +1,8 @@
+Class()
+
 require 'image'
 
-local lens_data = require 'util.lens_sensor_types'
+lens_data = require 'util.lens_sensor_types'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -30,7 +32,7 @@ if not images then
          printf("--- Skipping .DS_Store file")
          
       elseif (f:gmatch("jpg$")() or f:gmatch("png$")()) then
-         local imgfile = imagesdir.."/"..f
+         imgfile = imagesdir.."/"..f
          table.insert(images, imgfile)
          printf("Found : %s", imgfile)
       end
@@ -43,7 +45,7 @@ img = image.load(images[1])
 width = img:size(3)
 height = img:size(2)
  
-local scale  = 1/5
+scale  = 1/5
 
 lens = lens_data.sigma_10_20mm 
 

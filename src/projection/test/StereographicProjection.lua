@@ -1,19 +1,17 @@
-local pi = math.pi
-local pi2 = pi * 0.5
+Class()
 
-local width  = 4000
-local height = 3000
+pi = math.pi
+pi2 = pi * 0.5
 
-local hfov = pi2
-local vfov = hfov * height / width
+width  = 4000
+height = 3000
 
-local gp = projection.StereographicProjection.new(width,height, hfov,vfov)
+hfov = pi2
+vfov = hfov * height / width
 
-local angles = gp:angles_map()
+gp = projection.StereographicProjection.new(width,height, hfov,vfov)
 
-local unit_coords, unit_coords_rp
-local pixels, pixels_rp, pixels_angles
-local time, err
+angles = gp:angles_map()
 
 perElement = 1/angles[1]:nElement()
 
