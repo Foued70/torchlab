@@ -30,7 +30,9 @@ end
 function _G.Class(parent)
   local info = debug.getinfo(2)
   local filename = info.source:sub(2) -- remove the '@' prefix
-  local name = filename:match('/src/(.+).lua$'):gsub('/','.')
+  local name = filename:match('/?src/(.+).lua$')
+  name = name or filename:match('/?(.+).lua$')
+  name = name:gsub('/','.')
   local class = create_class_for_name(name)
 
   if parent then
@@ -40,6 +42,7 @@ function _G.Class(parent)
     setmetatable(class, {__index = function(self, name) return _G[name] end })
   end
 
+  class.__class__ = class
   class.__classname__ = name
   class.__filename__ = filename
   class.__mod_time__ = sys.fstat(filename)
