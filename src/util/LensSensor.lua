@@ -1,4 +1,4 @@
-local projection = util.projection
+local projection = projection.util
 local geom = util.geom
 
 local pi = math.pi

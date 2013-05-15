@@ -24,3 +24,25 @@ end
 function get_index_lt_val(vals,val)
    return vals:lt(val):sum()
 end
+
+
+-- takes a LongStorage <size> and adds a new dimension in the first dimension. eg: 
+-- 
+--   > t:size()
+-- 
+--    3280
+--    4948
+--    [torch.LongStorage of size 2]
+-- 
+--   > add_slices(3,t:size())
+-- 
+--    3
+--    3280
+--    4948
+--    [torch.LongStorage of size 3]
+-- 
+function add_slices(n_slices, size)
+   local out_size = {n_slices} 
+   for i = 1,size:size() do table.insert(out_size, size[i]) end
+   return torch.LongTensor(out_size):storage()
+end
