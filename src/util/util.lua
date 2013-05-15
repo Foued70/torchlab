@@ -46,3 +46,15 @@ function add_slices(n_slices, size)
    for i = 1,size:size() do table.insert(out_size, size[i]) end
    return torch.LongTensor(out_size):storage()
 end
+
+-- Really need a FILE GLOB...
+function file_match(dir,match) 
+   if not paths.dirp(dir) then return nil end
+   out = {}
+   for f in paths.files(dir) do 
+      if f:gmatch(match)() then
+         table.insert(out,dir .. "/" .. f) 
+      end 
+   end
+   return out
+end
