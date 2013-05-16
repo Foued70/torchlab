@@ -20,17 +20,22 @@ function StereographicProjection:__init(width, height,
    -- How to get to normalized coordinates
    self.units_per_pixel_x = math.tan(self.hfov*0.5)/width
    self.units_per_pixel_y = math.tan(self.vfov*0.5)/height
-   
-   lambda = lambda or 0
-   phi    = phi or 0
-   
+      
    self:set_lambda_phi(lambda, phi)
 
 end
 
 function StereographicProjection:set_lambda_phi(lambda,phi)
-   self.lambda0 = lambda 
-   self.phi1    = phi
+   self.tangent_point = self.tangent_point or torch.Tensor(2)
+
+   self.tangent_point[1] = lambda or 0 
+   self.tangent_point[2] = phi or 0
+
+   -- make sure that the tangent point is expressed betwee -pi and pi
+   projection.util.recenter_angles(self.tangent_point)
+
+   self.lambda0          = self.tangent_point[1]   
+   self.phi1             = self.tangent_point[2]
 
    self.sin_lambda0 = math.sin(self.lambda0)
    self.cos_lambda0 = math.cos(self.lambda0)
@@ -83,6 +88,9 @@ function StereographicProjection:coords_to_angles(coords, angles)
    rho:add(temp)
    -- lambda + atan((x * sinc) / (rho * cos_phi * cosc ) + ( - y * sin_phi * sinc))
    azimuth:atan2(rho):add(self.lambda0)
+
+   -- resets angles to lie between -pi and pi
+   projection.util.recenter_angles(angles)
 
    return angles
 end
