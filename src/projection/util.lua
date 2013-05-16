@@ -169,9 +169,15 @@ function recenter_angles(angles)
 
    local over   = angles:gt(pi)
    local n_over = over:sum()
-   if (n_over > 0) then
+   if (n_over > 0) then 
       printf(" - fixing %d pixels", n_over)
-      angles[over] = angles[over]:add(-2*pi)
+      -- find the number of times we have to subtract 2pi 
+      local div = angles[over]:add(-pi):mul(1/(2*pi))
+      div:apply(function (x) return math.modf(1+x) end)
+      div:mul(-2*pi)
+      -- subtract 2pi that number of times.
+      angles[over] = angles[over]:add(div) 
    end
+   -- put back the sign
    angles:cmul(sign)
 end
