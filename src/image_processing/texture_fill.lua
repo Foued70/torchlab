@@ -1,3 +1,5 @@
+Class()
+
 require 'image'
 
 cmd = torch.CmdLine()
@@ -17,25 +19,24 @@ cmd:option('-lw',256,'lookup_size_w - width of window in which to look up')
 cmd:text()
 
 -- parse input params
-local params = cmd:parse(arg)
+params = cmd:parse(arg)
 
-local image_file  = params.imagefile
-local mask_file   = params.maskfile
-local out_file    = params.outfile
-local batch_size = params.bs
-local window_size = params.ws
-local ws = window_size
+image_file  = params.imagefile
+mask_file   = params.maskfile
+out_file    = params.outfile
+batch_size = params.bs
+window_size = params.ws
+ws = window_size
 -- size of area in which to find matching patches (in pixels)
-local lookup_size_h = params.lh
-local lookup_size_w = params.lw
+lookup_size_h = params.lh
+lookup_size_w = params.lw
 
 if not paths.filep(image_file) then 
    error(string.format("-imagefile %s not found",image_file))
 end
 
-local img_rgb = image.load(image_file)
+img_rgb = image.load(image_file)
 
-local mask
 if mask_file and paths.filep(mask_file) then 
    printf(" - attempt to load mask file %s", mask_file)
    mask = image.load(mask_file)
@@ -56,34 +57,34 @@ end
 -- patch  : a window around the pixel (eg. 5x5)
 -- lookup : a set of windows (eg. 10x10 of 5x5)
 
-local timer = ui.Timer.new()
+timer = ui.Timer.new()
 
-local n_random_patches = 2
+n_random_patches = 2
 
-local ctr = math.ceil(ws*0.5)
+ctr = math.ceil(ws*0.5)
 
-local channel_mix  = torch.Tensor({40,20,20})
+channel_mix  = torch.Tensor({40,20,20})
 
 mask[mask:gt(0)] = 1 -- binarize
-local tofill       = mask:clone()
+tofill       = mask:clone()
 
-local image_h      = img_rgb:size(2)
-local image_w      = img_rgb:size(3)
-local pano_lab     = image.rgb2lab(img_rgb)
+image_h      = img_rgb:size(2)
+image_w      = img_rgb:size(3)
+pano_lab     = image.rgb2lab(img_rgb)
 
 -- views into the mask which gets up dated
-local mask_patches = tofill:unfold(1,ws,1):unfold(2,ws,1)
+mask_patches = tofill:unfold(1,ws,1):unfold(2,ws,1)
 
-local mps          = mask_patches:size()
+mps          = mask_patches:size()
 
 -- make data 
-local pano_patches = pano_lab:unfold(2,ws,1):unfold(3,ws,1)
-local pano_lookup  = pano_lab:unfold(2,lookup_size_h,1):unfold(3,lookup_size_w,1)
-local mask_lookup  = mask:unfold(1,lookup_size_h,1):unfold(2,lookup_size_w,1)
-local pls          = pano_lookup:size()
+pano_patches = pano_lab:unfold(2,ws,1):unfold(3,ws,1)
+pano_lookup  = pano_lab:unfold(2,lookup_size_h,1):unfold(3,lookup_size_w,1)
+mask_lookup  = mask:unfold(1,lookup_size_h,1):unfold(2,lookup_size_w,1)
+pls          = pano_lookup:size()
 
 -- flatten
-local total_patches = mps[1]*mps[2]
+total_patches = mps[1]*mps[2]
 
 -- we need to operate in 2D offsets, index gives 1D offset
 function index_to_hw (index,row_width)

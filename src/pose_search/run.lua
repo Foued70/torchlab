@@ -1,59 +1,18 @@
+Class()
+
+sys.tic()
 require 'image'
 require 'nn'
 
-LensSensor = util.LensSensor
-projection = util.projection
--- mp = util.mp
+saliency  = require 'saliency'
+lens_data = require 'util.lens_sensor_types'
 
 d2r = math.pi / 180
-
--- COPY from util/mp.lua until things are settled
--- <texture filename> <qx> <qy> <qz> <qw> <tx> <ty> <tz> <center u>
--- <center v> <degrees per px x> <degrees per px y> 
-function load_poses(posefile)
-  if not paths.filep(posefile) then return nil end
-  
-  print('Loading poses from', posefile)
-  local mp_poses = {}
-  
-  for line in io.lines(posefile) do
-    local pose_values = {}
-    
-    for value in line:gmatch("%S+") do    
-      table.insert(pose_values, value)
-    end
-
-    local pose = {}
-    pose.name = pose_values[1]
-    pose.rotation = torch.Tensor({pose_values[2], pose_values[3], pose_values[4], pose_values[5]})
-    pose.position = torch.Tensor({pose_values[6], pose_values[7], pose_values[8]})
-    pose.center_u = pose_values[9]
-    pose.center_v = pose_values[10]
-    pose.degrees_per_px_x = pose_values[11]
-    pose.degrees_per_px_y = pose_values[12]        
-    table.insert(mp_poses, pose)
-  end
-  print(#mp_poses, 'poses loaded.')
-  
-  return mp_poses
-end
-
--- Really need a FILE GLOB...
-function file_match(dir,match) 
-   if not paths.dirp(dir) then return nil end
-   out = {}
-   for f in paths.files(dir) do 
-      if f:gmatch(match)() then
-         table.insert(out,dir .. "/" .. f) 
-      end 
-   end
-   return out
-end
 
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text()
-cmd:text('Compute Perspective 3 points algorithm')
+cmd:text('Align images in a sweep')
 cmd:text()
 cmd:text('Options')
 cmd:option('-scan_dir',
@@ -67,9 +26,7 @@ cmd:option('-sweep_prefix',
            "sweep_",
            "Directory prefix for DSLR image sweeps (relative to scan_dir)")
 
-cmd:option("-lens_type", 
-           "nikon_10p5mm_r2t_full",
-           "data for image dewarping")
+cmd:option("-lens_type", "sigma_10_20mm", "data for image dewarping")
 
 cmd:text()
 
@@ -80,18 +37,19 @@ scan_dir = params.scan_dir
 
 matter_dir = scan_dir .. params.matter_dir
 
-matter_pose_fname = file_match(matter_dir,"texture_info.txt")
-if #matter_pose_fname > 0 then   
+matter_pose_fname = util.util.file_match(matter_dir,"texture_info.txt")
+
+if #matter_pose_fname > 0 then
    matter_pose_fname = matter_pose_fname[1]
    printf("using : %s", matter_pose_fname)
 end
 
-poses = load_poses(matter_pose_fname)
+poses = util.mp.load_poses(matter_pose_fname)
 
 sweep_dir  = scan_dir .. params.sweep_prefix
 
 -- load lens calibration
-lens = LensSensor.new(params.lens_type)
+lens = lens_data.sigma_10_20mm
 
 preprocess = nn.Sequential()
 preprocess:add(nn.SpatialContrastiveNormalization(1,image.gaussian(9)))
@@ -102,40 +60,123 @@ preprocess:add(nn.SpatialContrastiveNormalization(1,image.gaussian(9)))
 sweep_no = 1
 
 -- matterport texture
-matter_texture_fname = file_match(matter_dir,poses[sweep_no].name)
+matter_texture_fname = util.util.file_match(matter_dir,poses[sweep_no].name)
 
-if #matter_texture_fname > 0 then   
-   matter_texture_fname = matter_texture_fname[1]
+if #matter_texture_fname > 0 then
+   matter_texture_fname = matter_texture_fname[sweep_no]
    printf("using : %s", matter_texture_fname)
 end
 
 matter_texture = image.load(matter_texture_fname)
-mpout  = preprocess:forward(image.rgb2lab(matter_texture):narrow(1,1,1))
-mpvfov = d2r * 0.5 * 512 * poses[1].degrees_per_px_y
-image.display(mpout)
+mp_out  = preprocess:forward(image.rgb2lab(matter_texture):narrow(1,1,1))
+
+mp_sal  = saliency.high_entropy_features(mp_out)
+
+mp_width      = matter_texture:size(3)
+mp_height     = matter_texture:size(2)
+
+mp_hfov = poses[1].degrees_per_px_x * mp_width * d2r
+mp_vfov = poses[1].degrees_per_px_y * mp_height * d2r
+mp_cx   = mp_width  * poses[1].center_u
+mp_cy   = mp_height * poses[1].center_v
+
+image.display(matter_texture)
+image.display(mp_sal)
+
+-- load DSLR image
+
+images = util.util.file_match(sweep_dir .. sweep_no, ".jpg")
+
+img = image.load(images[1])
+
+width = img:size(3)
+height = img:size(2)
+
+
+lens = lens_data.sigma_10_20mm
+
+-- handle the vertical images correctly
+if width < height then
+   fx = lens.fy
+   fy = lens.fx
+   cx = lens.cy
+   cy = lens.cx
+else
+   fx = lens.fx
+   fy = lens.fy
+   cx = lens.cx
+   cy = lens.cy
+end
+
+
+proj_cal  = projection.CalibratedProjection.new(width,height,
+                                                fx, fy,
+                                                cx, cy,
+                                                lens.radial_coeff,
+                                                lens.tangential_coeff
+                                               )
+proj_rect = projection.RectilinearProjection.new(width,height,
+                                                 proj_cal.hfov,proj_cal.vfov)
+
+-- best guess at aligning the two images.
+out_height = proj_cal.vfov / (d2r * poses[1].degrees_per_px_y)
+out_width  = proj_cal.hfov / (d2r * poses[1].degrees_per_px_x)
+
+proj_sphere = projection.SphericalProjection.new(out_width, out_height,
+                                                 proj_cal.hfov,proj_cal.vfov,
+                                                 cx,cy)
+
+
+time_prep = sys.toc()
+printf(" - load image in %2.4fs", time_prep)
+sys.tic()
+
+p("Testing Calibrated Image Projection")
+
+sys.tic()
+
+cal_to_sphere         = projection.Remap.new(proj_cal,proj_sphere)
+-- rect_to_sphere        = projection.Remap.new(proj_rect,proj_sphere)
+-- do not need to call get_index_and_mask explicitly as it will be
+-- called when needed on the first call to remap, but by calling it
+-- here we can compute the timing information.
+index1D_cal    = cal_to_sphere:get_index_and_mask()
+-- index1D_rect   = rect_to_sphere:get_index_and_mask()
+
+perElement = index1D_cal:nElement()
+
+time = sys.toc()
+printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
+sys.tic()
+
+
 
 -- DSLR images
 
-sweep_image_fname = file_match(sweep_dir .. sweep_no, ".jpg")
+for i = 1,#images do
+   img = image.load(images[i])
 
-for ii = 1,#sweep_image_fname do 
-   
-   rawimg = image.load(sweep_image_fname[ii])
+   cal_img_out  = cal_to_sphere:remap(img)
+   -- rect_img_out = rect_to_sphere:remap(img)
 
-   if ii == 1 then
-      lens:add_image(rawimg)
+   time = sys.toc()
+   printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
+   sys.tic()
 
-      -- find proper size for projection to match matterport fov
+   cal_pp = preprocess:forward(image.rgb2lab(cal_img_out):narrow(1,1,1))
+   -- rect_pp = preprocess:forward(image.rgb2lab(rect_img_out):narrow(1,1,1))
 
-      scale = (512 / lens.image_h ) * ( lens.vfov / mpvfov)
+   cal_sal = saliency.high_entropy_features(cal_pp)
+   -- rect_sal = saliency.high_entropy_features(rect_pp)
 
+   time = sys.toc()
+   printf(" - convert to lab %2.4fs %2.4es per px", time, time*perElement)
+   sys.tic()
 
-      map = lens:make_projection_map("sphere",scale)
-   end
+   -- image.display(rect_img_out)
+   -- image.display(rect_sal)
+   image.display(cal_img_out)
+   image.display(cal_sal)
 
-   imgout = preprocess:forward(image.rgb2lab(projection.remap(rawimg,map)):narrow(1,1,1)):clone()
-
-   rawimg = nil
    collectgarbage()
-   image.display(imgout)
 end

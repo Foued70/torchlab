@@ -1,8 +1,10 @@
+Class()
+
 require 'image'
 
 sys.tic()
 
-local d2r = math.pi / 180
+d2r = math.pi / 180
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -37,7 +39,7 @@ if not images then
       elseif (f:gmatch("_texture_info.txt")()) then
          pose_file = scandir.."/"..f
       elseif (f:gmatch("jpg$")() or f:gmatch("png$")()) then
-         local imgfile = scandir.."/"..f
+         imgfile = scandir.."/"..f
          table.insert(images, imgfile)
          printf("Found : %s", imgfile)
       end
@@ -49,8 +51,8 @@ poses = util.mp.load_poses(pose_file)
 
 img = image.load(images[1])
 
-local width      = img:size(3)
-local height     = img:size(2)
+width      = img:size(3)
+height     = img:size(2)
 
 hfov = poses[1].degrees_per_px_x * width * d2r
 vfov = poses[1].degrees_per_px_y * height * d2r
@@ -72,7 +74,7 @@ sys.tic()
 
 faces = cmap:remap(img)
 for name,face in pairs(faces) do 
-   local outf = out_file .."_"..name..".jpg"
+   outf = out_file .."_"..name..".jpg"
    image.display(face)
    printf(" - saving: %s", outf)
    image.save(outf,face)
