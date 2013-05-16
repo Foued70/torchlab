@@ -53,10 +53,3 @@ function Properties:save()
 end
 
 
--- make sure you do this last in the file
--- local mt = getmetatable(Properties)
--- mt.__index = function(self, name)
---   p(self)
---   return self.props[name]
--- end
-

@@ -3,8 +3,8 @@ local url = require "socket.url"
 local ltn12 = require "ltn12"
 local paths = require "paths"
 local _ = require "util.underscore"
-local qs = require "util.qs"
-local c = require("util.cookie")
+local qs = require "net.qs"
+local c = require("net.cookie")
 local cookie = c.cookie
 local cookie_jar = c.jar:new()
 
