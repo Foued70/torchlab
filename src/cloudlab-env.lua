@@ -7,6 +7,7 @@ p = xlua.print
 log = require 'util.log'
 
 CLOUDLAB_SRC = paths.dirname(debug.getinfo(1).short_src)
+HOME = os.getenv('HOME')
 
 require 'util.Class'
 
