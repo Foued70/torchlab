@@ -1,4 +1,4 @@
-Class()
+-- Class()
 
 require 'image'
 
@@ -32,7 +32,7 @@ if not images then
       if f == ".DS_Store" then -- exclude OS X automatically-created backup files
          printf("--- Skipping .DS_Store file")
          
-      elseif (f:gmatch("jpg$")() or f:gmatch("png$")()) then
+      elseif (f:gmatch("JPG$")() or f:gmatch("png$")()) then
          imgfile = imagesdir.."/"..f
          table.insert(images, imgfile)
          printf("Found : %s", imgfile)
@@ -52,8 +52,8 @@ vfov = (97/180) * pi
 hfov = (74.22/180) * pi
 
 -- output full equirectangular
-out_width  = 600
-out_height = 300
+out_width  = 2048
+out_height = 1024
 out_hfov   = 2 * pi
 out_vfov   = pi
 
@@ -64,27 +64,55 @@ p("Testing Image Projection")
 
 sys.tic()
 
+indices     = {}
+masks       = {}
+out_images  = {}
+
 rect_to_sphere = projection.Remap.new(proj_from,proj_to)
--- do not need to call get_index_and_mask explicitly as it will be
--- called when needed on the first call to remap, but by calling it
--- here we can compute the timing information.
-index1D = rect_to_sphere:get_index_and_mask()
-perElement = index1D:nElement()
+
 time = sys.toc()
-printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
+printf(" - make map %2.4fs", time)
 sys.tic()
 force  = true 
 lambda = 0
 phi    = 0
-delta  = 2 * pi / 10
+delta  = 2 * pi / 6
+
 for i = 1,#images do 
-   img = image.load(images[i])
-   lambda = lambda + delta
+
+   img    = image.load(images[i])
+
    proj_from:set_lambda_phi(lambda,phi)
-   img_out = rect_to_sphere:remap(img,force)
+   index1D,stride,mask = rect_to_sphere:get_index_and_mask(force)
+   img_out = rect_to_sphere:remap(img)
+
+   table.insert(indices,index1D)
+   table.insert(masks,mask)
+   table.insert(out_images,img_out)
+
    time = sys.toc()
-   printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
+   printf(" - reproject %2.4fs", time)
    sys.tic()
 
-   image.display{image={img_out}}
+   lambda = lambda + delta
 end
+
+-- blend
+
+allmask = masks[1]:clone()
+for i = 2,#masks do 
+   allmask:add(masks[i])
+end
+allmask:add(-(allmask:min()-1))
+allmask[allmask:eq(allmask:max())] = 0
+allmask = allmask:double():mul(1/allmask:max())
+allmask_size = allmask:size()
+allmask:resize(util.util.add_slices(1,allmask_size))
+allmask = allmask:expand(util.util.add_slices(3,allmask_size))
+
+allimg = torch.cmul(out_images[1],allmask)
+for i = 2,#out_images do 
+   allimg:add(torch.cmul(out_images[i],allmask))
+end
+
+image.display(allimg)
