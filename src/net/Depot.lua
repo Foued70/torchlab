@@ -116,17 +116,17 @@ function get_arc(id)
 end
 
 function put_arc_file(path, filename)
-  local resp, code = request.put(host.."/arcs/"..path, {files = {file = filename}, redirect = false})
+  local resp, code, headers = request.put(host.."/arcs/"..path, {files = {file = filename}, redirect = false})
   if code ~= 200 then
     log.error(code, resp[1])
     return false
   end
 
-  return true
+  return tonumber(headers.last_modified)
 end
 
 function get_arc_file(path, filename)
-  local resp, code = request.get(host.."/arcs/"..path, {sink = filename, redirect = false})
+  local resp, code, headers = request.get(host.."/arcs/"..path, {sink = filename, redirect = false})
   if code ~= 200 then
     log.error(code, resp[1])
     return false

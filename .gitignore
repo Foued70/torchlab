@@ -28,3 +28,4 @@ cloudlab.sublime-workspace
 # temp files
 *~
 \#*
+/src/tmp
