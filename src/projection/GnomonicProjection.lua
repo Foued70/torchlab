@@ -1,6 +1,7 @@
 local GnomonicProjection = Class(projection.Projection)
 
 local pi2 = math.pi * 0.5
+local huge = math.huge
 
 -- The Gnomonic Projection is a more general version of the
 -- RectilinearProjection which allows tangent point of plane to
@@ -138,5 +139,11 @@ function GnomonicProjection:angles_to_coords(angles, coords)
    y:add(sin_phi:mul(self.cos_phi1))
    y:cdiv(cosc)
 
+   -- remove points which are further than pi/2 radians away from the
+   -- tangent point. cosc is the cosine of the hypotenuse of a right
+   -- triangle with azimuth and elevation
+   local mask = cosc:lt(0)
+   x[mask] = huge
+   y[mask] = huge
    return coords
 end
