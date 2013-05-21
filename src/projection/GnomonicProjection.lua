@@ -1,5 +1,7 @@
 local GnomonicProjection = Class(projection.Projection)
 
+local pi2 = math.pi * 0.5
+
 -- The Gnomonic Projection is a more general version of the
 -- RectilinearProjection which allows tangent point of plane to
 -- touch other parts of the sphere.  This is necessary for creating
@@ -22,18 +24,28 @@ function GnomonicProjection:__init(width, height,
    self.units_per_pixel_x = math.tan(self.hfov*0.5)/self.center[1]
    self.units_per_pixel_y = math.tan(self.vfov*0.5)/self.center[2]
 
-   self.lambda0 = lambda or 0
-   self.phi1    = phi or 0
+   
+   self:set_lambda_phi(lambda,phi)
+
+end
+
+function GnomonicProjection:set_lambda_phi(lambda,phi)
+   self.tangent_point = self.tangent_point or torch.Tensor(2)
+
+   self.tangent_point[1] = lambda or 0 
+   self.tangent_point[2] = phi or 0
+
+   -- make sure that the tangent point is expressed betwee -pi and pi
+   projection.util.recenter_angles(self.tangent_point)
+
+   self.lambda0          = self.tangent_point[1]   
+   self.phi1             = self.tangent_point[2]
 
    self.sin_lambda0 = math.sin(self.lambda0)
    self.cos_lambda0 = math.cos(self.lambda0)
    self.sin_phi1    = math.sin(self.phi1)
    self.cos_phi1    = math.cos(self.phi1)
-end
 
-function GnomonicProjection:set_lambda_phi(lambda,phi)
-   self.lambda0 = lambda 
-   self.phi1    = phi
 end
 
 -- coords - coords in normalized coordinates, 0,0 center
@@ -43,7 +55,7 @@ function GnomonicProjection:coords_to_angles(coords, angles)
 
    local x = coords[1]
    local y = coords[2]
-
+   
    -- rho = sqrt(x^2 + y^2)
    local rho = x:clone()
    rho:cmul(x)  -- x^2
@@ -73,14 +85,19 @@ function GnomonicProjection:coords_to_angles(coords, angles)
    -- not going to use rho after this
    -- rho * cos_phi1 * cosc
    rho:mul(self.cos_phi1):cmul(cosc)
+   
    -- - y * sin_phi1 * sinc
    temp:copy(y):mul(-self.sin_phi1):cmul(sinc)
-
+   
    -- (rho * cos_phi * cosc ) + ( - y * sin_phi * sinc)
    rho:add(temp)
+      
    -- lambda + atan((x * sinc) / (rho * cos_phi * cosc ) + ( - y * sin_phi * sinc))
    azimuth:atan2(rho):add(self.lambda0)
-
+   
+   -- resets angles to lie between -pi and pi
+   projection.util.recenter_angles(angles)
+   
    return angles
 end
 
@@ -90,12 +107,12 @@ end
 function GnomonicProjection:angles_to_coords(angles, coords)
    coords = coords or torch.Tensor(angles:size())
 
-
+   local angles = angles:clone()
    -- Azimuth: longitude, lambda, easting, how far east west
    local azimuth   = angles[1]
    -- Elevation: latitude, phi, northing, how far north, south
    local elevation = angles[2]
-
+   
    local x = coords[1]
    local y = coords[2]
 

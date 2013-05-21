@@ -24,6 +24,11 @@ end
 -- calibrated ones) need access to instance variables
 function Projection:coords_to_angles(coords, angles)
    error("Not implemented")
+
+   -- WARNING. You should call this function at the end of your code.
+   -- It resets your angles to lie between -pi and pi
+   projection.util.recenter_angles(angles)
+
 end
 
 function Projection:angles_to_coords(angles, coords)
@@ -45,9 +50,6 @@ function Projection:pixels_to_angles(pixels, angles)
 
    -- convert unit sphere projection coords to angles
    self:coords_to_angles(coords,angles)
-
-   -- make sure the angles lie between -pi and pi
-   projection.util.recenter_angles(angles)
 
    return angles
 end

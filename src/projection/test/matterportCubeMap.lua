@@ -14,7 +14,7 @@ cmd:text()
 cmd:text('Options')
 cmd:option('-scandir', 'images/', 'directory with the images to load')
 cmd:option('-outfile', 'skybox', 'basename for 6 output images for skybox')
-cmd:option('-size', '1024', 'size in pixels of side of skybox cube')
+cmd:option('-size', '512', 'size in pixels of side of skybox cube')
 cmd:text()
 
 -- parse input params
