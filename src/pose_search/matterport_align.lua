@@ -1,11 +1,9 @@
-Class()
+-- Class()
 
-sys.tic()
 require 'image'
-require 'nn'
 
-saliency  = require 'saliency'
-lens_data = require 'util.lens_sensor_types'
+pi = math.pi
+pi2 = pi * 0.5
 
 d2r = math.pi / 180
 
@@ -16,10 +14,10 @@ cmd:text('Align images in a sweep')
 cmd:text()
 cmd:text('Options')
 cmd:option('-scan_dir',
-           "../data/test/96_spring_kitchen/",
+           "../data/test/96_spring_kitchen/matterport_mount/",
            'base directory for scan')
 cmd:option('-matter_dir',
-           "raw_scan/",
+           "../data/test/96_spring_kitchen/blonde-beach-9765/",
            "Directory for matterport data (relative to scan_dir)")
 
 cmd:option('-sweep_prefix',
@@ -35,7 +33,7 @@ params = cmd:parse(arg)
 
 scan_dir = params.scan_dir
 
-matter_dir = scan_dir .. params.matter_dir
+matter_dir = params.matter_dir
 
 matter_pose_fname = util.util.file_match(matter_dir,"texture_info.txt")
 
@@ -46,137 +44,114 @@ end
 
 poses = util.mp.load_poses(matter_pose_fname)
 
-sweep_dir  = scan_dir .. params.sweep_prefix
+sweep_dir  = scan_dir .. "/" .. params.sweep_prefix
 
--- load lens calibration
-lens = lens_data.sigma_10_20mm
+nshots = 13
+force  = true
+delta  = 2 * pi / nshots
 
-preprocess = nn.Sequential()
-preprocess:add(nn.SpatialContrastiveNormalization(1,image.gaussian(9)))
-
--- Could loop over sweeps here.
+offset = 2 * pi / 6.5
 
 -- load sweeps
-sweep_no = 1
+for sweep_no = 1,4 do
 
--- matterport texture
-matter_texture_fname = util.util.file_match(matter_dir,poses[sweep_no].name)
+   -- matterport texture
+   matter_texture_fname = util.util.file_match(matter_dir,poses[sweep_no].name)
 
-if #matter_texture_fname > 0 then
-   matter_texture_fname = matter_texture_fname[sweep_no]
-   printf("using : %s", matter_texture_fname)
-end
+   if #matter_texture_fname > 0 then
+      matter_texture_fname = matter_texture_fname[1]
+      printf("using : %s", matter_texture_fname)
+   end
 
-matter_texture = image.load(matter_texture_fname)
-mp_out  = preprocess:forward(image.rgb2lab(matter_texture):narrow(1,1,1))
+   matter_texture = image.load(matter_texture_fname)
 
-mp_sal  = saliency.high_entropy_features(mp_out)
+   mp_width      = matter_texture:size(3)
+   mp_height     = matter_texture:size(2)
 
-mp_width      = matter_texture:size(3)
-mp_height     = matter_texture:size(2)
+   mp_rad_per_px_x = poses[sweep_no].degrees_per_px_x * d2r
+   mp_rad_per_px_y = poses[sweep_no].degrees_per_px_y * d2r
+   mp_hfov = mp_width * mp_rad_per_px_x
+   mp_vfov = mp_height * mp_rad_per_px_y
 
-mp_hfov = poses[1].degrees_per_px_x * mp_width * d2r
-mp_vfov = poses[1].degrees_per_px_y * mp_height * d2r
-mp_cx   = mp_width  * poses[1].center_u
-mp_cy   = mp_height * poses[1].center_v
+   mp_cx   = mp_width  * poses[sweep_no].center_u
+   mp_cy   = mp_height * poses[sweep_no].center_v
 
-image.display(matter_texture)
-image.display(mp_sal)
+   -- load DSLR image
 
--- load DSLR image
+   images = util.util.file_match(sweep_dir .. sweep_no, ".JPG")
 
-images = util.util.file_match(sweep_dir .. sweep_no, ".jpg")
+   img = image.load(images[1])
 
-img = image.load(images[1])
+   width  = img:size(3)
+   height = img:size(2)
 
-width = img:size(3)
-height = img:size(2)
+   -- images are vertical
+   vfov = (97.11/180) * pi
+   hfov = (74.22/180) * pi
 
+   proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
+   proj_to   = projection.SphericalProjection.new(mp_width,mp_height,mp_hfov,mp_vfov)
 
-lens = lens_data.sigma_10_20mm
+   p("Testing Image Projection")
 
--- handle the vertical images correctly
-if width < height then
-   fx = lens.fy
-   fy = lens.fx
-   cx = lens.cy
-   cy = lens.cx
-else
-   fx = lens.fx
-   fy = lens.fy
-   cx = lens.cx
-   cy = lens.cy
-end
-
-
-proj_cal  = projection.CalibratedProjection.new(width,height,
-                                                fx, fy,
-                                                cx, cy,
-                                                lens.radial_coeff,
-                                                lens.tangential_coeff
-                                               )
-proj_rect = projection.RectilinearProjection.new(width,height,
-                                                 proj_cal.hfov,proj_cal.vfov)
-
--- best guess at aligning the two images.
-out_height = proj_cal.vfov / (d2r * poses[1].degrees_per_px_y)
-out_width  = proj_cal.hfov / (d2r * poses[1].degrees_per_px_x)
-
-proj_sphere = projection.SphericalProjection.new(out_width, out_height,
-                                                 proj_cal.hfov,proj_cal.vfov,
-                                                 cx,cy)
-
-
-time_prep = sys.toc()
-printf(" - load image in %2.4fs", time_prep)
-sys.tic()
-
-p("Testing Calibrated Image Projection")
-
-sys.tic()
-
-cal_to_sphere         = projection.Remap.new(proj_cal,proj_sphere)
--- rect_to_sphere        = projection.Remap.new(proj_rect,proj_sphere)
--- do not need to call get_index_and_mask explicitly as it will be
--- called when needed on the first call to remap, but by calling it
--- here we can compute the timing information.
-index1D_cal    = cal_to_sphere:get_index_and_mask()
--- index1D_rect   = rect_to_sphere:get_index_and_mask()
-
-perElement = index1D_cal:nElement()
-
-time = sys.toc()
-printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
-sys.tic()
-
-
-
--- DSLR images
-
-for i = 1,#images do
-   img = image.load(images[i])
-
-   cal_img_out  = cal_to_sphere:remap(img)
-   -- rect_img_out = rect_to_sphere:remap(img)
-
-   time = sys.toc()
-   printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
    sys.tic()
 
-   cal_pp = preprocess:forward(image.rgb2lab(cal_img_out):narrow(1,1,1))
-   -- rect_pp = preprocess:forward(image.rgb2lab(rect_img_out):narrow(1,1,1))
+   indices     = {}
+   masks       = {}
+   out_images  = {}
 
-   cal_sal = saliency.high_entropy_features(cal_pp)
-   -- rect_sal = saliency.high_entropy_features(rect_pp)
+   rect_to_sphere = projection.Remap.new(proj_from,proj_to)
 
    time = sys.toc()
-   printf(" - convert to lab %2.4fs %2.4es per px", time, time*perElement)
+   printf(" - make map %2.4fs", time)
    sys.tic()
+   lambda = offset
+   phi    = 0 -- - 5 * rad_per_px_y
 
-   -- image.display(rect_img_out)
-   -- image.display(rect_sal)
-   image.display(cal_img_out)
-   image.display(cal_sal)
+   for i = 1,#images do
 
+      img    = image.load(images[i])
+
+      proj_from:set_lambda_phi(lambda,phi)
+      index1D,stride,mask = rect_to_sphere:get_index_and_mask(force)
+      img_out = rect_to_sphere:remap(img)
+
+      table.insert(indices,index1D)
+      table.insert(masks,mask)
+      table.insert(out_images,img_out)
+
+      time = sys.toc()
+      printf(" - reproject %2.4fs", time)
+      sys.tic()
+
+      lambda = lambda + delta
+   end
+
+   -- blend
+
+   allmask = masks[1]:clone()
+   for i = 2,#masks do
+      allmask:add(masks[i])
+   end
+   allmask:add(-(allmask:min()-1))
+   allmask[allmask:eq(allmask:max())] = 0
+   allmask = allmask:double():mul(1/allmask:max())
+   allmask_size = allmask:size()
+   allmask:resize(util.util.add_slices(1,allmask_size))
+   allmask = allmask:expand(util.util.add_slices(3,allmask_size))
+
+   allimg = torch.cmul(out_images[1],allmask)
+   for i = 2,#out_images do
+      allimg:add(torch.cmul(out_images[i],allmask))
+   end
+
+   orig_texture = matter_texture:clone()
+   matter_texture = matter_texture - allimg
    collectgarbage()
+
+   matter_texture:add(-matter_texture:min())
+   matter_texture:mul(1/matter_texture:max())
+
+   win = image.display{image={allimg,orig_texture,matter_texture},nrow=1}
+   image.save(string.format("align_sweep_%d.png",sweep_no),win.image)
 end
