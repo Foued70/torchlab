@@ -2,6 +2,8 @@
 
 require 'image'
 
+dofile('util.lua')
+
 pi = math.pi
 pi2 = pi * 0.5
 
@@ -14,10 +16,10 @@ cmd:text('Align images in a sweep')
 cmd:text()
 cmd:text('Options')
 cmd:option('-scan_dir',
-           "../data/test/96_spring_kitchen/",
+           "../data/test/96_spring_kitchen/nodal_ninja/",
            'base directory for scan')
 cmd:option('-matter_dir',
-           "raw_scan/",
+           "../data/test/96_spring_kitchen/blonde-beach-9765/",
            "Directory for matterport data (relative to scan_dir)")
 
 cmd:option('-sweep_prefix',
@@ -134,29 +136,16 @@ for sweep_no = 1,4 do
 
    -- blend
 
-   allmask = masks[1]:clone()
-   for i = 2,#masks do
-      allmask:add(masks[i])
-   end
-   allmask:add(-(allmask:min()-1))
-   allmask[allmask:eq(allmask:max())] = 0
-   allmask = allmask:double():mul(1/allmask:max())
-   allmask_size = allmask:size()
-   allmask:resize(util.util.add_slices(1,allmask_size))
-   allmask = allmask:expand(util.util.add_slices(3,allmask_size))
-
-   allimg = torch.cmul(out_images[1],allmask)
-   for i = 2,#out_images do
-      allimg:add(torch.cmul(out_images[i],allmask))
-   end
+   blend_image = blend(out_images,masks)
 
    orig_texture = matter_texture:clone()
-   matter_texture = matter_texture - allimg
+
+   matter_texture = matter_texture - blend_image
    collectgarbage()
 
    matter_texture:add(-matter_texture:min())
    matter_texture:mul(1/matter_texture:max())
 
-   win = image.display{image={allimg,orig_texture,matter_texture},nrow=1}
+   win = image.display{image={blend_image,orig_texture,matter_texture},nrow=1}
    image.save(string.format("align_sweep_%d.png",sweep_no),win.image)
 end
