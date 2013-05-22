@@ -2,7 +2,7 @@
 
 require 'image'
 
-dofile 'util.lua'
+dofile 'blend.lua'
 
 pi = math.pi
 pi2 = pi * 0.5

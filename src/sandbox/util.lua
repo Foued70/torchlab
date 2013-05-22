@@ -5,7 +5,6 @@ function blend (images, masks)
       allmask:add(masks[i])
    end
    allmask:add(-(allmask:min()-1))
-   -- allmask[allmask:eq(allmask:max())]
 
    allmask = allmask:double():add(-allmask:max()):abs()
    -- sum to 1
