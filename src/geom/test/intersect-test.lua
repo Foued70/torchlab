@@ -1,9 +1,9 @@
-local intersect = geometry.intersect
-local rot      = geometry.rotation
-local Ray       = geometry.Ray
-local geom      = geometry.util
+local intersect = geom.intersect
+local rot      = geom.rotation
+local Ray       = geom.Ray
+local geom      = geom.util
 local test = {}
-test.data = require "geometry.test.data.geom-data"
+test.data = require "geom.test.data.geom-data"
 
 -- also tests normals and major dimensions
 function test.point_in_polygon()

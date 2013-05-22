@@ -1,7 +1,7 @@
 require 'torch'
 require 'dok'
 
-local gutil = geometry.util
+local geom = geom.util
 Class()
 
 -- Below is a test for loading C backends using ffi
@@ -59,7 +59,7 @@ z_axis = axes[3]
 local neg_axes   = torch.eye(3):mul(-1)
 
 function axis_rotation(normal,d)
-   local n   = gutil.normalized(normal:narrow(1,1,3))
+   local n   = geom.normalized(normal:narrow(1,1,3))
    return quaternion_from_to(n,d)
 end
 
@@ -168,7 +168,7 @@ function rotation_matrix_to_quaternion (rmat, quat, debug)
    -- put signs into quaternion
    quat:cmul(qsign)
 
-   gutil.normalize(quat)
+   geom.normalize(quat)
 
    return quat
 end

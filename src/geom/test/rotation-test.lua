@@ -2,19 +2,19 @@ require 'torch'
 require 'sys'
 
 
-local rot = geometry.rotation
-local gutil = geometry.util
+local rot = geom.rotation
+local geom = geom.util
 
 local test = {}
-test.data = require "geometry.test.data.geom-data"
+test.data = require "geom.test.data.geom-data"
 
 function test.quaternion_from_to()
    print("Testing quaternion angle btw. 2 vectors")
    local e = 0
-   local p = gutil.normalized(test.data.vec[1])
+   local p = geom.normalized(test.data.vec[1])
 
    for i = 2,test.data.vec:size(1) do
-      local v = gutil.normalized(test.data.vec[i])
+      local v = geom.normalized(test.data.vec[i])
       local q = rot.quaternion_from_to(p,v)
       local d = q - test.data.result_vec_quat[i-1]
       if (d:abs():max() > 1e-6) then

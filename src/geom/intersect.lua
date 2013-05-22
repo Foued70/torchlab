@@ -1,7 +1,7 @@
 Class()
 
-local geom = geometry.rotation
-local Ray =  geometry.Ray
+local geom = geom.rotation
+local Ray =  geom.Ray
 
 -- pt (point) is the intersection between the ray and the plane of the
 -- polygon verts are the vertices of the polygon dims are the

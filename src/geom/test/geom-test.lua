@@ -1,6 +1,6 @@
-local geom      = geometry.util
+local geom      = geom.util
 local test = {}
-test.data = require "geometry.test.data.geom-data"
+test.data = require "geom.test.data.geom-data"
 
 function test.compute_normals()
    print("Testing compute normals")

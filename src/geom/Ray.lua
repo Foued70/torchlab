@@ -1,6 +1,6 @@
 require 'math'
 
-local geom = geometry.util
+local geom = geom.util
 
 -- Ray primitive.  This class is intentionally light weight.
 local Ray = Class()
