@@ -2,8 +2,7 @@ include ../Makefile.common
 
 ver=1.6.0
 
-url=http://www.pointclouds.org/assets/files/$(ver)/PCL-$(ver)-Source.tar.bz2
-
+url=http://downloads.sourceforge.net/project/pointclouds/$(ver)/PCL-$(ver)-Source.tar.bz2
 tar_file=$(build_dir)/deps/PCL-$(ver)-Source.tar.bz2
 unpack=$(build_dir)/deps/PCL-$(ver)-Source
 
@@ -23,7 +22,7 @@ $(install): $(unpack)
 	cd $(unpack)/build; make -j4 install
 
 $(unpack): $(tar_file)
-	cd $(build_dir)/deps; tar -xzf $(tar_file)
+	cd $(build_dir)/deps; tar -xjf $(tar_file)
 
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
