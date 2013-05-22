@@ -3,7 +3,7 @@ CMAKE_POLICY(VERSION 2.6)
 
 INCLUDE(../common.cmake REQUIRED)
 
-SET(src geom.c)
+SET(src rotation.c)
 
 ADD_TORCH_PACKAGE(geom "${src}" "" "Floored 3D utils")
 

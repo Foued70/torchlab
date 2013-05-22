@@ -1,7 +1,9 @@
-local intersect = util.intersect
-local geom = util.geom
-
+local intersect = geometry.intersect
+local rot      = geometry.rotation
+local Ray       = geometry.Ray
+local geom      = geometry.util
 local test = {}
+test.data = require "geometry.test.data.geom-data"
 
 -- also tests normals and major dimensions
 function test.point_in_polygon()
@@ -58,7 +60,7 @@ function test.ray_boundary_intersect()
    print("Testing ray boundary intersection")
    local o     = torch.Tensor({0,0,0})
    local d     = torch.Tensor({1,1,1})
-   local r     = Ray(o,d)
+   local r     = Ray.new(o,d)
    local rmint = 0
    local rmaxt = math.huge
    local err   = 0
@@ -101,7 +103,7 @@ function test.ray_boundary_intersect()
    for rdim = 1,3 do 
       dp = d:clone()
       dp[rdim] = -1
-      r = Ray(o,dp)
+      r = Ray.new(o,dp)
       do_tests(r,rdim)
    end
    printf(" - Errors: %d/%d", err,tot)
@@ -148,10 +150,10 @@ function test.ray_bbox_intersect()
       local tmin_max = torch.Tensor(dirs:size(1),2) 
       for di = 1,dirs:size(1) do 
          local d = dirs[di]
-         local r = Ray(o,d)
+         local r = Ray.new(o,d)
          local tval, tmin,tmax = intersect.ray_bbox(r,bbox)
-         local rn = r(tmin)
-         local rx = r(tmax)
+         local rn = r:endpoint(tmin)
+         local rx = r:endpoint(tmax)
          tmin_max[di][1] = tmin
          tmin_max[di][2] = tmax
          if verbose then 
@@ -250,10 +252,101 @@ function test.ray_bbox_intersect()
 
 end
 
+function test.ray_plane_intersection()
+   print("Testing ray plane intersection")
+   local e = 0
+   local cnt = 0
+   local results = test.data.result_ray_plane
+   local plane_norm = test.data.quat:narrow(2,1,3)
+   local plane_d = test.data.quat:select(2,4)
+   local maxterr = 0
+   local maxierr = 0
+   sys.tic()
+   for i = 1,test.data.vec:size(1) do
+      local tvec = test.data.vec[i]:narrow(1,1,3)
+      for j = 1,plane_norm:size(1) do
+         local n = geom.normalize(plane_norm[j])
+         local d = plane_d[j]
+         local intersection,t =
+            intersect.ray_plane(tvec,tvec,n,d,false)
+         cnt = cnt + 1
+         local gt = results[cnt]
+         local terr = torch.abs(t - gt[1])
+         if not intersection then
+            if  terr > 1 then
+               e = e + 1
+            end
+         else
+            ierr = torch.abs(torch.sum(torch.add(intersection,-gt:narrow(1,2,3))))/3
+            if terr > 1e-8 or ierr > 1e-8 then
+               if terr > maxterr then maxterr = terr end
+               if ierr > maxierr then maxierr = ierr end
+               e = e + 1
+               print(string.format("[v:%d][p:%d]", i, j))
+               print(string.format("T: %f <-> %f err: %e I: (%f,%f,%f) <-> (%f,%f,%f) err: %e",
+                                   t, gt[1], terr,
+                                   intersection[1],intersection[2],intersection[3],
+                                   gt[2],gt[3],gt[4], ierr))
+            end
+         end
+      end
+   end
+   print(string.format(" - Found %d/%d errors (maxT: %e, maxI: %e) in %2.4fs",
+                       e,cnt, maxterr,maxierr,sys.toc()))
+end
+
+function test.ray_face_intersection()
+   print("Testing ray face intersection")
+   local e          = 0
+   local cnt        = 0
+   local maxterr    = 0
+   local maxierr    = 0
+   local results    = test.data.result_ray_face
+   local pts        = test.data.pt_dir:narrow(2,1,3)
+   local dirs       = test.data.pt_dir:narrow(2,4,3)
+   local face_plane = test.data.face_plane
+   local face_verts = test.data.face_verts
+   local plane_d    = test.data.quat:select(2,4)
+   sys.tic()
+   for i = 1,pts:size(1) do
+      local pt  = pts[i]
+      local dir = dirs[i]
+      for j = 1,face_plane:size(1) do
+         local n = face_plane[j]:narrow(1,1,3)
+         local d = face_plane[j][4]
+         local v = face_verts[j]
+         local intersection,t =
+            intersect.ray_face(pt,dir,n,d,v,false)
+         cnt = cnt + 1
+         local gt = results[i][j]
+         if intersection then
+            if (gt:sum() == 0) then
+               e = e + 1
+            else
+               local terr = torch.max(torch.abs(intersection - gt))
+               if terr > 1e-7    then
+                  e = e + 1
+               end
+               if terr > maxterr then maxterr = terr end
+            end
+         else
+            if torch.sum(torch.abs(gt)) > 0 then
+               e = e + 1
+            end
+         end
+      end
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,cnt, maxterr,sys.toc()))
+end
+
+
 function test.all()
    test.point_in_polygon()
    test.ray_boundary_intersect()
    test.ray_bbox_intersect()
+   test.ray_plane_intersection()
+   test.ray_face_intersection()
 end
 
 return test
