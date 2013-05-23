@@ -2,7 +2,7 @@
 
 require 'image'
 
-dofile 'blend.lua'
+dofile 'util.lua'
 
 pi = math.pi
 pi2 = pi * 0.5
@@ -14,40 +14,29 @@ cmd:text('Compute image projections')
 cmd:text()
 cmd:text('Options')
 cmd:option('-imagesdir', 'images/', 'directory with the images to load')
+cmd:option('-imageext', 'JPG', 'filename extention of images to load')
 cmd:text()
 
 -- parse input params
 params = cmd:parse(arg)
 
-imagesdir  = params.imagesdir
-
--- load images
-if not images then
-   images = {}
-   if not paths.dirp(imagesdir) then 
-      error("Must set a valid path to directory of images to process default -imagesdir images/")
-   end
-   imgfiles = paths.files(imagesdir)
-   imgfiles() -- .
-   imgfiles() -- ..
-   for f in imgfiles do
-      if f == ".DS_Store" then -- exclude OS X automatically-created backup files
-         printf("--- Skipping .DS_Store file")
-         
-      elseif (f:gmatch("JPG$")() or f:gmatch("png$")()) then
-         imgfile = imagesdir.."/"..f
-         table.insert(images, imgfile)
-         printf("Found : %s", imgfile)
-      end
-   end
+images_dir  = params.imagesdir
+if not paths.dirp(images_dir) then 
+   error(string.format("Can't find directory: %s", images_dir))
 end
-collectgarbage()
+
+image_ext  = params.imageext
+
+images = util.util.file_match(images_dir,image_ext) 
+
+if #images == 0 then 
+   error(string.format("No images with ext %s found", image_ext))
+end
 
 img = image.load(images[1])
 
 width  = img:size(3)
 height = img:size(2)
-scale  = 1/5
 
 -- images are vertical
 vfov = (97/180) * pi 
@@ -78,7 +67,7 @@ sys.tic()
 force  = true 
 lambda = 0
 phi    = 0
-delta  = 2 * pi / 6
+delta  = 2 * pi / #images
 
 for i = 1,#images do 
 
@@ -97,6 +86,8 @@ for i = 1,#images do
    sys.tic()
 
    lambda = lambda + delta
+   collectgarbage()
+
 end
 
 -- blend

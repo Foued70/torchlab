@@ -2,7 +2,7 @@
 
 require 'image'
 
-dofile 'blend.lua'
+dofile 'util.lua'
 
 pi = math.pi
 pi2 = pi * 0.5
@@ -25,9 +25,6 @@ cmd:option('-matter_dir',
 cmd:option('-sweep_prefix',
            "sweep_",
            "Directory prefix for DSLR image sweeps (relative to scan_dir)")
-
-cmd:option("-lens_type", "sigma_10_20mm", "data for image dewarping")
-
 cmd:text()
 
 -- parse input params
