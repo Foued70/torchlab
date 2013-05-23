@@ -4,7 +4,7 @@
 -- TODO: n-gon support -- do submeshes and uvs need to be updated?
 
 local paths = require "paths"
-local geom = util.geom
+local geom  = geom.util
 
 local _t = sys.clock()
 local function tic(msg)
@@ -68,6 +68,7 @@ function Obj:add_derived_data()
   local face_bboxes         = torch.Tensor(n_faces, 6) -- xmin,ymin,zmin,xmax,ymax,zmax
   local bbox                = torch.Tensor(6)
 
+  -- TODO compute w/out for loop
   for face_idx = 1,n_faces do 
     local nverts = n_verts_per_face[face_idx]
     local fverts = face_verts[face_idx]:narrow(1, 1, nverts)

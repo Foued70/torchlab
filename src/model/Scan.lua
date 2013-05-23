@@ -1,18 +1,18 @@
 require 'torch'
 
-local libui = require 'libui'
-local paths = require 'paths'
-local config = require 'util.config'
-local loader = require 'util.loader'
+local libui      = require 'libui'
+local paths      = require 'paths'
+local config     = require 'model.config'
+local loader     = require 'data.loader'
 
-local fs = util.fs
-local Obj = util.Obj
-local Sweep = util.Sweep
-local LensSensor = util.LensSensor
-local interest = util.intersect
-local bihtree = util.bihtree
+local fs         = util.fs
+local Obj        = data.Obj
+local Sweep      = model.Sweep
+local LensSensor = model.LensSensor
+local interest   = geom.intersect
+local bihtree    = model.bihtree
 
-local Scan = Class()
+local Scan       = Class()
 
 local MODEL_FILE_EXTENSION = '.obj'
 

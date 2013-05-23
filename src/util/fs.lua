@@ -1,4 +1,5 @@
 local paths = require "paths"
+
 Class()
 
 local function dirCheck(fname, prefix, show_hidden)
@@ -49,4 +50,16 @@ end
 
 function extname(file_path)
   return file_path:match("%..+$")
+end
+
+-- Really need a FILE GLOB...
+function glob(dir,match) 
+   if not paths.dirp(dir) then return nil end
+   out = {}
+   for f in paths.files(dir) do 
+      if f:gmatch(match)() then
+         table.insert(out,dir .. "/" .. f) 
+      end 
+   end
+   return out
 end

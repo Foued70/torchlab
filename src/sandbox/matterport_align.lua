@@ -35,7 +35,7 @@ scan_dir = params.scan_dir
 
 matter_dir = params.matter_dir
 
-matter_pose_fname = util.util.file_match(matter_dir,"texture_info.txt")
+matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
 if #matter_pose_fname > 0 then
    matter_pose_fname = matter_pose_fname[1]
@@ -56,7 +56,7 @@ offset = 2 * pi / 6.5
 for sweep_no = 1,4 do
 
    -- matterport texture
-   matter_texture_fname = util.util.file_match(matter_dir,poses[sweep_no].name)
+   matter_texture_fname = util.fs.glob(matter_dir,poses[sweep_no].name)
 
    if #matter_texture_fname > 0 then
       matter_texture_fname = matter_texture_fname[1]
