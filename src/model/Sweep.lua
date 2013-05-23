@@ -1,10 +1,9 @@
 require 'torch'
-local geom = util.geom
-local paths = require 'paths'
-local config = require 'util.config'
+local paths  = require 'paths'
+local config = require 'model.config'
 
-local fs = util.fs
-local Photo = util.Photo
+local fs    = util.fs
+local Photo = model.Photo
 local Sweep = Class()
 
 function Sweep:__write_keys()
@@ -24,11 +23,11 @@ function Sweep:__init(parent_scan, sweep_dir)
 end
 
 function Sweep:set_photos()
-  local img_dir = paths.concat(self.path, config.img_folder)
+  local img_dir = self.path -- paths.concat(self.path, config.img_folder)
   if not img_dir or not paths.dirp(img_dir) then log.trace(img_dir, 'not found. Photos not created') return end
   
   self.photos = {}
-  for i, f in ipairs(fs.files_only(img_dir, unpack(config.img_extensions))) do
+  for i, f in ipairs(fs.glob(img_dir, unpack(config.img_extensions))) do
     table.insert(self.photos, Photo.new(self, f))
   end
 end
@@ -46,11 +45,11 @@ function Sweep:set_pose(pose)
     local offset_rotation = torch.Tensor(4)
 
     if i == 1 then
-      geom.quaternion_from_axis_angle(rotation_axis, config.delayed_start_rotation, offset_rotation)
+      geom.rotation.quaternion_from_axis_angle(rotation_axis, config.delayed_start_rotation, offset_rotation)
     else
-      geom.quaternion_from_axis_angle(rotation_axis, angular_velocity, offset_rotation)
+      geom.rotation.quaternion_from_axis_angle(rotation_axis, angular_velocity, offset_rotation)
     end
-    geom.normalize(offset_rotation)
+    geom.util.normalize(offset_rotation)
 
     -- TODO: figure out when/how these should be set when p3p is added
     -- offset is relative to the sweep
@@ -70,19 +69,31 @@ function Sweep:calculate_camera_world(photo_number)
   --Accumulate all the camera's rotations up to the camera in question
   local temp_quat = torch.Tensor(4)
   for i = 1, photo_number do
-    geom.quat_product(rotation, self.photos[i].offset_rotation, temp_quat)
-    geom.normalize(temp_quat)
+    geom.rotation.quat_product(rotation, self.photos[i].offset_rotation, temp_quat)
+    geom.util.normalize(temp_quat)
     rotation:copy(temp_quat)
   end
   
-  local camera_rig_offset_position = torch.Tensor({config.rig_offset_position[1], config.rig_offset_position[2], config.rig_offset_position[3]})
-  local camera_rig_offset_rotation = torch.Tensor({config.rig_offset_rotation[1], config.rig_offset_rotation[2], config.rig_offset_rotation[3], config.rig_offset_rotation[4]})
-  geom.normalize(camera_rig_offset_rotation)
+  local camera_rig_offset_position = 
+     torch.Tensor({config.rig_offset_position[1], 
+                   config.rig_offset_position[2], 
+                   config.rig_offset_position[3]})
+
+  local camera_rig_offset_rotation = 
+     torch.Tensor({config.rig_offset_rotation[1],
+                   config.rig_offset_rotation[2],
+                   config.rig_offset_rotation[3],
+                   config.rig_offset_rotation[4]})
+
+  geom.util.normalize(camera_rig_offset_rotation)
 
   local forward_vector = torch.Tensor({0,1,0})
-  local camera_look_direction = geom.rotate_by_quat(forward_vector, camera_rig_offset_rotation)
-  local camera_center = camera_rig_offset_position + camera_look_direction
-  local camera_center_rotated = geom.rotate_by_quat(camera_center, rotation)
+  local camera_look_direction = 
+     geom.rotate_by_quat(forward_vector, camera_rig_offset_rotation)
+  local camera_center = 
+     camera_rig_offset_position + camera_look_direction
+  local camera_center_rotated = 
+     geom.rotate_by_quat(camera_center, rotation)
 
   local camera_rig_offset_position_magnitude = camera_rig_offset_position:norm()
   geom.normalize(camera_rig_offset_position)

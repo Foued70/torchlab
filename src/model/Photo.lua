@@ -2,13 +2,14 @@ require 'image'
 require 'paths'
 require 'math'
 
-local LensSensor = util.LensSensor
+local LensSensor = projection.LensSensor
 local projection = projection.util
-local Ray = util.Ray
-local geom = util.geom
-local bihtree = util.bihtree
-local loader = require 'util.loader'
-local interpolate = util.interpolate
+local Ray = geom.Ray
+local geom = geom.util
+
+local bihtree = model.bihtree
+local loader = require 'data.loader'
+local interpolate = model.interpolate
 
 local Photo = Class()
 

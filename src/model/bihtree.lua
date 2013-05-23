@@ -1,12 +1,8 @@
-require 'torch'
-require 'sys'
-require 'paths'
-require 'math'
-
-local intersect = util.intersect
-local Ray = util.Ray
-
 Class()
+
+local intersect = geom.intersect
+local Ray       = geom.Ray
+
 
 -- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
 

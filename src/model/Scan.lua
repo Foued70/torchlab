@@ -8,9 +8,10 @@ local loader     = require 'data.loader'
 local fs         = util.fs
 local Obj        = data.Obj
 local Sweep      = model.Sweep
-local LensSensor = model.LensSensor
 local interest   = geom.intersect
 local bihtree    = model.bihtree
+
+local LensSensor = projection.LensSensor
 
 local Scan       = Class()
 
@@ -34,9 +35,7 @@ function Scan:__init(scan_path, pose_file, obj_file)
   
   if paths.dirp(scan_path) then    
     self.path = scan_path
-    self.camera_id = 'nikon_10p5mm_r2t_full' -- hardcoded for now, can figure it from exif data maybe?
-    self.lens_luts = {}
-    
+
     self:set_sweeps()
 
     log.trace("pose_file", pose_file)
@@ -48,23 +47,6 @@ function Scan:__init(scan_path, pose_file, obj_file)
   end  
 end
 
-function Scan:get_lens(image_data)
-  local img_data_ptr, img_data_size = libui.double_storage_info(image_data)
-
-  if not self.lens_luts then self.lens_luts = {} end
-      
-  if self.lens_luts[img_data_size] == nil then
-    local lens_sensor = LensSensor.new(self.camera_id, image_data)
-    local rectilinear_lut = lens_sensor:make_projection_map("rectilinear")
-    local equirectangular_lut = lens_sensor:make_projection_map("equirectangular")
-    self.lens_luts[img_data_size] = {sensor = lens_sensor, rectilinear = rectilinear_lut, equirectangular = equirectangular_lut}
-  end
-
-  return self.lens_luts[img_data_size]
-end
-
-function Scan:set_camera_id()
-end
 -- file_path: any file path (optional)
 function Scan:set_model_file(file_path)
   -- if there's a file_path and it has the right extension, use it. 
@@ -147,7 +129,7 @@ function Scan:set_poses(pose_file)
     end
   end
   self.pose_file = pose_file
-  self.poses = util.mp.poses(pose_file)  
+  self.poses = model.mp.poses(pose_file)  
   self:init_sweeps_poses()
 end
 
@@ -159,6 +141,7 @@ function Scan:init_sweeps_poses()
     sweep:set_pose(pose)
   end
 end
+
 
 function Scan:get_photos()
   if not self.photos then
@@ -230,8 +213,7 @@ function Scan:get_occlusions_slow(ray,debug)
     if debug then 
       if not testd then testd = math.huge end
       printf("%s[%05d] : %f", bstr,fi,testd)
-    end
-      
+    end      
   end
   return mindepth,fid
 end

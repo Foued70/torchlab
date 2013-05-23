@@ -1,12 +1,11 @@
-require 'paths'
-
-local Scan = util.Scan
-local Sweep = util.Sweep
-local Photo = util.Photo
-local LensSensor = util.LensSensor
-local loader = require 'util.loader'
-
 Class()
+
+local Scan       = model.Scan
+local Sweep      = model.Sweep
+local Photo      = model.Photo
+local LensSensor = projection.LensSensor
+local loader     = require 'data.loader'
+
 
 function scan_name(posefile, objfile)
   local sn = ""

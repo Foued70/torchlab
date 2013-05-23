@@ -1,5 +1,5 @@
 local projection = projection.util
-local geom = util.geom
+local geom       = geom.util
 
 local pi = math.pi
 local piover2 = math.pi * 0.5
@@ -16,7 +16,7 @@ local max_rad_rectilinear = 1
 -- stores fixed information about lens+sensors which we glean from spec sheets and elsewhere.
 local LensSensor = Class()
 
-LensSensor.default_lens_sensor = require "util.lens_sensor_types"
+LensSensor.default_lens_sensor = require "projection.lens_sensor_types"
 
 -- combine image and lens data into a single object
 
