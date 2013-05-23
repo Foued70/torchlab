@@ -82,7 +82,7 @@ for sweep_no = 1,4 do
 
    -- load DSLR image
 
-   images = util.util.file_match(sweep_dir .. sweep_no, ".JPG")
+   images = util.fs.glob(sweep_dir .. sweep_no, ".JPG")
 
    img = image.load(images[1])
 

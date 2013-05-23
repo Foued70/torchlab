@@ -27,7 +27,7 @@ end
 
 image_ext  = params.imageext
 
-images = util.util.file_match(images_dir,image_ext) 
+images = util.fs.glob(images_dir,image_ext) 
 
 if #images == 0 then 
    error(string.format("No images with ext %s found", image_ext))
