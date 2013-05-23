@@ -1,12 +1,13 @@
+Class()
+
 local intersect = geom.intersect
-local rot      = geom.rotation
 local Ray       = geom.Ray
 local geom      = geom.util
-local test = {}
-test.data = require "geom.test.data.geom-data"
+
+data = require "geom.test.data"
 
 -- also tests normals and major dimensions
-function test.point_in_polygon()
+function point_in_polygon()
    print("Testing point in polygon")
    local cerr  = 0
    local vperr = 0
@@ -56,7 +57,7 @@ function test.point_in_polygon()
           cerr, npts, vperr, vmerr, verr, npts*3)
 end
 
-function test.ray_boundary_intersect()
+function ray_boundary_intersect()
    print("Testing ray boundary intersection")
    local o     = torch.Tensor({0,0,0})
    local d     = torch.Tensor({1,1,1})
@@ -110,7 +111,7 @@ function test.ray_boundary_intersect()
 end
 
 -- lots of edge cases when rays intersect corners and edges of the bbox.
-function test.ray_bbox_intersect()
+function ray_bbox_intersect()
    local bbox = torch.Tensor({-1,-1,-1,1,1,1})
 
    local dirs_axes = torch.Tensor({{ 1, 0, 0},
@@ -252,18 +253,18 @@ function test.ray_bbox_intersect()
 
 end
 
-function test.ray_plane_intersection()
+function ray_plane_intersection()
    print("Testing ray plane intersection")
    local e = 0
    local cnt = 0
-   local results = test.data.result_ray_plane
-   local plane_norm = test.data.quat:narrow(2,1,3)
-   local plane_d = test.data.quat:select(2,4)
+   local results = data.result_ray_plane
+   local plane_norm = data.quat:narrow(2,1,3)
+   local plane_d = data.quat:select(2,4)
    local maxterr = 0
    local maxierr = 0
    sys.tic()
-   for i = 1,test.data.vec:size(1) do
-      local tvec = test.data.vec[i]:narrow(1,1,3)
+   for i = 1,data.vec:size(1) do
+      local tvec = data.vec[i]:narrow(1,1,3)
       for j = 1,plane_norm:size(1) do
          local n = geom.normalize(plane_norm[j])
          local d = plane_d[j]
@@ -295,18 +296,18 @@ function test.ray_plane_intersection()
                        e,cnt, maxterr,maxierr,sys.toc()))
 end
 
-function test.ray_face_intersection()
+function ray_face_intersection()
    print("Testing ray face intersection")
    local e          = 0
    local cnt        = 0
    local maxterr    = 0
    local maxierr    = 0
-   local results    = test.data.result_ray_face
-   local pts        = test.data.pt_dir:narrow(2,1,3)
-   local dirs       = test.data.pt_dir:narrow(2,4,3)
-   local face_plane = test.data.face_plane
-   local face_verts = test.data.face_verts
-   local plane_d    = test.data.quat:select(2,4)
+   local results    = data.result_ray_face
+   local pts        = data.pt_dir:narrow(2,1,3)
+   local dirs       = data.pt_dir:narrow(2,4,3)
+   local face_plane = data.face_plane
+   local face_verts = data.face_verts
+   local plane_d    = data.quat:select(2,4)
    sys.tic()
    for i = 1,pts:size(1) do
       local pt  = pts[i]
@@ -341,12 +342,10 @@ function test.ray_face_intersection()
 end
 
 
-function test.all()
-   test.point_in_polygon()
-   test.ray_boundary_intersect()
-   test.ray_bbox_intersect()
-   test.ray_plane_intersection()
-   test.ray_face_intersection()
+function all()
+   point_in_polygon()
+   ray_boundary_intersect()
+   ray_bbox_intersect()
+   ray_plane_intersection()
+   ray_face_intersection()
 end
-
-return test

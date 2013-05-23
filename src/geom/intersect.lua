@@ -1,6 +1,5 @@
 Class()
 
-local geom = geom.rotation
 local Ray =  geom.Ray
 
 -- pt (point) is the intersection between the ray and the plane of the

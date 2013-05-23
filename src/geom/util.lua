@@ -48,3 +48,49 @@ end
 function angle_between(vec1, vec2)
    return torch.acos(torch.dot(vec1, vec2) / (vec1:norm()*vec2:norm()))
 end
+
+-- input:  Nx3 tensor of unit cartesian vectors
+-- output: Nx2 tensor of azimuth and elevation for a set of points
+-- these are in camera coords
+--    x : right
+--    y : forward
+--    z : up
+function unit_cartesian_to_spherical_angles(uc)
+
+   local x = uc[{{},1}]
+   local y = uc[{{},2}]
+   local z = uc[{{},3}]
+
+   local angles = torch.Tensor(uc:size(1),2)
+
+   angles[{{},1}] = torch.atan2(x,y) -- azimuth
+   angles[{{},2}] = torch.asin(z)   -- elevation
+
+   return angles
+
+end
+
+-- input:  Nx2 tensor of azimuth and elevation for a set of points
+-- output: Nx3 tensor of unit cartesian vectors
+-- these are in camera coords
+--    x : right
+--    y : forward
+--    z : up
+function spherical_angles_to_unit_cartesian(angles)
+
+   local azimuth   = angles[{{},1}]
+   local elevation = angles[{{},2}]
+
+   local unit_vec = torch.Tensor(angles:size(1),3)
+   local cos_elevation = torch.cos(elevation)
+
+   -- right = sin(azimuth) * cos(elevation)
+   unit_vec[{{},1}]  = torch.sin(azimuth):cmul(cos_elevation)
+   -- forward = cos(azimuth) * cos(elevation)
+   unit_vec[{{},2}]  = torch.cos(azimuth):cmul(cos_elevation)
+   -- up = sin(elevation)  or cos(pi/2 - elevation) == cos(polar)
+   unit_vec[{{},3}]  = torch.sin(elevation)
+
+   return unit_vec
+end
+
