@@ -5,23 +5,34 @@ require 'qtuiloader'
 require 'qtwidget'
 require 'qt'
 
+cmd = torch.CmdLine()
+cmd:text()
+cmd:text()
+cmd:text('Make a seamless texture')
+cmd:text()
+cmd:text('Options')
+cmd:option('-imageFile', '', 'image to crop and make seamless')
+cmd:option('-repeatStyle', 'repeat', 'mirror,mirrorH,mirrorV,offset,repeat')
+cmd:option('-scale', '1/4', 'scale at which to process the image')
+cmd:text()
+
+-- parse input params
+params = cmd:parse(arg)
+imgfile = params.imageFile
+scale   = tonumber(params.scale) or 1/4
+rStyle  = params.repeatStyle
+
 --load image
-orig = image.load('textures-to-seamless/DSC01096.jpg')
+orig = image.load(imgfile)
+
 orig_size = orig:size()
-print(orig_size)
 -- set scale
-scale = 1/4
 scale_size    = torch.LongStorage(orig_size:totable())
 scale_size[2] = scale_size[2]*scale
 scale_size[3] = scale_size[3]*scale
-print(scale_size)
 
 -- set tile
 tile = {}
-
--- set normalization kernel
-normscale = 0.25
-
 
 -- photoshop style offset
 function offset (imgtile, ox, oy, output)
@@ -161,10 +172,18 @@ function process()
       xout = math.max(xin + 1, math.min(tile.w,outw))
 
       imgtile = imgnrml[{{},{yin,yout},{xin,xout}}]
-      mtile = mirror_2way_v(imgtile,mtile)
-      -- mtile = mirror_4way(imgtile,mtile)
-      -- mtile = offset(imgtile,(yout-yin)/2, (xout-xin)/2,mtile)
-      -- mtile = four_way(imgtile,mtile)
+      if rStyle == 'mirror' then
+         mtile = mirror_4way(imgtile,mtile)
+      elseif rStyle == 'offset' then 
+         mtile = offset(imgtile,(yout-yin)/2, (xout-xin)/2,mtile)
+      elseif rStyle == 'mirrorV' then 
+         mtile = mirror_2way_v(imgtile,mtile)
+      elseif rStyle == 'mirrorH' then 
+         mtile = mirror_2way_h(imgtile,mtile)
+      else
+         -- repeat
+         mtile = four_way(imgtile,mtile)
+      end
 
       tile.y = yin
       tile.h = yout
@@ -179,10 +198,10 @@ function display()
 
    win:gbegin()
    win:showpage()
-
+   img2offset = scaled:size(2) + 1 
    -- (1) display input image
-   -- image.display{image=scaled, win=win}
-   image.display{image=mtile, win=win} -- , x = scaled:size(3) + 1}
+   image.display{image=scaled, win=win}
+   image.display{image=mtile, win=win , y = img2offset}
 
    -- (2) overlay bounding boxes tile chosen
    win:setcolor(1,0,0)
@@ -191,6 +210,17 @@ function display()
    win:setfont(qt.QFont{serif=false,italic=false,size=16})
    win:moveto(tile.x, tile.y-1)
    win:show('input')
+
+   win:setcolor(0,1,0)
+   outOffsetX = mtile:size(3)/4
+   outOffsetY = mtile:size(2)/4 + img2offset
+
+   win:rectangle(outOffsetX, outOffsetY,
+                 mtile:size(3)/2, mtile:size(2)/2)
+   win:stroke()
+   win:setfont(qt.QFont{serif=false,italic=false,size=16})
+   win:moveto(outOffsetX, outOffsetY-3)
+   win:show('output')
 
    win:gend()
 end

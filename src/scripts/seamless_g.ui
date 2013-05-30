@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="sizePolicy">
-   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+   <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
@@ -89,13 +89,13 @@
      <property name="minimumSize">
       <size>
        <width>640</width>
-       <height>480</height>
+       <height>640</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>640</width>
-       <height>480</height>
+       <width>1024</width>
+       <height>1024</height>
       </size>
      </property>
      <property name="palette">
