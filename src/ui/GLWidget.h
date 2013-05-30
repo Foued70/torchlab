@@ -3,6 +3,10 @@
 
 #include <QtOpenGL/QGLWidget>
 
+#include "qtlua/qtluautils.h"
+#include "qtlua/qtluaengine.h"
+
+
 extern "C" {
   #include "lua.h"
   #include <lauxlib.h>
@@ -40,6 +44,8 @@ protected:
   
 private:
   lua_State* L;
+  QtLuaEngine* luaEngine;
+  QtLuaLocker* lua;
   int luaWidgetRef;
 
   int callLua(int inCount, int outCount);

@@ -3,6 +3,7 @@ cmake_policy(VERSION 2.6)
 include(../common.cmake REQUIRED)
 
 find_library(COCOA_LIBRARY Cocoa)
+find_library(COCOA_LIBRARY Cocoa)
 
 FILE(GLOB src "*.cpp" )
 
@@ -53,4 +54,4 @@ ADD_CUSTOM_COMMAND(
 
 ADD_TORCH_PACKAGE(ui "${src}" "" "Floored Viewer")
 
-target_link_libraries(ui precomp luaT TH ${COCOA_LIBRARY} ${OPENGL_LIBRARIES} ${QT_LIBRARIES} )
+target_link_libraries(ui precomp luaT TH qtlua ${COCOA_LIBRARY} ${OPENGL_LIBRARIES} ${QT_LIBRARIES} )
