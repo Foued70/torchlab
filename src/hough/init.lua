@@ -1,10 +1,28 @@
+local hough = {}
+
+-- load C lib
+
+require 'libhough'
+
+function hough.get_hough_transform(img, numRadius, numAngles)
+  local hT = torch.zeros(numRadius, numAngles);
+  libhough.libhough.houghTransform(hT,img);
+  return hT;
+end
+
+
+function hough.local_contrast_normalization(hT)
+  libhough.localContrastNormalization(hT);
+  return hT;
+end
+
 local pi = math.pi
 local twopi = 2*pi
 
 function line (img,numR,numA)
    local transf = torch.Tensor(numR,numA)
    -- expects a 2D input 
-   if (img:dim == 3) then 
+   if (img:dim() == 3) then 
       img = img:sum(1):squeeze()
    end
 
@@ -34,3 +52,5 @@ function line (img,numR,numA)
    r:add(ysinA:transpose(2,1,3))
 
 end
+
+return hough
