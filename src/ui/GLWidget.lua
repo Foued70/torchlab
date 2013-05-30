@@ -22,10 +22,10 @@ function GLWidget:__init(gl_init_callback)
   self.mode = NAV_MODE
 
   libui.attach_qt(self)
-  while self.initialized ~= true do
-    os.execute("sleep 1")
-  end
-  collectgarbage()
+  -- while self.initialized ~= true do
+  --   os.execute("sleep 1")
+  -- end
+  -- collectgarbage()
 end
 
 function GLWidget:init(qt_widget)

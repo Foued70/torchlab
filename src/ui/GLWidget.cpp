@@ -8,7 +8,7 @@ using namespace std;
 Core3_2_context* CORE_CONTEXT = new Core3_2_context(GLFormat());
 
 GLWidget::GLWidget(lua_State* L, int luaWidgetRef, QWidget* parent) : QGLWidget( CORE_CONTEXT, parent ), 
-  L(L),
+  luaEngine(luaQ_engine(L)),
   luaWidgetRef(luaWidgetRef)
 {
   resize(800,600);
@@ -21,17 +21,23 @@ GLWidget::~GLWidget() {
 
 int 
 GLWidget::callLua(int inCount, int outCount) {
-  int err = lua_pcall(L, inCount, outCount, 0);
+  int err = 0;
+  luaQ_call(L, inCount, outCount, this);
   if (err) {
     cout << luaL_checkstring(L, -1) << '\n';
     lua_pop(L, 1);
   }
+
+  delete lua;
 
   return err;
 }
 
 void 
 GLWidget::selfFunction(const char* functionName) {
+  lua = new QtLuaLocker(luaEngine);
+  L = *lua;
+
   lua_rawgeti(L, LUA_REGISTRYINDEX, luaWidgetRef); // get the GLWidget instance from the registry
   lua_getfield(L, -1, functionName); // push the fucntion name
   lua_pushvalue(L, -2); // push self
