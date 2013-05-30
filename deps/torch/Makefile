@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-ver=498ff1c31e89d0b034082596fdd2c45127679d65
+ver=f4731c87da806e68e5fc3385f2947ed0be427857
 
 git_clone=$(build_dir)/deps/torch
 # git_clone=/Users/dustin/proj/torch
@@ -15,8 +15,6 @@ pkgs = $(addprefix $(install_root)/share/torch/lua/,$(packages))
 
 
 args = $(default_cmake_args) \
-	-D CUDA_NVCC_EXECUTABLE= \
-	-D WITH_LUA_JIT=1 \
 	-D QT_QMAKE_EXECUTABLE=$(install_root)/bin/qmake
 
 all:$(pkgs)
