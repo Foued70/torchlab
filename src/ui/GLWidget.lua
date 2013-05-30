@@ -21,11 +21,20 @@ function GLWidget:__init(gl_init_callback)
   self.renderer = ui.Renderer.new(self)
   self.mode = NAV_MODE
 
-  libui.attach_qt(self)
+  qt.qcall(qt.qApp, libui.attach_qt, self)
+  -- libui.attach_qt(self)
+  -- self:wait_for_init()
   -- while self.initialized ~= true do
   --   os.execute("sleep 1")
   -- end
   -- collectgarbage()
+end
+
+function GLWidget:wait_for_init()
+  while self.initialized ~= true do
+    qt.doevents(false)
+  end
+
 end
 
 function GLWidget:init(qt_widget)
