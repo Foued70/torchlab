@@ -112,23 +112,35 @@ for sweep_no = 1,4 do
    lambda = hard_coded[sweep_no]  + (offset[sweep_no] * mp_rad_per_px_x)
    phi    = 0 -- - 5 * rad_per_px_y
 
+   local pr = xlua.Profiler()
+
    for i = 1,#images do
-
+      pr:start("image")
+      pr:start("load")
       img    = image.load(images[i])
-
+      pr:lap("load")
+      pr:start("project")
+      pr:start("set lambda phi")
       proj_from:set_lambda_phi(lambda,phi)
+      pr:lap("set lambda phi")
+      pr:start("get index")
       index1D,stride,mask = rect_to_sphere:get_index_and_mask(force)
+      pr:lap("get index")
+      pr:start("rect to sphere")
       img_out = rect_to_sphere:remap(img)
-
+      pr:lap("rect to sphere")
+      pr:start("store")
       table.insert(indices,index1D)
       table.insert(masks,mask)
       table.insert(out_images,img_out)
-
+      pr:lap("store")
       time = sys.toc()
       printf(" - reproject %2.4fs", time)
       sys.tic()
 
       lambda = lambda + delta
+      pr:lap("image")
+      pr:printAll()
    end
 
    -- blend

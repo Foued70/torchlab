@@ -1,13 +1,13 @@
-local saliency = {}
+Class()
 
 -- load C lib
 local libsaliency = require 'libsaliency'
 
 
-function saliency.high_entropy_features (...)
+function high_entropy_features (...)
    local _, img, kr, kc, sr, sc, nscale, scalefactor, nbins, entropyType, nmswinsize, npts = dok.unpack(
       {...},
-      'saliency.high_entropy_features',
+      'high_entropy_features',
       '[[ Implements a saliency detector based on entropy of histogram of input.  And searches for a saliency across scales. ]]',
       {arg='img', type='torch.Tensor',
        help='torch.Tensor image (though can have multiple channels', 
@@ -115,10 +115,10 @@ function saliency.high_entropy_features (...)
    return m,sm
 end
 
-function saliency.spent_pxdiff_motion (...)
+function spent_pxdiff_motion (...)
    local _, img, imgprev, mix, kr, kc, sr, sc, nscale, scalefactor, nbins, entropyType, nmswinsize, npts, histsize = dok.unpack(
       {...},
-      'saliency.spent_pxdiff_motion',
+      'spent_pxdiff_motion',
       '[[ Spatial Entropy + Pixel difference ]]',
       {arg='img', type='torch.Tensor',
        help='torch.Tensor image (though can have multiple channels', 
@@ -153,7 +153,7 @@ function saliency.spent_pxdiff_motion (...)
        help='how many images do we compare', default=2}
    )
    -- compute spatial saliency on new image
-   m,sm = saliency.high_entropy_features(
+   m,sm = high_entropy_features(
       img, kr, kc, sr, sc, 
       nscale, scalefactor, nbins, entropyType, nmswinsize, npts)
    -- ring buffer
@@ -170,10 +170,10 @@ function saliency.spent_pxdiff_motion (...)
    end
 end
 
-function saliency.high_entropy_motion_features (...)
+function high_entropy_motion_features (...)
    local _, img, imgprev, kr, kc, sr, sc, nscale, scalefactor, nbins, entropyType, nmswinsize, npts, histsize = dok.unpack(
       {...},
-      'saliency.high_entropy_motion_features',
+      'high_entropy_motion_features',
       '[[ Implements a saliency detector based on entropy of histogram of input.  And searches for a saliency across scales and time. ]]',
       {arg='img', type='torch.Tensor',
        help='torch.Tensor image (though can have multiple channels', 
@@ -206,7 +206,7 @@ function saliency.high_entropy_motion_features (...)
        help='how many images do we compare', default=2}
    )
    -- compute spatial saliency on new image
-   m,sm = saliency.high_entropy_features(
+   m,sm = high_entropy_features(
       img, kr, kc, sr, sc, 
       nscale, scalefactor, nbins, entropyType, nmswinsize, npts)
    -- ring buffer
@@ -227,7 +227,7 @@ end
 -- Non-maximal suppression: takes the full max of each windowsize x
 -- windowsize patch and places it in a buffer. If this value = the
 -- actual value then you have a local max at this position.
-function saliency.newNMS(m,windowsize,npts)
+function newNMS(m,windowsize,npts)
    if not windowsize then
       windowsize = 5
    end
@@ -240,7 +240,7 @@ end
 -- Non-maximal suppression: takes the max of each row and the max of
 -- each col and places it in a buffer. If this value = the actual
 -- value then you have a local max at this position.
-function saliency.getMax(m,windowsize,npts)
+function getMax(m,windowsize,npts)
    if not windowsize then
       windowsize = 5
    end
@@ -250,7 +250,7 @@ function saliency.getMax(m,windowsize,npts)
    return m.libsaliency.fastNMS(m,windowsize,npts)
 end
 
-function saliency.multiScaleMax(m,windowsize,npts)
+function multiScaleMax(m,windowsize,npts)
    if not windowsize then 
       windowsize = {15,7,3}
    end
@@ -297,7 +297,7 @@ end
 -- sm is a 3D tensor nscales x width x height. This function sums the
 -- abs difference between the scales and multiplies this by the sum of
 -- the saliencies at each scale.
-function saliency.scaleSaliency(sm)
+function scaleSaliency(sm)
    local m = torch.Tensor(sm:size(2),sm:size(3))
    -- compute saliency across scales
    if sm:size(1) == 1 then
@@ -338,7 +338,7 @@ function integer_img(img)
 end
 
 -- lua version of the above code used for testing.
-function saliency.getMaxLua(m,windowsize,npts)
+function getMaxLua(m,windowsize,npts)
    if not windowsize then
       windowsize = 5
    end
@@ -418,5 +418,3 @@ function saliency.getMaxLua(m,windowsize,npts)
 
    return outxy, outval, points
 end
-
-return saliency
