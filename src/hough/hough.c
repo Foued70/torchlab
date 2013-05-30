@@ -1,15 +1,21 @@
 #include <TH.h>
+#include <luaT.h>
 
-void hough(THDoubleTensor *result, THDoubleTensor *image, long numR, long numA)
-{  
-  double *res = THDoubleTensor_data(result);
-  double *img = THDoubleTensor_data(image);
+#define torch_(NAME) TH_CONCAT_3(torch_, Real, NAME)
+#define torch_Tensor TH_CONCAT_STRING_3(torch.,Real,Tensor)
+#define libhough_(NAME) TH_CONCAT_3(libhough_, Real, NAME)
 
-  double numRows = image->size[1];
-  double numCols = image->size[2];
+#include "generic/hough.c"
+#include "THGenerateFloatTypes.h"
 
-  double maxRadius = sqrt(numRows * numRows + numCols * numCols) * 0.5;
+DLL_EXPORT int luaopen_libhough(lua_State *L)
+{
+  lua_newtable(L);
+  lua_pushvalue(L, -1);
+  lua_setfield(L, LUA_GLOBALSINDEX, "libhough");
 
-}  
+  //libhough_FloatMain_init(L);
+  libhough_DoubleMain_init(L);
 
-
+  return 1;
+}
