@@ -48,9 +48,9 @@ function add_slices(n_slices, size)
 end
 
 -- Really need a FILE GLOB...
-function file_match(dir,match) 
+function file_match(dir,match,out) 
    if not paths.dirp(dir) then return nil end
-   out = {}
+   out = out or {}
    for f in paths.files(dir) do 
       if f:gmatch(match)() then
          table.insert(out,dir .. "/" .. f) 
