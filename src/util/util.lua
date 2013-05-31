@@ -46,3 +46,17 @@ function add_slices(n_slices, size)
    for i = 1,size:size() do table.insert(out_size, size[i]) end
    return torch.LongTensor(out_size):storage()
 end
+function locals()
+   local variables = {}
+  local idx = 1
+  while true do
+     local ln, lv = debug.getlocal(2, idx)
+    if ln ~= nil then
+       variables[ln] = lv
+    else
+      break
+    end
+    idx = 1 + idx
+  end
+  return variables
+end
