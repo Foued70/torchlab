@@ -38,7 +38,7 @@ end
 function trace_x(level, color_func, ...)
   if TRACE then
     local info = debug.getinfo(level)
-    local short_file = info.short_src:match('/([^/]+)$')
+    local short_file = info.short_src:match('/([^/]+)$') or info.short_src
     local func = info.name or ''
     local rest = ''
     local delim = ''
