@@ -22,20 +22,23 @@ GLWidget::~GLWidget() {
 int 
 GLWidget::callLua(int inCount, int outCount) {
   int err = 0;
-  luaQ_call(L, inCount, outCount, this);
+  lua_pcall(L, inCount, outCount, 0);
   if (err) {
     cout << luaL_checkstring(L, -1) << '\n';
     lua_pop(L, 1);
   }
 
   delete lua;
+  // printf("   unlocked\n");
 
   return err;
 }
 
 void 
 GLWidget::selfFunction(const char* functionName) {
+  // printf("%s locking ", functionName);
   lua = new QtLuaLocker(luaEngine);
+  // printf("locked\n");
   L = *lua;
 
   lua_rawgeti(L, LUA_REGISTRYINDEX, luaWidgetRef); // get the GLWidget instance from the registry
