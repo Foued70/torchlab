@@ -3,42 +3,14 @@ extern "C" {
 #include <luaT.h>
 }
 
-#include <QtGui/QApplication>
 #include <QtOpenGL/QGLWidget>
 #include "GLWidget.h"
 
-// gui component holder which will be moved to main thread
-class gui_launcher : public QObject
-{
-  public:
-    lua_State* L;
-    int luaWidgetRef;
-
-  virtual bool event( QEvent *ev ) {
-    if( ev->type() == QEvent::User ) {
-      // Create a GLWidget requesting our format
-      GLWidget* glWidget = new GLWidget(L, luaWidgetRef);
-
-      delete this;
-      
-      return true;
-    }
-    return false;
-  }
-};
-
-
 int libui_attach_qt(lua_State* L) {
-  gui_launcher* gl = new gui_launcher;
-  gl->L = L;
   lua_pushvalue(L, -1);
-  gl->luaWidgetRef = luaL_ref(L, LUA_REGISTRYINDEX);
+  int luaWidgetRef = luaL_ref(L, LUA_REGISTRYINDEX);
 
-  // move it to main thread
-  gl->moveToThread( QApplication::instance()->thread() );
-  // send it event which will be posted from main thread
-  QCoreApplication::postEvent( gl, new QEvent( QEvent::User ) );
-
+  GLWidget* glWidget = new GLWidget(L, luaWidgetRef);
   return 0;
 }
 

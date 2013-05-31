@@ -46,4 +46,3 @@ function add_slices(n_slices, size)
    for i = 1,size:size() do table.insert(out_size, size[i]) end
    return torch.LongTensor(out_size):storage()
 end
-

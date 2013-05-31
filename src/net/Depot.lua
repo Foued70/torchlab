@@ -10,18 +10,18 @@ local Depot = Class()
 local props = util.Properties.new(paths.concat(HOME, '.cloudlab'))
 local host = props.depot_url or "http://depot.floored.com"
 
-function login(username, password)
-  local resp, status_code = request.post(host.."/login.json", {data = {username = username, password = password}})
+function login(email, password)
+  local resp, status_code = request.post(host.."/login.json", {data = {email = email, password = password}})
   if status_code == 200 then
-    if username ~= props.username or password ~= props.password then
-      props.username = username
+    if email ~= props.email or password ~= props.password then
+      props.email = email
       props.password = password
       props:save()
     end
     return true
   end
 
-  return false
+  return false, resp
 end
 
 function is_logged_in()

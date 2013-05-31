@@ -3,8 +3,9 @@ CMAKE_POLICY(VERSION 2.6)
 
 INCLUDE(../common.cmake REQUIRED)
 
+SET(luasrc init.lua)
 SET(src hough.c)
 
-ADD_TORCH_PACKAGE(hough "${src}" "" "Floored Hough Transform")
+ADD_TORCH_PACKAGE(hough "${src}" "${luasrc}" "Floored Hough Transform")
 
-TARGET_LINK_LIBRARIES(hough TH)
+TARGET_LINK_LIBRARIES(hough luaT TH)
