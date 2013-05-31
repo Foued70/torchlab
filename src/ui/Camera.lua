@@ -1,5 +1,4 @@
 local gl = require 'ui.gl'
-local geom = util.geom
 
 local Camera = Class()
 
@@ -152,9 +151,9 @@ end
 
 
 function Camera:rotate(rotation_quat)
-  geom.rotate_by_quat(self.look_dir, self.look_dir, rotation_quat)
-  geom.rotate_by_quat(self.up_dir, self.up_dir, rotation_quat)
-  geom.rotate_by_quat(self.right_dir, self.right_dir, rotation_quat)
+  geom.quaternion.rotate(self.look_dir, self.look_dir, rotation_quat)
+  geom.quaternion.rotate(self.up_dir, self.up_dir, rotation_quat)
+  geom.quaternion.rotate(self.right_dir, self.right_dir, rotation_quat)
 end
 
 

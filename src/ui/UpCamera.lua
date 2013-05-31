@@ -1,7 +1,5 @@
 local UpCamera = Class(ui.Camera)
 
-local geom = util.geom
-
 local Z_AXIS_POS = torch.Tensor({0,0,1})
 local Z_AXIS_NEG = torch.Tensor({0,0,-1})
 
@@ -14,21 +12,21 @@ end
 function UpCamera:update()
   -- look direction
   torch.add(self.look_dir, self.center, -1, self.eye) -- look_dir = center - eye
-  geom.normalize(self.look_dir)
+  geom.util.normalize(self.look_dir)
   
   local up
   -- calculate a temporary up
-  if geom.eq(self.look_dir, Z_AXIS_POS) or geom.eq(self.look_dir, Z_AXIS_NEG) then
+  if geom.util.eq(self.look_dir, Z_AXIS_POS) or geom.util.eq(self.look_dir, Z_AXIS_NEG) then
     -- use our last up value but make it horizontal
     self.up_dir[3] = 0
     up = self.up_dir
-    geom.normalize(up)
+    geom.util.normalize(up)
   else
     up = Z_AXIS_POS
   end
 
   torch.cross(self.right_dir, self.look_dir, up) -- right_dir = look_dir X up
-  geom.normalize(self.right_dir)
+  geom.util.normalize(self.right_dir)
 
   torch.cross(self.up_dir, self.right_dir, self.look_dir)
 end
@@ -66,15 +64,15 @@ function UpCamera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
     -- this would take us past vertical (up), so lock to Z up
     torch.mul(a, Z_AXIS_POS, a:norm())
     -- rotate up for x instead of eye
-    geom.rotate_axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
+    geom.rotate.axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
   elseif z_axis_angle - y_angle > math.pi then
     -- this would take us past vertical (down), so lock to Z down
     torch.mul(a, Z_AXIS_NEG, a:norm())
     -- rotate up for x instead of eye
-    geom.rotate_axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
+    geom.rotate.axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
   else
-    geom.rotate_axis_angle(a, self.right_dir, y_angle);
-    geom.rotate_axis_angle(a, Z_AXIS_POS, x_angle);
+    geom.rotate.axis_angle(a, self.right_dir, y_angle);
+    geom.rotate.axis_angle(a, Z_AXIS_POS, x_angle);
   end
   
   -- move a back into position

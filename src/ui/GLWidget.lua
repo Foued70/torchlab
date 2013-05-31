@@ -1,7 +1,6 @@
 local libui = require 'libui'
 local gl = require 'ui.gl'
 local key = require 'ui.key'
-local geom = util.geom
 
 require 'qt'
 require 'qttorch'
@@ -152,7 +151,7 @@ end
 function GLWidget:fly_to(goal_position)
   local VIEW_DISTANCE = 8
   local VIEW_HEIGHT = 2.25
-  local eye_offset_direction = geom.direction(goal_position, self.renderer.cameras.viewport_camera.eye)
+  local eye_offset_direction = geom.util.direction(goal_position, self.renderer.cameras.viewport_camera.eye)
   local eye_position = goal_position - eye_offset_direction * VIEW_DISTANCE
   
   --TODO: {0,-0.01, -1} idealy would be {0,0,-1} to raycast straight down. 
