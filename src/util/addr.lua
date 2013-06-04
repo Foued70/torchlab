@@ -11,15 +11,15 @@ Class()
 -- example, we often need to keep track of x and y locations in a
 -- pixel map as well as the offset lookup values to quickly access the
 -- data at that pixel location. These functions help to move back and
--- forth between the offsets and coordinates (offset_to_coords,
--- coords_to_offset) and to quickly access the data based on an offset
+-- forth between the offsets and coordinates (offset_to_pixel_coords,
+-- pixel_coords_to_offset) and to quickly access the data based on an offset
 -- Tensor (remap).  The offset tensor itself can have any number of
 -- dimensions which shape the result of the remapping.
 
 -- A coord (or coordinate) is an address in multiple parts (an x and y
--- coordinate or a height (h) and width (w) for 2D).  coords are
+-- coordinate or a height (h) and width (w) for 2D).  pixel_coords are
 -- nCoords x nSamples because we often have to operate on coordinate
--- dimensions independently.  Storing coords nCoords by nSamples keeps
+-- dimensions independently.  Storing pixel_coords nCoords by nSamples keeps
 -- each dimension contiguous in memory speeding up operations such as
 -- x = sin(x) + pi * cos(y) etc.  Other types of coordinates are 3D
 -- x,y,z though we don't often store those densely in a tensor and a
@@ -81,8 +81,8 @@ function remap(img, offset, mask, out_image)
 end
 
 -- make mask for out of bounds values of coordinates defined in <max_dims>,<min_dims>
-function mask_out_of_bounds(coords,max_dims,min_dims,mask)
-   local nCoords = coords:size(1)
+function mask_out_of_bounds(pixel_coords,max_dims,min_dims,mask)
+   local nCoords = pixel_coords:size(1)
    if max_dims:size(1) ~= nCoords then
       printf("nCoords: %d max_dims: %d",nCoords,max_dims:size(1))
       error("not same number of dimensions as max_dims")
@@ -91,12 +91,12 @@ function mask_out_of_bounds(coords,max_dims,min_dims,mask)
       min_dims = torch.ones(nCoords)
    end
 
-   mask = mask or torch.ByteTensor(coords[1]:size())
-   mask:resize(coords[1]:size()):zero()
+   mask = mask or torch.ByteTensor(pixel_coords[1]:size())
+   mask:resize(pixel_coords[1]:size()):zero()
 
    -- out of bounds check
    for d = 1,nCoords do 
-      mask = mask + coords[d]:ge(min_dims[d]) + coords[d]:le(max_dims[d]) 
+      mask = mask + pixel_coords[d]:ge(min_dims[d]) + pixel_coords[d]:le(max_dims[d]) 
    end
    -- reset mask to 0 and 1 (valid parts of mask must pass 2 tests for
    -- each dimenstion (less than and greater than) We need the mask to
@@ -109,10 +109,10 @@ function mask_out_of_bounds(coords,max_dims,min_dims,mask)
 end
 
 -- convert the x and y index into a single 1D offset (y * stride + x)
-function coords_to_offset(coords,stride,mask,offset)
+function pixel_coords_to_offset(pixel_coords,stride,mask,offset)
 
-   offset = offset or torch.LongTensor(coords[1]:size())
-   offset:resize(coords[1]:size())
+   offset = offset or torch.LongTensor(pixel_coords[1]:size())
+   offset:resize(pixel_coords[1]:size())
 
    -- CAREFUL strides are counted in the original raw image, not in the
    -- projection which can be scaled if xmap:size() is not equal to
@@ -124,11 +124,11 @@ function coords_to_offset(coords,stride,mask,offset)
    -- sense.  -0.5 then floor is equivalient to adding 0.5 -> floor ->
    -- -1 before multiply by stride. -1 is because C is 0 indexed where
    -- torch is 1 indexed.
-   local output_map = coords[1]:clone():add(-0.5):floor():mul(stride[1])
+   local output_map = pixel_coords[1]:clone():add(-0.5):floor():mul(stride[1])
 
    local temp = torch.Tensor(output_map:size())
-   for d = 2,coords:size(1) do 
-      temp:copy(coords[d]):add(-0.5):floor():mul(stride[d])
+   for d = 2,pixel_coords:size(1) do 
+      temp:copy(pixel_coords[d]):add(-0.5):floor():mul(stride[d])
       output_map:add(temp)
    end
    -- remove spurious out of bounds from output
@@ -141,7 +141,7 @@ function coords_to_offset(coords,stride,mask,offset)
    return offset 
 end
 
-function offset_to_coords (offset, stride, pixels)
+function offset_to_pixel_coords (offset, stride, pixels)
    local ndims = stride:size(1)
    local size = util.util.add_slices(ndims,offset:size())
    pixels = pixels or torch.Tensor(size)

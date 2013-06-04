@@ -19,29 +19,29 @@ function RectilinearProjection:__init(width, height,
 end
 
 
--- coords - coords in normalized coordinates, 0,0 center
+-- normalized_coords - normalized_coords in normalized coordinates, 0,0 center
 -- angles (optional) - azimuth, elevation from 0,0 center of projection
-function RectilinearProjection:coords_to_angles(coords, angles)
-   angles = angles or torch.Tensor(coords:size())
+function RectilinearProjection:normalized_coords_to_angles(normalized_coords, angles)
+   angles = angles or torch.Tensor(normalized_coords:size())
 
-   local azimuth = torch.atan(coords[2])
+   local azimuth = torch.atan(normalized_coords[2])
    angles[2] = azimuth
-   angles[1] = torch.cmul(coords[1], torch.cos(azimuth)):atan()
+   angles[1] = torch.cmul(normalized_coords[1], torch.cos(azimuth)):atan()
 
    return angles
 end
 
 
 -- angles - azimuth, elevation from 0,0 center of projection
--- coords (optional) - coords in normalized coordinates
-function RectilinearProjection:angles_to_coords(angles, coords)
-   coords = coords or torch.Tensor(angles:size())
+-- normalized_coords (optional) - normalized_coords in normalized coordinates
+function RectilinearProjection:angles_to_normalized_coords(angles, normalized_coords)
+   normalized_coords = normalized_coords or torch.Tensor(angles:size())
 
    local elevation = angles[1]
    local azimuth   = angles[2]
 
-   coords[1] = torch.tan(elevation):cdiv(torch.cos(azimuth))
-   coords[2] = torch.tan(azimuth)
+   normalized_coords[1] = torch.tan(elevation):cdiv(torch.cos(azimuth))
+   normalized_coords[2] = torch.tan(azimuth)
 
-   return coords
+   return normalized_coords
 end

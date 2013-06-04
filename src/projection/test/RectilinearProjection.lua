@@ -17,13 +17,13 @@ perElement = 1/angles[1]:nElement()
 
 p("Testing Rectilinear projection")
 sys.tic()
-unit_coords = rp:angles_to_coords(angles)
+unit_coords = rp:angles_to_normalized_coords(angles)
 time = sys.toc()
 printf(" - angles to coords %2.4fs, %2.4es per px", time, time*perElement)
 sys.tic()
-unit_angles = rp:coords_to_angles(unit_coords)
+unit_angles = rp:normalized_coords_to_angles(unit_coords)
 time = sys.toc()
-printf(" - coords to angles %2.4fs, %2.4es per px", time, time*perElement)
+printf(" - normalized_coords to angles %2.4fs, %2.4es per px", time, time*perElement)
 
 err = unit_angles - angles
 err:abs()

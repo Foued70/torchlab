@@ -14,7 +14,7 @@ cmd:text()
 cmd:text('Compute image projections')
 cmd:text()
 cmd:text('Options')
-cmd:option('-scandir', 'images/', 'directory with the images to load')
+cmd:option('-scandir', 'scan/', 'directory of matterport scan to load')
 cmd:option('-size', '512', 'size in pixels of side of stereographic')
 cmd:text()
 
@@ -22,31 +22,16 @@ cmd:text()
 params = cmd:parse(arg)
 
 scandir  = params.scandir
-out_size   = params.size
+out_size = tonumber(params.size) or 512
 
 -- load images
-if not images then
-   images = {}
-   if not paths.dirp(scandir) then
-      error("Must set a valid path to directory of images to process default -scandir images/")
-   end
-   files = paths.files(scandir)
-   files() -- .
-   files() -- ..
-   for f in files do
-      if f == ".DS_Store" then -- exclude OS X automatically-created backup files
-         printf("--- Skipping .DS_Store file")
-      elseif (f:gmatch("_texture_info.txt")()) then
-         pose_file = scandir.."/"..f
-      elseif (f:gmatch("jpg$")() or f:gmatch("png$")()) then
-         imgfile = scandir.."/"..f
-         table.insert(images, imgfile)
-         printf("Found : %s", imgfile)
-      end
-   end
-end
-collectgarbage()
+images = util.fs.glob(scandir,"jpg")
+images = util.fs.glob(scandir,"png",images)
+images = util.fs.glob(scandir,"JPG",images)
+images = util.fs.glob(scandir,"PNG",images)
 
+pose_file = util.fs.glob(scandir,"_texture_info.txt")
+pose_file = pose_file[1]
 poses = model.mp.load_poses(pose_file)
 
 img = image.load(images[1])
@@ -81,12 +66,12 @@ sys.tic()
 
 sphere_to_stereographic = projection.Remap.new(proj_sphere,proj_stereo)
 sphere_to_little = projection.Remap.new(proj_sphere,proj_little)
--- do not need to call get_index_and_mask explicitly as it will be
+-- do not need to call get_offset_and_mask explicitly as it will be
 -- called when needed on the first call to remap, but by calling it
 -- here we can compute the timing information.
-index1Ds = sphere_to_stereographic:get_index_and_mask()
-index1Dl = sphere_to_little:get_index_and_mask()
-perElement = index1Ds:nElement()
+offsets = sphere_to_stereographic:get_offset_and_mask()
+offsetl = sphere_to_little:get_offset_and_mask()
+perElement = offsets:nElement()
 
 time_map = sys.toc()
 printf(" - make map %2.4fs", time_map)

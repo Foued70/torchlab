@@ -50,11 +50,11 @@ p("Testing Image Projection")
 sys.tic()
 
 sphere_to_stereographic = projection.Remap.new(proj_sphere,proj_stereo)
--- do not need to call get_index_and_mask explicitly as it will be
+-- do not need to call get_offset_and_mask explicitly as it will be
 -- called when needed on the first call to remap, but by calling it
 -- here we can compute the timing information.
-index1D = sphere_to_stereographic:get_index_and_mask()
-perElement = index1D:nElement()
+offset = sphere_to_stereographic:get_offset_and_mask()
+perElement = offset:nElement()
 
 time = sys.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)

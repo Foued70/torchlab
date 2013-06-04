@@ -45,14 +45,14 @@ for i,c in ipairs(centers) do
    gp:set_lambda_phi(c[1],c[2])
    angles = gp:angles_map()
    sys.tic()
-   unit_coords = gp:angles_to_coords(angles,unit_coords)
+   unit_coords = gp:angles_to_normalized_coords(angles,unit_coords)
    time = sys.toc()
-   printf(" - Time Stereographic angles to coords")
+   printf(" - Time Stereographic angles to normalized_coords")
    printf("   %2.4fs, %2.4es per px", time, time*perElement)
    sys.tic()
-   unit_angles = gp:coords_to_angles(unit_coords,unit_angles)
+   unit_angles = gp:normalized_coords_to_angles(unit_coords,unit_angles)
    time = sys.toc()
-   printf(" - Time Stereographic coords to angles")
+   printf(" - Time Stereographic normalized_coords to angles")
    printf("   %2.4fs, %2.4es per px", time, time*perElement)
 
    err = unit_angles - angles

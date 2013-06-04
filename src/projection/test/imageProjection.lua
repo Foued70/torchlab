@@ -47,7 +47,7 @@ rect_to_sphere = projection.Remap.new(proj_from,proj_to)
 -- do not need to call get_index_and_mask explicitly as it will be
 -- called when needed on the first call to remap, but by calling it
 -- here we can compute the timing information.
-index1D = rect_to_sphere:get_index_and_mask()
+index1D = rect_to_sphere:get_offset_and_mask()
 perElement = index1D:nElement()
 time = sys.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)

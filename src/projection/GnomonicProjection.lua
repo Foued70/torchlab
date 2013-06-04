@@ -53,13 +53,13 @@ function GnomonicProjection:set_lambda_phi(lambda,phi)
 
 end
 
--- coords - coords in normalized coordinates, 0,0 center
+-- normalized_coords - coords in normalized coordinates, 0,0 center
 -- angles (optional) - azimuth, elevation from 0,0 center of projection
-function GnomonicProjection:coords_to_angles(coords, angles)
-   angles = angles or torch.Tensor(coords:size())
+function GnomonicProjection:normalized_coords_to_angles(normalized_coords, angles)
+   angles = angles or torch.Tensor(normalized_coords:size())
 
-   local y = coords[1]
-   local x = coords[2]
+   local y = normalized_coords[1]
+   local x = normalized_coords[2]
    
    -- rho = sqrt(x^2 + y^2)
    local rho = x:clone()
@@ -108,9 +108,9 @@ end
 
 
 -- angles - azimuth, elevation from 0,0 center of projection
--- coords (optional) - coords in normalized coordinates
-function GnomonicProjection:angles_to_coords(angles, coords)
-   coords = coords or torch.Tensor(angles:size())
+-- normalized_coords (optional) - coords in normalized coordinates
+function GnomonicProjection:angles_to_normalized_coords(angles, normalized_coords)
+   normalized_coords = normalized_coords or torch.Tensor(angles:size())
 
    local angles = angles:clone()
    -- Elevation: latitude, phi, northing, how far north, south
@@ -119,8 +119,8 @@ function GnomonicProjection:angles_to_coords(angles, coords)
    -- Azimuth: longitude, lambda, easting, how far east west
    local azimuth   = angles[2]
    
-   local y = coords[1]
-   local x = coords[2]
+   local y = normalized_coords[1]
+   local x = normalized_coords[2]
 
    local cos_phi = torch.cos(elevation)
    local sin_phi = torch.sin(elevation)
@@ -149,5 +149,5 @@ function GnomonicProjection:angles_to_coords(angles, coords)
    local mask = cosc:lt(0)
    x[mask] = huge
    y[mask] = huge
-   return coords
+   return normalized_coords
 end

@@ -25,7 +25,7 @@ end
 -- every projection must implement these low level functions.  they
 -- are instance functions because some projections (such as the
 -- calibrated ones) need access to instance variables
-function Projection:coords_to_angles(coords, angles)
+function Projection:normalized_coords_to_angles(normalized_coords, angles)
    error("Not implemented")
 
    -- WARNING. You should call this function at the end of your code.
@@ -34,7 +34,7 @@ function Projection:coords_to_angles(coords, angles)
 
 end
 
-function Projection:angles_to_coords(angles, coords)
+function Projection:angles_to_normalized_coords(angles, normalized_coords)
    error("Not implemented")
 end
 
@@ -44,15 +44,15 @@ function Projection:pixels_to_angles(pixels, angles)
    angles = angles or torch.Tensor(pixels:size())
    angles:resize(pixels:size())
 
-   local coords = pixels:clone()
+   local normalized_coords = pixels:clone()
    
    -- move 0,0 to the center
    -- convert to unit sphere coords
-   coords[1]:add(-self.center[1]):mul(self.units_per_pixel_y)
-   coords[2]:add(-self.center[2]):mul(self.units_per_pixel_x)
+   normalized_coords[1]:add(-self.center[1]):mul(self.units_per_pixel_y)
+   normalized_coords[2]:add(-self.center[2]):mul(self.units_per_pixel_x)
 
-   -- convert unit sphere projection coords to angles
-   self:coords_to_angles(coords,angles)
+   -- convert unit sphere projection normalized_coords to angles
+   self:normalized_coords_to_angles(normalized_coords,angles)
 
    return angles
 end
@@ -64,7 +64,7 @@ function Projection:angles_to_pixels(angles, pixels)
    pixels = pixels or torch.Tensor(angles:size())
    pixels:resize(angles:size())
 
-   self:angles_to_coords(angles, pixels)
+   self:angles_to_normalized_coords(angles, pixels)
 
    -- convert from unit sphere coords to pixels
    -- move 0,0 to the upper left corner
@@ -126,7 +126,7 @@ function Projection:pixels_to_offset_and_mask(pixels, offset, mask)
    stride[2] = 1
 
    -- convert the x and y values into a single 1D offset (y * stride + x)
-   offset = util.addr.coords_to_offset(pixels,stride,mask,offset)
+   offset = util.addr.pixel_coords_to_offset(pixels,stride,mask,offset)
 
    return offset, stride, mask
 end
@@ -140,11 +140,11 @@ function Projection:angles_to_offset_and_mask(angles, offset, mask)
 end
 
 function Projection:offset_and_mask_to_pixels(offset,stride,mask,pixels)
-   return util.addr.offset_to_coords(offset, stride, pixels)
+   return util.addr.offset_to_pixel_coords(offset,stride,pixels)
 end
 
 
 function Projection:offset_and_mask_to_angles(offset,stride,mask,angles)
-   local pixels = util.addr.offset_to_coords(offset, stride)
+   local pixels = util.addr.offset_to_pixel_coords(offset,stride)
    return self:pixels_to_angles(pixels,angles)
 end

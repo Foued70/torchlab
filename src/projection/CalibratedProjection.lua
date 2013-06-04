@@ -13,8 +13,8 @@ function CalibratedProjection:__init(width, height,
                     pixel_center_x+1, pixel_center_y+1)
 
    -- Need to compute fov  from the "intrinsic parameters" we get from opencv
-   self.hfov = 2 * math.atan2(self.center[1],fx)
-   self.vfov = 2 * math.atan2(self.center[2],fy)
+   self.vfov = 2 * math.atan2(self.center[1],fy)
+   self.hfov = 2 * math.atan2(self.center[2],fx)
 
    -- How to get to normalized coordinates
    self.units_per_pixel_x = 1/fx
@@ -26,9 +26,9 @@ function CalibratedProjection:__init(width, height,
 end
 
 
--- coords - coords in normalized coordinates, 0,0 center
+-- normalized_coords - coords in normalized coordinates, 0,0 center
 -- angles (optional) - azimuth, elevation from 0,0 center of projection
-function CalibratedProjection:coords_to_angles(coords, angles)
+function CalibratedProjection:normalized_coords_to_angles(normalized_coords, angles)
    -- TODO: for now we have no reverse function from the opencv
    --       coefficients
    error("Not implemented")
@@ -36,9 +36,9 @@ end
 
 
 -- angles - azimuth, elevation from 0,0 center of projection
--- coords (optional) - coords in normalized coordinates
-function CalibratedProjection:angles_to_coords(angles, coords)
-   coords = coords and coords:copy(angles) or angles:clone()
+-- normalized_coords (optional) - coords in normalized coordinates
+function CalibratedProjection:angles_to_normalized_coords(angles, normalized_coords)
+   normalized_coords = normalized_coords and normalized_coords:copy(angles) or angles:clone()
 
    -- the variables are named as they are in the opencv documentation:
    -- http://docs.opencv.org/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
@@ -47,16 +47,17 @@ function CalibratedProjection:angles_to_coords(angles, coords)
    -- so to get from angles (spherical coordinates) to perspective
    -- coordinates we apply a rectilinear transform.
 
-   local azimuth   = angles[1]
-   local elevation = angles[2]
 
-   coords[1] = torch.tan(azimuth)
-   coords[2] = torch.tan(elevation):cdiv(torch.cos(azimuth))
+   local elevation = angles[1]
+   local azimuth   = angles[2]
+
+   normalized_coords[1] = torch.tan(elevation):cdiv(torch.cos(azimuth))
+   normalized_coords[2] = torch.tan(azimuth)
 
    -- then we apply the opencv distortion from perfect rectilinear to
    -- actual image plane rectilinear.
-   local xp = coords[1]
-   local yp = coords[2]
+   local yp = normalized_coords[1]
+   local xp = normalized_coords[2]
    
    local xpyp = torch.cmul(xp,yp)
 
@@ -74,8 +75,8 @@ function CalibratedProjection:angles_to_coords(angles, coords)
    xp = nil 
    yp = nil
 
-   local xpp = coords[1]
-   local ypp = coords[2]
+   local ypp = normalized_coords[1]
+   local xpp = normalized_coords[2]
 
    for ri = 1,self.radial_coeff:size(1)-1 do
       radial_distortion:add(r_pow * self.radial_coeff[ri])
@@ -109,5 +110,5 @@ function CalibratedProjection:angles_to_coords(angles, coords)
    yp_sqr = nil
    collectgarbage()
 
-   return coords
+   return normalized_coords
 end

@@ -47,19 +47,19 @@ function SphericalProjection:angles_map(scale,hfov,vfov, hoffset, voffset)
 end
 
 
--- coords - coords in the unit sphere projection, 0,0 center
+-- normalized_coords - normalized_coords in the unit sphere projection, 0,0 center
 -- angles (optional) - azimuth, elevation from 0,0 center of projection
-function SphericalProjection:coords_to_angles(coords, angles)
-   angles = angles or torch.Tensor(coords:size())
-   angles:copy(coords)
+function SphericalProjection:normalized_coords_to_angles(normalized_coords, angles)
+   angles = angles or torch.Tensor(normalized_coords:size())
+   angles:copy(normalized_coords)
    return angles
 end
 
 
 -- angles - azimuth, elevation from 0,0 center of projection
--- coords (optional) - coords in the unit sphere projection
-function SphericalProjection:angles_to_coords(angles, coords)
-   coords = coords or torch.Tensor(angles:size())
-   coords:copy(angles) 
-   return coords
+-- normalized_coords (optional) - normalized_coords in the unit sphere projection
+function SphericalProjection:angles_to_normalized_coords(angles, normalized_coords)
+   normalized_coords = normalized_coords or torch.Tensor(angles:size())
+   normalized_coords:copy(angles) 
+   return normalized_coords
 end
