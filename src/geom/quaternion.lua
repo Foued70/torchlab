@@ -1,5 +1,11 @@
 Class()
 
+local axes   = torch.eye(3)
+
+x = axes[1]
+y = axes[2]
+z = axes[3]
+
 function conjugate(quat,res)
    if (not res) then
       res = quat:clone()
@@ -161,12 +167,12 @@ end
 
 -- if two quaternions are equal they will rotate a vector the same distance
 function distance(quat1, quat2)
-   local vec1x = rotate(x_axis, quat1)
-   local vec2x = rotate(x_axis, quat2)
-   local vec1y = rotate(y_axis, quat1)
-   local vec2y = rotate(y_axis, quat2)
-   local vec1z = rotate(z_axis, quat1)
-   local vec2z = rotate(z_axis, quat2)
+   local vec1x = rotate(x, quat1)
+   local vec2x = rotate(x, quat2)
+   local vec1y = rotate(y, quat1)
+   local vec2y = rotate(y, quat2)
+   local vec1z = rotate(z, quat1)
+   local vec2z = rotate(z, quat2)
    return vec1x:dist(vec2x) + vec1y:dist(vec2y) + vec1z:dist(vec2z)
 end
 
@@ -195,7 +201,7 @@ function rotate(...)
                       {type='torch.Tensor', help='quaternion',   req=true}))
       dok.error('incorrect arguements', 'rotate_by_quat')
    end
-   -- FIXME make this lowlevel C and add possibility to rotate a set of vectors
+
    local x1 = q[2]*v[3] - q[3]*v[2]
    local y1 = q[3]*v[1] - q[1]*v[3]
    local z1 = q[1]*v[2] - q[2]*v[1]

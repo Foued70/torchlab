@@ -1,5 +1,4 @@
 local projection = projection.util
-local geom       = geom.util
 
 local pi = math.pi
 local piover2 = math.pi * 0.5
@@ -623,7 +622,7 @@ function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
 
    -- apply the lens transform
    local diagonal_angles = 
-      projection.radial_distance_to_angle(d, self.lens_type, self.pol)
+      self:radial_distance_to_angle(d, self.lens_type, self.pol)
 
    -- convert diagonal angle to equirectangular (spherical) angles
    local elevation,azimuth = projection.diagonal_to_height_width(diagonal_angles,self.aspect_ratio) 
@@ -633,7 +632,7 @@ function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
    spherical_angles:cmul(normalized_pts) -- put the sign
 
    if (out_type == "uc") or (out_type == "unit_cartesian") then
-      return geom.spherical_coords_to_unit_cartesian(spherical_angles)
+      return geom.util.spherical_angles_to_unit_cartesian(spherical_angles)
    else
       return spherical_angles
    end

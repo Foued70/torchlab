@@ -1,6 +1,7 @@
-local geom      = util.geom
 local ffi_utils = require 'util.ffi'
 local ffi       = require 'ffi'
+
+local normalize = geom.util.normalize
 
 -- Reimplementation in torch/C of Laurent Kneip's code. Could also have
 -- used Pierre Moulon's openMVG (https://github.com/openMVG/openMVG) but
@@ -101,7 +102,7 @@ function p3p.compute_poses (world_pts,unit_vec,debug)
    camT = torch.Tensor(3,3)
    camT[1] = f1
    camT[3] = torch.cross(f1,f2)
-   geom.normalize(camT[3])
+   normalize(camT[3])
    camT[2] = torch.cross(camT[3],camT[1])
 
    local pf3 = camT*f3 
@@ -117,7 +118,7 @@ function p3p.compute_poses (world_pts,unit_vec,debug)
       f2 = tmp
       camT[1] = f1
       camT[3] = torch.cross(f1,f2)
-      geom.normalize(camT[3])
+      normalize(camT[3])
       camT[2] = torch.cross(camT[3],camT[1])
 
       pf3 = camT*f3 
@@ -131,10 +132,10 @@ function p3p.compute_poses (world_pts,unit_vec,debug)
    -- Create intermediate world frame
    worldT = torch.Tensor(3,3)
    worldT[1] = p2p1
-   geom.normalize(worldT[1])
+   normalize(worldT[1])
    
    worldT[3] = torch.cross(worldT[1],p3p1)
-   geom.normalize(worldT[3])
+   normalize(worldT[3])
    
    worldT[2] = torch.cross(worldT[3],worldT[1])
    local pp3 = worldT*p3p1

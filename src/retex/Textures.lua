@@ -4,13 +4,7 @@
 -- tex = retex.Textures.new(scan, {ppm = 300})
 -- tex:make()
 
-require 'torch'
-require 'sys'
-require 'paths'
-require 'math'
-
-local loader = require 'util.loader'
-local geom = util.geom
+local loader = require 'data.loader'
 
 local Textures = Class()
 
@@ -207,30 +201,30 @@ function Textures:face_to_texture_transform_and_dimension(fid,debug)
     if debug then log.trace("longedge:", pid, eid) end
 
     -- align largest dimension of the plane normal
-    local nrot,ndim = geom.largest_rotation(normal)
+    local nrot,ndim = geom.util.largest_rotation(normal)
    
     -- align longest edge which is in a plane orthogonal to the new
     -- zaxis, and needs to be rotated to the xaxis around the zaxis
-    local nrot_longedge = geom.rotate_by_quat(longedge,nrot)
+    local nrot_longedge = geom.quaternion.rotate(longedge,nrot)
 
-    local erot,edim  = geom.largest_rotation(nrot_longedge)
+    local erot,edim  = geom.util.largest_rotation(nrot_longedge)
 
     -- combine the rotations into a single rotation
-    local rot = geom.quat_product(erot,nrot)
+    local rot = geom.quaternion.product(erot,nrot)
    
     local ydim = 6 - (edim+ndim)
     local dims = torch.Tensor({ndim,edim,ydim})
 
     if debug then    
       log.trace("   Orig normal:", normal[1],normal[2],normal[3])
-      local n = geom.rotate_by_quat(normal,nrot)
+      local n = geom.quaternion.rotate(normal,nrot)
       log.trace("Rotated normal:",n[1],n[2],n[3])
 
       log.trace(" --  long edge:",longedge[1],longedge[2],longedge[3])
       log.trace(" --  nrot edge:",nrot_longedge[1],nrot_longedge[2],nrot_longedge[3])
-      local enrot_longedge  = geom.rotate_by_quat(nrot_longedge,erot)    
+      local enrot_longedge  = geom.quaternion.rotate(nrot_longedge,erot)    
       log.trace(" -- enrot edge:",enrot_longedge[1],enrot_longedge[2],enrot_longedge[3])
-      enrot_longedge  = geom.rotate_by_quat(longedge,rot)
+      enrot_longedge  = geom.quaternion.rotate(longedge,rot)
       log.trace(" -- enrot edge:",enrot_longedge[1],enrot_longedge[2],enrot_longedge[3])
 
       log.trace("-- dim: ", ndim, "nrot:", nrot[1],nrot[2],nrot[3],nrot[4])
@@ -239,12 +233,12 @@ function Textures:face_to_texture_transform_and_dimension(fid,debug)
     end
 
     --  b) find dimensions of the texture to be created
-    local v = geom.rotate_by_quat(face_verts[1] - trans,rot)
+    local v = geom.quaternion.rotate(face_verts[1] - trans,rot)
     -- range is min,max,range
     local xrange = torch.Tensor(3):fill(v[edim])
     local yrange = torch.Tensor(3):fill(v[ydim])
     for vi = 2,nverts do
-      v = geom.rotate_by_quat(face_verts[vi] - trans,rot)
+      v = geom.quaternion.rotate(face_verts[vi] - trans,rot)
       if (yrange[1] > v[ydim]) then yrange[1] = v[ydim] end
       if (yrange[2] < v[ydim]) then yrange[2] = v[ydim] end
       if (xrange[1] > v[edim]) then xrange[1] = v[edim] end
@@ -267,7 +261,7 @@ function Textures:test_face_to_texture()
       printf(" -- nrm: %2.4f %2.4f %2.4f",n[1],n[2],n[3])
       r,t,d,x,y = face_to_texture_transform_and_dimension(fid, true)
       printf(" -- rot: %2.4f %2.4f %2.4f %2.4f",r[1],r[2],r[3],r[4])
-      print(geom.rotation_matrix(r))
+      print(geom.quaternion.to_rotation_matrix(r))
       printf(" -- trs: %2.4f %2.4f %2.4f",t[1],t[2],t[3])
       printf(" -- dim: %d %d %d",d[1],d[2],d[3])
       printf(" -- xrg: %2.4f - %2.4f",x[1],x[2])
@@ -305,7 +299,7 @@ function Textures:create_uvs(fid, debug)
   
   for vi = 1, obj.n_verts_per_face[fid] do
     local vtrans = face_verts[vi] - trans
-    vtrans = geom.rotate_by_quat(vtrans,rot)
+    vtrans = geom.quaternion.rotate(vtrans,rot)
     obj.n_uvs = obj.n_uvs + 1
     obj.uvs[obj.n_uvs][1] = (vtrans[dims[2]] - xrange[1])/xrange[3]
     obj.uvs[obj.n_uvs][2] = 1 - ((vtrans[dims[3]] - yrange[1])/yrange[3])
@@ -341,7 +335,7 @@ function Textures:make_img(fid, debug)
   local rot,trans,dims,xrange,yrange = self:face_to_texture_transform_and_dimension(fid, debug)
     
   --  a) need rotation from texture to global
-  local rotT = geom.quat_conjugate(rot)
+  local rotT = geom.quaternion.conjugate(rot)
 
   -- 3) create the texture image which we will color, and temp variables
   local widthpx, heightpx, dx, dy = self:range_to_texture_dimensions(xrange[3], yrange[3], debug)
@@ -368,7 +362,7 @@ function Textures:make_img(fid, debug)
       v[dims[1]] = 0
 
       --  inverse from texture coords to global
-      v = geom.rotate_by_quat(v,rotT) + trans
+      v = geom.quaternion.rotate(v,rotT) + trans
       local found = 0
       -- loop through closest photos
       for pi = 1,closest_photos:size(1) do        

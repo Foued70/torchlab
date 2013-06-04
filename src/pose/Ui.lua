@@ -5,11 +5,10 @@ require 'qtuiloader'
 require 'qtwidget'
 require 'qt'
 
-local geom = util.geom
-local libui = require 'libui'
-local Scan = util.Scan
+local libui    = require 'libui'
+local Scan     = model.Scan
 local GLWidget = ui.GLWidget
-local Obj = util.Obj
+local Obj      = data.Obj
 
 local Ui = Class()
 
@@ -434,7 +433,7 @@ function Ui:update_viewport_passes()
   local photo = self.scan.sweeps[self.current_sweep].photos[self.current_photo]  
 
   local forward_vector = torch.Tensor({0,1,0})
-  local look_direction = geom.rotate_by_quat(forward_vector, photo.rotation)
+  local look_direction = geom.quaternion.rotate(forward_vector, photo.rotation)
 
   local camera_eye = photo.position
   local camera_center = camera_eye + look_direction

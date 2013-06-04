@@ -1,5 +1,5 @@
 require 'torch'
-local imagedir = "../data/test/96_spring_kitchen/"
+local imagedir = "/Users/marco/projects/cloudlab/src/data/test/96_spring_kitchen/nikon_10.5mm/"
 local sweep_1 = {
   {
     image_path = imagedir .. "sweep_1/DSC_0180.jpg",

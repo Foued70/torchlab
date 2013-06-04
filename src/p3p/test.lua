@@ -1,7 +1,6 @@
 require 'image'
 
-local LensSensor = util.LensSensor
-local geom       = require 'util.geom' -- not a class so needs to be required explicitly
+local LensSensor = projection.LensSensor
 local p3p        = require 'p3p'
 
 
@@ -14,7 +13,7 @@ cmd:text('Compute Perspective 3 points algorithm')
 cmd:text()
 cmd:text('Options')
 cmd:option('-data_file',
-           "Kitchen_calibration_4_3_13.lua",
+           "picking_data/Kitchen_calibration_4_3_13.lua",
            'pose info file in same directory as the texture images')
 cmd:option("-lens_type", "nikon_10p5mm_r2t_full","data for image dewarping")
 
@@ -31,8 +30,8 @@ img = image.load(data[1][1].image_path)
 -- load lens calibration
 lens = LensSensor.new(params.lens_type,img)
 
-rot_error   = torch.Tensor(3)
-trans_error = torch.Tensor(3)
+rot_error   = 0 -- torch.Tensor(3)
+trans_error = 0 -- torch.Tensor(3)
 
 for si,sweep in pairs(data) do 
    -- matterport pose
@@ -51,7 +50,7 @@ for si,sweep in pairs(data) do
          if not photo.world then 
             photo.world = photo.calibration_pairs:narrow(2,1,3)
             photo.uv    = photo.calibration_pairs:narrow(2,4,2)
-            photo.uc    = lens:img_coords_to_world(photo.uv,"uv","uc")
+            photo.uc    = lens:image_coords_to_angles(photo.uv,"uv","uc")
          end
 
          solutions = p3p.compute_poses(photo.world,photo.uc)
@@ -62,7 +61,7 @@ for si,sweep in pairs(data) do
             s = solutions[ui]
             trans = s[1]
             rot   = s:narrow(1,2,3)
-            quat  = geom.rotation_matrix_to_quaternion(rot)
+            quat  = geom.quaternion.from_rotation_matrix(rot)
             printf("Root: [%d]", ui)
             if quat then 
                local ctrans_err = torch.dist(pp,trans)
@@ -71,7 +70,7 @@ for si,sweep in pairs(data) do
                printf(" - sweep: %f %f %f",pp[1],pp[2],pp[3])
                printf(" - photo: %f %f %f",hp[1],hp[2],hp[3])
                printf(" -   p3p: %f %f %f",trans[1],trans[2],trans[3])
-               local crot_err = geom.quaternion_dist(pr,quat)
+               local crot_err = geom.quaternion.distance(pr,quat)
                if crot_err < rot_err then rot_err = crot_err end
                printf("+ Rotation (error: %f)", rot_err)
                printf(" - sweep: %f %f %f %f norm: %f",pr[1],pr[2],pr[3],pr[4],pr:norm())
@@ -82,8 +81,8 @@ for si,sweep in pairs(data) do
                newuc = torch.Tensor(photo.uc:size())
                for uci = 1,newuc:size(1) do 
                   newuc[uci] = 
-                     geom.normalize(geom.rotate_by_quat(photo.world[uci] - trans, 
-                                                        geom.quat_conjugate(quat)))
+                     geom.util.normalize(geom.quaternion.rotate(photo.world[uci] - trans, 
+                                                                geom.quaternion.conjugate(quat)))
                end
                printf("angle dist: %f", newuc:dist(photo.uc))
                print(newuc)
@@ -99,5 +98,6 @@ for si,sweep in pairs(data) do
       end
    end
 end
+
 printf("Total Translation Error: %f", trans_error)
 printf("Total Rotation Error: %f", rot_error)

@@ -1,6 +1,5 @@
-local geom       = util.geom 
 local p3p        = require "p3p"
-local LensSensor = util.LensSensor
+local LensSensor = projection.LensSensor
 
 average_distance        = 3
 project_through_corners = false
@@ -37,23 +36,23 @@ zaxis = axes[3]
 c = LensSensor.new("nikon_10p5mm_r2t_full",4928,3264)
 
 -- camera at random point on sphere of radius 6
-c.xyz = geom.normalize(torch.randn(3)) * 6
+c.xyz = geom.util.normalize(torch.randn(3)) * 6
 
 c.fovx   = math.atan2(c.center_x,c.hfocal_px)
 c.fovy   = math.atan2(c.center_y,c.vfocal_px)
 
 -- make camera point at origin
-view_direction = geom.normalize(torch.mul(c.xyz,-1))
-c.quat_r = geom.quaternion_from_to(xaxis,view_direction)
-c.quat   = geom.quat_conjugate(c.quat_r)
+view_direction = geom.util.normalize(torch.mul(c.xyz,-1))
+c.quat_r = geom.quaternion.angle_between(xaxis,view_direction)
+c.quat   = geom.quaternion.conjugate(c.quat_r)
 
 -- copy these functions from what used to be Pose.lua
 function c:local2global(v)
-   return geom.rotate_by_quat(v,self.quat) + self.xyz
+   return geom.quaternion.rotate(v,self.quat) + self.xyz
 end
 
 function c:global2local(v)
-   return geom.normalize(geom.rotate_by_quat(v - self.xyz, self.quat_r))
+   return geom.normalize(geom.quaternion.rotate(v - self.xyz, self.quat_r))
 end
 
 function c:globalxyz2angle(pt)
@@ -75,21 +74,21 @@ function check_solutions(solutions,c,debug)
       s = solutions[ui]
       trans = s[1]
       rot   = s:narrow(1,2,3)
-      quat  = geom.rotation_matrix_to_quaternion(rot)
+      quat  = geom.quaternion.from_rotation_matrix(rot)
       if debug then
          printf("Root: [%d]", ui)
       end
       if quat then
          local ctrans_err = torch.dist(c.xyz,trans)
          if ctrans_err < trans_err then trans_err = ctrans_err end
-         local crot_err = geom.quaternion_dist(c.quat_r,quat)
+         local crot_err = geom.quaternion.distance(c.quat_r,quat)
          if crot_err < rot_err then rot_err = crot_err end
 
          -- new unit vectors from new position should align with the original 
          newuc = torch.Tensor(3,3) -- c.uc:size())
          for uci = 1,3 do -- newuc:size(1) do 
             newuc[uci] = 
-               geom.normalize(geom.rotate_by_quat(c.world[uci] - trans, quat))
+               geom.util.normalize(geom.quaternion.rotate(c.world[uci] - trans, quat))
          end
          -- the reprojection error on the three points will solve the 
          local creproj_err = newuc:dist(c.uc:narrow(1,1,3))
@@ -142,9 +141,9 @@ for ji = -5,0,0.1 do
    
    for i = 1,sample_size do
       -- reset camera position
-      c.xyz = geom.normalize(torch.randn(3)) * 6
-      c.quat_r = geom.quaternion_from_to(xaxis,geom.normalize(torch.mul(c.xyz,-1)))
-      c.quat   = geom.quat_conjugate(c.quat_r)
+      c.xyz = geom.util.normalize(torch.randn(3)) * 6
+      c.quat_r = geom.quaternion.angle_between(xaxis,geom.util.normalize(torch.mul(c.xyz,-1)))
+      c.quat   = geom.quaternion.conjugate(c.quat_r)
       if true then
          if project_through_corners then 
             -- shoot rays through corners of camera, put in world coords
@@ -170,7 +169,7 @@ for ji = -5,0,0.1 do
             -- jitter unit vectors directly
             test_unit:add(torch.randn(test_unit:size()):mul(jitter_amount))
             for ti = 1,test_unit:size(1) do
-               geom.normalize(test_unit[ti])
+               geom.util.normalize(test_unit[ti])
             end
          end
          
