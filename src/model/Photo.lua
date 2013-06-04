@@ -5,7 +5,7 @@ require 'math'
 local LensSensor = projection.LensSensor
 local projection = projection.util
 local Ray = geom.Ray
-local geom = geom.util
+-- local geom = geom.util
 
 local bihtree = model.bihtree
 local loader = require 'data.loader'
@@ -129,11 +129,11 @@ end
 -- global x,y,z to camera local x,y,z (origin at
 -- camera ray origin, and 0,0,0 direction in center of image)
 function Photo:global2local(v)
-  return geom.rotate_by_quat(v - self.position, self.rotation_r)
+  return geom.quaternion.rotate(v - self.position, self.rotation_r)
 end
 
 function Photo:local2global(v)
-   return geom.rotate_by_quat(v,self.rotation) + self.position
+   return geom.quaternion.rotate(v,self.rotation) + self.position
 end
 
 -- FIXME optimize (in C) these funcs.
@@ -145,7 +145,7 @@ function Photo:global_xyz_to_2d(pt)
   -- xyz in photo coordinates  
   local v       = self:global2local(pt)  
   local azimuth = torch.atan2(v[1],v[2])
-  local norm    = geom.normalize(v)
+  local norm    = geom.util.normalize(v)
   local elevation = torch.asin(norm[3])  
   
   -- TODO: fix this mp fix
@@ -196,9 +196,9 @@ function Photo:local_xy_to_global_rot(x, y)
     dir[1]  =   h * torch.cos(azimuth)   -- x'
   end
   
-  geom.normalize(dir)
+  geom.util.normalize(dir)
   -- return point and direction rotated to global coordiante
-  return geom.rotate_by_quat(dir,self.rotation)
+  return geom.quaternion.rotate(dir,self.rotation)
 end
 
 function Photo:compute_dirs(scale)

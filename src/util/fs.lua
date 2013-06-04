@@ -57,9 +57,17 @@ function glob(dir,match, out)
    if not paths.dirp(dir) then return nil end
    out = out or {}
    for f in paths.files(dir) do 
-      if f:gmatch(match)() then
-         table.insert(out,dir .. "/" .. f) 
-      end 
-   end
+      if type(match) == 'table' then
+         for _,m in pairs(match) do 
+            if f:gmatch(m)() then
+               table.insert(out,dir .. "/" .. f) 
+            end 
+         end
+      else -- match is a string
+         if f:gmatch(match)() then
+            table.insert(out,dir .. "/" .. f) 
+         end 
+      end
+   end 
    return out
 end

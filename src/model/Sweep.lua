@@ -27,7 +27,8 @@ function Sweep:set_photos()
   if not img_dir or not paths.dirp(img_dir) then log.trace(img_dir, 'not found. Photos not created') return end
   
   self.photos = {}
-  for i, f in ipairs(fs.glob(img_dir, unpack(config.img_extensions))) do
+  print(unpack(config.img_extensions))
+  for i, f in ipairs(fs.glob(img_dir, config.img_extensions)) do
     table.insert(self.photos, Photo.new(self, f))
   end
 end
