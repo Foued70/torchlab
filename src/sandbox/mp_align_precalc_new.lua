@@ -2,6 +2,31 @@
 
 require 'image'
 
+cmd = torch.CmdLine()
+cmd:text()
+cmd:text()
+cmd:text('Compute image projections')
+cmd:text()
+cmd:text('Options')
+cmd:option('-topdir', '/Users/lihui815/Projects/PICSDIR/Sweeps/NikonD5100_130522', 'project directory')
+cmd:option('-sweepnum', 'sweep_7', 'directory of particular sweep')
+cmd:option('-imagesdir', 'JPG', 'directory with the images to load')
+cmd:option('-outdir', 'output', 'directory to save images')
+
+cmd:text()
+
+-- arg = ''
+
+-- parse input params
+params = cmd:parse(arg)
+
+imagesdir  = params.topdir..'/'..params.sweepnum..'/'..params.imagesdir
+if not paths.dirp(imagesdir) then
+   error("Must set a valid path to directory of images to process default -imagesdir images/")
+end
+outdir = params.topdir..'/'..params.outdir
+sys.execute("mkdir -p " .. outdir)
+
 pi = math.pi
 pi2 = pi * 0.5
 
@@ -40,39 +65,12 @@ delta_quant = 25;
 
 delta_sum_tolerance = (0.1/180)*pi
 
---mindist = torch.Tensor(#images);
---mindist:fill(9999999999999999999999);
---best_delta = precalculated:clone();
---best_distance = torch.Tensor(#images);
---best_area = torch.Tensor(#images);
---best_quant = torch.Tensor(#images);
-
-mindist = 9999999999999999999999;
-best_vfov = vfov_anchor;
-best_hfov = hfov_anchor;
-best_phi = phi_anchor;
+mindist    = math.huge
+best_vfov  = vfov_anchor;
+best_hfov  = hfov_anchor;
+best_phi   = phi_anchor;
 best_delta = precalculated:clone();
 
-cmd = torch.CmdLine()
-cmd:text()
-cmd:text()
-cmd:text('Compute image projections')
-cmd:text()
-cmd:text('Options')
-cmd:option('-topdir', '/Users/lihui815/Projects/PICSDIR/Sweeps/NikonD5100_130522', 'project directory')
-cmd:option('-sweepnum', 'sweep_7', 'directory of particular sweep')
-cmd:option('-imagesdir', 'JPG', 'directory with the images to load')
-cmd:option('-outdir', 'output', 'directory to save images')
-
-cmd:text()
-
-arg = ''
-
--- parse input params
-params = cmd:parse(arg)
-
-imagesdir  = params.topdir..'/'..params.sweepnum..'/'..params.imagesdir
-outdir = params.topdir..'/'..params.outdir
 
 lab_images={}
 rgb_images={}
@@ -81,9 +79,6 @@ rgb_images={}
 if not images then
    images = {}
    fnames = {}
-   if not paths.dirp(imagesdir) then 
-      error("Must set a valid path to directory of images to process default -imagesdir images/")
-   end
    imgfiles = paths.files(imagesdir)
    imgfiles() -- .
    imgfiles() -- ..
@@ -115,184 +110,186 @@ width  = img:size(3)
 height = img:size(2)
 scale  = 1/10
 
-force  = true 
+force  = true
 lambda = 0
 
 -- images are vertical
+
 
 p("Testing Image Projection")
 
 sys.tic()
 
 for pp = -phi_quant,phi_quant do
-  
-  local phi = phi_anchor + phi_wiggle * (pp/(phi_quant + 0.0001));
 
-  for vv = -vfov_quant,vfov_quant do
-  
-    local vfov = vfov_anchor + vfov_wiggle * (vv/(vfov_quant + 0.0001));
+   local phi = phi_anchor + phi_wiggle * (pp/(phi_quant + 0.0001));
 
-    for hh = -hfov_quant,hfov_quant do
-  
-      local hfov = hfov_anchor + hfov_wiggle * (hh/(hfov_quant + 0.0001))
-      
-      -- create a delta_partition such that sum(delta) = 2*pi
-      
-      local cost_matrix = torch.zeros(#images, 2 * delta_quant + 1);
-      local quant_mat = torch.zeros(#images);
-      local dist_mat = torch.ones(#images) * 9999999999;
+   for vv = -vfov_quant,vfov_quant do
 
-      for i = 1,#images do
-      
-        for d=-delta_quant,delta_quant do
-          
-          collectgarbage();
+      local vfov = vfov_anchor + vfov_wiggle * (vv/(vfov_quant + 0.0001));
 
-          local delta = delta_anchor[i] + delta_wiggle * (d/(delta_quant + 0.0001));
+      for hh = -hfov_quant,hfov_quant do
 
-          local proj_from1 = projection.GnomonicProjection.new(width,height,hfov,vfov)
-          local proj_from2 = projection.GnomonicProjection.new(width,height,hfov,vfov)
+         local hfov = hfov_anchor + hfov_wiggle * (hh/(hfov_quant + 0.0001))
 
-          local proj_to1   = projection.SphericalProjection.new(width*2*scale,height*scale,2*hfov,vfov)
-          local proj_to2   = projection.SphericalProjection.new(width*2*scale,height*scale,2*hfov,vfov)
+         local proj_from1 = projection.GnomonicProjection.new(width,height,hfov,vfov)
+         local proj_from2 = projection.GnomonicProjection.new(width,height,hfov,vfov)
 
-          local rect_to_sphere1 = projection.Remap.new(proj_from1,proj_to1)
-          local rect_to_sphere2 = projection.Remap.new(proj_from2,proj_to2)
+         local proj_to1   = projection.SphericalProjection.new(width*2*scale,height*scale,2*hfov,vfov)
+         local proj_to2   = projection.SphericalProjection.new(width*2*scale,height*scale,2*hfov,vfov)
 
-          proj_from1:set_lambda_phi(lambda-delta/2,phi)
-          local index1D1,stride1,mask1 = rect_to_sphere1:get_index_and_mask(force)
+         local rect_to_sphere1 = projection.Remap.new(proj_from1,proj_to1)
+         local rect_to_sphere2 = projection.Remap.new(proj_from2,proj_to2)
 
-          proj_from2:set_lambda_phi(lambda+delta/2,phi)
-          local index1D2,stride2,mask2 = rect_to_sphere2:get_index_and_mask(force)
+         -- create a delta_partition such that sum(delta) = 2*pi
 
-          local mm1 = mask1-1;
-          local mm2 = mask2-1;
-          local overlap_mask = mm1:cmul(mm2);
-          local overlap_mask=overlap_mask:repeatTensor(3,1,1);
-          local overlap_mask=overlap_mask:type('torch.DoubleTensor');
+         local cost_matrix = torch.zeros(#images, 2 * delta_quant + 1);
+         local quant_mat   = torch.zeros(#images);
+         local dist_mat    = torch.ones(#images) * math.huge;
 
-          local ss = 0
-          local area = overlap_mask:sum();
+         for i = 1,#images do
 
-          collectgarbage()
-   
-          local j = (i-1) % #images + 1
-          local k = (i+0) % #images + 1
+            for d=-delta_quant,delta_quant do
 
-          local img_l = lab_images[j]
-          local img_r = lab_images[k]
-   
-          local img_out_l = rect_to_sphere1:remap(img_l)
-          local img_out_r = rect_to_sphere2:remap(img_r)
+               collectgarbage();
 
-          local imo_l = img_out_l:clone():cmul(overlap_mask);
-          local imo_r = img_out_r:clone():cmul(overlap_mask);
+               local delta = delta_anchor[i] + delta_wiggle * (d/(delta_quant + 0.0001));
 
-          local imdiff = imo_l-imo_r;
-          local imdist = imdiff[1]:cmul(imdiff[1]);
-          for c=2,imdiff:size(1) do
-            imdist = imdist + imdiff[c]:cmul(imdiff[c])
-          end
-          imdist:sqrt();
-    
-          ss = imdist:sum()/(area+0.0001);
-          
-          if area == 0 then
-            ss = 1.0
-          end
-          
-          cost_matrix[i][d+delta_quant+1] = ss;
-          
-          if ss < dist_mat[i] then
-            quant_mat[i] = d;
-            dist_mat[i]=ss;
-            printf("for image %d, the best [lambda, phi, delta, vfov, hfov, d] is [%s, %s, %s, %s, %s, %s]", i, lambda, phi, delta, vfov, hfov, d)
-          end
 
-        end
-        
-        collectgarbage()
+               proj_from1:set_lambda_phi(lambda-delta/2,phi)
+               local index1D1,stride1,mask1 = rect_to_sphere1:get_offset_and_mask(force)
 
-      end
-      
-      local dd = quant_mat:clone()
-      local cnt = 0;
-      local dd_sum = dd:sum()
+               proj_from2:set_lambda_phi(lambda+delta/2,phi)
+               local index1D2,stride2,mask2 = rect_to_sphere2:get_offset_and_mask(force)
 
-      local deltas_partition = delta_anchor + (dd * (delta_wiggle / (delta_quant + 0.0001)));
-      
-      while not(dd_sum == 0) do
-      
-        local next_cost = 999
-        local next_dd = 1
-        local next_im = 0
-        
-        if dd_sum < 0 then
-        
-          for i = 1,#images do
-            if dd[i] < delta_quant then
-              local cd = dd[i]
-              local nd = dd[i]+1
-              local nc = cost_matrix[i][nd+delta_quant+1]-cost_matrix[i][cd+delta_quant+1]
-              printf("235 - i: %d, cd: %s, nd: %s, nc %s", i, cd, nd, nc)  
-              if nc < next_cost then
-                next_cost = cost_matrix[i][nd+delta_quant+1]
-                next_dd = nd
-                next_im = i
-              end
+               local mm1 = mask1-1;
+               local mm2 = mask2-1;
+               local overlap_mask = mm1:cmul(mm2);
+               local overlap_mask=overlap_mask:repeatTensor(3,1,1);
+               local overlap_mask=overlap_mask:type('torch.DoubleTensor');
+
+               local ss = 0
+               local area = overlap_mask:sum();
+
+               collectgarbage()
+
+               local j = (i-1) % #images + 1
+               local k = (i+0) % #images + 1
+
+               local img_l = lab_images[j]
+               local img_r = lab_images[k]
+
+               local img_out_l = rect_to_sphere1:remap(img_l)
+               local img_out_r = rect_to_sphere2:remap(img_r)
+
+               local imo_l = img_out_l:clone():cmul(overlap_mask);
+               local imo_r = img_out_r:clone():cmul(overlap_mask);
+
+               local imdiff = imo_l-imo_r;
+               local imdist = imdiff[1]:cmul(imdiff[1]);
+               for c=2,imdiff:size(1) do
+                  imdist = imdist + imdiff[c]:cmul(imdiff[c])
+               end
+               imdist:sqrt();
+
+               ss = imdist:sum()/(area+0.0001);
+
+               if area == 0 then
+                  ss = 1.0
+               end
+
+               cost_matrix[i][d+delta_quant+1] = ss;
+
+               if ss < dist_mat[i] then
+                  quant_mat[i] = d;
+                  dist_mat[i]=ss;
+                  printf("for image %d, the best [lambda, phi, delta, vfov, hfov, d] is [%s, %s, %s, %s, %s, %s]", i, lambda, phi, delta, vfov, hfov, d)
+               end
+
             end
-          end
 
-        else
-          
-          for i = 1,#images do
-            if dd[i] > -delta_quant then
-              local cd = dd[i]
-              local nd = dd[i]-1
-              local nc = cost_matrix[i][nd+delta_quant+1]-cost_matrix[i][cd+delta_quant+1]
-              printf("251 - i: %d, cd: %s, nd: %s, nc %s", i, cd, nd, nc)  
-              if nc < next_cost then
-                next_cost = cost_matrix[i][nd+delta_quant+1]
-                next_dd = nd
-                next_im = i
-              end
+            collectgarbage()
+
+         end
+
+         local dd = quant_mat:clone()
+         local cnt = 0;
+         local dd_sum = dd:sum()
+
+         local deltas_partition = delta_anchor + (dd * (delta_wiggle / (delta_quant + 0.0001)));
+
+         while not(dd_sum == 0) do
+
+            local next_cost = 999
+            local next_dd = 1
+            local next_im = 0
+
+            if dd_sum < 0 then
+
+               for i = 1,#images do
+                  if dd[i] < delta_quant then
+                     local cd = dd[i]
+                     local nd = dd[i]+1
+                     local nc = cost_matrix[i][nd+delta_quant+1]-cost_matrix[i][cd+delta_quant+1]
+                     printf("235 - i: %d, cd: %s, nd: %s, nc %s", i, cd, nd, nc)
+                     if nc < next_cost then
+                        next_cost = cost_matrix[i][nd+delta_quant+1]
+                        next_dd = nd
+                        next_im = i
+                     end
+                  end
+               end
+
+            else
+
+               for i = 1,#images do
+                  if dd[i] > -delta_quant then
+                     local cd = dd[i]
+                     local nd = dd[i]-1
+                     local nc = cost_matrix[i][nd+delta_quant+1]-cost_matrix[i][cd+delta_quant+1]
+                     printf("251 - i: %d, cd: %s, nd: %s, nc %s", i, cd, nd, nc)
+                     if nc < next_cost then
+                        next_cost = cost_matrix[i][nd+delta_quant+1]
+                        next_dd = nd
+                        next_im = i
+                     end
+                  end
+               end
+
             end
-          end
 
-        end
-        
-        collectgarbage()
-        
-        printf("tochange - changed_image: %d, dd_sum: %d, next_dd: %d, cost_change: %s", next_im, dd_sum, next_dd, next_cost)
-        
-        print(dd)
-        dd[next_im] = next_dd
-        print(dd)
-        dd_sum = dd:sum()
-        
-      end
-      
+            collectgarbage()
+
+            printf("tochange - changed_image: %d, dd_sum: %d, next_dd: %d, cost_change: %s", next_im, dd_sum, next_dd, next_cost)
+
+            print(dd)
+            dd[next_im] = next_dd
+            print(dd)
+            dd_sum = dd:sum()
+
+         end
+
+         collectgarbage()
+
+         local ss = 0
+         for i = 1, #images do
+            ss = ss + cost_matrix[i][dd[i]+delta_quant+1]
+         end
+
+         if ss < mindist then
+            best_delta = delta_anchor + dd * (delta_wiggle/(delta_quant + 0.0001));
+            best_vfov = vfov
+            best_hfov = hfov
+            best_phi = phi
+         end
+
+      end -- phi
+
       collectgarbage()
-      
-      local ss = 0
-      for i = 1, #images do
-        ss = ss + cost_matrix[i][dd[i]+delta_quant+1]
-      end
-      
-      if ss < mindist then
-        best_delta = delta_anchor + dd * (delta_wiggle/(delta_quant + 0.0001));
-        best_vfov = vfov
-        best_hfov = hfov
-        best_phi = phi
-      end
-  
-    end -- phi
-  
-    collectgarbage()
 
-  end --hfov
-  
-  collectgarbage()
+   end --hfov
+
+   collectgarbage()
 
 end --vfov
 
@@ -317,78 +314,31 @@ masks = {}
 delta = 0;
 sc = 1/5;
 
+local proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
+
+local proj_to   = projection.SphericalProjection.new(width*((2*pi+hfov)/hfov)*sc,height*sc,2*pi+hfov,vfov)
+
+local rect_to_sphere = projection.Remap.new(proj_from,proj_to)
+
 for i = 1,#images do
-    
-    collectgarbage()
 
-    local proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
-    
-    local proj_to   = projection.SphericalProjection.new(width*((2*pi+hfov)/hfov)*sc,height*sc,2*pi+hfov,vfov)
+   collectgarbage()
 
-    local rect_to_sphere = projection.Remap.new(proj_from,proj_to)
+   proj_from:set_lambda_phi(lambda+delta,phi)
+   local index1D,stride,mask = rect_to_sphere:get_offset_and_mask(force)
 
-    proj_from:set_lambda_phi(lambda+delta,phi)
-    local index1D,stride,mask = rect_to_sphere:get_index_and_mask(force)
+   local mm = mask:repeatTensor(3,1,1);
+   mm = mm:type('torch.DoubleTensor');
 
-    local mm = mask:repeatTensor(3,1,1);
-    mm = mm:type('torch.DoubleTensor');
+   local img = rgb_images[i]
 
-    local img = rgb_images[i]
+   local img_out = rect_to_sphere:remap(img)
 
-    local img_out = rect_to_sphere:remap(img)
+   table.insert(mapped_images,img_out)
+   table.insert(masks,mm)
 
-    table.insert(mapped_images,img_out)
-    table.insert(masks,mm)
-    
-    delta = delta + best_delta[i]
-    
-    --local proj_from1 = projection.GnomonicProjection.new(width,height,hfov,vfov)
-    --local proj_from2 = projection.GnomonicProjection.new(width,height,hfov,vfov)
-    --local proj_from3 = projection.GnomonicProjection.new(width,height,hfov,vfov)
+   delta = delta + best_delta[i]
 
-    --local proj_to1   = projection.SphericalProjection.new(width*3*scale,height*scale,hfov*3,vfov)
-    --local proj_to2   = projection.SphericalProjection.new(width*3*scale,height*scale,hfov*3,vfov)
-    --local proj_to3   = projection.SphericalProjection.new(width*3*scale,height*scale,hfov*3,vfov)
-    
-    --local rect_to_sphere1 = projection.Remap.new(proj_from1,proj_to1)
-    --local rect_to_sphere2 = projection.Remap.new(proj_from2,proj_to2)
-    --local rect_to_sphere3 = projection.Remap.new(proj_from3,proj_to3)
-
-    --j = (i-1) % #images + 1
-    --k = (i+0) % #images + 1
-    --l = (i+1) % #images + 1
-
-    --proj_from1:set_lambda_phi(lambda-best_delta_orig[j],phi)
-    --local index1D1,stride1,mask1 = rect_to_sphere1:get_index_and_mask(force)
-    
-    --proj_from2:set_lambda_phi(lambda,phi)
-    --local index1D2,stride2,mask2 = rect_to_sphere2:get_index_and_mask(force)
-    
-    --proj_from3:set_lambda_phi(lambda+best_delta_orig[k],phi)
-    --local index1D3,stride3,mask3 = rect_to_sphere3:get_index_and_mask(force)
-    
-    --local mm1 = mask1:repeatTensor(3,1,1);
-    --mm1 = mm1:type('torch.DoubleTensor');
-    --local mm2 = mask2:repeatTensor(3,1,1);
-    --mm2 = mm2:type('torch.DoubleTensor');
-    --local mm3 = mask3:repeatTensor(3,1,1);
-    --mm3 = mm3:type('torch.DoubleTensor');
-    
-    --local img1 = rgb_images[j]
-    --local img2 = rgb_images[k]
-    --local img3 = rgb_images[l]
-
-    --local img_out1 = rect_to_sphere1:remap(img1)
-    --local img_out2 = rect_to_sphere2:remap(img2)
-    --local img_out3 = rect_to_sphere3:remap(img3)
-    
-    --local bgim = img_out1 + img_out2 + img_out3
-    --local bgmk = - mm1 - mm2 - mm3 + 3
-    --local bgf = bgim:clone():cdiv(bgmk)
-    
-    --image.save(outdir.."/bg_img_"..params.sweepnum.."_"..j.."_"..k.."_"..l..".jpg", bgim)
-    --image.save(outdir.."/bg_fmg_"..params.sweepnum.."_"..j.."_"..k.."_"..l..".jpg", bgf)
-    
 end
 
 collectgarbage()
@@ -397,8 +347,8 @@ big_image = mapped_images[1]
 big_mask = -masks[1]+1
 
 for i = 2,#images do
-    big_image = big_image + mapped_images[i]
-    big_mask = big_mask + 1 - masks[i]
+   big_image = big_image + mapped_images[i]
+   big_mask = big_mask + 1 - masks[i]
 end
 
 collectgarbage()

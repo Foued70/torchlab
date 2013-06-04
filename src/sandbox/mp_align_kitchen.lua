@@ -26,19 +26,24 @@ cmd:option('-outdir', 'output', 'directory to save images')
 
 cmd:text()
 
-arg = ''
+-- arg = ''
 
 -- parse input params
 params = cmd:parse(arg)
 
 imagesdir  = params.topdir..'/'..params.imagesdir..'/'..params.sweepnum
+if not paths.dirp(imagesdir) then
+   error("Must set a valid path to directory of images to process default -imagesdir images/")
+end
+
 outdir = params.topdir..'/'..params.outdir
+sys.execute("mkdir -p " .. outdir)
 
 -- images are vertical
 vfov = (97/180) * pi
 hfov = (74.8/180) * pi
 
-force  = true 
+force  = true
 lambda = 0
 phi    = 0
 
@@ -50,36 +55,11 @@ scale  = 1/8
 loaded_images={}
 rgb_images={}
 
--- load images
-if not images then
-   images = {}
-   fnames = {}
-   if not paths.dirp(imagesdir) then 
-      error("Must set a valid path to directory of images to process default -imagesdir images/")
-   end
-   imgfiles = paths.files(imagesdir)
-   imgfiles() -- .
-   imgfiles() -- ..
-   for f in imgfiles do
-      if f == ".DS_Store" then -- exclude OS X automatically-created backup files
-         printf("--- Skipping .DS_Store file")
 
-      elseif (f:gmatch("jpg$")() or f:gmatch("png$")() or f:gmatch("JPG$")() or f:gmatch("PNG$")()) then
-         imgfile = imagesdir.."/"..f
-         table.insert(images, imgfile)
-         table.insert(fnames, f);
-         local img = image.load(imgfile)
-         if img:size(2) < img:size(3) then
-            img = img:transpose(2,3)
-         end
-         local imglab = image.rgb2lab(img);
-         table.insert(loaded_images,imglab);
-         table.insert(rgb_images,img);
-         printf("Found : %s", imgfile)
-      end
-      collectgarbage()
-   end
-end
+images = util.fs.glob(imagesdir,"JPG")
+images = util.fs.glob(imagesdir,"jpg",images)
+images = util.fs.glob(imagesdir,"png",images)
+
 collectgarbage()
 
 img = image.load(images[1])
@@ -91,84 +71,90 @@ p("Testing Image Projection")
 
 sys.tic()
 
-mindist = torch.Tensor(#images);
-mindist:fill(9999999999999999999999);
-best_delta = torch.Tensor(#images);
+mindist       = torch.Tensor(#images);
+mindist:fill(math.huge);
+best_delta    = torch.Tensor(#images);
 best_distance = torch.Tensor(#images);
-best_area = torch.Tensor(#images);
-best_quant = torch.Tensor(#images);
+best_area     = torch.Tensor(#images);
+best_quant    = torch.Tensor(#images);
+
+local proj_from1      = projection.GnomonicProjection.new(width,height,hfov,vfov)
+local proj_from2      = projection.GnomonicProjection.new(width,height,hfov,vfov)
+
+local proj_to1        = projection.SphericalProjection.new(width*2*scale,height*scale,2*hfov,vfov)
+local proj_to2        = projection.SphericalProjection.new(width*2*scale,height*scale,2*hfov,vfov)
+
+local rect_to_sphere1 = projection.Remap.new(proj_from1,proj_to1)
+local rect_to_sphere2 = projection.Remap.new(proj_from2,proj_to2)
 
 for i = 1,#images do
-    
-    for dd = -maxquant,maxquant do
-        
-        collectgarbage()
-    
-        local delta_anchor =  precalc[i]
+   collectgarbage()
+   -- load images individually
+   local img = image.load(images[i])
+   if img:size(2) < img:size(3) then
+      img = img:transpose(2,3)
+   end
+   local imglab = image.rgb2lab(img);
+   local imgprev 
+   for dd = -maxquant,maxquant do
 
-        local delta = delta_anchor + wiggle * (dd/maxquant);
+      collectgarbage()
 
-        local proj_from1 = projection.GnomonicProjection.new(width,height,hfov,vfov)
-        local proj_from2 = projection.GnomonicProjection.new(width,height,hfov,vfov)
+      local delta_anchor =  precalc[i]
 
-        local proj_to1   = projection.SphericalProjection.new(width*2*scale,height*scale,2*hfov,vfov)
-        local proj_to2   = projection.SphericalProjection.new(width*2*scale,height*scale,2*hfov,vfov)
+      local delta = delta_anchor + wiggle * (dd/maxquant);
 
-        local rect_to_sphere1 = projection.Remap.new(proj_from1,proj_to1)
-        local rect_to_sphere2 = projection.Remap.new(proj_from2,proj_to2)
+      proj_from1:set_lambda_phi(lambda-delta/2,phi)
+      local index1D1,stride1,mask1 = rect_to_sphere1:get_offset_and_mask(force)
 
-        proj_from1:set_lambda_phi(lambda-delta/2,phi)
-        local index1D1,stride1,mask1 = rect_to_sphere1:get_index_and_mask(force)
+      proj_from2:set_lambda_phi(lambda+delta/2,phi)
+      local index1D2,stride2,mask2 = rect_to_sphere2:get_offset_and_mask(force)
 
-        proj_from2:set_lambda_phi(lambda+delta/2,phi)
-        local index1D2,stride2,mask2 = rect_to_sphere2:get_index_and_mask(force)
+      local mm1 = mask1-1;
+      local mm2 = mask2-1;
+      local overlap_mask = mm1:cmul(mm2);
+      local overlap_mask=overlap_mask:repeatTensor(3,1,1);
+      local overlap_mask=overlap_mask:type('torch.DoubleTensor');
 
-        local mm1 = mask1-1;
-        local mm2 = mask2-1;
-        local overlap_mask = mm1:cmul(mm2);
-        local overlap_mask=overlap_mask:repeatTensor(3,1,1);
-        local overlap_mask=overlap_mask:type('torch.DoubleTensor');
+      local ss = 0
+      local area = overlap_mask:sum();
 
-        local ss = 0
-        local area = overlap_mask:sum();
+      collectgarbage()
 
-        collectgarbage()
-   
-        local j = (i-1) % #images + 1
-        local k = (i+0) % #images + 1
+      local j = (i-1) % #images + 1
 
-        local img_l = loaded_images[j]
-        local img_r = loaded_images[k]
-   
-        local img_out_l = rect_to_sphere1:remap(img_l)
-        local img_out_r = rect_to_sphere2:remap(img_r)
+      local img_l = imgprev or image.rgb2lab(image.load(images[j]))
+      local img_r = imglab
 
-        local imo_l = img_out_l:clone():cmul(overlap_mask);
-        local imo_r = img_out_r:clone():cmul(overlap_mask);
+      local img_out_l = rect_to_sphere1:remap(img_l)
+      local img_out_r = rect_to_sphere2:remap(img_r)
 
-        local imdiff = imo_l-imo_r;
-        local imdist = imdiff[1]:cmul(imdiff[1]);
-        for c=2,imdiff:size(1) do
-            imdist = imdist + imdiff[c]:cmul(imdiff[c])
-        end
-        imdist:sqrt();
-    
-        ss = imdist:sum()/area;
-        
-        if ss < mindist[i] then
-            best_delta[i] = delta;
-            best_distance[i] = ss;
-            mindist[i] = ss;
-            best_area[i] = area;
-            best_quant[i] = dd;
-        
-            printf("new best found for %d: %d %s %s %s", i, dd, delta, ss, area);
-        
-        end
+      local imo_l = img_out_l:clone():cmul(overlap_mask);
+      local imo_r = img_out_r:clone():cmul(overlap_mask);
 
-    end
-    
-    collectgarbage()
+      local imdiff = imo_l-imo_r;
+      local imdist = imdiff[1]:cmul(imdiff[1]);
+      for c=2,imdiff:size(1) do
+         imdist = imdist + imdiff[c]:cmul(imdiff[c])
+      end
+      imdist:sqrt();
+
+      ss = imdist:sum()/area;
+
+      if ss < mindist[i] then
+         best_delta[i]    = delta;
+         best_distance[i] = ss;
+         mindist[i]       = ss;
+         best_area[i]     = area;
+         best_quant[i]    = dd;
+
+         printf("new best found for %d: %d %s %s %s", i, dd, delta, ss, area);
+
+      end
+
+   end
+   imgprev = imglab
+   collectgarbage()
 
 end
 
@@ -186,31 +172,31 @@ masks = {}
 delta = 0;
 sc = 1/4;
 
+local proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
+
+local proj_to   = projection.SphericalProjection.new(width*((2*pi+hfov)/hfov)*sc,height*sc,2*pi+hfov,vfov)
+
+local rect_to_sphere = projection.Remap.new(proj_from,proj_to)
+
 for i = 1,#images do
-    
-    collectgarbage()
 
-    local proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
-    
-    local proj_to   = projection.SphericalProjection.new(width*((2*pi+hfov)/hfov)*sc,height*sc,2*pi+hfov,vfov)
+   collectgarbage()
 
-    local rect_to_sphere = projection.Remap.new(proj_from,proj_to)
+   proj_from:set_lambda_phi(lambda+delta,phi)
+   local index1D,stride,mask = rect_to_sphere:get_offset_and_mask(force)
 
-    proj_from:set_lambda_phi(lambda+delta,phi)
-    local index1D,stride,mask = rect_to_sphere:get_index_and_mask(force)
+   local mm = mask:repeatTensor(3,1,1);
+   mm = mm:type('torch.DoubleTensor');
 
-    local mm = mask:repeatTensor(3,1,1);
-    mm = mm:type('torch.DoubleTensor');
+   local img = rgb_images[i]
 
-    local img = rgb_images[i]
+   local img_out = rect_to_sphere:remap(img)
 
-    local img_out = rect_to_sphere:remap(img)
+   table.insert(mapped_images,img_out)
+   table.insert(masks,mm)
 
-    table.insert(mapped_images,img_out)
-    table.insert(masks,mm)
-    
-    delta = delta + best_delta[i]
-    
+   delta = delta + best_delta[i]
+
 end
 
 collectgarbage()
@@ -219,8 +205,8 @@ big_image = mapped_images[1]
 big_mask = -masks[1]+1
 
 for i = 2,#images do
-    big_image = big_image + mapped_images[i]
-    big_mask = big_mask + 1 - masks[i]
+   big_image = big_image + mapped_images[i]
+   big_mask = big_mask + 1 - masks[i]
 end
 
 collectgarbage()
