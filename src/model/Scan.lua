@@ -8,7 +8,7 @@ local loader     = require 'data.loader'
 local fs         = util.fs
 local Obj        = data.Obj
 local Sweep      = model.Sweep
-local interest   = geom.intersect
+local intersect  = geom.intersect
 local bihtree    = model.bihtree
 
 local LensSensor = projection.LensSensor

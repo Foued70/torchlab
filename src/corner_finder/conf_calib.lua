@@ -1,7 +1,6 @@
-geom=util.geom
 loader= require 'util.loader'
-LensSensor=util.LensSensor
-projection=util.projection
+LensSensor=data.LensSensor
+projection=projection.util
 p3p=require 'p3p'
 
 creffname="cornerPoints_ref.txt";
@@ -34,7 +33,7 @@ function first_sweep(scanref,cp,cpref)
     local startRotV=torch.Tensor(3);
     local position=scanref.poses[1].position
     local rotation=scanref.poses[1].rotation
-    geom.rotate_by_quat(startRotV, defTens, rotation)
+    geom.quaternion.rotate(startRotV, defTens, rotation)
 
     for i=1,#cp_ref do
         positions[i]={};

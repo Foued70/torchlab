@@ -46,9 +46,9 @@ function Sweep:set_pose(pose)
     local offset_rotation = torch.Tensor(4)
 
     if i == 1 then
-      geom.rotation.quaternion_from_axis_angle(rotation_axis, config.delayed_start_rotation, offset_rotation)
+      geom.quaternion.from_axis_angle(rotation_axis, config.delayed_start_rotation, offset_rotation)
     else
-      geom.rotation.quaternion_from_axis_angle(rotation_axis, angular_velocity, offset_rotation)
+      geom.quaternion.from_axis_angle(rotation_axis, angular_velocity, offset_rotation)
     end
     geom.util.normalize(offset_rotation)
 
@@ -70,7 +70,7 @@ function Sweep:calculate_camera_world(photo_number)
   --Accumulate all the camera's rotations up to the camera in question
   local temp_quat = torch.Tensor(4)
   for i = 1, photo_number do
-    geom.rotation.quat_product(rotation, self.photos[i].offset_rotation, temp_quat)
+    geom.quaternion.product(rotation, self.photos[i].offset_rotation, temp_quat)
     geom.util.normalize(temp_quat)
     rotation:copy(temp_quat)
   end
@@ -90,24 +90,24 @@ function Sweep:calculate_camera_world(photo_number)
 
   local forward_vector = torch.Tensor({0,1,0})
   local camera_look_direction = 
-     geom.rotate_by_quat(forward_vector, camera_rig_offset_rotation)
+     geom.quaternion.rotate(forward_vector, camera_rig_offset_rotation)
   local camera_center = 
      camera_rig_offset_position + camera_look_direction
   local camera_center_rotated = 
-     geom.rotate_by_quat(camera_center, rotation)
+     geom.quaternion_rotate(camera_center, rotation)
 
   local camera_rig_offset_position_magnitude = camera_rig_offset_position:norm()
-  geom.normalize(camera_rig_offset_position)
+  geom.util.normalize(camera_rig_offset_position)
   
-  local camera_rig_offset_position_rotated = geom.rotate_by_quat(camera_rig_offset_position, rotation)
+  local camera_rig_offset_position_rotated = geom.quaternion.rotate(camera_rig_offset_position, rotation)
   torch.mul(camera_rig_offset_position_rotated, camera_rig_offset_position_rotated, camera_rig_offset_position_magnitude)
   torch.add(position, position, camera_rig_offset_position_rotated)
   torch.add(position, position, self.photos[photo_number].offset_position)
   local camera_look_direction_rotated = camera_center_rotated - camera_rig_offset_position_rotated
 
   local final_rotation = torch.Tensor(4)
-  geom.quaternion_from_to(forward_vector, camera_look_direction_rotated, final_rotation)
-  geom.normalize(final_rotation)
+  geom.quaternion.angle_between(forward_vector, camera_look_direction_rotated, final_rotation)
+  geom.util.normalize(final_rotation)
   
   return position, final_rotation 
 end
