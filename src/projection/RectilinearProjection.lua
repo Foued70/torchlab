@@ -1,5 +1,8 @@
 local RectilinearProjection = Class(projection.Projection)
 
+-- CAREFUL: The Projection class stores the indexes for x and y in the
+-- same height,width order as the underlying torch.Tensors()
+
 function RectilinearProjection:__init(width, height,
                                       hfov, vfov,
                                       pixel_center_x, pixel_center_y)
@@ -10,8 +13,8 @@ function RectilinearProjection:__init(width, height,
                     pixel_center_x, pixel_center_y)
 
    -- How to get to normalized coordinates
-   self.units_per_pixel_x = math.tan(self.hfov*0.5)/self.center[1]
-   self.units_per_pixel_y = math.tan(self.vfov*0.5)/self.center[2]
+   self.units_per_pixel_y = math.tan(self.vfov*0.5)/self.center[1]
+   self.units_per_pixel_x = math.tan(self.hfov*0.5)/self.center[2]
 
 end
 
@@ -21,9 +24,9 @@ end
 function RectilinearProjection:coords_to_angles(coords, angles)
    angles = angles or torch.Tensor(coords:size())
 
-   local azimuth = torch.atan(coords[1])
-   angles[1] = azimuth
-   angles[2] = torch.cmul(coords[2], torch.cos(azimuth)):atan()
+   local azimuth = torch.atan(coords[2])
+   angles[2] = azimuth
+   angles[1] = torch.cmul(coords[1], torch.cos(azimuth)):atan()
 
    return angles
 end
@@ -34,11 +37,11 @@ end
 function RectilinearProjection:angles_to_coords(angles, coords)
    coords = coords or torch.Tensor(angles:size())
 
-   local azimuth   = angles[1]
-   local elevation = angles[2]
+   local elevation = angles[1]
+   local azimuth   = angles[2]
 
-   coords[1] = torch.tan(azimuth)
-   coords[2] = torch.tan(elevation):cdiv(torch.cos(azimuth))
+   coords[1] = torch.tan(elevation):cdiv(torch.cos(azimuth))
+   coords[2] = torch.tan(azimuth)
 
    return coords
 end

@@ -53,9 +53,9 @@ function extname(file_path)
 end
 
 -- Really need a FILE GLOB...
-function glob(dir,match) 
+function glob(dir,match, out) 
    if not paths.dirp(dir) then return nil end
-   out = {}
+   out = out or {}
    for f in paths.files(dir) do 
       if f:gmatch(match)() then
          table.insert(out,dir .. "/" .. f) 

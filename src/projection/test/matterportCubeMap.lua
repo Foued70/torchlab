@@ -25,29 +25,12 @@ out_size   = params.size
 out_file   = params.outfile
 
 -- load images
-if not images then
-   images = {}
-   if not paths.dirp(scandir) then
-      error("Must set a valid path to directory of images to process default -scandir images/")
-   end
-   files = paths.files(scandir)
-   files() -- .
-   files() -- ..
-   for f in files do
-      if f == ".DS_Store" then -- exclude OS X automatically-created backup files
-         printf("--- Skipping .DS_Store file")
-      elseif (f:gmatch("_texture_info.txt")()) then
-         pose_file = scandir.."/"..f
-      elseif (f:gmatch("jpg$")() or f:gmatch("png$")()) then
-         imgfile = scandir.."/"..f
-         table.insert(images, imgfile)
-         printf("Found : %s", imgfile)
-      end
-   end
-end
-collectgarbage()
+-- load images
+images = util.fs.glob(scandir,"jpg")
+pose_file = util.fs.glob(scandir,"_texture_info.txt")
+pose_file = pose_file[1]
 
-poses = util.mp.load_poses(pose_file)
+poses = model.mp.load_poses(pose_file)
 
 img = image.load(images[1])
 

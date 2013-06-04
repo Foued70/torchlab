@@ -1,5 +1,8 @@
 local SphericalProjection = Class(projection.Projection)
 
+-- CAREFUL: The Projection class stores the indexes for x and y in the
+-- same height,width order as the underlying torch.Tensors()
+
 function SphericalProjection:__init(width, height, 
                                       hfov, vfov, 
                                       pixel_center_x, pixel_center_y)
@@ -36,8 +39,8 @@ function SphericalProjection:angles_map(scale,hfov,vfov, hoffset, voffset)
                                                                                                                                                      
    local angles = torch.Tensor(2,maph,mapw)
 
-   angles[1]:copy(lambda)
-   angles[2]:copy(phi:t())
+   angles[1]:copy(phi:t())
+   angles[2]:copy(lambda)
 
    return angles
 

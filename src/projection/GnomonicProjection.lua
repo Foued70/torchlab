@@ -1,5 +1,8 @@
 local GnomonicProjection = Class(projection.Projection)
 
+-- CAREFUL: The Projection class stores the indexes for x and y in the
+-- same height,width order as the underlying torch.Tensors()
+
 local pi2 = math.pi * 0.5
 local huge = math.huge
 
@@ -33,14 +36,15 @@ end
 function GnomonicProjection:set_lambda_phi(lambda,phi)
    self.tangent_point = self.tangent_point or torch.Tensor(2)
 
-   self.tangent_point[1] = lambda or 0 
-   self.tangent_point[2] = phi or 0
+   self.tangent_point[1] = phi or 0
+   self.tangent_point[2] = lambda or 0 
 
    -- make sure that the tangent point is expressed betwee -pi and pi
    projection.util.recenter_angles(self.tangent_point)
 
-   self.lambda0          = self.tangent_point[1]   
-   self.phi1             = self.tangent_point[2]
+   
+   self.phi1             = self.tangent_point[1]
+   self.lambda0          = self.tangent_point[2]
 
    self.sin_lambda0 = math.sin(self.lambda0)
    self.cos_lambda0 = math.cos(self.lambda0)
@@ -54,8 +58,8 @@ end
 function GnomonicProjection:coords_to_angles(coords, angles)
    angles = angles or torch.Tensor(coords:size())
 
-   local x = coords[1]
-   local y = coords[2]
+   local y = coords[1]
+   local x = coords[2]
    
    -- rho = sqrt(x^2 + y^2)
    local rho = x:clone()
@@ -71,7 +75,7 @@ function GnomonicProjection:coords_to_angles(coords, angles)
    c = nil
 
    -- latitude, phi, northing, how far north, south
-   local elevation = angles[2]
+   local elevation = angles[1]
    -- y * sinc * cos_phi / rho
    elevation:copy(y):cmul(sinc):mul(self.cos_phi1):cdiv(rho)
    -- cosc * sin_phi1
@@ -80,7 +84,7 @@ function GnomonicProjection:coords_to_angles(coords, angles)
    elevation:add(temp):asin()
 
    -- longitude, lambda, easting, how far east west
-   local azimuth = angles[1]
+   local azimuth = angles[2]
    -- x * sinc
    azimuth:copy(x):cmul(sinc)
    -- not going to use rho after this
@@ -109,13 +113,14 @@ function GnomonicProjection:angles_to_coords(angles, coords)
    coords = coords or torch.Tensor(angles:size())
 
    local angles = angles:clone()
-   -- Azimuth: longitude, lambda, easting, how far east west
-   local azimuth   = angles[1]
    -- Elevation: latitude, phi, northing, how far north, south
-   local elevation = angles[2]
+   local elevation = angles[1]
+
+   -- Azimuth: longitude, lambda, easting, how far east west
+   local azimuth   = angles[2]
    
-   local x = coords[1]
-   local y = coords[2]
+   local y = coords[1]
+   local x = coords[2]
 
    local cos_phi = torch.cos(elevation)
    local sin_phi = torch.sin(elevation)
@@ -128,7 +133,6 @@ function GnomonicProjection:angles_to_coords(angles, coords)
    y:copy(azimuth)
    y:add(-self.lambda0)
    y:cos():cmul(cos_phi)
-
 
    -- (sin(phi1) * sin(phi)) + ( cos_phi * cos(azimuth - lambda0))
    cosc:add(torch.mul(y,self.cos_phi1))

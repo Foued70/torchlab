@@ -1,6 +1,8 @@
-Class()
+-- Class()
 
 require 'image'
+
+profile = xlua.Profiler()
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -17,7 +19,7 @@ cmd:option('-lh',256,'lookup_size_h - height of window in which to look up')
 cmd:option('-lw',256,'lookup_size_w - width of window in which to look up')
 
 cmd:text()
-
+profile:start("init")
 -- parse input params
 params = cmd:parse(arg)
 
@@ -86,146 +88,8 @@ pls          = pano_lookup:size()
 -- flatten
 total_patches = mps[1]*mps[2]
 
--- we need to operate in 2D offsets, index gives 1D offset
-function index_to_hw (index,row_width)
-   local hw = torch.Tensor(2,index:size(1))
-   local h = hw[1]
-   local w = hw[2]
+p:lap('init')
 
-   h:copy(index)
-   h:mul(1/row_width)
-   h:ceil()
-
-   w:copy(index)
-   w:apply(function (x) return math.mod(x,row_width) end)
-   w[w:eq(0)] = row_width
-
-   return hw
-end
-
-function hw_to_index(hw,row_width)
-
-   local index = hw[1]:clone()
-   index:add(-1)
-   index:mul(row_width)
-   index:add(hw[2])
-
-   return index
-end
-
-function test_index_to_hw (debug)
-   -- 120 has long list of divisors, to test 1D to 2D
-   local index = torch.range(1,120)
-   local rw = torch.Tensor({2,3,4,5,6,8,10,12,15,20,24,30,40,60})
-   local toterr = 0
-   for r = 1,rw:size(1) do 
-      local row_width = rw[r]
-      local hw        = index_to_hw(index,row_width)
-      local index_out = hw_to_index(hw,row_width)
-      -- compute errors
-      err = index - index_out
-      err:abs()
-      toterr = toterr + err:gt(0):sum()
-      if debug then 
-         print(hw[1]:resize(120/row_width,row_width))
-         print(hw[2]:resize(120/row_width,row_width))
-         print(index_out:resize(120/row_width,row_width))
-      end 
-   end
-   printf("Errors: %d/%d",toterr,120*rw:size(1))
-end
-
--- always step == 1
-function px_to_patch (px_hw,px_height,px_width,patch_height,patch_width)
-   local patch_hw = px_hw:clone()
-   
-   local ctr_height = math.ceil(patch_height * 0.5)
-   local ctr_width  = math.ceil(patch_width * 0.5)
-   local max_height = px_height - patch_height + 1
-   local max_width  = px_width - patch_width + 1
-   
-   patch_hw[1]:add(1-ctr_height)
-   patch_hw[2]:add(1-ctr_width)
-   -- boundary
-   patch_hw[patch_hw:lt(1)] = 1
-   patch_hw[1][patch_hw[1]:gt(max_height)] = max_height
-   patch_hw[2][patch_hw[2]:gt(max_width)] = max_width
-
-   return patch_hw 
-end
-
-function test_px_to_patch()
-   local index = torch.range(1,120)
-   local hw = index_to_hw(index,12)
-
-   for _,wsh in pairs({3,5,7,9}) do 
-      for _,wsw in pairs({3,5,7,9}) do 
-         printf("window: %d,%d", wsh,wsw)
-         local patch_hw = px_to_patch(hw,10,12,wsh,wsw,1)
-
-         print(patch_hw[1]:resize(10,12))
-         print(patch_hw[2]:resize(10,12))
-      end
-   end
-end
-
-function patch_to_px(patch_hw,patch_height,patch_width,px_height,px_width)
-
-   local px_hw = patch_hw:clone()
-   
-   local ctr_height = math.ceil(patch_height * 0.5)
-   local ctr_width  = math.ceil(patch_width * 0.5)
-   
-   px_hw[1]:add(ctr_height-1)
-   px_hw[2]:add(ctr_width-1)
-   
-   -- boundary already accounted for unless data is corrupt
-
-   return px_hw
-
-end
-
-function patch_px_to_image_px(patch_px,patch_h,patch_w)
-   -- 1,1 goes to patch_h, patch_w
-   local image_px = patch_px:clone()
-   image_px[1]:add(patch_h-1)
-   image_px[2]:add(patch_w-1)
-   return image_px
-end
-
-function test_patch_px_to_image_px()
-   local index = torch.range(1,25)
-   local hw = index_to_hw(index,5)
-
-   local no_offset = patch_px_to_image_px(hw,1,1)
-   print(no_offset[1]:resize(5,5))
-   print(no_offset[2]:resize(5,5))
-   local some_offset = patch_px_to_image_px(hw,10,100)
-   print(some_offset[1]:resize(5,5))
-   print(some_offset[2]:resize(5,5))
-end
-
-function get_centers(mask,patch_height,patch_width)
-
-   local mask_height = mask:size(1)
-   local mask_width  = mask:size(2)
-
-   local ctr_height = math.ceil(patch_height * 0.5)
-   local ctr_width  = math.ceil(patch_width * 0.5)
-   local n_height = mask_height - patch_height + 1
-   local n_width  = mask_width  - patch_width + 1
-
-   return mask:narrow(1,ctr_height,n_height):narrow(2,ctr_width,n_width)
-end
-
-function test_get_centers ()
-   local mask = torch.range(1,120):resize(10,12)
-   
-   for _,r in pairs({3,5,7,9}) do 
-      print(mask)
-      print(get_centers(mask,r,r))
-   end
-end
 
 -- make list of patches with sum > 0 and center pixel == 0
 
@@ -234,14 +98,14 @@ end
 
 -- uses convolution with a particular kernel to compute the edge pixels quickly in a single sweep.
 function find_patches (mask,ws)
-   sys.tic()
+   profile:start("find_patches")
    -- dilation kernel
    local kernel = torch.ones(ws,ws)
    -- center of match must be zero so set center kernel to -(number_of_offcenter_pixels)
    kernel[ctr][ctr] = -((ws * ws) - 1)
    
    -- apply dilation which is fast even on large input
-   mask_dilated = torch.conv2(mask,kernel,'F')
+   local mask_dilated = torch.conv2(mask,kernel,'F')
    mask_dilated = mask_dilated:narrow(1,ctr,image_h):narrow(2,ctr,image_w)
    mask_dilated[mask_dilated:lt(0)] = 0 -- remove negative values from mask
    
@@ -267,8 +131,9 @@ function find_patches (mask,ws)
 
    local n_patches = mask_index:size(1)
 
-   printf(" - found %d patches of %d from %d to %d neighbors in %2.4fs",
-          n_patches, mask:sum(), y[1], y[n_patches], sys.toc())
+   printf(" - found %d patches of %d from %d to %d neighbors",
+          n_patches, mask:sum(), y[1], y[n_patches])
+   profiler:lap("find_patches")
 
    return mask_index
 
@@ -290,9 +155,9 @@ function fill_patches (mask_index,debug)
    
    local t0 = timer:time()     
    local n_patches = mask_index:size(1)
-   local mask_hw   = index_to_hw(mask_index,image_w)
-   local patch_hw  = px_to_patch(mask_hw,image_h,image_w,ws,ws)
-   local lookup_hw = px_to_patch(mask_hw,image_h,image_w,
+   local mask_xy   = index_to_xy(mask_index,image_w)
+   local patch_xy  = px_to_patch(mask_xy,image_h,image_w,ws,ws)
+   local lookup_xy = px_to_patch(mask_xy,image_h,image_w,
                                  lookup_size_h,lookup_size_w)
 
    local t1 = timer:time()
@@ -306,15 +171,15 @@ function fill_patches (mask_index,debug)
    for pi = 1,mask_index:size(1) do
       
       local t2 = timer:time()
-      local mask_h  = mask_hw[1][pi]
-      local mask_w  = mask_hw[2][pi] 
+      local mask_h  = mask_xy[1][pi]
+      local mask_w  = mask_xy[2][pi] 
 
-      local patch_h = patch_hw[1][pi]
-      local patch_w = patch_hw[2][pi]
+      local patch_h = patch_xy[1][pi]
+      local patch_w = patch_xy[2][pi]
 
       -- find window in which to lookup patches
-      local lookup_h = lookup_hw[1][pi]
-      local lookup_w = lookup_hw[2][pi]
+      local lookup_h = lookup_xy[1][pi]
+      local lookup_w = lookup_xy[2][pi]
 
       if debug then
          printf("Processing patch: %d %d", patch_h,patch_w)
@@ -418,7 +283,7 @@ function fill_patches (mask_index,debug)
       -- matching patch index in lookup table
       local patch_index = rand_index[dsti:narrow(1,1,n_found)]
 
-      local lookup_patch_hw = index_to_hw(patch_index,n_lookup_w)
+      local lookup_patch_xy = index_to_xy(patch_index,n_lookup_w)
 
       -- pick random patch from top n
       local ri = math.random(n_found)
@@ -429,17 +294,17 @@ function fill_patches (mask_index,debug)
          dpatches[1]:copy(patch)
          local j = 2
          for i = 1,n_found do 
-            dpatches[j]:copy(lookup[{{},lookup_patch_hw[1][i],lookup_patch_hw[2][i],{},{}}])
+            dpatches[j]:copy(lookup[{{},lookup_patch_xy[1][i],lookup_patch_xy[2][i],{},{}}])
             j = j + 1
          end
          image.display{image=dpatches,zoom=5,nrow=31}
       end
 
-      lookup_patch_hw = lookup_patch_hw:narrow(2,ri,1)
+      lookup_patch_xy = lookup_patch_xy:narrow(2,ri,1)
 
-      local pixel_in_lookup = patch_to_px(lookup_patch_hw,ws,ws,n_lookup_h,n_lookup_w)
+      local pixel_in_lookup = patch_to_px(lookup_patch_xy,ws,ws,n_lookup_h,n_lookup_w)
 
-      lookup_patch_hw = lookup_patch_hw:squeeze()
+      lookup_patch_xy = lookup_patch_xy:squeeze()
 
       local pixel_in_image = patch_px_to_image_px(pixel_in_lookup,lookup_h,lookup_w)
       pixel_in_image = pixel_in_image:squeeze()
@@ -451,11 +316,11 @@ function fill_patches (mask_index,debug)
          px = img_rgb[{{},mask_h,mask_w}]
          printf(" copied: %f %f %f",px[1],px[2],px[3])
          printf(" center: %f %f %f",
-             lookup_centers1[lookup_patch_hw[1]][lookup_patch_hw[2]],
-             lookup_centers2[lookup_patch_hw[1]][lookup_patch_hw[2]],
-             lookup_centers3[lookup_patch_hw[1]][lookup_patch_hw[2]])
+             lookup_centers1[lookup_patch_xy[1]][lookup_patch_xy[2]],
+             lookup_centers2[lookup_patch_xy[1]][lookup_patch_xy[2]],
+             lookup_centers3[lookup_patch_xy[1]][lookup_patch_xy[2]])
          print("** COPIED zero value **")
-         print(mask_patches[lookup_patch_hw[1]][lookup_patch_hw[2]])
+         print(mask_patches[lookup_patch_xy[1]][lookup_patch_xy[2]])
          printf("index: %d",ri)
          print(distances[ri])
       end

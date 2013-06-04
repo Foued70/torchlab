@@ -12,6 +12,7 @@ cmd:text('Compute image projections')
 cmd:text()
 cmd:text('Options')
 cmd:option('-imagefile', 'equirectangular.jpg', 'Equirectangular input to remap')
+cmd:option('-scale','0.25', 'downsample')
 cmd:text()
 
 -- parse input params
@@ -28,7 +29,7 @@ img = image.load(image_file)
 
 width = img:size(3)
 height = img:size(2)
-scale  = 1/5
+scale  = tonumber(params.scale)
 
 hfov = 2 * pi 
 vfov = pi

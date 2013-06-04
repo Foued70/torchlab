@@ -1,5 +1,8 @@
 local Projection = Class()
 
+-- CAREFUL: The Projection class stores the indexes for x and y in the
+-- same height,width order as the underlying torch.Tensors()
+
 function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_center_y)
    self.width = width or 100
    self.height = height or 100
@@ -11,7 +14,7 @@ function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_cent
    pixel_center_x = pixel_center_x or self.width/2
    pixel_center_y = pixel_center_y or self.height/2
 
-   self.center = {pixel_center_x, pixel_center_y}
+   self.center = {pixel_center_y, pixel_center_x}
 
    -- every projection must implement these
    self.units_per_pixel_x = nil
@@ -45,8 +48,8 @@ function Projection:pixels_to_angles(pixels, angles)
    
    -- move 0,0 to the center
    -- convert to unit sphere coords
-   coords[1]:add(-self.center[1]):mul(self.units_per_pixel_x)
-   coords[2]:add(-self.center[2]):mul(self.units_per_pixel_y)
+   coords[1]:add(-self.center[1]):mul(self.units_per_pixel_y)
+   coords[2]:add(-self.center[2]):mul(self.units_per_pixel_x)
 
    -- convert unit sphere projection coords to angles
    self:coords_to_angles(coords,angles)
@@ -65,8 +68,8 @@ function Projection:angles_to_pixels(angles, pixels)
 
    -- convert from unit sphere coords to pixels
    -- move 0,0 to the upper left corner
-   pixels[1]:mul(1/self.units_per_pixel_x):add(self.center[1])
-   pixels[2]:mul(1/self.units_per_pixel_y):add(self.center[2])
+   pixels[1]:mul(1/self.units_per_pixel_y):add(self.center[1])
+   pixels[2]:mul(1/self.units_per_pixel_x):add(self.center[2])
 
    return pixels
 end
@@ -86,12 +89,11 @@ function Projection:pixels_map(scale, from_x, to_x, from_y, to_y)
    from_y = from_y or 1
    to_y   = to_y   or self.height
    
-   
    local x = torch.linspace(from_x,to_x,mapw):resize(1,mapw):expand(maph,mapw)
    local y = torch.linspace(from_y,to_y,maph):resize(1,maph):expand(mapw,maph)
    
-   pixels[1]:copy(x)
-   pixels[2]:copy(y:t())
+   pixels[1]:copy(y:t())
+   pixels[2]:copy(x)
    
    return pixels
 end
@@ -104,50 +106,45 @@ function Projection:angles_map(scale,pixels_map)
 end
 
 -- 
--- index1D : (LongTensor) for fast lookups
---  stride : (number) stride (width) of input image
---    mask : (ByteTensor) invalid locations marked with 1
-function Projection:pixels_to_index1D_and_mask(pixels, index1D, mask)
+-- offset : (LongTensor) for fast lookups
+-- stride : (LongTensor) width, 1 of input image
+--   mask : (ByteTensor) invalid locations marked with 1
+-- 
+function Projection:pixels_to_offset_and_mask(pixels, offset, mask)
 
-   local stride = self.width
-   local max_x  = self.width
-   local max_y  = self.height
+   local dims = torch.LongTensor({self.height,self.width})
 
-   index1D = index1D or torch.LongTensor(pixels[1]:size())
-   mask    =    mask or torch.ByteTensor(pixels[1]:size())
-
+   offset = offset or torch.LongTensor(pixels[1]:size())
+   mask   =   mask or torch.ByteTensor(pixels[1]:size())
    
    -- make mask for out of bounds values
-   mask = projection.util.make_mask(pixels,max_x,max_y,mask)
+   mask = util.addr.mask_out_of_bounds(pixels,dims,nil,mask)
    log.tracef("Masking %d/%d pixel locations (out of bounds)", mask:sum(),mask:nElement())
 
+   stride    = dims
+   stride[1] = self.width
+   stride[2] = 1
 
    -- convert the x and y values into a single 1D offset (y * stride + x)
-   index1D = projection.util.make_index(pixels,stride,mask,index1D)
+   offset = util.addr.coords_to_offset(pixels,stride,mask,offset)
 
-   return index1D, stride, mask
+   return offset, stride, mask
 end
 
-function Projection:angles_to_index1D_and_mask(angles, index1D, mask)
-
-   index1D = index1D or torch.LongTensor(angles[1]:size())
-   mask    =    mask or torch.ByteTensor(angles[1]:size())
+function Projection:angles_to_offset_and_mask(angles, offset, mask)
+   offset = offset or torch.LongTensor(angles[1]:size())
+   mask   =   mask or torch.ByteTensor(angles[1]:size())
    
    local pixels = self:angles_to_pixels(angles)
-   return self:pixels_to_index1D_and_mask(pixels,index1D,mask)
-
+   return self:pixels_to_offset_and_mask(pixels,offset,mask)
 end
 
-function Projection:index1D_and_mask_to_pixels(index1D,stride,mask,pixels)
-
-   return projection.util.index1D_to_xymap(index1D, stride, pixels)
-
+function Projection:offset_and_mask_to_pixels(offset,stride,mask,pixels)
+   return util.addr.offset_to_coords(offset, stride, pixels)
 end
 
 
-function Projection:index1D_and_mask_to_angles(index1D,stride,mask,angles)
-
-   local pixels = projection.util.index1D_to_xymap(index1D, stride)
+function Projection:offset_and_mask_to_angles(offset,stride,mask,angles)
+   local pixels = util.addr.offset_to_coords(offset, stride)
    return self:pixels_to_angles(pixels,angles)
-
 end

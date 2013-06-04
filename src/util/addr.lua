@@ -25,30 +25,6 @@ Class()
 -- x,y,z though we don't often store those densely in a tensor and a
 -- CubeMap 6 x X x Y.
 
--- patch vs. image.  An image is a set of data of size nCoords or
--- nChannel x nCoords. A patch is a nCoords subset of an image.  For
--- example: grey_image is an array of numbers with dimensions
--- 100x100. patch_10x10 is a 10x10 set of these numbers starting at
--- image location (12,12) to (22,22).
--- 
--- +(1,1)------------------- ... ----+(1,100)
--- |                                 |
--- |    +(12,12)---+(12,22)          |
--- |    |          |                 |
--- |    |   patch  |                 |
--- |    |          |                 |
--- |    +(12,22)---+(22,22)          |
--- |                                 |
--- |            image                |
--- |                                 |
--- +(1,100)----------------- ... ----+(100,100)
--- 
--- The multi-channel color_image is 3x100x100 (RGB) or 4x100x100
--- (RGBA) and patch is 3x10x10.
--- 
--- A patch is non-contiguous.
--- 
-
 -- using <offset> and (optional) <mask> remap <img> to
 -- <out_image>.  <out_image> gets it's dimensions from <offset>
 function remap(img, offset, mask, out_image)
@@ -108,6 +84,7 @@ end
 function mask_out_of_bounds(coords,max_dims,min_dims,mask)
    local nCoords = coords:size(1)
    if max_dims:size(1) ~= nCoords then
+      printf("nCoords: %d max_dims: %d",nCoords,max_dims:size(1))
       error("not same number of dimensions as max_dims")
    end
    if not min_dims then
@@ -132,192 +109,54 @@ function mask_out_of_bounds(coords,max_dims,min_dims,mask)
 end
 
 -- convert the x and y index into a single 1D offset (y * stride + x)
--- TODO could have multiple strides
-function coords_to_offset(pixel_map,stride,mask,offset)
-   local xmap = pixel_map[1]
-   local ymap = pixel_map[2]
-   offset = offset or torch.LongTensor(ymap:size())
-   offset:resize(ymap:size())
+function coords_to_offset(coords,stride,mask,offset)
 
-   -- CAREFUL stride is in the original raw image not in the
+   offset = offset or torch.LongTensor(coords[1]:size())
+   offset:resize(coords[1]:size())
+
+   -- CAREFUL strides are counted in the original raw image, not in the
    -- projection which can be scaled if xmap:size() is not equal to
    -- the size original image in which we index this function will
    -- return all the wrong values.
    stride = stride or error("must pass stride")
 
-   -- CAREFUL must floor before multiplying by stride or does not make sense.
-   -- -0.5 then floor is equivalient to adding 0.5 -> floor -> -1 before multiply by stride.
-   local output_map = ymap:clone():add(-0.5):floor()
+   -- CAREFUL must floor before multiplying by stride or does not make
+   -- sense.  -0.5 then floor is equivalient to adding 0.5 -> floor ->
+   -- -1 before multiply by stride. -1 is because C is 0 indexed where
+   -- torch is 1 indexed.
+   local output_map = coords[1]:clone():add(-0.5):floor():mul(stride[1])
 
-   -- ymap -1 so that multiply by stride makes sense (imgw is the stride)
-   -- to map (1,1) ::  y = 0  * stride + x = 1 ==> 1
-   -- to map (2,1) ::  y = 1  * stride + x = 1 ==> stride + 1 etc.
-
-   output_map:mul(stride):add(xmap + 0.5)
-
+   local temp = torch.Tensor(output_map:size())
+   for d = 2,coords:size(1) do 
+      temp:copy(coords[d]):add(-0.5):floor():mul(stride[d])
+      output_map:add(temp)
+   end
    -- remove spurious out of bounds from output
    if mask then
       output_map[mask] = 1
    end
 
-   offset:copy(output_map) -- conversion to long rounds (+0.5 added above and floor)
+   offset:copy(output_map) -- conversion to long 
 
    return offset 
 end
 
-function offset_to_xymap (offset, stride, pixels)
-   local size = util.util.add_slices(2,offset:size())
+function offset_to_coords (offset, stride, pixels)
+   local ndims = stride:size(1)
+   local size = util.util.add_slices(ndims,offset:size())
    pixels = pixels or torch.Tensor(size)
    pixels:resize(size)
 
-   local xmap   = pixels[1]
-   local ymap   = pixels[2]
-
-   xmap:copy(offset):apply(function (x) return math.mod(x,stride) end)
-   xmap[xmap:eq(0)] = stride
-   ymap:copy(offset):mul(1/stride):ceil()
+   local remainder = torch.Tensor(offset:size())
+   -- put index back into torch 1 offset
+   remainder:copy(offset):add(1)
+   pixels[1]:copy(remainder):mul(1/stride[1]):ceil()
+   
+   for d = 2,ndims do 
+      remainder:add(torch.add(pixels[d-1],-1):mul(-1*stride[d-1]))
+      pixels[d]:copy(remainder):mul(1/stride[d]):floor() 
+   end
 
    return pixels
 end
 
--- we need to operate in 2D offsets, index gives 1D offset
-function offset_to_xy (index,row_width)
-   local xy = torch.Tensor(2,index:size(1))
-   local h = xy[1]
-   local w = xy[2]
-
-   h:copy(index)
-   h:mul(1/row_width)
-   h:ceil()
-
-   w:copy(index)
-   w:apply(function (x) return math.mod(x,row_width) end)
-   w[w:eq(0)] = row_width
-
-   return xy
-end
-
-function xy_to_offset(xy,row_width)
-
-   local index = xy[1]:clone()
-   index:add(-1)
-   index:mul(row_width)
-   index:add(xy[2])
-
-   return index
-end
-
-function test_offset_to_xy (debug)
-   -- 120 has long list of divisors, to test 1D to 2D
-   local index = torch.range(1,120)
-   local rw = torch.Tensor({2,3,4,5,6,8,10,12,15,20,24,30,40,60})
-   local toterr = 0
-   for r = 1,rw:size(1) do 
-      local row_width = rw[r]
-      local xy        = offset_to_xy(index,row_width)
-      local index_out = xy_to_offset(xy,row_width)
-      -- compute errors
-      err = index - index_out
-      err:abs()
-      toterr = toterr + err:gt(0):sum()
-      if debug then 
-         print(xy[1]:resize(120/row_width,row_width))
-         print(xy[2]:resize(120/row_width,row_width))
-         print(index_out:resize(120/row_width,row_width))
-      end 
-   end
-   printf("Errors: %d/%d",toterr,120*rw:size(1))
-end
-
-
--- always step == 1
-function pixel_coords_to_patch (pixel_coords_xy,pixel_coords_height,pixel_coords_width,patch_height,patch_width)
-   local patch_xy = pixel_coords_xy:clone()
-   
-   local ctr_height = math.ceil(patch_height * 0.5)
-   local ctr_width  = math.ceil(patch_width * 0.5)
-   local max_height = pixel_coords_height - patch_height + 1
-   local max_width  = pixel_coords_width - patch_width + 1
-   
-   patch_xy[1]:add(1-ctr_height)
-   patch_xy[2]:add(1-ctr_width)
-   -- boundary
-   patch_xy[patch_xy:lt(1)] = 1
-   patch_xy[1][patch_xy[1]:gt(max_height)] = max_height
-   patch_xy[2][patch_xy[2]:gt(max_width)] = max_width
-
-   return patch_xy 
-end
-
-function test_pixel_coords_to_patch()
-   local index = torch.range(1,120)
-   local xy = index_to_xy(index,12)
-
-   for _,wsh in pairs({3,5,7,9}) do 
-      for _,wsw in pairs({3,5,7,9}) do 
-         printf("window: %d,%d", wsh,wsw)
-         local patch_xy = pixel_coords_to_patch(xy,10,12,wsh,wsw,1)
-
-         print(patch_xy[1]:resize(10,12))
-         print(patch_xy[2]:resize(10,12))
-      end
-   end
-end
-
-function pixel_coords_patch_to_image(patch_coords,patch_height,patch_width,image_height,image_width)
-
-   local image_coords = patch_coords:clone()
-   
-   local ctr_height = math.ceil(patch_height * 0.5)
-   local ctr_width  = math.ceil(patch_width * 0.5)
-   
-   image_coords[1]:add(ctr_height-1)
-   image_coords[2]:add(ctr_width-1)
-   
-   -- boundary already accounted for unless data is corrupt
-
-   return image_coords
-
-end
-
-function patch_pixel_coords_to_image_pixel_coords(patch_pixel_coords,patch_h,patch_w)
-   -- 1,1 goes to patch_h, patch_w
-   local image_pixel_coords = patch_pixel_coords:clone()
-   image_pixel_coords[1]:add(patch_h-1)
-   image_pixel_coords[2]:add(patch_w-1)
-   return image_pixel_coords
-end
-
-function test_patch_pixel_coords_to_image_pixel_coords()
-   local index = torch.range(1,25)
-   local xy = index_to_xy(index,5)
-
-   local no_offset = patch_pixel_coords_to_image_pixel_coords(xy,1,1)
-   print(no_offset[1]:resize(5,5))
-   print(no_offset[2]:resize(5,5))
-   local some_offset = patch_pixel_coords_to_image_pixel_coords(xy,10,100)
-   print(some_offset[1]:resize(5,5))
-   print(some_offset[2]:resize(5,5))
-end
-
-function get_centers(mask,patch_height,patch_width)
-
-   local mask_height = mask:size(1)
-   local mask_width  = mask:size(2)
-
-   local ctr_height = math.ceil(patch_height * 0.5)
-   local ctr_width  = math.ceil(patch_width * 0.5)
-   local n_height = mask_height - patch_height + 1
-   local n_width  = mask_width  - patch_width + 1
-
-   return mask:narrow(1,ctr_height,n_height):narrow(2,ctr_width,n_width)
-end
-
-function test_get_centers ()
-   local mask = torch.range(1,120):resize(10,12)
-   
-   for _,r in pairs({3,5,7,9}) do 
-      print(mask)
-      print(get_centers(mask,r,r))
-   end
-end

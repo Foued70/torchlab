@@ -47,7 +47,7 @@ if not images then
 end
 collectgarbage()
 
-poses = util.mp.load_poses(pose_file)
+poses = model.mp.load_poses(pose_file)
 
 img = image.load(images[1])
 

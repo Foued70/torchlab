@@ -155,7 +155,7 @@ function LensSensor:add_image(...)
          
       end
       
-      vfov,hfov = projection.derive_hw(dfov,aspect_ratio)
+      vfov,hfov = projection.diagonal_to_height_width(dfov,aspect_ratio)
    end
    
    log.tracef(" -- degress: d: %2.4f h: %2.4f v: %2.4f",
@@ -297,11 +297,11 @@ function LensSensor:output_to_equirectangular_map(proj_type,maph,mapw)
       -- limit the fov to roughly 120 degrees
       if fov > max_rad_rectilinear then
          fov = max_rad_rectilinear
-         vfov,hfov = projection.derive_hw(fov,self.aspect_ratio)
+         vfov,hfov = projection.diagonal_to_height_width(fov,self.aspect_ratio)
       end
       -- set up size of the output table
       drange = torch.tan(fov)
-      vrange,hrange = projection.derive_hw(drange,self.aspect_ratio)
+      vrange,hrange = projection.diagonal_to_height_width(drange,self.aspect_ratio)
       -- equal steps in normalized coordinates
       lambda     = torch.linspace(-hrange,hrange,mapw)
       phi        = torch.linspace(-vrange,vrange,maph)
@@ -626,7 +626,7 @@ function LensSensor:image_coords_to_angles (img_pts, pt_type, out_type)
       projection.radial_distance_to_angle(d, self.lens_type, self.pol)
 
    -- convert diagonal angle to equirectangular (spherical) angles
-   local elevation,azimuth = projection.derive_hw(diagonal_angles,self.aspect_ratio) 
+   local elevation,azimuth = projection.diagonal_to_height_width(diagonal_angles,self.aspect_ratio) 
    local spherical_angles = torch.Tensor(elevation:size(1),2)
    spherical_angles[{{},1}] = azimuth
    spherical_angles[{{},2}] = elevation

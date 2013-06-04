@@ -12,6 +12,7 @@ cmd:text('Compute image projections')
 cmd:text()
 cmd:text('Options')
 cmd:option('-imagesdir', 'images/', 'directory with the images to load')
+cmd:option('-scale', '0.25', 'downsample ratio')
 cmd:text()
 
 -- parse input params
@@ -20,32 +21,16 @@ params = cmd:parse(arg)
 imagesdir  = params.imagesdir
 
 -- load images
-if not images then
-   images = {}
-   if not paths.dirp(imagesdir) then 
-      error("Must set a valid path to directory of images to process default -imagesdir images/")
-   end
-   imgfiles = paths.files(imagesdir)
-   imgfiles() -- .
-   imgfiles() -- ..
-   for f in imgfiles do
-      if f == ".DS_Store" then -- exclude OS X automatically-created backup files
-         printf("--- Skipping .DS_Store file")
-         
-      elseif (f:gmatch("jpg$")() or f:gmatch("png$")()) then
-         imgfile = imagesdir.."/"..f
-         table.insert(images, imgfile)
-         printf("Found : %s", imgfile)
-      end
-   end
-end
-collectgarbage()
+images = util.fs.glob(imagesdir,"jpg")
+images = util.fs.glob(imagesdir,"png",images)
+images = util.fs.glob(imagesdir,"JPG",images)
+images = util.fs.glob(imagesdir,"PNG",images)
 
 img = image.load(images[1])
 
 width  = img:size(3)
 height = img:size(2)
-scale  = 1/5
+scale  = tonumber(params.scale) or 0.25
 
 -- images are vertical
 vfov = (97/180) * pi 
