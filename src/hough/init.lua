@@ -7,12 +7,15 @@ require 'libhough'
 function hough.get_hough_transform(img, numRadius, numAngles)
   local hT = torch.zeros(numRadius, numAngles);
   libhough.libhough.houghTransform(hT,img);
+  hT = hT:type('torch.DoubleTensor');
+  hT = hT/hT:max();
   return hT;
 end
 
 
 function hough.local_contrast_normalization(hT)
-  libhough.localContrastNormalization(hT);
+  hTclone=hT:clone()
+  libhough.libhough.localContrastNormalization(hT,hTclone);
   return hT;
 end
 
