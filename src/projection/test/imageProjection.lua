@@ -1,4 +1,4 @@
-Class()
+-- Class()
 
 require 'image'
 
@@ -12,7 +12,7 @@ cmd:text('Compute image projections')
 cmd:text()
 cmd:text('Options')
 cmd:option('-imagesdir', 'images/', 'directory with the images to load')
-cmd:option('-scale', '0.25', 'downsample ratio')
+cmd:option('-scale', '0.1', 'downsample ratio')
 cmd:text()
 
 -- parse input params
@@ -21,22 +21,20 @@ params = cmd:parse(arg)
 imagesdir  = params.imagesdir
 
 -- load images
-images = util.fs.glob(imagesdir,"jpg")
-images = util.fs.glob(imagesdir,"png",images)
-images = util.fs.glob(imagesdir,"JPG",images)
-images = util.fs.glob(imagesdir,"PNG",images)
+images = util.fs.glob(imagesdir,{"JPG","PNG","jpg","png"})
 
 img = image.load(images[1])
 
 width  = img:size(3)
 height = img:size(2)
-scale  = tonumber(params.scale) or 0.25
+scale  = tonumber(params.scale) or 0.1
 
 -- images are vertical
 vfov = (97/180) * pi 
 hfov = (74/180) * pi
  
-proj_from = projection.RectilinearProjection.new(width,height,hfov,vfov)
+-- proj_from = projection.RectilinearProjection.new(width,height,hfov,vfov)
+proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
 proj_to   = projection.SphericalProjection.new(width*scale,height*scale,hfov,vfov)
 
 p("Testing Image Projection")
@@ -44,11 +42,12 @@ p("Testing Image Projection")
 sys.tic()
 
 rect_to_sphere = projection.Remap.new(proj_from,proj_to)
+
 -- do not need to call get_index_and_mask explicitly as it will be
 -- called when needed on the first call to remap, but by calling it
 -- here we can compute the timing information.
-index1D = rect_to_sphere:get_offset_and_mask()
-perElement = index1D:nElement()
+offset,stride,mask = rect_to_sphere:get_offset_and_mask()
+perElement = offset:nElement()
 time = sys.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
 sys.tic()

@@ -25,8 +25,9 @@ function GnomonicProjection:__init(width, height,
                     pixel_center_x, pixel_center_y)
 
    -- How to get to normalized coordinates
-   self.units_per_pixel_x = math.tan(self.hfov*0.5)/self.center[1]
-   self.units_per_pixel_y = math.tan(self.vfov*0.5)/self.center[2]
+
+   self.units_per_pixel_y = math.tan(self.vfov*0.5)/self.center[1]
+   self.units_per_pixel_x = math.tan(self.hfov*0.5)/self.center[2]
 
    
    self:set_lambda_phi(lambda,phi)
