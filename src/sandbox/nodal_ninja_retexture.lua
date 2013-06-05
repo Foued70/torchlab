@@ -124,10 +124,10 @@ for sweep_no = 1,4 do
       img    = image.load(images[i])
 
       proj_from:set_lambda_phi(lambda,phi)
-      index1D,stride,mask = rect_to_sphere:get_index_and_mask(force)
+      offset1D,stride,mask = rect_to_sphere:get_offset_and_mask(force)
       img_out = rect_to_sphere:remap(img)
 
-      table.insert(indices,index1D)
+      table.insert(indices,offset1D)
       table.insert(masks,mask)
       table.insert(out_images,img_out)
 
@@ -139,8 +139,8 @@ for sweep_no = 1,4 do
    end
 
    -- blend
-
-   blend_image = blend(out_images,masks)
+   local invert = true
+   blend_image = util.alpha_masks.blend(out_images,masks,invert)
 
    orig_texture = matter_texture:clone()
 
