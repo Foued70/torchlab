@@ -198,7 +198,6 @@ static int libhough_(Main_hough_local_contrast_normalization)(lua_State *L){
   real *tmpHTNPt = res;
   real *tmpHTOPt = cln;
   
-  
   for (long nR = 0; nR < numRadius; nR ++){
     for (long nA = 0; nA < numAngles; nA ++){
       //tmpHTNPt = res + (nR * numAngles) + nA;
@@ -226,11 +225,12 @@ static int libhough_(Main_hough_local_contrast_normalization)(lua_State *L){
         
         avg = avg/cnt;
         
-        *tmpHTNPt = avg;
-        *tmpHTOPt = avg;
+        if (*tmpHTOPt > avg){
+          *tmpHTNPt = avg;
+          *tmpHTOPt = avg;
+        }
         
       }
-      
       
       // normalization
       if(*tmpHTNPt > 0){
@@ -265,6 +265,9 @@ static int libhough_(Main_hough_local_contrast_normalization)(lua_State *L){
       
     }
   }
+  
+  tmpHTNPt = res;
+  tmpHTOPt = cln;
   
   return 1;
 }
