@@ -168,11 +168,11 @@ static int libhough_(Main_houghTransform)(lua_State *L){
                   long nR = (long)(nRR);
 
                   if (nRR >=0 && nRR < numRadius)
-                    {
-                      real *tmpHoughPt = res + (nR * numAngles) + nA;
-                      *tmpHoughPt += *img;
+                  {
+                    real *tmpHoughPt = res + (nR * numAngles) + nA;
+                    *tmpHoughPt += *img;
 
-                    }
+                  }
                 }
             }
 
