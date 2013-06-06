@@ -44,7 +44,7 @@ restA = 5.0
 ht1 = hough.restrict_angles(ht, 0.0, math.pi*(restA)/180.0)
 ht2 = hough.restrict_angles(ht, math.pi*(180.0-restA)/180.0, math.pi*(180.0+restA)/180.0)
 ht3 = hough.restrict_angles(ht, math.pi*(360.0-restA)/180.0, 2.0*math.pi)
-ht = ht1+ht2+ht2
+ht = ht1+ht2+ht3
 disp3 = ht:clone()/ht:max()
 disp3 = image.scale(disp3, 600,600)
 image.display(disp3);

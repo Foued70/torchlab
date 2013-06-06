@@ -95,7 +95,7 @@ function hough.draw_line (img,r,a, numRadius, numAngles)
   local cosa = math.cos(ang)
   local sina = math.sin(ang)
   
-  if (ang > 45 and ang <= (135.0*pi/180)) or (ang > (225.0*pi/180) and ang <= (315.0*pi/180)) then
+  if (ang > (45.0*pi/180) and ang <= (135.0*pi/180)) or (ang > (225.0*pi/180) and ang <= (315.0*pi/180)) then
   -- horizontal ish lines
     for col=1,width do
       local x = col-width/2
