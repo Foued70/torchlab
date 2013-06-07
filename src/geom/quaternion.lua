@@ -1,5 +1,5 @@
 Class()
-
+-- TODO: vectorize all these like the new spherical angles 
 local axes   = torch.eye(3)
 
 x = axes[1]
@@ -15,14 +15,9 @@ function conjugate(quat,res)
 end
 
 function equals(quat1, quat2)
-   if (  (math.abs(quat2[1]-quat1[1])<1e-8) and
-         (math.abs(quat2[2]-quat1[2])<1e-8) and
-         (math.abs(quat2[3]-quat1[3])<1e-8) and
-         (math.abs(quat2[4]-quat1[4])<1e-8) ) then
-      return true
-   else
-      return false
-   end
+   local diff = quat1 - quat2
+   diff:abs()
+   return (diff:lt(1e-8):sum() == 4)
 end
 
 -- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
@@ -164,6 +159,101 @@ function from_rotation_matrix(rmat, quat, debug)
    return quat
 end
 
+
+-- euler angle    = Nx2 or 3 : pitch, yaw and optional roll
+-- our spherical coordinates are called phi (pitch) and lambda (yaw)
+function from_euler_angle(euler_angle)
+   local pitch    = euler_angle[1]
+   local yaw      = euler_angle[2]
+   local roll
+
+   if (euler_angle:size(1) == 3) then
+      roll = euler_angle[3]
+   else
+      roll = torch.zeros(pitch:size())
+   end
+
+   quat = quat or torch.Tensor(4,pitch:nElement())
+   quat:resize(4,pitch:nElement())
+
+   local cpitch      = pitch:clone():mul(0.5):cos()
+   local cyaw        = yaw:clone():mul(0.5):cos()
+   local croll       = roll:clone():mul(0.5):cos()
+
+   local spitch      = pitch:clone():mul(0.5):sin()
+   local syaw        = yaw:clone():mul(0.5):sin()
+   local sroll       = roll:clone():mul(0.5):sin()
+
+   local cyaw_cpitch = torch.cmul(cyaw,cpitch)
+   local syaw_spitch = torch.cmul(syaw,spitch)
+   local cyaw_spitch = torch.cmul(cyaw,spitch)
+   local syaw_cpitch = torch.cmul(syaw,cpitch)
+
+
+   quat[1]:copy(cyaw_cpitch):cmul(sroll):add(-1,torch.cmul(syaw_spitch,croll))
+   quat[2]:copy(cyaw_spitch):cmul(croll):add(torch.cmul(syaw_cpitch,sroll))
+   quat[3]:copy(syaw_cpitch):cmul(croll):add(-1,torch.cmul(cyaw_spitch,sroll))
+   quat[4]:copy(cyaw_cpitch):cmul(croll):add(torch.cmul(syaw_spitch,sroll))
+
+   -- unlike projections, quaternions used in 3D are Nx4
+   return quat:t():contiguous()
+end
+
+-- <quat> is Nx4
+-- <euler_angles> is 3xN
+function to_euler_angle(quat,euler_angle)
+   local n_elem = 1
+   if (quat:dim() == 1) then 
+      quat:resize(1,quat:size(1)) 
+   else
+      n_elem = quat:size(1)
+   end
+
+   euler_angle = euler_angle or torch.Tensor(3,n_elem)
+   euler_angle:resize(3,n_elem)
+
+   -- q_sqr is 4xN
+   local q     = quat:t():clone()
+   local q_sqr = torch.cmul(q,q)
+
+   q00 = q_sqr[4]  
+   q11 = q_sqr[1]  
+   q22 = q_sqr[2]  
+   q33 = q_sqr[3]
+  
+   r11 = q00:clone():add(q11):add(-1,q22):add(-1,q33)
+   r21 = torch.cmul(q[1],q[2]):add(torch.cmul(q[4],q[3])):mul(2)
+
+   -- absorbs the negative applied to all future uses
+   local r31 = torch.cmul(q[1],q[3]):add(-1,torch.cmul(q[4],q[2])):mul(-2)
+   local r32 = torch.cmul(q[2],q[3]):add(torch.cmul(q[4],q[1])):mul(2)
+   local r33 = q00:clone():add(-1,q11):add(-1,q22):add(q33)
+
+   tmp = torch.abs(r31)
+   gimbal = tmp:gt(0.999999)
+   not_gimbal = gimbal:ne(1)
+   
+   if (not_gimbal:sum() > 0) then
+      euler_angle[3][not_gimbal] = torch.atan2(r32[not_gimbal],r33[not_gimbal]) -- roll
+      euler_angle[1][not_gimbal] = torch.asin(r31[not_gimbal])         -- pitch
+      euler_angle[2][not_gimbal] = torch.atan2(r21[not_gimbal],r11[not_gimbal]) -- yaw
+   end
+
+   if (gimbal:sum() > 0) then 
+      local r12 = r21
+      r12:copy(q[1]):cmul(q[2]):add(-1,torch.cmul(q[4],q[3])):mul(-2)
+      local r13 = r32
+      r13:copy(q[1]):cmul(q[3]):add(torch.cmul(q[4],q[2])):mul(2)
+      r13:cmul(r31)
+      
+      euler_angle[3][gimbal] = 0                                    -- roll
+      tmp[gimbal] = tmp[gimbal]:mul(math.pi/2)
+      euler_angle[1][gimbal] = torch.cdiv(r31[gimbal],tmp[gimbal])  -- pitch
+      euler_angle[2][gimbal] = torch.atan2(r12[gimbal],r13[gimbal]) -- yaw
+   end
+
+   return euler_angle
+end
 
 -- if two quaternions are equal they will rotate a vector the same distance
 function distance(quat1, quat2)

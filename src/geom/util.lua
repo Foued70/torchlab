@@ -8,10 +8,11 @@ function direction(vec1, vec2)
    return normalize(vec1 - vec2)
 end
 
-function normalize(vec)
-   local n = vec:norm()
-   if (n > 1e-8) then
-      vec:mul(1/n)
+function normalize(vec,dim)
+   if dim then 
+      vec:cdiv(vec:norm(2,dim):expand(vec:size()))
+   else
+      vec:div(vec:norm())      
    end
    return vec
 end

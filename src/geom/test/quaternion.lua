@@ -130,6 +130,32 @@ function quat_product()
                        e,data.quat:size(1)*data.vec:size(1),maxerr,sys.toc()))
 end
 
+function quat_from_to_euler()
+   print("Testing conversion to euler (spherical angles) and back")
+   local eps = 0.002 -- terrible numerical results with all the trig functions
+   local e = 0
+   local maxerr = 0
+   sys.tic()
+   local ea = quat.to_euler_angle(data.quat)
+   local q  = quat.from_euler_angle(ea)
+   for j = 1,data.quat:size(1) do
+      local d = quat.distance(data.quat[j],q[j])
+      if d > maxerr then maxerr = d end
+      if d > eps then e = e + 1 end
+   end
+   -- test 2 edge cases
+   local qe = torch.eye(4)
+   ea = quat.to_euler_angle(qe)
+   q  = quat.from_euler_angle(ea)
+   for j = 1,4 do
+      local d = quat.distance(qe[j],q[j])
+      if d > maxerr then maxerr = d end
+      if d > eps then e = e + 1 end
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,data.quat:size(1)+4,maxerr,sys.toc()))
+end
+
 
 function all()
    quaternion_from_to()
@@ -137,5 +163,5 @@ function all()
    rot2quat()
    rotation_by_quat()
    quat_product()
+   quat_from_to_euler()
 end
-
