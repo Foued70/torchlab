@@ -104,9 +104,10 @@ function rotation_by_quat()
 end
 
 function quat_product()
-   print("Testing composition of rotations with quaternion")
+   print("Testing composition of rotations with quaternion product")
    local e = 0
    local maxerr = 0
+   local n_test = 0
    sys.tic()
    local q1 = data.quat[1]
    for j = 2,data.quat:size(1) do
@@ -124,10 +125,40 @@ function quat_product()
             e = e + 1
          end
          q2 = q1
+         n_test = n_test + 1
+      end
+   end
+   -- test with conjugate also
+   local qr = torch.Tensor(data.quat:size())
+   for i = 1,data.quat:size(1) do
+      local q1 = data.quat[i]
+      for j = 1,data.quat:size(1) do
+         local q2 = data.quat[j]
+         quat.product(q1,q2,qr[j])
+         local qc = quat.product(qr[j],quat.conjugate(q2))
+         local ce = torch.max(torch.abs(qc - q1))
+         if (ce > maxerr) then maxerr = ce end
+         if (ce > 5e-4) then
+            print(ce,q1,qc)
+            e = e + 1
+         end
+         q2 = q1 
+         n_test = n_test + 1
+      end
+      -- test matrix version
+      local qmat = quat.product(q1,data.quat)
+      for j = 1,data.quat:size(1) do
+         local ce = torch.max(torch.abs(qr[j] - qmat[j]))
+         if (ce > maxerr) then maxerr = ce end
+         if (ce > 5e-4) then
+            print(ce,qr[j],qmat[j])
+            e = e + 1
+         end
+         n_test = n_test + 1
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,data.quat:size(1)*data.vec:size(1),maxerr,sys.toc()))
+                       e,n_test,maxerr,sys.toc()))
 end
 
 function quat_from_to_euler()

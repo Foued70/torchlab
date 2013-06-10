@@ -21,28 +21,35 @@ function equals(quat1, quat2)
 end
 
 -- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
--- FIXME test cases
 function product(quat1,quat2,res)
-   local zero_quat = torch.Tensor({0,0,0,1})
-
-   if equals(quat1, zero_quat) and equals(quat1, zero_quat) then
-      if (not res) then
-         return zero_quat
-      else
-         return res:copy(zero_quat)
-      end
-   end
 
    if (not res) then
-      res = torch.Tensor(4)
+      res = torch.Tensor(quat2:size())
    end
 
-   local v1 = quat1:narrow(1,1,3)
-   local v2 = quat2:narrow(1,1,3)
-   local vres = res:narrow(1,1,3)
-   vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
-   res[4] = quat1[4]*quat2[4] - v1:dot(v2)
+   if quat2:dim() == 1 then
+      local v1 = quat1:narrow(1,1,3)
+      local v2 = quat2:narrow(1,1,3)
+      local vres = res:narrow(1,1,3)
+      vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
+      res[4] = quat1[4]*quat2[4] - v1:dot(v2)
+   else
+      quat1 = quat1:resize(1,4):expandAs(quat2)
+      local v1 = quat1:narrow(2,1,3)
+      local v2 = quat2:narrow(2,1,3)
+      local w1 = quat1[{{},{4}}]:expandAs(v1)
+      local w2 = quat2[{{},{4}}]:expandAs(v2)
+      local vres = res:narrow(2,1,3)
+      local wres = res[{{},4}]
+      vres:copy(torch.cross(v1,v2,2)):add(torch.cmul(v1,w2)):add(torch.cmul(v2,w1))
+      
+      for i = 1,wres:size(1) do 
+         wres[i] = quat1[i][4]*quat2[i][4] - v1[i]:dot(v2[i])
+      end
+   end    
+   
    return res
+                
 end
 
 -- returns quaternion represnting angle between two vectors
@@ -163,10 +170,14 @@ end
 -- euler angle    = Nx2 or 3 : pitch, yaw and optional roll
 -- our spherical coordinates are called phi (pitch) and lambda (yaw)
 function from_euler_angle(euler_angle)
+   if euler_angle:dim() == 1 then 
+      euler_angle:resize(euler_angle:size(1),1)
+   end
+
    local pitch    = euler_angle[1]
    local yaw      = euler_angle[2]
    local roll
-
+ 
    if (euler_angle:size(1) == 3) then
       roll = euler_angle[3]
    else
