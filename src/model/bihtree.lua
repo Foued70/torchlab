@@ -1,10 +1,7 @@
-Class()
-
 local intersect = geom.intersect
 local Ray       = geom.Ray
 
-
--- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
+local BIHTree = Class()
 
 -- sv : split_verts.    Used to split the faces (obj.face_centers)
 -- bb : bounding_boxes. Around the object centered in each bbox
@@ -128,15 +125,15 @@ local function recurse_build(tree,sv,bb,noffset,absindex,debug)
    return noffset
 end
 
-function build(obj,debug)
+-- This is a BIH-tree for fast lookups of bounding volumes.  Written in torch.
+function BIHTree:__init(obj,debug)
    -- the tree is two torch tensors
 
-   local tree = {}
    -- bulky node struct (FIXME time with nice ffi struct)
    -- [1] dim
    -- [2] bounding interval min
    -- [3] bounding interval max
-   tree.nodes   = torch.Tensor(obj.n_faces,3):fill(0)
+   self.nodes   = torch.Tensor(obj.n_faces,3):fill(0)
 
    -- inner node
    -- [1] index left child
@@ -144,31 +141,32 @@ function build(obj,debug)
    -- leaf node
    -- [1] start index in leaf_fid matrix
    -- [2] stop index in leaf_fid matrix
-   tree.child_index = torch.LongTensor(obj.n_faces,2):fill(0)
+   self.child_index = torch.LongTensor(obj.n_faces,2):fill(0)
 
    -- leaves are indices to the faces
-   tree.leaf_fid = torch.LongTensor(obj.n_faces):fill(0)
+   self.leaf_fid = torch.LongTensor(obj.n_faces):fill(0)
 
 
-   tree.leafindex = 1 -- Global offset at which to write the next leaf
-   tree.min_for_leaf = 4
+   self.leafindex = 1 -- Global offset at which to write the next leaf
+   self.min_for_leaf = 4
 
-   local noffset = recurse_build(tree,obj.face_centers,obj.face_bboxes)
+   local noffset = recurse_build(self,obj.face_centers,obj.face_bboxes)
 
    -- clean up
-   tree.child_index = tree.child_index:narrow(1,1,noffset-1)
-   tree.nodes       = tree.nodes:narrow(1,1,noffset-1)
-   tree.bbox        = obj.bbox
+   self.child_index = self.child_index:narrow(1,1,noffset-1)
+   self.nodes       = self.nodes:narrow(1,1,noffset-1)
+   self.bbox        = obj.bbox
 
-   if debug then p(tree.nodes) end
-   return tree
+   if debug then p(self.nodes) end
 
 end
+
+
 
 -- write a simple obj file to visualize the tree partitioning: each
 -- leaf as separate objects.
 
-function dump(tree,obj)
+function BIHTree:dump(obj)
    local objfilename = "tree_dump.obj"
    local objf = assert(io.open(objfilename, "w"))
 
@@ -180,9 +178,9 @@ function dump(tree,obj)
    end
    objf:write("\n")
 
-   local nodes       = tree.nodes
-   local leaf_offset = tree.child_index
-   local leaf_fid    = tree.leaf_fid
+   local nodes       = self.nodes
+   local leaf_offset = self.child_index
+   local leaf_fid    = self.leaf_fid
 
    local nvpf  = obj.n_verts_per_face
    local faces = obj.faces
@@ -240,22 +238,22 @@ end
 
 -- recursive traversal of tree useful for debugging or perhaps to
 -- flatten the tree.
-function walk(tree,obj)
+function BIHTree:walk(obj)
    local node_id    = 1
    -- start at parent
-   recurse_traverse(tree,node_id,obj)
+   self:recurse_traverse(node_id,obj)
 end
 
 -- return depth of closest intersection.
-function traverse(tree,obj,ray,debug)
+function BIHTree:traverse(obj,ray,debug)
    -- stack used to keep track of nodes left to visit
    local todolist  = torch.LongTensor(64)
    local todominmax = torch.Tensor(64,2)
    local todoindex = 0
    local node_id   = 1 -- start at parent
-   local nodes     = tree.nodes
-   local children  = tree.child_index
-   local fids      = tree.leaf_fid
+   local nodes     = self.nodes
+   local children  = self.child_index
+   local fids      = self.leaf_fid
    local rsign     = ray.sign
 
    -- In this BIH tree the node holds the max and min for the
@@ -400,9 +398,9 @@ end
 
 -- compare aggregate to and exhaustive search through all polygons.
 -- FIXME write this test case.  Return get_occlusions from icebox.
-function test_traverse(tree,obj,ray)
+function BIHTree:test_traverse(obj,ray)
    sys.tic()
-   local tree_d, tree_fid = traverse(tree,obj,ray)
+   local tree_d, tree_fid = self:traverse(obj,ray)
    local tree_duration = sys.toc()
 
    sys.tic()
