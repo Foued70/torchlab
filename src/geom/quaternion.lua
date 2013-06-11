@@ -34,7 +34,7 @@ function product(quat1,quat2,res)
       vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
       res[4] = quat1[4]*quat2[4] - v1:dot(v2)
    else
-      quat1 = quat1:resize(1,4):expandAs(quat2)
+      quat1 = quat1:reshape(1,4):expandAs(quat2)
       local v1 = quat1:narrow(2,1,3)
       local v2 = quat2:narrow(2,1,3)
       local w1 = quat1[{{},{4}}]:expandAs(v1)
@@ -167,16 +167,51 @@ function from_rotation_matrix(rmat, quat, debug)
 end
 
 
--- euler angle    = Nx2 or 3 : pitch, yaw and optional roll
--- our spherical coordinates are called phi (pitch) and lambda (yaw)
+-- Input: euler angle    = Nx2 or 3 : pitch, yaw and optional roll
+-- Output:               = Nx4 quaternion
+-- 
+-- Local coordinates in our 2D image projections in x,y or phi
+-- (vertical), lambda (horizontal) have 0,0 in the middle. Looking at
+-- the 2D image in screen space: -,- is in the upper left hand corner,
+-- and +,+ in the lower right hand corner.  This is the same way that
+-- OpenGL presents the UV coordinates with -1,-1 in the upper left and
+-- +1,+1 in the lower right.
+-- 
+-- In 3D coordinates we have settled on Z up, Y forward and X right.
+
+-- To translate the euler angles of the spherical image projections to
+-- angles in 3D coordinates it is useful to keep these bearings in mind:
+-- 
+-- Rotations : about (X,Y,Z axis)
+-- 
+-- + X : pitch (phi, elevation, latitude) pitch is rotation around the X
+--   (right hand) axis (a quaternion has a large component in the x location)
+-- + Y : roll rotation around the forward facing axis
+-- + Z : yaw (lambda,azimuth, longitude) is a rotation around the Z upward axis
+--   (quaternion is large in z location)
+
+-- Direction of rotations :
+-- 
+-- (to stay consitent with image space projections)
+
+-- + Pitch (south-ing): positive angle moves south 
+--   (+y -> -z -> -y),(+z -> +y -> -z)
+
+-- + Roll (clockwise) : positive angle moves clockwise around forward
+--   facing direction (+x -> -z -> -x),(+z -> +x -> -z) 
+
+-- + Yaw (east-ing): positive angle moves east 
+--   (+y -> +x -> -y) (+x -> -y -> -x)
+-- 
+
 function from_euler_angle(euler_angle)
    if euler_angle:dim() == 1 then 
       euler_angle:resize(euler_angle:size(1),1)
    end
 
-   local pitch    = euler_angle[1]
-   local yaw      = euler_angle[2]
-   local roll
+   local pitch   = euler_angle[1]  -- rotate about X axis
+   local yaw     = euler_angle[2]  -- rotate about Z axis
+   local roll                      -- rotate about Y axis
  
    if (euler_angle:size(1) == 3) then
       roll = euler_angle[3]
@@ -187,27 +222,29 @@ function from_euler_angle(euler_angle)
    quat = quat or torch.Tensor(4,pitch:nElement())
    quat:resize(4,pitch:nElement())
 
-   local cpitch      = pitch:clone():mul(0.5):cos()
-   local cyaw        = yaw:clone():mul(0.5):cos()
-   local croll       = roll:clone():mul(0.5):cos()
+   -- negative signs in yaw and pitch are needed to correspond with
+   -- directions as stated in the comment above.
+   local croll      = roll:clone():mul(0.5):cos()
+   local cyaw       = yaw:clone():mul(-0.5):cos()
+   local cpitch     = pitch:clone():mul(-0.5):cos()
 
-   local spitch      = pitch:clone():mul(0.5):sin()
-   local syaw        = yaw:clone():mul(0.5):sin()
-   local sroll       = roll:clone():mul(0.5):sin()
+   local sroll      = roll:clone():mul(0.5):sin()
+   local syaw       = yaw:clone():mul(-0.5):sin()
+   local spitch     = pitch:clone():mul(-0.5):sin()
 
-   local cyaw_cpitch = torch.cmul(cyaw,cpitch)
-   local syaw_spitch = torch.cmul(syaw,spitch)
-   local cyaw_spitch = torch.cmul(cyaw,spitch)
-   local syaw_cpitch = torch.cmul(syaw,cpitch)
+   local cyaw_croll = torch.cmul(cyaw,croll)
+   local syaw_sroll = torch.cmul(syaw,sroll)
+   local cyaw_sroll = torch.cmul(cyaw,sroll)
+   local syaw_croll = torch.cmul(syaw,croll)
 
 
-   quat[1]:copy(cyaw_cpitch):cmul(sroll):add(-1,torch.cmul(syaw_spitch,croll))
-   quat[2]:copy(cyaw_spitch):cmul(croll):add(torch.cmul(syaw_cpitch,sroll))
-   quat[3]:copy(syaw_cpitch):cmul(croll):add(-1,torch.cmul(cyaw_spitch,sroll))
-   quat[4]:copy(cyaw_cpitch):cmul(croll):add(torch.cmul(syaw_spitch,sroll))
+   quat[1]:copy(cyaw_croll):cmul(spitch):add(-1,torch.cmul(syaw_sroll,cpitch))
+   quat[2]:copy(cyaw_sroll):cmul(cpitch):add(torch.cmul(syaw_croll,spitch))
+   quat[3]:copy(syaw_croll):cmul(cpitch):add(-1,torch.cmul(cyaw_sroll,spitch))
+   quat[4]:copy(cyaw_croll):cmul(cpitch):add(torch.cmul(syaw_sroll,spitch))
 
-   -- unlike projections, quaternions used in 3D are Nx4
-   return quat:t():contiguous()
+   -- unlike projections, quaternions (used in 3D) are Nx4
+   return quat:t():contiguous():squeeze()
 end
 
 -- <quat> is Nx4
@@ -229,7 +266,7 @@ function to_euler_angle(quat,euler_angle)
 
    q00 = q_sqr[4]  
    q11 = q_sqr[1]  
-   q22 = q_sqr[2]  
+   q22 = q_sqr[2]
    q33 = q_sqr[3]
   
    r11 = q00:clone():add(q11):add(-1,q22):add(-1,q33)
@@ -245,9 +282,9 @@ function to_euler_angle(quat,euler_angle)
    not_gimbal = gimbal:ne(1)
    
    if (not_gimbal:sum() > 0) then
-      euler_angle[3][not_gimbal] = torch.atan2(r32[not_gimbal],r33[not_gimbal]) -- roll
-      euler_angle[1][not_gimbal] = torch.asin(r31[not_gimbal])         -- pitch
+      euler_angle[1][not_gimbal] = torch.atan2(r32[not_gimbal],r33[not_gimbal]) -- pitch
       euler_angle[2][not_gimbal] = torch.atan2(r21[not_gimbal],r11[not_gimbal]) -- yaw
+      euler_angle[3][not_gimbal] = torch.asin(r31[not_gimbal])                  -- roll
    end
 
    if (gimbal:sum() > 0) then 
@@ -257,11 +294,15 @@ function to_euler_angle(quat,euler_angle)
       r13:copy(q[1]):cmul(q[3]):add(torch.cmul(q[4],q[2])):mul(2)
       r13:cmul(r31)
       
-      euler_angle[3][gimbal] = 0                                    -- roll
-      tmp[gimbal] = tmp[gimbal]:mul(math.pi/2)
-      euler_angle[1][gimbal] = torch.cdiv(r31[gimbal],tmp[gimbal])  -- pitch
+      euler_angle[1][gimbal] = 0                                    -- pitch
       euler_angle[2][gimbal] = torch.atan2(r12[gimbal],r13[gimbal]) -- yaw
+      tmp[gimbal] = tmp[gimbal]:mul(math.pi/2)
+      euler_angle[3][gimbal] = torch.cdiv(r31[gimbal],tmp[gimbal])  -- roll
    end
+
+   -- make euler angles correspond to image projections (south-ing and east-ing)
+   euler_angle[1]:mul(-1)
+   euler_angle[2]:mul(-1)
 
    return euler_angle
 end
