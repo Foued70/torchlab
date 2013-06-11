@@ -30,15 +30,15 @@ if paths.filep(geomlib) then
 
    -- either there is a way to stick function on torch.DoubleTensor
    -- for automatic type cast or we just do everything in doubles.
-   function rotate_by_quatC (out, vec, quat)
+   function by_quaternion (out, vec, quat)
       C.rotate_by_quat(torch.cdata(out), torch.cdata(vec),
                        torch.cdata(quat))
    end
-   function rotate_translateC (out, vec, trans, quat)
+   function rotate_translate (out, vec, trans, quat)
       C.rotate_translate(torch.cdata(out), torch.cdata(vec),
                          torch.cdata(trans), torch.cdata(quat))
    end
-   function translate_rotateC (out, vec, trans, quat)
+   function translate_rotate (out, vec, trans, quat)
       C.translate_rotate(torch.cdata(out), torch.cdata(vec),
                          torch.cdata(trans), torch.cdata(quat))
    end
@@ -117,11 +117,5 @@ function by_matrix(...)
    return res:narrow(1,1,3)
 end
 
--- rotate vector by quaternion
--- this is an optimized version of 30 ops which we will move C
--- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
-function by_quaternion(...)
-   return geom.quaternion.rotate(...)
-end
 
 

@@ -54,8 +54,8 @@ end
 
 -- returns quaternion represnting angle between two vectors
 function angle_between(from_vector, to_vector, quat)
-   from = from_vector:narrow(1,1,3)
-   to   = to_vector:narrow(1,1,3)
+   local from = from_vector:narrow(1,1,3)
+   local to   = to_vector:narrow(1,1,3)
 
    local rot_axis = torch.cross(from, to)
    local rot_angle = 0
@@ -204,7 +204,7 @@ end
 --   (+y -> +x -> -y) (+x -> -y -> -x)
 -- 
 
-function from_euler_angle(euler_angle)
+function from_euler_angle(euler_angle, quat)
    if euler_angle:dim() == 1 then 
       euler_angle:resize(euler_angle:size(1),1)
    end
@@ -264,22 +264,22 @@ function to_euler_angle(quat,euler_angle)
    local q     = quat:t():clone()
    local q_sqr = torch.cmul(q,q)
 
-   q00 = q_sqr[4]  
-   q11 = q_sqr[1]  
-   q22 = q_sqr[2]
-   q33 = q_sqr[3]
+   local q00 = q_sqr[4]  
+   local q11 = q_sqr[1]  
+   local q22 = q_sqr[2]
+   local q33 = q_sqr[3]
   
-   r11 = q00:clone():add(q11):add(-1,q22):add(-1,q33)
-   r21 = torch.cmul(q[1],q[2]):add(torch.cmul(q[4],q[3])):mul(2)
+   local r11 = q00:clone():add(q11):add(-1,q22):add(-1,q33)
+   local r21 = torch.cmul(q[1],q[2]):add(torch.cmul(q[4],q[3])):mul(2)
 
    -- absorbs the negative applied to all future uses
    local r31 = torch.cmul(q[1],q[3]):add(-1,torch.cmul(q[4],q[2])):mul(-2)
    local r32 = torch.cmul(q[2],q[3]):add(torch.cmul(q[4],q[1])):mul(2)
    local r33 = q00:clone():add(-1,q11):add(-1,q22):add(q33)
 
-   tmp = torch.abs(r31)
-   gimbal = tmp:gt(0.999999)
-   not_gimbal = gimbal:ne(1)
+   local tmp = torch.abs(r31)
+   local gimbal = tmp:gt(0.999999)
+   local not_gimbal = gimbal:ne(1)
    
    if (not_gimbal:sum() > 0) then
       euler_angle[1][not_gimbal] = torch.atan2(r32[not_gimbal],r33[not_gimbal]) -- pitch
@@ -309,13 +309,9 @@ end
 
 -- if two quaternions are equal they will rotate a vector the same distance
 function distance(quat1, quat2)
-   local vec1x = rotate(x, quat1)
-   local vec2x = rotate(x, quat2)
-   local vec1y = rotate(y, quat1)
-   local vec2y = rotate(y, quat2)
-   local vec1z = rotate(z, quat1)
-   local vec2z = rotate(z, quat2)
-   return vec1x:dist(vec2x) + vec1y:dist(vec2y) + vec1z:dist(vec2z)
+   local vec1 = rotate(axes, quat1)
+   local vec2 = rotate(axes, quat2)
+   return vec1:dist(vec2)
 end
 
 
@@ -333,7 +329,7 @@ function rotate(...)
    elseif nargs == 2 then
       v   = args[1]
       q   = args[2]
-      res = torch.Tensor(3)
+      res = torch.Tensor(v:size())
    else
       print(dok.usage('rotate_by_quat',
                       'rotate a vector by quaternion',
@@ -344,12 +340,7 @@ function rotate(...)
       dok.error('incorrect arguements', 'rotate_by_quat')
    end
 
-   local x1 = q[2]*v[3] - q[3]*v[2]
-   local y1 = q[3]*v[1] - q[1]*v[3]
-   local z1 = q[1]*v[2] - q[2]*v[1]
+   geom.rotation.by_quaternion(res,v,q)
 
-   res[1] = v[1] + 2 * (q[4]*x1 + q[2]*z1 - q[3]*y1)
-   res[2] = v[2] + 2 * (q[4]*y1 + q[3]*x1 - q[1]*z1)
-   res[3] = v[3] + 2 * (q[4]*z1 + q[1]*y1 - q[2]*x1)
    return res
 end
