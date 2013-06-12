@@ -24,7 +24,7 @@ function quaternion_from_to()
    print(string.format(" - Found %d/%d errors",e,data.vec:size(1)-1))
 end
 
-function quat2rot()
+function quaternion_to_rotation_matrix()
    print("Testing quaternion to rotation matrix")
    local e = 0
    for i = 1,data.quat:size(1) do
@@ -38,7 +38,7 @@ function quat2rot()
    print(string.format(" - Found %d/%d errors",e,data.quat:size(1)))
 end
 
-function rot2quat()
+function rotation_matrix_to_quaternion()
    print("Testing rotation matrix to quaternion")
    local e = 0
    local maxerr = 0
@@ -66,7 +66,7 @@ function rot2quat()
             e = e + 1
          end
          i = i + 1
-      
+
       end
    end
    print(string.format(" - Found %d/%d errors",e,res:size(1)))
@@ -110,17 +110,17 @@ function quat_product()
    local n_test = 0
    sys.tic()
 
-   local dq = data.quat 
-   dv = data.vec 
+   local dq = data.quat
+   local dv = data.vec
    local vr1  = quat.rotate(dq,dv)
-   vr2  = quat.rotate(dq,vr1)
+   local vr2  = quat.rotate(dq,vr1)
    for i = 1,dq:size(1) do
-      local q1 = dq[i] 
+      local q1 = dq[i]
       for j = 1,dq:size(1) do
          local q2   = dq[j]
          local q12  = quat.product(q2,q1)
-            
-         vr12 = quat.rotate(q12,dv)
+
+         local vr12 = quat.rotate(q12,dv)
          local ce = torch.abs(vr12 - vr2[j][i])
          local mx = torch.max(ce)
          if ( mx > maxerr) then maxerr = mx end
@@ -143,7 +143,7 @@ function quat_product()
             print(ce,q1,qc)
             e = e + 1
          end
-         q2 = q1 
+         q2 = q1
          n_test = n_test + 1
       end
       -- test matrix version
@@ -189,11 +189,79 @@ function quat_from_to_euler()
 end
 
 
+function euler_to_quat_directions()
+   print("Testing directions in euler to quat conversions")
+   sys.tic()
+   -- step = 25
+   -- angles = torch.linspace(-2*math.pi,2*math.pi,2*step+1)
+   local angles = data.euler_angles
+   local n_angles = data.euler_angles:size(1)
+   local ea = torch.zeros(3,n_angles)
+
+   local e = 0
+
+   local mid = math.ceil(n_angles/2)
+
+   local axes = torch.eye(3)
+   print("   rotate about quaternion axis is equivalent to euler angle")
+   print(" - quaternion X (Right)   <=> euler pitch (phi, elevation,latitude)")
+
+   ea[1] = angles
+   local q     = quat.from_euler_angle(ea)
+   local v     = quat.rotate(q,axes)
+
+   local x = v[{{},1,{}}]
+   local y = v[{{},2,{}}]
+   local z = v[{{},3,{}}]
+
+   if not (x:sum() == n_angles) then e = e + 1 end
+   if not (x[{{},1}]:sum() == n_angles) then e = e + 1 end
+   if not (q[{{},2}]:sum() == 0) then e = e + 1 end
+   if not (q[{{},3}]:sum() == 0) then e = e + 1 end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v - data.result_axes_about_x):max() < 1e-15) then e = e + 1 end
+
+   print(" - quaternion Y (Forward) <=> euler roll")
+   ea[1]:fill(0)
+   ea[3] = angles
+   quat.from_euler_angle(ea,q)
+   quat.rotate(v,q,axes)
+
+   if not (y:sum() == n_angles) then e = e + 1 end
+   if not (y[{{},2}]:sum() == n_angles) then e = e + 1 end
+   if not (q[{{},1}]:sum() == 0) then e = e + 1 end
+   if not (q[{{},3}]:sum() == 0) then e = e + 1 end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v - data.result_axes_about_y):max() < 1e-15) then e = e + 1 end
+
+   print(" - quaternion Z (Up)      <=> euler yaw (lambda,azimuth, longitude)")
+   ea[3]:fill(0)
+   ea[2] = angles
+   quat.from_euler_angle(ea,q)
+   quat.rotate(v,q,axes)
+
+   if not (z:sum() == n_angles) then e = e + 1 end
+   if not (z[{{},3}]:sum() == n_angles) then e = e + 1 end
+   if not (q[{{},1}]:sum() == 0) then e = e + 1 end
+   if not (q[{{},2}]:sum() == 0) then e = e + 1 end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v - data.result_axes_about_z):max() < 1e-15) then e = e + 1 end
+
+   printf(" - Passed %d/%d tests in %2.4fs", e, 8*3, sys.toc())
+end
+
 function all()
    quaternion_from_to()
-   quat2rot()
-   rot2quat()
+   quaternion_to_rotation_matrix()
+   rotation_matrix_to_quaternion()
    rotation_by_quat()
    quat_product()
    quat_from_to_euler()
+   euler_to_quat_directions()
 end

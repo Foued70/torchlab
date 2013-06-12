@@ -220,8 +220,9 @@ function from_euler_angle(euler_angle, quat)
       roll = torch.zeros(pitch:size())
    end
 
-   quat = quat or torch.Tensor(4,pitch:nElement())
-   quat:resize(4,pitch:nElement())
+   -- for 3D manipulations quaternions are stored Nx4 
+   quat = quat or torch.Tensor(pitch:nElement(),4)
+   quat:resize(pitch:nElement(),4)
 
    -- negative signs in yaw and pitch are needed to correspond with
    -- directions as stated in the comment above.
@@ -239,13 +240,12 @@ function from_euler_angle(euler_angle, quat)
    local syaw_croll = torch.cmul(syaw,croll)
 
 
-   quat[1]:copy(cyaw_croll):cmul(spitch):add(-1,torch.cmul(syaw_sroll,cpitch))
-   quat[2]:copy(cyaw_sroll):cmul(cpitch):add(torch.cmul(syaw_croll,spitch))
-   quat[3]:copy(syaw_croll):cmul(cpitch):add(-1,torch.cmul(cyaw_sroll,spitch))
-   quat[4]:copy(cyaw_croll):cmul(cpitch):add(torch.cmul(syaw_sroll,spitch))
-
-   -- unlike projections, quaternions (used in 3D) are Nx4
-   return quat:t():contiguous():squeeze()
+   quat[{{},1}]:copy(cyaw_croll):cmul(spitch):add(-1,torch.cmul(syaw_sroll,cpitch))
+   quat[{{},2}]:copy(cyaw_sroll):cmul(cpitch):add(torch.cmul(syaw_croll,spitch))
+   quat[{{},3}]:copy(syaw_croll):cmul(cpitch):add(-1,torch.cmul(cyaw_sroll,spitch))
+   quat[{{},4}]:copy(cyaw_croll):cmul(cpitch):add(torch.cmul(syaw_sroll,spitch))
+   
+   return quat
 end
 
 -- <quat> is Nx4
