@@ -50,7 +50,7 @@ function rot2quat()
       -- vector in the same way.
       for k = 1,data.vec:size(1) do
          local v   = data.vec[k]
-         quat.rotate(res[i],v,q)
+         quat.rotate(res[i],q,v)
          local d   = res[i] - data.result_rot_by_quat[i]
          local ce  = d:abs():max()
          if (ce > maxerr) then maxerr = ce end
@@ -83,7 +83,7 @@ function rotation_by_quat()
       local q = data.quat[j]
       for k = 1,data.vec:size(1) do
          local v   = data.vec[k]
-         quat.rotate(res[i],v,q)
+         quat.rotate(res[i],q,v)
          local d   = res[i] - data.result_rot_by_quat[i]
          local ce  = d:abs():max()
          if (ce > maxerr) then maxerr = ce end
@@ -109,25 +109,26 @@ function quat_product()
    local maxerr = 0
    local n_test = 0
    sys.tic()
-   local q1 = data.quat[1]
-   for j = 2,data.quat:size(1) do
-      local q2 = data.quat[j]
-      for k = 1,data.vec:size(1) do
-         local v    = data.vec[k]
-         local vr1  = quat.rotate(v,q1)
-         local vr2  = quat.rotate(vr1,q2)
+
+   local dq = data.quat 
+   dv = data.vec 
+   local vr1  = quat.rotate(dq,dv)
+   vr2  = quat.rotate(dq,vr1)
+   for i = 1,dq:size(1) do
+      local q1 = dq[i] 
+      for j = 1,dq:size(1) do
+         local q2   = dq[j]
          local q12  = quat.product(q2,q1)
-         local vr12 = quat.rotate(v,q12)
-         local ce = torch.max(torch.abs(vr12 - vr2))
-         if (ce > maxerr) then maxerr = ce end
-         if (ce > 5e-4) then
-            print(ce,vr2,vr12)
-            e = e + 1
-         end
-         q2 = q1
-         n_test = n_test + 1
+            
+         vr12 = quat.rotate(q12,dv)
+         local ce = torch.abs(vr12 - vr2[j][i])
+         local mx = torch.max(ce)
+         if ( mx > maxerr) then maxerr = mx end
+         e = e + ce:gt(7e-4):sum()
+         n_test = n_test + dv:size(1)
       end
    end
+
    -- test with conjugate also
    local qr = torch.Tensor(data.quat:size())
    for i = 1,data.quat:size(1) do
