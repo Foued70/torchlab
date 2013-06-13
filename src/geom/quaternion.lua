@@ -9,6 +9,8 @@ z = axes[3]
 function conjugate(quat,res)
    if (not res) then
       res = quat:clone()
+   elseif (quat ~= res) then
+      res:resizeAs(quat):copy(quat)
    end
    res:narrow(1,1,3):mul(-1)
    return res
