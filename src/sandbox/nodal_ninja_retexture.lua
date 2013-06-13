@@ -86,39 +86,21 @@ for sweep_no = 1,4 do
 
    matter_texture = image.load(matter_texture_fname)
 
-   local mp_width      = matter_texture:size(3)
-   local mp_height     = matter_texture:size(2)
+   local mp_width        = matter_texture:size(3)
+   local mp_height       = matter_texture:size(2)
 
    local mp_rad_per_px_x = pose.degrees_per_px_x * d2r
    local mp_rad_per_px_y = pose.degrees_per_px_y * d2r
-   local mp_hfov = mp_width * mp_rad_per_px_x
-   local mp_vfov = mp_height * mp_rad_per_px_y
+   local mp_hfov         = mp_width * mp_rad_per_px_x
+   local mp_vfov         = mp_height * mp_rad_per_px_y
 
-   local mp_cx   = mp_width  * pose.center_u
-   local mp_cy   = mp_height * pose.center_v
+   local mp_cx           = mp_width  * pose.center_u
+   local mp_cy           = mp_height * pose.center_v
 
    -- load DSLR image
 
    local images = util.fs.glob(sweep_dir .. sweep_no, {".jpg", ".JPG"})
 
-   local img = image.load(images[1])
-
-   local width  = img:size(3)
-   local height = img:size(2)
-
-
-   local proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
-   local proj_to   = projection.SphericalProjection.new(mp_width,mp_height,mp_hfov,mp_vfov)
-
-   p("Testing Image Projection")
-
-   sys.tic()
-
-   local rect_to_sphere = projection.Remap.new(proj_from,proj_to)
-
-   time = sys.toc()
-   printf(" - make map %2.4fs", time)
-   sys.tic()
    euler_angles = torch.Tensor(2,#images)
    local lambda = hard_coded[sweep_no]  + (offset[sweep_no] * mp_rad_per_px_x)
    local phi    = 0 -- - 5 * rad_per_px_y
@@ -128,19 +110,45 @@ for sweep_no = 1,4 do
       euler_angles[2][i] = lambda
       lambda = lambda + delta
 
-      -- proj_from:set_lambda_phi(lambda,phi)
-      -- rect_to_sphere:get_offset_and_mask(force) 
    end
 
+   -- compute orientation quaternions for each image in this sweep 
    q_rel_pose = geom.quaternion.from_euler_angle(euler_angles)
    q_global   = geom.quaternion.product(pose.rotation,q_rel_pose)
 
    for i = 1,#images do
-      local view = model.View.new(pose.position,q_global[i],hfov,vfov)
-
-      -- view.imagepath = images[i]
-      -- view.remap     = rect_to_sphere
-      
+      local view = model.View.new(pose.position,q_global[i],hfov,vfov)  
       table.insert(views,view)
    end
 end
+
+-- setup a "scan" object
+scan.views = views
+scan.view_frustrums = torch.Tensor(#views,views[1].frustrum:size(1),views[1].frustrum:size(2))
+
+for i,v in pairs(views) do scan.view_frustrums[i] = v.frustrum ; v.frustrum = scan.view_frustrums[i]; end
+scan.view_frustrums:resize(#views*views[1].frustrum:size(1),views[1].frustrum:size(2))
+
+scan:get_model_data()
+
+-- distance of each view frustum plane to each vertex 
+function make_view_getter()
+   local df    = torch.mm(scan.model_data.verts,scan.view_frustrums:t())
+   local dfrs  = df:reshape(scan.model_data.n_verts,#scan.views,scan.views[1].n_planes)
+   local dfrsm = dfrs:min(3):squeeze()
+   
+   local dbi   = dfrsm:gt(0)
+   local r     = torch.range(1,#scan.views)
+
+   df    = nil
+   dfrs  = nil
+   dfrsm = nil
+   collectgarbage()
+   
+   return function (face_id)
+      return r[dbi[scan.model_data.faces[face_id]:select(2,2)]:sum(1):gt(0)]
+         end
+end
+
+get_views = make_view_getter()
+p(get_views(100))

@@ -1,5 +1,6 @@
 local View = Class()
 
+local normalize = geom.util.normalize
 
 function View:__init(position, orientation, hfov, vfov, clip_distance)
 
@@ -20,7 +21,7 @@ function View:__init(position, orientation, hfov, vfov, clip_distance)
    local prev = frustrum_vect[4]
    for v = 1,4 do
       local cur = frustrum_vect[v]
-      frustrum_plane[{v,{1,3}}] = torch.cross(prev,cur)
+      frustrum_plane[{v,{1,3}}] = normalize(torch.cross(prev,cur))
       prev = cur
    end
    frustrum_plane[{5,{1,3}}] = frustrum_vect[5]
@@ -45,4 +46,5 @@ function View:__init(position, orientation, hfov, vfov, clip_distance)
    self.hfov     = hfov
    self.vfov     = vfov
    self.frustrum = frustrum_plane
+   self.n_planes = n_planes
 end
