@@ -49,7 +49,7 @@ function files_only(dir_path, ...)
 end
 
 function extname(file_path)
-  return file_path:match("%..+$")
+   return file_path:match("%.[^%.]+$")
 end
 
 -- Really need a FILE GLOB...
