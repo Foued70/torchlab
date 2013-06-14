@@ -11,8 +11,9 @@ if paths.filep(geomlib) then
    -- load low level c functions
    ffi.cdef[[
                void rotate_by_quat(THDoubleTensor *result,
-                                   THDoubleTensor *vectors,
-                                   THDoubleTensor *quat);
+                                   THDoubleTensor *quat,
+                                   THDoubleTensor *vectors
+                                   );
 
                void rotate_translate(THDoubleTensor *result,
                                      THDoubleTensor *vectors,
@@ -30,9 +31,10 @@ if paths.filep(geomlib) then
 
    -- either there is a way to stick function on torch.DoubleTensor
    -- for automatic type cast or we just do everything in doubles.
-   function by_quaternion (out, vec, quat)
-      C.rotate_by_quat(torch.cdata(out), torch.cdata(vec),
-                       torch.cdata(quat))
+   function by_quaternion (out, quat, vec)
+      C.rotate_by_quat(torch.cdata(out), 
+                       torch.cdata(quat),
+                       torch.cdata(vec))
    end
    function rotate_translate (out, vec, trans, quat)
       C.rotate_translate(torch.cdata(out), torch.cdata(vec),

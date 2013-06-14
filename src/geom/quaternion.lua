@@ -9,6 +9,8 @@ z = axes[3]
 function conjugate(quat,res)
    if (not res) then
       res = quat:clone()
+   elseif (quat ~= res) then
+      res:resizeAs(quat):copy(quat)
    end
    res:narrow(1,1,3):mul(-1)
    return res
@@ -203,6 +205,7 @@ end
 -- + Yaw (east-ing): positive angle moves east 
 --   (+y -> +x -> -y) (+x -> -y -> -x)
 -- 
+-- http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html
 
 function from_euler_angle(euler_angle, quat)
    if euler_angle:dim() == 1 then 
@@ -219,8 +222,9 @@ function from_euler_angle(euler_angle, quat)
       roll = torch.zeros(pitch:size())
    end
 
-   quat = quat or torch.Tensor(4,pitch:nElement())
-   quat:resize(4,pitch:nElement())
+   -- for 3D manipulations quaternions are stored Nx4 
+   quat = quat or torch.Tensor(pitch:nElement(),4)
+   quat:resize(pitch:nElement(),4)
 
    -- negative signs in yaw and pitch are needed to correspond with
    -- directions as stated in the comment above.
@@ -238,17 +242,18 @@ function from_euler_angle(euler_angle, quat)
    local syaw_croll = torch.cmul(syaw,croll)
 
 
-   quat[1]:copy(cyaw_croll):cmul(spitch):add(-1,torch.cmul(syaw_sroll,cpitch))
-   quat[2]:copy(cyaw_sroll):cmul(cpitch):add(torch.cmul(syaw_croll,spitch))
-   quat[3]:copy(syaw_croll):cmul(cpitch):add(-1,torch.cmul(cyaw_sroll,spitch))
-   quat[4]:copy(cyaw_croll):cmul(cpitch):add(torch.cmul(syaw_sroll,spitch))
-
-   -- unlike projections, quaternions (used in 3D) are Nx4
-   return quat:t():contiguous():squeeze()
+   quat[{{},1}]:copy(cyaw_croll):cmul(spitch):add(-1,torch.cmul(syaw_sroll,cpitch))
+   quat[{{},2}]:copy(cyaw_sroll):cmul(cpitch):add(torch.cmul(syaw_croll,spitch))
+   quat[{{},3}]:copy(syaw_croll):cmul(cpitch):add(-1,torch.cmul(cyaw_sroll,spitch))
+   quat[{{},4}]:copy(cyaw_croll):cmul(cpitch):add(torch.cmul(syaw_sroll,spitch))
+   
+   return quat
 end
 
 -- <quat> is Nx4
 -- <euler_angles> is 3xN
+-- http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html
+
 function to_euler_angle(quat,euler_angle)
    local n_elem = 1
    if (quat:dim() == 1) then 
@@ -309,8 +314,8 @@ end
 
 -- if two quaternions are equal they will rotate a vector the same distance
 function distance(quat1, quat2)
-   local vec1 = rotate(axes, quat1)
-   local vec2 = rotate(axes, quat2)
+   local vec1 = rotate(quat1,axes)
+   local vec2 = rotate(quat2,axes)
    return vec1:dist(vec2)
 end
 
@@ -319,28 +324,29 @@ end
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
 function rotate(...)
-   local res,v,q
+   local res,q,v
    local args = {...}
    local nargs = #args
    if nargs == 3 then
       res = args[1]
-      v   = args[2]
-      q   = args[3]
-   elseif nargs == 2 then
-      v   = args[1]
       q   = args[2]
-      res = torch.Tensor(v:size())
+      v   = args[3] 
+   elseif nargs == 2 then
+      q   = args[1]
+      v   = args[2]
+      local n_elem = v:nElement() * (q:nElement() / 4)
+      res = torch.Tensor(n_elem)
    else
       print(dok.usage('rotate_by_quat',
                       'rotate a vector by quaternion',
                       '> returns: rotated vector',
                       {type='torch.Tensor', help='result'},
-                      {type='torch.Tensor', help='vector', req=true},
-                      {type='torch.Tensor', help='quaternion',   req=true}))
-      dok.error('incorrect arguements', 'rotate_by_quat')
+                      {type='torch.Tensor', help='quaternion', req=true},
+                      {type='torch.Tensor', help='vector',     req=true}))
+      dok.error('incorrect arguments', 'rotate_by_quat')
    end
-
-   geom.rotation.by_quaternion(res,v,q)
+   -- call C function
+   geom.rotation.by_quaternion(res,q,v)
 
    return res
 end
