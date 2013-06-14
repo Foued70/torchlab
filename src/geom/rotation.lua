@@ -16,14 +16,15 @@ if paths.filep(geomlib) then
                                    );
 
                void rotate_translate(THDoubleTensor *result,
-                                     THDoubleTensor *vectors,
+                                     THDoubleTensor *quat,
                                      THDoubleTensor *trans,
-                                     THDoubleTensor *quat);
+                                     THDoubleTensor *vectors
+                                     );
 
                void translate_rotate(THDoubleTensor *result,
-                                     THDoubleTensor *vectors,
                                      THDoubleTensor *trans,
-                                     THDoubleTensor *quat);
+                                     THDoubleTensor *quat,
+                                     THDoubleTensor *vectors );
             ]]
 
    -- don't want to call C functions directly
@@ -36,13 +37,15 @@ if paths.filep(geomlib) then
                        torch.cdata(quat),
                        torch.cdata(vec))
    end
-   function rotate_translate (out, vec, trans, quat)
-      C.rotate_translate(torch.cdata(out), torch.cdata(vec),
-                         torch.cdata(trans), torch.cdata(quat))
+   function rotate_translate (out, quat, trans, vec)
+      C.rotate_translate(torch.cdata(out), 
+                         torch.cdata(quat), torch.cdata(trans),
+                         torch.cdata(vec))
    end
-   function translate_rotate (out, vec, trans, quat)
-      C.translate_rotate(torch.cdata(out), torch.cdata(vec),
-                         torch.cdata(trans), torch.cdata(quat))
+   function translate_rotate (out, trans, quat, vec)
+      C.translate_rotate(torch.cdata(out), 
+                         torch.cdata(trans), torch.cdata(quat), 
+                         torch.cdata(vec))
    end
 end
 

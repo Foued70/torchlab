@@ -7,7 +7,7 @@ local geom = geom.util
 data = require "geom.test.data"
 
 
-function rotation_by_quatC()
+function rotation_by_quat()
    print("Testing rotation with quaternion (C version)")
    local e      = 0
    local maxerr = 0
@@ -20,27 +20,14 @@ function rotation_by_quatC()
    local i      = 1
    local offset = 1
    sys.tic()
-   for i = 1,nquats do
-      local q   = quats[i]
-      local out = res:narrow(1,offset,nvecs)
-      local gt  = groundt:narrow(1,offset,nvecs) 
-      offset = offset + nvecs
 
-      rot.rotate_by_quatC(out,vecs,q)
+   rot.by_quaternion(res,quats,vecs)
+
       
-      local d = out - gt
-      local ce  = d:abs():max()
-      if (ce > maxerr) then maxerr = ce end
-      if (ce > 1e-3) then
-         printf("error: %f",ce)
-         printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3])
-         printf("should be: (%f,%f,%f)",
-                data.result_rot_by_quat[i][1],
-                data.result_rot_by_quat[i][2],
-                data.result_rot_by_quat[i][3])
-         e = e + 1
-      end 
-   end
+   local d = res - groundt
+   local ce  = d:abs():max()
+   if (ce > maxerr) then maxerr = ce end
+   e = e + d:abs():gt(1e-3):sum()
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,res:size(1),maxerr,sys.toc()))
 end
@@ -53,8 +40,8 @@ function rotate_translate()
    local nvecs  = vecs:size(1)
    local quats  = data.quat
    local nquats = quats:size(1)
-   local res    = torch.Tensor(nvecs*nquats,3)
-   local groundt = res:clone()
+   res    = torch.Tensor(nvecs*nquats,3)
+   groundt = res:clone()
    local i      = 1
    local offset = 1
 
@@ -62,37 +49,24 @@ function rotate_translate()
    for j = 1,nquats do
       local q = quats[j]
       for k = 1,nvecs do
-         groundt[i] = vecs[j] + quat.rotate(vecs[k],q)
+         groundt[i] = vecs[j] + quat.rotate(q,vecs[k])
          i = i + 1
       end
    end
    print(string.format(" - built ground truth in %2.4fs", sys.toc()))
 
    sys.tic()
-   for i = 1,nquats do
-      local q   = quats[i]
-      local out = res:narrow(1,offset,nvecs)
-      local gt  = groundt:narrow(1,offset,nvecs) 
-      offset = offset + nvecs
-
-      rot.rotate_translateC(out,vecs,vecs[i],q)
-
-      local d = out - gt
-      local ce  = d:abs():max()
-      if (ce > maxerr) then maxerr = ce end
-      if (ce > 1e-3) then
-         printf("error: %f",ce)
-         printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3])
-         printf("should be: (%f,%f,%f)",
-                data.result_rot_by_quat[i][1],
-                data.result_rot_by_quat[i][2],
-                data.result_rot_by_quat[i][3])
-         e = e + 1
-      end 
-   end
+   rot.rotate_translate(res,quats,vecs,vecs)
+   print(string.format(" - build test in %2.4fs", sys.toc()))
+   sys.tic()
+   local d = res - groundt
+   local ce  = d:abs():max()
+   if (ce > maxerr) then maxerr = ce end
+   e = e + d:abs():gt(1e-15):sum()
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,sys.toc()))
+                       e,res:nElement(),maxerr,sys.toc()))
 end
+
 
 function translate_rotate()
    print("Testing translation then rotation with quaternion (C version)")
@@ -102,48 +76,33 @@ function translate_rotate()
    local nvecs  = vecs:size(1)
    local quats  = data.quat
    local nquats = quats:size(1)
-   local res    = torch.Tensor(nvecs*nquats,3)
+   res    = torch.Tensor(nvecs*nquats,3)
+   groundt = res:clone()
    local i      = 1
    local offset = 1
-   local groundt = res:clone()
 
    sys.tic()
    for j = 1,nquats do
       local q = quats[j]
       for k = 1,nvecs do
          local v   = vecs[k] + vecs[j]
-         quat.rotate(groundt[i],v,q)
+         quat.rotate(groundt[i],q,v)
          i = i + 1
       end
    end
    print(string.format(" - built ground truth in %2.4fs", sys.toc()))
 
    sys.tic()
-   for i = 1,nquats do
-      local q   = quats[i]
-      local out = res:narrow(1,offset,nvecs)
-      local gt  = groundt:narrow(1,offset,nvecs) 
-      offset = offset + nvecs
-
-      rot.translate_rotateC(out,vecs,vecs[i],q)
-
-      local d = out - gt
-      local ce  = d:abs():max()
-      if (ce > maxerr) then maxerr = ce end
-      if (ce > 1e-3) then
-         printf("error: %f",ce)
-         printf("result (%f,%f,%f)", res[i][1],res[i][2],res[i][3])
-         printf("should be: (%f,%f,%f)",
-                data.result_rot_by_quat[i][1],
-                data.result_rot_by_quat[i][2],
-                data.result_rot_by_quat[i][3])
-         e = e + 1
-      end 
-   end
+   rot.translate_rotate(res,vecs,quats,vecs)
+   print(string.format(" - build test in %2.4fs", sys.toc()))
+   sys.tic()
+   local d = res - groundt
+   local ce  = d:abs():max()
+   if (ce > maxerr) then maxerr = ce end
+   e = e + d:abs():gt(1e-15):sum()
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,sys.toc()))
+                       e,res:nElement(),maxerr,sys.toc()))
 end
-
 
 function rotation_by_mat()
    print("Testing rotation w/ rotation matrix")
@@ -179,7 +138,7 @@ function z_rotation()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]
       local q = rot.z_axis(tvec)
-      local rvec = quat.rotate(tvec,q)
+      local rvec = quat.rotate(q,tvec)
       local ce = rvec[3] - rvec:sum()
       if (ce > maxerr) then maxerr = ce end
       if (ce > 1e-8) then
@@ -199,7 +158,7 @@ function x_rotation()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]
       local q     = rot.x_axis(tvec)
-      local rvec = quat.rotate(tvec,q)
+      local rvec = quat.rotate(q,tvec)
       local ce = rvec[1] - rvec:sum()
       if (ce > maxerr) then maxerr = ce end
       if (ce > 1e-8) then
@@ -219,7 +178,7 @@ function y_rotation()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]
       local q    = rot.y_axis(tvec)
-      local rvec = quat.rotate(tvec,q)
+      local rvec = quat.rotate(q,tvec)
       local ce = rvec[2] - rvec:sum()
       if (ce > maxerr) then maxerr = ce end
       if (ce > 1e-8) then
@@ -239,7 +198,7 @@ function largest_rotation()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]
       local q,d = rot.largest(tvec)
-      local rvec   = quat.rotate(tvec,q)
+      local rvec   = quat.rotate(q,tvec)
       local ce = rvec[d] - rvec:sum()
       if (ce > maxerr) then maxerr = ce end
       if (ce > 1e-8) then
@@ -254,11 +213,9 @@ end
 
 function all()
    rotation_by_mat()
-   if rot.rotate_by_quatC then 
-      rotation_by_quatC()
-      rotate_translate()
-      translate_rotate() 
-   end
+   rotation_by_quat()
+   rotate_translate()
+   translate_rotate() 
    x_rotation()
    y_rotation()
    z_rotation()
