@@ -42,7 +42,7 @@ if #matter_pose_fname > 0 then
    printf("using : %s", matter_pose_fname)
 end
 
-poses = util.mp.load_poses(matter_pose_fname)
+poses = model.mp.load_poses(matter_pose_fname)
 
 sweep_dir  = scan_dir .. "/" .. params.sweep_prefix
 
