@@ -46,16 +46,34 @@ poses = model.mp.load_poses(matter_pose_fname)
 sweep_dir  = scan_dir .. "/" .. params.sweep_prefix
 
 force  = true
-delta  = 2 * pi / 6
 
-hard_coded = { delta,
-               0, 
-               -0.5*delta,
-               -3*delta } 
-offset = { - 20, 
-           - 65,
-           35,
-           128}
+-- images are vertical
+vfov = (97.0/180) * pi
+hfov = (74.8/180) * pi
+
+offsets = {
+   -- sweep 1
+   {
+      delta = torch.Tensor({1.0472, 1.0422, 1.0322, 1.0472, 1.0472, 1.0672}),
+      initial = 1.0156043690219
+   },
+   -- sweep 2
+   {
+      delta = torch.Tensor({1.0472, 1.0497, 1.0472, 1.0597, 1.0547, 1.0247}),
+      initial = 6.0183196949309
+   },
+   -- sweep 3
+   {
+      delta = torch.Tensor({1.0447, 1.0447, 1.0472, 1.0622, 1.0447, 1.0397}),
+      initial = 5.8524838277737
+   },
+   -- sweep 4
+   {
+      delta = torch.Tensor({1.0397, 1.0372, 1.0472, 1.0497, 1.0472, 1.0622}),
+      initial = 3.5634463280735
+   }
+}
+
 -- load sweeps
 for sweep_no = 1,4 do
 
@@ -89,10 +107,6 @@ for sweep_no = 1,4 do
    width = img:size(3)
    height = img:size(2)
 
-   -- images are vertical
-   vfov = (97.11/180) * pi
-   hfov = (74.22/180) * pi
-
    proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
    proj_to   = projection.SphericalProjection.new(mp_width,mp_height,mp_hfov,mp_vfov)
 
@@ -109,8 +123,9 @@ for sweep_no = 1,4 do
    time = sys.toc()
    printf(" - make map %2.4fs", time)
    sys.tic()
-   lambda = hard_coded[sweep_no]  + (offset[sweep_no] * mp_rad_per_px_x)
-   phi    = 0 -- - 5 * rad_per_px_y
+   offset = offsets[sweep_no]
+   lambda = offset.initial
+   phi    = 0 
 
    local pr = xlua.Profiler()
 
@@ -139,7 +154,7 @@ for sweep_no = 1,4 do
       printf(" - reproject %2.4fs", time)
       sys.tic()
 
-      lambda = lambda + delta
+      lambda = lambda + offset.delta[i]
       pr:lap("image")
       pr:printAll()
    end
