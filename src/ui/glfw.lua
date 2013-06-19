@@ -356,9 +356,7 @@ GLFWglproc glfwGetProcAddress(const char* procname);
 ]])
 
 
-local shared_lib_ext = ffi.os == 'OSX' and '.dylib' or '.so'
-local shared_lib_file = path.normalize(process.execPath..'/../../lib/libglfw'..shared_lib_ext)
-local libglfw = ffi.load(shared_lib_file)
+local libglfw = util.ffi.load('libglfw')
 
 setmetatable(glfw, {
   __index = function(tbl, name)

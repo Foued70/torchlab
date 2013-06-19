@@ -59,7 +59,7 @@ function GLWidget:update()
 end
 
 function GLWidget:resize(width, height)
-  log.trace("resize")
+  glfw.SetWindowSize(self.window, width, height)
   if self.renderer.cameras.viewport_camera == nil then
     self.renderer:init(width, height)
   else

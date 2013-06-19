@@ -30,3 +30,19 @@ MACRO(ADD_LUVIT_LIB package src)
       LIBRARY DESTINATION "lib/luvit")
   
 ENDMACRO(ADD_LUVIT_LIB)
+
+MACRO(ADD_FFI_LIB package src)
+  INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR} ${Torch_SOURCE_INCLUDES})
+
+  ADD_LIBRARY(${package} SHARED ${src})
+  
+  SET_TARGET_PROPERTIES(${package} PROPERTIES
+    PREFIX "lib"
+    IMPORT_PREFIX "lib"
+    INSTALL_NAME_DIR "@executable_path/../lib/luvit")
+  
+  INSTALL(TARGETS ${package} 
+      RUNTIME DESTINATION "lib"
+      LIBRARY DESTINATION "lib")
+  
+ENDMACRO(ADD_FFI_LIB)

@@ -1,7 +1,7 @@
 local gl = require './gl'
 local ffi = require 'ffi'
 local torch = require 'torch'
-local torch_util = require '../util/ffi'
+local torch_util = util.ffi
 
 local image = require '../image'
 

@@ -1,7 +1,16 @@
-setfenv(1, setmetatable({}, {__index = _G}))
+Class()
 
 -- local 
-ffi = require 'ffi'
+local ffi = require 'ffi'
+local path = require 'path'
+
+local shared_lib_ext = ffi.os == 'OSX' and '.dylib' or '.so'
+
+function load(name)
+   local shared_lib_file = path.normalize(process.execPath..'/../../lib/'..name..shared_lib_ext)
+   return ffi.load(shared_lib_file)
+end
+
 
 -- part of ffi for sending tensors to our own C funcs.
 local header_template = 
@@ -28,67 +37,34 @@ typedef struct THTensor
 
  ]]
 
-local types = {
-   THDouble = "double", 
-   THFloat  = "float",
-   THByte  = "unsigned char",
-   THChar  = "char",
-   THShort = "short",
-   THInt   = "int", 
-   THLong  = "long"
-}
-
 local type_map = {}
-type_map['torch.DoubleTensor'] = {'THDoubleTensor*', 'double'}
-type_map['torch.FloatTensor'] = {'THFloatTensor*', 'float'}
-type_map['torch.IntTensor'] = {'THIntTensor*', 'int'}
-type_map['torch.ByteTensor'] = {'THByteTensor*', 'char'}
+type_map['torch.DoubleTensor'] = {'THDouble', 'THDoubleTensor*', 'double'}
+type_map['torch.FloatTensor']  = {'THFloat', 'THFloatTensor*', 'float'}
+type_map['torch.ByteTensor']   = {'THByte', 'THByteTensor*', 'unsigned char'}
+type_map['torch.CharTensor']   = {'THChar', 'THCharTensor*', 'char'}
+type_map['torch.ShortTensor']  = {'THShort', 'THShortTensor*', 'short'}
+type_map['torch.IntTensor']    = {'THInt', 'THIntTensor*', 'int'}
+type_map['torch.LongTensor']   = {'THLong', 'THLongTensor*', 'long'}
 
 
 -- save memory by building table
 header = {}
-for T,t in pairs(types) do 
-   local s = header_template:gsub("TH",T):gsub("real",t)
-   table.insert(header, s)
+for T,t in pairs(type_map) do 
+   local s = header_template:gsub("TH",t[1]):gsub("real",t[3])
+   ffi.cdef(s)
 end
--- convert table into string
-header = table.concat(header,'\n')
-
--- Load header
-ffi.cdef(header)
 
 -- Method to return pointer to raw data
 function torch.data(obj)
-   -- first cast pointer into the right type
-   local type_obj     = torch.typename(obj)
-   local type_tensor  = type_obj:gfind('torch%.(.*)Tensor')()
-   local type_storage = type_obj:gfind('torch%.(.*)Storage')()
-   if type_tensor then
-      -- return raw pointer to data
-      return ffi.cast('TH' .. type_tensor .. 'Tensor*', torch.pointer(obj)).storage.data
-   elseif type_storage then
-      -- return raw pointer to data
-      return ffi.cast('TH' .. type_storage .. 'Storage*', torch.pointer(obj)).data
-   else
-      print('Unknown data type: ' .. type_obj)
-   end
+  local type_info = type_map[torch.typename(tensor)]
+  local t = ffi.cast(type_info[2], torch.pointer(tensor))
+  return t.storage.data
 end 
 
 -- Method to return c pointer to tensor or storage struct to pass to C
-function torch.cdata(obj)
-   -- first cast pointer into the right type
-   local type_obj     = torch.typename(obj)
-   local type_tensor  = type_obj:gfind('torch%.(.*)Tensor')()
-   local type_storage = type_obj:gfind('torch%.(.*)Storage')()
-   if type_tensor then
-      -- return raw pointer to data
-      return ffi.cast('TH' .. type_tensor .. 'Tensor*', torch.pointer(obj))
-   elseif type_storage then
-      -- return raw pointer to data
-      return ffi.cast('TH' .. type_storage .. 'Storage*', torch.pointer(obj))
-   else
-      print('Unknown data type: ' .. type_obj)
-   end
+function torch.cdata(tensor)
+  local type_info = type_map[torch.typename(tensor)]
+  return ffi.cast(type_info[2], torch.pointer(tensor))
 end 
 
 -- allows us to easily write functions for all tensor types
@@ -120,11 +96,7 @@ end
 
 function storage_info(tensor)
   local type_info = type_map[torch.typename(tensor)]
-  local t = ffi.cast(type_info[1], torch.pointer(tensor))
-  return t.storage.data, t.storage.size * ffi.sizeof(type_info[2])
+  local t = ffi.cast(type_info[2], torch.pointer(tensor))
+  return t.storage.data, t.storage.size * ffi.sizeof(type_info[3])
 end
 
-
-
-
-return (getfenv())

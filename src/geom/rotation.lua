@@ -1,49 +1,41 @@
-local ffi_utils = require '../util/ffi'
+local ffi = require 'ffi'
 Class()
 
--- Below is a test for loading C backends using ffi
+ -- load low level c functions
+ ffi.cdef[[
+   void rotate_by_quat(THDoubleTensor *result,
+                       THDoubleTensor *quat,
+                       THDoubleTensor *vectors
+                       );
 
-local ffi = ffi_utils.ffi
+   void rotate_translate(THDoubleTensor *result,
+                         THDoubleTensor *vectors,
+                         THDoubleTensor *trans,
+                         THDoubleTensor *quat);
 
-local geomlib = ffi_utils.lib_path("geom")
+   void translate_rotate(THDoubleTensor *result,
+                         THDoubleTensor *vectors,
+                         THDoubleTensor *trans,
+                         THDoubleTensor *quat);
+]]
 
-if paths.filep(geomlib) then
-   -- load low level c functions
-   ffi.cdef[[
-               void rotate_by_quat(THDoubleTensor *result,
-                                   THDoubleTensor *quat,
-                                   THDoubleTensor *vectors
-                                   );
+ -- don't want to call C functions directly
+local libgeom = util.ffi.load('libgeom')
 
-               void rotate_translate(THDoubleTensor *result,
-                                     THDoubleTensor *vectors,
-                                     THDoubleTensor *trans,
-                                     THDoubleTensor *quat);
-
-               void translate_rotate(THDoubleTensor *result,
-                                     THDoubleTensor *vectors,
-                                     THDoubleTensor *trans,
-                                     THDoubleTensor *quat);
-            ]]
-
-   -- don't want to call C functions directly
-   local C  = ffi.load(geomlib)
-
-   -- either there is a way to stick function on torch.DoubleTensor
-   -- for automatic type cast or we just do everything in doubles.
-   function by_quaternion (out, quat, vec)
-      C.rotate_by_quat(torch.cdata(out), 
-                       torch.cdata(quat),
-                       torch.cdata(vec))
-   end
-   function rotate_translate (out, vec, trans, quat)
-      C.rotate_translate(torch.cdata(out), torch.cdata(vec),
-                         torch.cdata(trans), torch.cdata(quat))
-   end
-   function translate_rotate (out, vec, trans, quat)
-      C.translate_rotate(torch.cdata(out), torch.cdata(vec),
-                         torch.cdata(trans), torch.cdata(quat))
-   end
+-- either there is a way to stick function on torch.DoubleTensor
+-- for automatic type cast or we just do everything in doubles.
+function by_quaternion (out, quat, vec)
+  libgeom.rotate_by_quat(torch.cdata(out), 
+                   torch.cdata(quat),
+                   torch.cdata(vec))
+end
+function rotate_translate (out, vec, trans, quat)
+  libgeom.rotate_translate(torch.cdata(out), torch.cdata(vec),
+                     torch.cdata(trans), torch.cdata(quat))
+end
+function translate_rotate (out, vec, trans, quat)
+  libgeom.translate_rotate(torch.cdata(out), torch.cdata(vec),
+                     torch.cdata(trans), torch.cdata(quat))
 end
 
 -- end of loading C backend

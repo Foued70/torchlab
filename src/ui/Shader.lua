@@ -1,7 +1,7 @@
 local gl = require './gl'
 local ffi = require 'ffi'
-local torch_util = require '../util/ffi'
 local fs = require 'fs'
+local torch_util = util.ffi
 
 local Shader = Class()
 

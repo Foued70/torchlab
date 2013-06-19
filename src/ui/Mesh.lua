@@ -1,5 +1,5 @@
 local gl = require './gl'
-local torch_util = require '../util/ffi'
+local torch_util = util.ffi
 
 local Mesh = Class()
 

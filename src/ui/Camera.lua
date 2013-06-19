@@ -151,9 +151,9 @@ end
 
 
 function Camera:rotate(rotation_quat)
-  geom.quaternion.rotate(self.look_dir, self.look_dir, rotation_quat)
-  geom.quaternion.rotate(self.up_dir, self.up_dir, rotation_quat)
-  geom.quaternion.rotate(self.right_dir, self.right_dir, rotation_quat)
+  geom.rotation.by_quaternion(self.look_dir, rotation_quat, self.look_dir)
+  geom.rotation.by_quaternion(self.up_dir, rotation_quat, self.up_dir)
+  geom.rotation.by_quaternion(self.right_dir, rotation_quat, self.right_dir)
 end
 
 
