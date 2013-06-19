@@ -1,5 +1,4 @@
 local gl = require './gl'
-local torch_util = util.ffi
 
 local FrameBuffer = Class()
 
@@ -94,7 +93,7 @@ function FrameBuffer:get_depth_image()
   gl.check_errors()
 
   local depth_image = torch.FloatTensor(self.height, self.width)
-  local img_data_ptr, img_data_size = torch_util.storage_info(depth_image)
+  local img_data_ptr, img_data_size = util.ctorch.storage_info(depth_image)
 
   gl.ReadPixels(0,0, self.width, self.height, gl.DEPTH_COMPONENT, gl.FLOAT, img_data_ptr)
   gl.check_errors()
@@ -110,7 +109,7 @@ function FrameBuffer:get_color_image()
   local num_channels = 4
 
   local color_image = torch.FloatTensor(self.height, self.width, num_channels)
-  local img_data_ptr, img_data_size = torch_util.storage_info(color_image)
+  local img_data_ptr, img_data_size = util.ctorch.storage_info(color_image)
 
   local color_id = self.widget.texture_manager.textures[self.name..'_pass_color']
   gl.BindTexture(gl.TEXTURE_2D, color_id)
@@ -133,7 +132,7 @@ function FrameBuffer:get_picking_image()
   local num_channels = 3
 
   local picking_image = torch.FloatTensor(self.height, self.width, num_channels)
-  local img_data_ptr, img_data_size = torch_util.storage_info(picking_image)
+  local img_data_ptr, img_data_size = util.ctorch.storage_info(picking_image)
 
   local picking_id = self.widget.texture_manager.textures[self.name..'_pass_picking']
   log.trace("picking id=", picking_id)
@@ -189,7 +188,7 @@ function FrameBuffer:read_pick_pixels(start_pixels, end_pixels)
   local start_index = torch.Tensor({math.floor(start_pixels[1]), self.height-math.ceil(start_pixels[2]+size[2])})
 
   local pick_pixels = torch.IntTensor(size[2], size[1], 3):fill(0)
-  local img_data_ptr, img_data_size = torch_util.storage_info(pick_pixels)
+  local img_data_ptr, img_data_size = util.ctorch.storage_info(pick_pixels)
   gl.ReadPixels(start_index[1], start_index[2], size[1], size[2], gl.RGB_INTEGER, gl.UNSIGNED_INT, img_data_ptr)
   gl.check_errors()
   gl.ReadBuffer(gl.NONE)

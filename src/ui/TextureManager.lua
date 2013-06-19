@@ -1,7 +1,6 @@
 local gl = require './gl'
 local ffi = require 'ffi'
 local torch = require 'torch'
-local torch_util = util.ffi
 
 local image = require '../image'
 
@@ -82,7 +81,7 @@ function TextureManager:create_from_image(image_path)
 
   local tex_img = image.load(image_path, nil, 'byte')
   tex_img = format_image(tex_img)
-  local img_data_ptr, img_data_size = torch_util.storage_info(tex_img)
+  local img_data_ptr, img_data_size = util.ctorch.storage_info(tex_img)
   local width = tex_img:size()[2]
   local height = tex_img:size()[1]
 

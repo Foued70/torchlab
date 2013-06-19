@@ -1,22 +1,25 @@
 local ffi = require 'ffi'
+
+local ctorch = util.ctorch -- ctorch needs to be loaded before we reference THTensor stuff in a cdef
+
 Class()
 
  -- load low level c functions
- ffi.cdef[[
-   void rotate_by_quat(THDoubleTensor *result,
-                       THDoubleTensor *quat,
-                       THDoubleTensor *vectors
-                       );
+ffi.cdef[[
+ void rotate_by_quat(THDoubleTensor *result,
+                     THDoubleTensor *quat,
+                     THDoubleTensor *vectors
+                     );
 
-   void rotate_translate(THDoubleTensor *result,
-                         THDoubleTensor *vectors,
-                         THDoubleTensor *trans,
-                         THDoubleTensor *quat);
+ void rotate_translate(THDoubleTensor *result,
+                       THDoubleTensor *vectors,
+                       THDoubleTensor *trans,
+                       THDoubleTensor *quat);
 
-   void translate_rotate(THDoubleTensor *result,
-                         THDoubleTensor *vectors,
-                         THDoubleTensor *trans,
-                         THDoubleTensor *quat);
+ void translate_rotate(THDoubleTensor *result,
+                       THDoubleTensor *vectors,
+                       THDoubleTensor *trans,
+                       THDoubleTensor *quat);
 ]]
 
  -- don't want to call C functions directly

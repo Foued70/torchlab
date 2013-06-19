@@ -1,4 +1,3 @@
-local ffi_utils = require 'util.ffi'
 local ffi       = require 'ffi'
 
 local normalize = geom.util.normalize
@@ -69,8 +68,7 @@ ffi.cdef
     int backSubstitute(double *solutions, double *pointData, double *realRoots); 
 ]]
 
-local p3plib = ffi_utils.lib_path("p3p")
-local p3pC   = ffi.load(p3plib)
+local libp3p   = util.ffi.load('libp3p')
 
 local p3p = {}
 
@@ -162,15 +160,15 @@ function p3p.compute_poses (world_pts,unit_vec,debug)
    pointData[6] = b
 
    local factors = torch.Tensor(5)
-   p3pC.computeFactors(torch.data(factors),
+   libp3p.computeFactors(torch.data(factors),
                        torch.data(pointData))
 
    local real_roots = torch.Tensor(4)
-   p3pC.solveQuartic(torch.data(real_roots),
+   libp3p.solveQuartic(torch.data(real_roots),
                      torch.data(factors))
                      
    local solutions = torch.Tensor(4,4,3)
-   p3pC.backSubstitute(torch.data(solutions),
+   libp3p.backSubstitute(torch.data(solutions),
                        torch.data(pointData),
                        torch.data(real_roots))
                      

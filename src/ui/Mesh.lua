@@ -1,5 +1,4 @@
 local gl = require './gl'
-local torch_util = util.ffi
 
 local Mesh = Class()
 
@@ -26,7 +25,7 @@ function Mesh:push_to_gl()
   gl.BindBuffer(gl.ARRAY_BUFFER, self.vert_buffer_id)
   gl.check_errors()
 
-  local ptr, size = torch_util.storage_info(self.faces - 1)
+  local ptr, size = util.ctorch.storage_info(self.faces - 1)
   gl.BufferData(
       gl.ELEMENT_ARRAY_BUFFER,
       size,
@@ -36,7 +35,7 @@ function Mesh:push_to_gl()
   gl.check_errors()
 
 
-  ptr, size = torch_util.storage_info(self.verts)
+  ptr, size = util.ctorch.storage_info(self.verts)
   local vert_size = size / self.verts:size()[1] -- bytes per row
   gl.BufferData(
       gl.ARRAY_BUFFER,

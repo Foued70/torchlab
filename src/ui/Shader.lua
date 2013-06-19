@@ -1,7 +1,6 @@
 local gl = require './gl'
 local ffi = require 'ffi'
 local fs = require 'fs'
-local torch_util = util.ffi
 
 local Shader = Class()
 
@@ -209,7 +208,7 @@ end
 function Shader:set_uniform_matrix(name, matrix)
   local loc = gl.GetUniformLocation(self.program_id, name)
 
-  local matrix_ptr = torch_util.storage_info(matrix)
+  local matrix_ptr = util.ctorch.storage_info(matrix)
   if     matrix:size()[1] == 3 then gl.UniformMatrix3fv(loc, 1, gl.FALSE, matrix_ptr)
   elseif matrix:size()[1] == 4 then gl.UniformMatrix4fv(loc, 1, gl.FALSE, matrix_ptr)
   end
