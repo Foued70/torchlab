@@ -15,7 +15,10 @@ pkgs = $(addprefix $(install_root)/share/torch/lua/,$(packages))
 
 
 args = $(default_cmake_args) \
-	-D QT_QMAKE_EXECUTABLE=$(install_root)/bin/qmake
+       -D WITH_QTLUA=0 \
+       -D CMAKE_SHARED_LINKER_FLAGS=-static-libgcc 
+
+
 
 all:$(pkgs)
 
@@ -27,6 +30,8 @@ $(install): $(git_clone)
 	cd $(git_clone); mkdir -p build
 	cd $(git_clone)/build; cmake $(args) ..
 	cd $(git_clone)/build; make install
+	# mv $(install_root)/share/torch/lua/* $(install_root)/lib/luvit/
+	# mv $(install_root)/lib/torch/lua/* $(install_root)/lib/
 
 
 $(git_clone):

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+project_dir="@project_dir@"
+install_root="@install_root@"
+current_dir=`pwd`
+current_dir_name=`basename $current_dir`
+
+build_dir=$install_root/build/cloudlab/$current_dir_name
+
+mkdir -p $build_dir
+cd $build_dir
+cmake $current_dir
+make install

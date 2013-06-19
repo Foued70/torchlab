@@ -1,4 +1,4 @@
-local gl = require 'ui.gl'
+local gl = require './gl'
 
 local Camera = Class()
 

@@ -28,5 +28,3 @@ $(install): $(git_clone)
 $(git_clone):
 	git clone $(url) $(git_clone)
 
-tmp:
-

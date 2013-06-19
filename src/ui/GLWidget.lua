@@ -1,12 +1,5 @@
-local libui = require 'libui'
-local gl = require 'ui.gl'
-local key = require 'ui.key'
-
-require 'qt'
-require 'qttorch'
-require 'image'
-require 'qtwidget'
-require 'qtuiloader'
+local gl = require './gl'
+local glfw = require './glfw'
 
 local GLWidget = Class()
 
@@ -15,43 +8,61 @@ local FOCUS_MODE = 2
 
 function GLWidget:__init(gl_init_callback)
   self.gl_init_callback = gl_init_callback
-  self.initialized = false
+
+  self.window = glfw.CreateWindow(640, 480, "My Title", nil, nil)
+  self:make_current()
+  
+  log.info("OpenGL "..gl.GetString(gl.VERSION).." GLSL "..gl.GetString(gl.SHADING_LANGUAGE_VERSION))
 
   self.renderer = ui.Renderer.new(self)
   self.mode = NAV_MODE
 
-  qt.qcall(qt.qApp, libui.attach_qt, self)
-end
-
-function GLWidget:wait_for_init()
-  while self.initialized ~= true do
-    qt.doevents(false)
-  end
-
-end
-
-function GLWidget:init(qt_widget)
-  log.info("OpenGL "..gl.GetString(gl.VERSION).." GLSL "..gl.GetString(gl.SHADING_LANGUAGE_VERSION))
-  self.qt_widget = qt_widget
+  self:resize(640, 480)
+  
+  self:setup_callbacks()
 
   if self.gl_init_callback then self.gl_init_callback(self) end
 end
 
-function GLWidget:update()
-  libui.update_gl(self.qt_widget)
+function GLWidget:setup_callbacks()
+  glfw.SetKeyCallback(self.window, function(window, key, scancode, action, mods) 
+    self:key_press(key, scancode, action, mods) 
+  end)
+
+  glfw.SetFramebufferSizeCallback(self.window, function(window, width, height) 
+    self:resize(width, height) 
+  end)
+
+  glfw.SetCursorPosCallback(self.window, function(window, x, y)
+    self:mouse_move(x,y)
+  end)
+
+  glfw.SetMouseButtonCallback(self.window, function(window, button, action, mods)
+    if action == glfw.PRESS then self:mouse_press(button, mods) else self:mouse_release(button, mods) end
+  end)
+
+  glfw.SetScrollCallback(self.window, function(window, button, action, mods)
+
+  end)
 end
 
-function GLWidget:resize_widget(width, height)
-  libui.widget_resize(self.qt_widget, width, height)
+function GLWidget:make_current()
+  glfw.MakeContextCurrent(self.window)
+end
+
+function GLWidget:__gc()
+  glfw.DestroyWindow(self.window)
+end
+
+function GLWidget:update()
+  self:paint()
 end
 
 function GLWidget:resize(width, height)
   log.trace("resize")
-  if self.initialized == false then
+  if self.renderer.cameras.viewport_camera == nil then
     self.renderer:init(width, height)
-  end
-  
-  if self.renderer.cameras.viewport_camera ~= nil then
+  else
     self.renderer.cameras.viewport_camera:resize(width, height)
   end
 
@@ -60,42 +71,44 @@ function GLWidget:resize(width, height)
 end
 
 function GLWidget:paint()
-  if not self.initialized then 
-    log.info('not ready to paint')
-    return 
-  end
-
   self.renderer:render()
+  glfw.SwapBuffers(self.window)
 end
 
-function GLWidget:mouse_press(event)
+function GLWidget:mouse_press(button, mods)
   -- p('mouse_press', event)
-  self.drag_start_x = event.global_x
-  self.drag_start_y = event.global_y
-  self.drag_last_x = event.global_x
-  self.drag_last_y = event.global_y
+  self.drag_start_x = self.last_x
+  self.drag_start_y = self.last_y
+  self.drag_last_x = self.last_x
+  self.drag_last_y = self.last_y
+
+  if button == glfw.MOUSE_BUTTON_LEFT then self.left_button = true end
+  if button == glfw.MOUSE_BUTTON_RIGHT then self.right_button = true end
 end
 
-function GLWidget:mouse_release(event)
+function GLWidget:mouse_release(button, mods)
   -- redirtect simple clicks
-  if self.drag_start_x == event.global_x and self.drag_start_y == event.global_y then 
-    return self:mouse_click(event)
+  if self.drag_start_x == self.last_x and self.drag_start_y == self.last_y then 
+    return self:mouse_click(button, mods)
   end
+
+  if button == glfw.MOUSE_BUTTON_LEFT then self.left_button = false end
+  if button == glfw.MOUSE_BUTTON_RIGHT then self.right_button = false end
 end
 
-function GLWidget:mouse_click(event)
-  if event.left_button then
+function GLWidget:mouse_click(button, mods)
+  if button == glfw.MOUSE_BUTTON_LEFT then
     self.mode = NAV_MODE
     rotateMode = false
     -- FlyTo Behavior
-    local clicked_pos_world = self.renderer.cameras.viewport_camera:pixel_to_world(event.x, event.y)
+    local clicked_pos_world = self.renderer.cameras.viewport_camera:pixel_to_world(self.last_x, self.last_y)
     if clicked_pos_world ~= nil then
       self:fly_to(clicked_pos_world)
     end
     
-  elseif event.right_button then
+  elseif button == glfw.MOUSE_BUTTON_RIGHT then
     self.mode = FOCUS_MODE
-    local object_id, triangle_index = self.renderer.cameras.viewport_camera.frame_buffer:read_pick_pixel(event.x, event.y)
+    local object_id, triangle_index = self.renderer.cameras.viewport_camera.frame_buffer:read_pick_pixel(self.last_x, self.last_y)
     local object = self.renderer.scenes.viewport_scene[object_id]
     local verts, center, normal = object:get_triangle(triangle_index)
 
@@ -107,12 +120,15 @@ function GLWidget:mouse_click(event)
   self:update()
 end
 
-function GLWidget:mouse_move(event)
-  -- p('mouse_move', event)
-  local dx = event.global_x - self.drag_last_x
-  local dy = event.global_y - self.drag_last_y
+function GLWidget:mouse_move(x, y)
+  self.last_x = x
+  self.last_y = y
 
-  if event.right_button then
+  if self.right_button then
+    -- p('mouse_move', event)
+    local dx = x - self.drag_last_x
+    local dy = y - self.drag_last_y
+
     local  rotation_speed = 1;
     if self.mode == NAV_MODE then
       self.renderer.cameras.viewport_camera:rotate_center_around_eye(dx*rotation_speed, dy*rotation_speed)
@@ -120,11 +136,10 @@ function GLWidget:mouse_move(event)
       self.renderer.cameras.viewport_camera:rotate_eye_around_center(dx*rotation_speed, dy*rotation_speed)
     end
 
-    self.drag_last_x = event.global_x
-    self.drag_last_y = event.global_y
+    self.drag_last_x = x
+    self.drag_last_y = y
     self:update()
   end
-
 end
 
 function GLWidget:mouse_wheel(event)
@@ -134,15 +149,15 @@ function GLWidget:mouse_wheel(event)
   self:update()
 end
 
-function GLWidget:key_press(event)
+function GLWidget:key_press(key, scancode, action, mods)
   -- p('key_press', event)
-  if event.key == key.Left then
+  if key == glfw.KEY_LEFT then
     self.renderer.cameras.viewport_camera:move_eye(-0.3,0,0)
-  elseif event.key == key.Right then
+  elseif key == glfw.KEY_RIGHT then
     self.renderer.cameras.viewport_camera:move_eye(0.3,0,0)
-  elseif event.key == key.Up then
+  elseif key == glfw.KEY_UP then
     self.renderer.cameras.viewport_camera:move_eye(0,0.3,0)
-  elseif event.key == key.Down then
+  elseif key == glfw.KEY_DOWN then
     self.renderer.cameras.viewport_camera:move_eye(0,-0.3,0)
   end
   self:update()
@@ -161,7 +176,7 @@ function GLWidget:fly_to(goal_position)
     eye_position[3] = hit_location[3] + VIEW_HEIGHT
   end
 
-  self.renderer.animation_manager:add(self.renderer.cameras.viewport_camera.center, goal_position, 0.5, BEZIER_START_BEHAVIORS.FAST, BEZIER_END_BEHAVIORS.SLOW)
-  self.renderer.animation_manager:add(self.renderer.cameras.viewport_camera.eye, eye_position, 0.5, BEZIER_START_BEHAVIORS.FAST, BEZIER_END_BEHAVIORS.SLOW)
+  self.renderer.animation_manager:add(self.renderer.cameras.viewport_camera.center, goal_position, 0.5, ui.AnimationManager.BEZIER_START_BEHAVIORS.FAST, ui.AnimationManager.BEZIER_END_BEHAVIORS.SLOW)
+  self.renderer.animation_manager:add(self.renderer.cameras.viewport_camera.eye, eye_position, 0.5, ui.AnimationManager.BEZIER_START_BEHAVIORS.FAST, ui.AnimationManager.BEZIER_END_BEHAVIORS.SLOW)
   self:update()
 end

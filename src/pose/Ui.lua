@@ -5,7 +5,6 @@ require 'qtuiloader'
 require 'qtwidget'
 require 'qt'
 
-local libui    = require 'libui'
 local Scan     = model.Scan
 local GLWidget = ui.GLWidget
 local Obj      = data.Obj

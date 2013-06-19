@@ -1,22 +1,16 @@
-local gl = require 'ui.gl'
+local gl = require './gl'
 local ffi = require 'ffi'
-local libui = require 'libui'
+local torch_util = require '../util/ffi'
+local fs = require 'fs'
 
 local Shader = Class()
 
 local function read(filename)
-  io.input(CLOUDLAB_SRC..'/ui/shaders/'..filename)
-  return io.read("*all")
+  return fs.readFileSync(CLOUDLAB_SRC..'/ui/shaders/'..filename)
 end
 
 local function file_exists(filename)
-  local file = io.open(CLOUDLAB_SRC..'/ui/shaders/'..filename)
-  if file ~= nil then
-    io.close(file)
-    return true
-  else
-    return false
-  end
+  return fs.existsSync(CLOUDLAB_SRC..'/ui/shaders/'..filename)
 end
 
 local function setShaderSource(shader_id, source)
@@ -215,7 +209,7 @@ end
 function Shader:set_uniform_matrix(name, matrix)
   local loc = gl.GetUniformLocation(self.program_id, name)
 
-  local matrix_ptr = libui.float_storage_info(matrix)
+  local matrix_ptr = torch_util.storage_info(matrix)
   if     matrix:size()[1] == 3 then gl.UniformMatrix3fv(loc, 1, gl.FALSE, matrix_ptr)
   elseif matrix:size()[1] == 4 then gl.UniformMatrix4fv(loc, 1, gl.FALSE, matrix_ptr)
   end

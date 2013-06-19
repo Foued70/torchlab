@@ -1,5 +1,4 @@
-local gl = require 'ui.gl'
-local libui = require 'libui'
+local gl = require './gl'
 
 local Material = Class()
 

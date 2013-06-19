@@ -1,6 +1,5 @@
 require 'torch'
 
-local libui      = require 'libui'
 local paths      = require 'paths'
 local config     = require 'model.config'
 local loader     = require 'data.loader'

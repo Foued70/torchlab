@@ -1,5 +1,5 @@
-local gl = require 'ui.gl'
-local libui = require 'libui'
+local gl = require './gl'
+local torch_util = require '../util/ffi'
 
 local Mesh = Class()
 
@@ -26,7 +26,7 @@ function Mesh:push_to_gl()
   gl.BindBuffer(gl.ARRAY_BUFFER, self.vert_buffer_id)
   gl.check_errors()
 
-  local ptr, size = libui.int_storage_info(self.faces - 1)
+  local ptr, size = torch_util.storage_info(self.faces - 1)
   gl.BufferData(
       gl.ELEMENT_ARRAY_BUFFER,
       size,
@@ -36,7 +36,7 @@ function Mesh:push_to_gl()
   gl.check_errors()
 
 
-  ptr, size = libui.double_storage_info(self.verts)
+  ptr, size = torch_util.storage_info(self.verts)
   local vert_size = size / self.verts:size()[1] -- bytes per row
   gl.BufferData(
       gl.ARRAY_BUFFER,
@@ -109,14 +109,12 @@ function Mesh:paint(context)
       submesh.material:use(context)
     end
 
-    sys.tic()
     gl.DrawElements(
         gl.TRIANGLES,
         submesh.length * 3,
         gl.UNSIGNED_INT,
         gl.uint_ptr(nil) + ((submesh.start - 1) * 3)
     )
-    -- print(submesh.start, sys.toc() / submesh.length)
     gl.check_errors()
 
   end

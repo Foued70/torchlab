@@ -3,13 +3,16 @@
 -- TODO: n-gon support -- connect tri to associated ngon so that viewer can show "ngon"
 -- TODO: n-gon support -- do submeshes and uvs need to be updated?
 
-local paths = require "paths"
+local path = require 'path'
+local fs = require 'fs'
+local os = require 'os'
+local io = require 'io'
 local geom  = geom.util
 
-local _t = sys.clock()
+local _t = os.time()
 local function tic(msg)
-  local lapse = sys.clock() - _t
-  _t = sys.clock()
+  local lapse = os.time() - _t
+  _t = os.time()
   if msg then
     print(lapse, msg)
   end
@@ -18,7 +21,7 @@ end
 local Obj = Class()
 
 function Obj:__init(filename)
-  if filename and paths.filep(filename) then    
+  if filename and fs.existsSync(filename) then    
     self:load(filename)
     self:add_derived_data()
   end
@@ -108,13 +111,13 @@ local function default_material()
 end
 
 local function load_materials(pathname, filename)
-  filename = paths.concat(pathname, filename)
+  filename = path.join(pathname, filename)
   
   local materials = {}
   local mtl_name_index_map = {}
   local mtl
   
-  if paths.filep(filename) then 
+  if fs.existsSync(filename) then 
 
     for line in io.lines(filename) do
       if line:match('^newmtl ') then

@@ -1,3 +1,6 @@
+local fs = require'fs'
+local path = require'path'
+
 local loaded_classes = {}
 
 local function get_class_for_name(name)
@@ -45,7 +48,7 @@ function _G.Class(parent)
   class.__class__ = class
   class.__classname__ = name
   class.__filename__ = filename
-  class.__mod_time__ = sys.fstat(filename)
+  class.__mod_time__ = fs.statSync(filename).mtime
   class.__super__ = parent
 
   function class.new(...)
@@ -102,7 +105,7 @@ end
 
 function _G.reload() 
   for name, class in pairs(loaded_classes) do
-    new_time = sys.fstat(class.__filename__)
+    new_time = fs.statSync(class.__filename__)
     if new_time > class.__mod_time__ then
       -- file has changed
       package.loaded[name] = nil
@@ -114,13 +117,13 @@ end
 
 local function package_class_loader(self, name)
   local package_name = getmetatable(self).package_name
-  require(package_name..'.'..name)
+  require('../'..package_name..'/'..name)
   return rawget(rawget(_G, package_name), name)
 end
 
 
-for file_name in paths.files(CLOUDLAB_SRC) do
-  local dir_name = paths.concat(CLOUDLAB_SRC, file_name)
+for _, file_name in ipairs(fs.readdirSync(CLOUDLAB_SRC)) do
+  local dir_name = path.join(CLOUDLAB_SRC, file_name)
   if paths.dirp(dir_name) then
     _G[file_name] = {}
     setmetatable(_G[file_name], {

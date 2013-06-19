@@ -1,4 +1,4 @@
-local libui = require 'libui'
+local os = require 'os'
 
 local Timer = Class()
 
@@ -33,6 +33,6 @@ function Timer:tick()
 end
 
 function Timer:get_time_seconds()
-	return sys.clock()
+	return os.time()
 end
 

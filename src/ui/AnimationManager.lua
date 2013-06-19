@@ -1,5 +1,3 @@
-local libui = require 'libui'
-
 local AnimationManager = Class()
 
 BEZIER_START_BEHAVIORS = {

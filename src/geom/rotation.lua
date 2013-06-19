@@ -1,7 +1,7 @@
+local ffi_utils = require '../util/ffi'
 Class()
 
 -- Below is a test for loading C backends using ffi
-local ffi_utils = require 'util.ffi'
 
 local ffi = ffi_utils.ffi
 

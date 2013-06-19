@@ -38,6 +38,13 @@ local types = {
    THLong  = "long"
 }
 
+local type_map = {}
+type_map['torch.DoubleTensor'] = {'THDoubleTensor*', 'double'}
+type_map['torch.FloatTensor'] = {'THFloatTensor*', 'float'}
+type_map['torch.IntTensor'] = {'THIntTensor*', 'int'}
+type_map['torch.ByteTensor'] = {'THByteTensor*', 'char'}
+
+
 -- save memory by building table
 header = {}
 for T,t in pairs(types) do 
@@ -109,5 +116,15 @@ function lib_path(libname)
    local ext = ffi.os == "OSX" and ".dylib" or ".so"
    return paths.install_lib .. "/torch/lua/lib" .. libname..ext
 end
+
+
+function storage_info(tensor)
+  local type_info = type_map[torch.typename(tensor)]
+  local t = ffi.cast(type_info[1], torch.pointer(tensor))
+  return t.storage.data, t.storage.size * ffi.sizeof(type_info[2])
+end
+
+
+
 
 return (getfenv())
