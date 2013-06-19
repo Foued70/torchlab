@@ -4,5 +4,5 @@ include(../common.cmake REQUIRED)
 
 SET(src p3p.c)
 
-ADD_TORCH_PACKAGE(p3p "${src}" "" "Floored p3p Functions")
+ADD_FFI_LIB(p3p "${src}")
 

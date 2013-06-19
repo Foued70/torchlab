@@ -34,6 +34,6 @@ set(NUMERICAL_LIBS cholmod ccolamd camd colamd amd suitesparseconfig cxsparse)
 
 set(CERES_DEPENDENCIES ${GOOGLE_LIBS} ${VECLIB_LIBRARY} ${NUMERICAL_LIBS} gomp)
 
-ADD_TORCH_PACKAGE(solve "${src}" "" "Floored Ceres Solver")
+ADD_FFILIB(solve "${src}")
 TARGET_LINK_LIBRARIES(solve luaT TH ${CERES_LIBRARY} ${CERES_DEPENDENCIES})
 
