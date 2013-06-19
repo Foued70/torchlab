@@ -54,12 +54,12 @@ function product(quat1,quat2,res)
                 
 end
 
--- returns quaternion represnting angle between two vectors
+-- returns quaternion representing angle between two vectors
 function angle_between(from_vector, to_vector, quat)
    local from = from_vector:narrow(1,1,3)
    local to   = to_vector:narrow(1,1,3)
 
-   local rot_axis = torch.cross(from, to)
+   local rot_axis = torch.cross(from,to)
    local rot_angle = 0
 
    -- avoid the degenerate case when from_vector is very close to to_vector
@@ -77,9 +77,27 @@ function from_axis_angle(rot_axis, rot_angle, quat)
       quat = torch.Tensor(4)
    end
    quat[{{1,3}}] = rot_axis * torch.sin(rot_angle / 2)
-   quat[4] = torch.cos(rot_angle / 2)
+   quat[4]       = torch.cos(rot_angle / 2)
 
    return quat
+end
+
+function to_axis_angle(quat, axis_angle)
+   if not axis_angle then
+      axis_angle = quat:clone()
+   else
+      axis_angle:resize(quat):copy(quat)
+   end
+
+   axis_angle[4] = torch.acos(quat[4]) * 2
+   
+   local d = math.sqrt(1 - quat[4]*quat[4])
+   
+   if d > 0 then
+      rot_axis:mul(1/d)
+   end
+   
+   return axis_angle
 end
 
 function to_rotation_matrix(quat, res)
@@ -226,14 +244,12 @@ function from_euler_angle(euler_angle, quat)
    quat = quat or torch.Tensor(pitch:nElement(),4)
    quat:resize(pitch:nElement(),4)
 
-   -- negative signs in yaw and pitch are needed to correspond with
-   -- directions as stated in the comment above.
-   local croll      = roll:clone():mul(0.5):cos()
-   local cyaw       = yaw:clone():mul(-0.5):cos()
+   local croll      =  roll:clone():mul( 0.5):cos()
+   local cyaw       =   yaw:clone():mul(-0.5):cos()
    local cpitch     = pitch:clone():mul(-0.5):cos()
 
-   local sroll      = roll:clone():mul(0.5):sin()
-   local syaw       = yaw:clone():mul(-0.5):sin()
+   local sroll      =  roll:clone():mul( 0.5):sin()
+   local syaw       =   yaw:clone():mul(-0.5):sin()
    local spitch     = pitch:clone():mul(-0.5):sin()
 
    local cyaw_croll = torch.cmul(cyaw,croll)
@@ -347,6 +363,74 @@ function rotate(...)
    end
    -- call C function
    geom.rotation.by_quaternion(res,q,v)
+
+   return res
+end
+
+-- rotate vector by quaternion and translate
+-- this is an optimized version of 30 ops which we will move C
+-- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+function rotate_translate(...)
+   local res,q,t,v
+   local args = {...}
+   local nargs = #args
+   if nargs == 4 then
+      res = args[1]
+      q   = args[2]
+      t   = args[3] 
+      v   = args[4] 
+   elseif nargs == 3 then
+      q   = args[1]
+      t   = args[2]
+      v   = args[3]
+      local n_elem = v:nElement() * (q:nElement() / 4)
+      res = torch.Tensor(n_elem)
+   else
+      print(dok.usage('rotate_translate',
+                      'rotate a vector by quaternion then translate',
+                      '> returns: rotated vector',
+                      {type='torch.Tensor', help='result'},
+                      {type='torch.Tensor', help='quaternion', req=true},
+                      {type='torch.Tensor', help='translate',  req=true},
+                      {type='torch.Tensor', help='vector',     req=true}))
+      dok.error('incorrect arguments', 'rotate_translate')
+   end
+   -- call C function
+   geom.rotation.rotate_translate(res,q,t,v)
+
+   return res
+end
+
+-- translate a vector then rotate by quaternion
+-- this is an optimized version of 30 ops which we will move C
+-- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+function translate_rotate(...)
+   local res,t,q,v
+   local args = {...}
+   local nargs = #args
+   if nargs == 4 then
+      res = args[1]
+      t   = args[2]
+      q   = args[3] 
+      v   = args[4] 
+   elseif nargs == 3 then
+      t   = args[1]
+      q   = args[2]
+      v   = args[3]
+      local n_elem = v:nElement() * (q:nElement() / 4)
+      res = torch.Tensor(n_elem)
+   else
+      print(dok.usage('rotate_translate',
+                      'rotate a vector by quaternion then translate',
+                      '> returns: rotated vector',
+                      {type='torch.Tensor', help='result'},
+                      {type='torch.Tensor', help='translate',  req=true},
+                      {type='torch.Tensor', help='quaternion', req=true},
+                      {type='torch.Tensor', help='vector',     req=true}))
+      dok.error('incorrect arguments', 'rotate_translate')
+   end
+   -- call C function
+   geom.rotation.translate_rotate(res,t,q,v)
 
    return res
 end

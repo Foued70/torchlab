@@ -194,9 +194,9 @@ function euler_to_quat_directions()
    sys.tic()
    -- step = 25
    -- angles = torch.linspace(-2*math.pi,2*math.pi,2*step+1)
-   local angles = data.euler_angles
+   local angles   = data.euler_angles
    local n_angles = data.euler_angles:size(1)
-   local ea = torch.zeros(3,n_angles)
+   local ea       = torch.zeros(3,n_angles)
 
    local e = 0
 
@@ -253,7 +253,7 @@ function euler_to_quat_directions()
    if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
    if not (torch.abs(v - data.result_axes_about_z):max() < 1e-15) then e = e + 1 end
 
-   printf(" - Passed %d/%d tests in %2.4fs", e, 8*3, sys.toc())
+   printf(" - Failed %d/%d tests in %2.4fs", e, 8*3, sys.toc())
 end
 
 function all()
