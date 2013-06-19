@@ -41,7 +41,7 @@ if #matter_pose_fname > 0 then
    printf("using : %s", matter_pose_fname)
 end
 
-poses = util.mp.load_poses(matter_pose_fname)
+poses = model.mp.load_poses(matter_pose_fname)
 
 sweep_dir  = scan_dir .. "/" .. params.sweep_prefix
 
@@ -124,11 +124,12 @@ for sweep_no = 1,4 do
       proj_from:set_lambda_phi(lambda,phi)
       pr:lap("set lambda phi")
       pr:start("get index")
-      index1D,stride,mask = rect_to_sphere:get_index_and_mask(force)
+      index1D,stride,mask = rect_to_sphere:get_offset_and_mask(force)
       pr:lap("get index")
       pr:start("rect to sphere")
       img_out = rect_to_sphere:remap(img)
       pr:lap("rect to sphere")
+      pr:lap("project")
       pr:start("store")
       table.insert(indices,index1D)
       table.insert(masks,mask)
@@ -144,8 +145,8 @@ for sweep_no = 1,4 do
    end
 
    -- blend
-
-   blend_image = blend(out_images,masks)
+   invert = true
+   blend_image = blend(out_images,masks,invert)
 
    orig_texture = matter_texture:clone()
 

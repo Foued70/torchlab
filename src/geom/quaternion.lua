@@ -1,5 +1,5 @@
 Class()
-
+-- TODO: vectorize all these like the new spherical angles 
 local axes   = torch.eye(3)
 
 x = axes[1]
@@ -9,51 +9,55 @@ z = axes[3]
 function conjugate(quat,res)
    if (not res) then
       res = quat:clone()
+   elseif (quat ~= res) then
+      res:resizeAs(quat):copy(quat)
    end
    res:narrow(1,1,3):mul(-1)
    return res
 end
 
 function equals(quat1, quat2)
-   if (  (math.abs(quat2[1]-quat1[1])<1e-8) and
-         (math.abs(quat2[2]-quat1[2])<1e-8) and
-         (math.abs(quat2[3]-quat1[3])<1e-8) and
-         (math.abs(quat2[4]-quat1[4])<1e-8) ) then
-      return true
-   else
-      return false
-   end
+   local diff = quat1 - quat2
+   diff:abs()
+   return (diff:lt(1e-8):sum() == 4)
 end
 
 -- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
--- FIXME test cases
 function product(quat1,quat2,res)
-   local zero_quat = torch.Tensor({0,0,0,1})
-
-   if equals(quat1, zero_quat) and equals(quat1, zero_quat) then
-      if (not res) then
-         return zero_quat
-      else
-         return res:copy(zero_quat)
-      end
-   end
 
    if (not res) then
-      res = torch.Tensor(4)
+      res = torch.Tensor(quat2:size())
    end
 
-   local v1 = quat1:narrow(1,1,3)
-   local v2 = quat2:narrow(1,1,3)
-   local vres = res:narrow(1,1,3)
-   vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
-   res[4] = quat1[4]*quat2[4] - v1:dot(v2)
+   if quat2:dim() == 1 then
+      local v1 = quat1:narrow(1,1,3)
+      local v2 = quat2:narrow(1,1,3)
+      local vres = res:narrow(1,1,3)
+      vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
+      res[4] = quat1[4]*quat2[4] - v1:dot(v2)
+   else
+      quat1 = quat1:reshape(1,4):expandAs(quat2)
+      local v1 = quat1:narrow(2,1,3)
+      local v2 = quat2:narrow(2,1,3)
+      local w1 = quat1[{{},{4}}]:expandAs(v1)
+      local w2 = quat2[{{},{4}}]:expandAs(v2)
+      local vres = res:narrow(2,1,3)
+      local wres = res[{{},4}]
+      vres:copy(torch.cross(v1,v2,2)):add(torch.cmul(v1,w2)):add(torch.cmul(v2,w1))
+      
+      for i = 1,wres:size(1) do 
+         wres[i] = quat1[i][4]*quat2[i][4] - v1[i]:dot(v2[i])
+      end
+   end    
+   
    return res
+                
 end
 
 -- returns quaternion represnting angle between two vectors
 function angle_between(from_vector, to_vector, quat)
-   from = from_vector:narrow(1,1,3)
-   to   = to_vector:narrow(1,1,3)
+   local from = from_vector:narrow(1,1,3)
+   local to   = to_vector:narrow(1,1,3)
 
    local rot_axis = torch.cross(from, to)
    local rot_angle = 0
@@ -165,15 +169,154 @@ function from_rotation_matrix(rmat, quat, debug)
 end
 
 
+-- Input: euler angle    = Nx2 or 3 : pitch, yaw and optional roll
+-- Output:               = Nx4 quaternion
+-- 
+-- Local coordinates in our 2D image projections in x,y or phi
+-- (vertical), lambda (horizontal) have 0,0 in the middle. Looking at
+-- the 2D image in screen space: -,- is in the upper left hand corner,
+-- and +,+ in the lower right hand corner.  This is the same way that
+-- OpenGL presents the UV coordinates with -1,-1 in the upper left and
+-- +1,+1 in the lower right.
+-- 
+-- In 3D coordinates we have settled on Z up, Y forward and X right.
+
+-- To translate the euler angles of the spherical image projections to
+-- angles in 3D coordinates it is useful to keep these bearings in mind:
+-- 
+-- Rotations : about (X,Y,Z axis)
+-- 
+-- + X : pitch (phi, elevation, latitude) pitch is rotation around the X
+--   (right hand) axis (a quaternion has a large component in the x location)
+-- + Y : roll rotation around the forward facing axis
+-- + Z : yaw (lambda,azimuth, longitude) is a rotation around the Z upward axis
+--   (quaternion is large in z location)
+
+-- Direction of rotations :
+-- 
+-- (to stay consitent with image space projections)
+
+-- + Pitch (south-ing): positive angle moves south 
+--   (+y -> -z -> -y),(+z -> +y -> -z)
+
+-- + Roll (clockwise) : positive angle moves clockwise around forward
+--   facing direction (+x -> -z -> -x),(+z -> +x -> -z) 
+
+-- + Yaw (east-ing): positive angle moves east 
+--   (+y -> +x -> -y) (+x -> -y -> -x)
+-- 
+-- http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html
+
+function from_euler_angle(euler_angle, quat)
+   if euler_angle:dim() == 1 then 
+      euler_angle:resize(euler_angle:size(1),1)
+   end
+
+   local pitch   = euler_angle[1]  -- rotate about X axis
+   local yaw     = euler_angle[2]  -- rotate about Z axis
+   local roll                      -- rotate about Y axis
+ 
+   if (euler_angle:size(1) == 3) then
+      roll = euler_angle[3]
+   else
+      roll = torch.zeros(pitch:size())
+   end
+
+   -- for 3D manipulations quaternions are stored Nx4 
+   quat = quat or torch.Tensor(pitch:nElement(),4)
+   quat:resize(pitch:nElement(),4)
+
+   -- negative signs in yaw and pitch are needed to correspond with
+   -- directions as stated in the comment above.
+   local croll      = roll:clone():mul(0.5):cos()
+   local cyaw       = yaw:clone():mul(-0.5):cos()
+   local cpitch     = pitch:clone():mul(-0.5):cos()
+
+   local sroll      = roll:clone():mul(0.5):sin()
+   local syaw       = yaw:clone():mul(-0.5):sin()
+   local spitch     = pitch:clone():mul(-0.5):sin()
+
+   local cyaw_croll = torch.cmul(cyaw,croll)
+   local syaw_sroll = torch.cmul(syaw,sroll)
+   local cyaw_sroll = torch.cmul(cyaw,sroll)
+   local syaw_croll = torch.cmul(syaw,croll)
+
+
+   quat[{{},1}]:copy(cyaw_croll):cmul(spitch):add(-1,torch.cmul(syaw_sroll,cpitch))
+   quat[{{},2}]:copy(cyaw_sroll):cmul(cpitch):add(torch.cmul(syaw_croll,spitch))
+   quat[{{},3}]:copy(syaw_croll):cmul(cpitch):add(-1,torch.cmul(cyaw_sroll,spitch))
+   quat[{{},4}]:copy(cyaw_croll):cmul(cpitch):add(torch.cmul(syaw_sroll,spitch))
+   
+   return quat
+end
+
+-- <quat> is Nx4
+-- <euler_angles> is 3xN
+-- http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html
+
+function to_euler_angle(quat,euler_angle)
+   local n_elem = 1
+   if (quat:dim() == 1) then 
+      quat:resize(1,quat:size(1)) 
+   else
+      n_elem = quat:size(1)
+   end
+
+   euler_angle = euler_angle or torch.Tensor(3,n_elem)
+   euler_angle:resize(3,n_elem)
+
+   -- q_sqr is 4xN
+   local q     = quat:t():clone()
+   local q_sqr = torch.cmul(q,q)
+
+   local q00 = q_sqr[4]  
+   local q11 = q_sqr[1]  
+   local q22 = q_sqr[2]
+   local q33 = q_sqr[3]
+  
+   local r11 = q00:clone():add(q11):add(-1,q22):add(-1,q33)
+   local r21 = torch.cmul(q[1],q[2]):add(torch.cmul(q[4],q[3])):mul(2)
+
+   -- absorbs the negative applied to all future uses
+   local r31 = torch.cmul(q[1],q[3]):add(-1,torch.cmul(q[4],q[2])):mul(-2)
+   local r32 = torch.cmul(q[2],q[3]):add(torch.cmul(q[4],q[1])):mul(2)
+   local r33 = q00:clone():add(-1,q11):add(-1,q22):add(q33)
+
+   local tmp = torch.abs(r31)
+   local gimbal = tmp:gt(0.999999)
+   local not_gimbal = gimbal:ne(1)
+   
+   if (not_gimbal:sum() > 0) then
+      euler_angle[1][not_gimbal] = torch.atan2(r32[not_gimbal],r33[not_gimbal]) -- pitch
+      euler_angle[2][not_gimbal] = torch.atan2(r21[not_gimbal],r11[not_gimbal]) -- yaw
+      euler_angle[3][not_gimbal] = torch.asin(r31[not_gimbal])                  -- roll
+   end
+
+   if (gimbal:sum() > 0) then 
+      local r12 = r21
+      r12:copy(q[1]):cmul(q[2]):add(-1,torch.cmul(q[4],q[3])):mul(-2)
+      local r13 = r32
+      r13:copy(q[1]):cmul(q[3]):add(torch.cmul(q[4],q[2])):mul(2)
+      r13:cmul(r31)
+      
+      euler_angle[1][gimbal] = 0                                    -- pitch
+      euler_angle[2][gimbal] = torch.atan2(r12[gimbal],r13[gimbal]) -- yaw
+      tmp[gimbal] = tmp[gimbal]:mul(math.pi/2)
+      euler_angle[3][gimbal] = torch.cdiv(r31[gimbal],tmp[gimbal])  -- roll
+   end
+
+   -- make euler angles correspond to image projections (south-ing and east-ing)
+   euler_angle[1]:mul(-1)
+   euler_angle[2]:mul(-1)
+
+   return euler_angle
+end
+
 -- if two quaternions are equal they will rotate a vector the same distance
 function distance(quat1, quat2)
-   local vec1x = rotate(x, quat1)
-   local vec2x = rotate(x, quat2)
-   local vec1y = rotate(y, quat1)
-   local vec2y = rotate(y, quat2)
-   local vec1z = rotate(z, quat1)
-   local vec2z = rotate(z, quat2)
-   return vec1x:dist(vec2x) + vec1y:dist(vec2y) + vec1z:dist(vec2z)
+   local vec1 = rotate(quat1,axes)
+   local vec2 = rotate(quat2,axes)
+   return vec1:dist(vec2)
 end
 
 
@@ -181,33 +324,29 @@ end
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
 function rotate(...)
-   local res,v,q
+   local res,q,v
    local args = {...}
    local nargs = #args
    if nargs == 3 then
       res = args[1]
-      v   = args[2]
-      q   = args[3]
-   elseif nargs == 2 then
-      v   = args[1]
       q   = args[2]
-      res = torch.Tensor(3)
+      v   = args[3] 
+   elseif nargs == 2 then
+      q   = args[1]
+      v   = args[2]
+      local n_elem = v:nElement() * (q:nElement() / 4)
+      res = torch.Tensor(n_elem)
    else
       print(dok.usage('rotate_by_quat',
                       'rotate a vector by quaternion',
                       '> returns: rotated vector',
                       {type='torch.Tensor', help='result'},
-                      {type='torch.Tensor', help='vector', req=true},
-                      {type='torch.Tensor', help='quaternion',   req=true}))
-      dok.error('incorrect arguements', 'rotate_by_quat')
+                      {type='torch.Tensor', help='quaternion', req=true},
+                      {type='torch.Tensor', help='vector',     req=true}))
+      dok.error('incorrect arguments', 'rotate_by_quat')
    end
+   -- call C function
+   geom.rotation.by_quaternion(res,q,v)
 
-   local x1 = q[2]*v[3] - q[3]*v[2]
-   local y1 = q[3]*v[1] - q[1]*v[3]
-   local z1 = q[1]*v[2] - q[2]*v[1]
-
-   res[1] = v[1] + 2 * (q[4]*x1 + q[2]*z1 - q[3]*y1)
-   res[2] = v[2] + 2 * (q[4]*y1 + q[3]*x1 - q[1]*z1)
-   res[3] = v[3] + 2 * (q[4]*z1 + q[1]*y1 - q[2]*x1)
    return res
 end

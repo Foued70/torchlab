@@ -55,8 +55,8 @@ local function get_counts(filename)
       n_uvs = n_uvs + 1;
     end
   end
-
-  return n_faces, n_verts, n_uvs, n_gon, n_verts_per_face
+  -- better to store data in Tensor
+  return n_faces, n_verts, n_uvs, n_gon, torch.LongTensor(n_verts_per_face)
 end
 
 function Obj:add_derived_data()
@@ -65,9 +65,8 @@ function Obj:add_derived_data()
   local n_verts_per_face = self.n_verts_per_face
   local face_verts = self.face_verts
   
-  local face_normals        = torch.Tensor(n_faces, 3)
-  local face_center_dists   = torch.Tensor(n_faces)
-  local face_centers        = torch.Tensor(n_faces, 3)
+  local face_planes         = torch.Tensor(n_faces, 4)
+  local face_centers        = torch.ones(n_faces, 4)
   local face_bboxes         = torch.Tensor(n_faces, 6) -- xmin,ymin,zmin,xmax,ymax,zmax
   local bbox                = torch.Tensor(6)
 
@@ -75,13 +74,17 @@ function Obj:add_derived_data()
   for face_idx = 1,n_faces do 
     local nverts = n_verts_per_face[face_idx]
     local fverts = face_verts[face_idx]:narrow(1, 1, nverts)
-       
+    local face_center = face_centers[face_idx]
     -- a) compute face centers
-    face_centers[face_idx] = fverts:mean(1):squeeze()
+    face_center = fverts:mean(1):squeeze()
     
+    fverts = fverts:narrow(2,1,3)
+
     -- b) compute plane normal and face_center_dists distance from origin for plane eq.
-    face_normals[face_idx] = geom.compute_normal(fverts)
-    face_center_dists[face_idx] = - torch.dot(face_normals[face_idx], face_centers[face_idx])
+    local face_norm = face_planes[{face_idx,{1,3}}] 
+
+    face_norm:copy(geom.compute_normal(fverts))
+    face_planes[face_idx][4] = - torch.dot(face_norm, face_center:narrow(1,1,3))
     
     -- c) compute bbox
     local thisbb   = face_bboxes[face_idx]
@@ -92,10 +95,10 @@ function Obj:add_derived_data()
   bbox:narrow(1,1,3):copy(face_bboxes:narrow(2,1,3):min(1):squeeze())
   bbox:narrow(1,4,3):copy(face_bboxes:narrow(2,4,3):max(1):squeeze())
   
-  self.face_normals = face_normals
-  self.face_center_dists = face_center_dists
+  self.face_planes  = face_planes
+  self.face_normals = face_planes:narrow(2,1,3)
   self.face_centers = face_centers
-  self.face_bboxes = face_bboxes
+  self.face_bboxes  = face_bboxes
   self.bbox = bbox
 
   tic('derive')
@@ -154,11 +157,11 @@ function Obj:load(filename)
   local n_faces, n_verts, n_uvs, n_gon, n_verts_per_face = get_counts(filename);
   tic('counts')  
   
-  local verts         = torch.Tensor(n_verts, 4):fill(1)
-  local uvs           = torch.Tensor(n_uvs, 2):fill(1)  
-  local faces         = torch.IntTensor(n_faces, n_gon, 3):fill(-1) 
-  local face_verts    = torch.Tensor(n_faces, n_gon, 3):fill(1)
-  local unified_verts = torch.Tensor(n_faces*n_gon, 9):fill(1) -- n_faces*n_gon is max. we'll trim later.  
+  local verts         = torch.ones(n_verts, 4)
+  local uvs           = torch.ones(n_uvs, 2)
+  local faces         = torch.LongTensor(n_faces, n_gon, 3):fill(-1) 
+  local face_verts    = torch.ones(n_faces, n_gon, 4)
+  local unified_verts = torch.ones(n_faces*n_gon, 9) -- n_faces*n_gon is max. we'll trim later.  
   tic('alloc')
   
   local materials, mtl_name_index_map
@@ -258,7 +261,7 @@ function Obj:load(filename)
   self.faces              = faces -- all faces with indexes into unified verts, verts, and uvs. n_faces x n_gon x 3
   self.face_verts         = face_verts -- all faces with copy of vert data. n_faces x n_gon x 3 (retexture)
   self.unified_verts      = trimmed_unified_verts -- unique pos/texture pairs. ?x9. 4 position + 2 uv + 3 normal (viewer)
-  self.submeshes          = torch.IntTensor(submeshes) -- indexes of faces in  a submesh and index into materials. 
+  self.submeshes          = torch.LongTensor(submeshes) -- indexes of faces in  a submesh and index into materials. 
   self.materials          = materials -- table of material properties (viewer)
 end
 
@@ -286,7 +289,7 @@ function Obj:get_tris()
     else
       log.trace('triangulating')
       local max_tris = (self.n_gon - 2) * self.n_faces
-      local tris =  torch.IntTensor(max_tris, 3):fill(1)
+      local tris =  torch.LongTensor(max_tris, 3):fill(1)
       local n_verts_per_face = self.n_verts_per_face
       local faces = self.faces
       local tris_idx = 0    
@@ -316,7 +319,7 @@ function Obj:get_tris()
         --   end          
         -- end
       end      
-      local trimmed_tris = torch.IntTensor(tris_idx, 3)
+      local trimmed_tris = torch.LongTensor(tris_idx, 3)
       trimmed_tris[{{1, tris_idx}}] = tris[{{1, tris_idx}}]
       self.tris = trimmed_tris      
       -- self.submeshes = submeshes

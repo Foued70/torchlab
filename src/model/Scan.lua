@@ -8,7 +8,7 @@ local fs         = util.fs
 local Obj        = data.Obj
 local Sweep      = model.Sweep
 local intersect  = geom.intersect
-local bihtree    = model.bihtree
+local BIHTree    = model.BIHTree
 
 local LensSensor = projection.LensSensor
 
@@ -97,7 +97,7 @@ end
 function Scan:get_bihtree()
   if not self.bihtree then
     sys.tic()
-    self.bihtree = bihtree.build(self:get_model_data())
+    self.bihtree = BIHTree.new(self:get_model_data())
     log.trace('built tree in', sys.toc())
   end
 

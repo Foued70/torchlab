@@ -24,7 +24,7 @@ function quaternion_from_to()
    print(string.format(" - Found %d/%d errors",e,data.vec:size(1)-1))
 end
 
-function quat2rot()
+function quaternion_to_rotation_matrix()
    print("Testing quaternion to rotation matrix")
    local e = 0
    for i = 1,data.quat:size(1) do
@@ -38,7 +38,7 @@ function quat2rot()
    print(string.format(" - Found %d/%d errors",e,data.quat:size(1)))
 end
 
-function rot2quat()
+function rotation_matrix_to_quaternion()
    print("Testing rotation matrix to quaternion")
    local e = 0
    local maxerr = 0
@@ -50,7 +50,7 @@ function rot2quat()
       -- vector in the same way.
       for k = 1,data.vec:size(1) do
          local v   = data.vec[k]
-         quat.rotate(res[i],v,q)
+         quat.rotate(res[i],q,v)
          local d   = res[i] - data.result_rot_by_quat[i]
          local ce  = d:abs():max()
          if (ce > maxerr) then maxerr = ce end
@@ -66,7 +66,7 @@ function rot2quat()
             e = e + 1
          end
          i = i + 1
-      
+
       end
    end
    print(string.format(" - Found %d/%d errors",e,res:size(1)))
@@ -83,7 +83,7 @@ function rotation_by_quat()
       local q = data.quat[j]
       for k = 1,data.vec:size(1) do
          local v   = data.vec[k]
-         quat.rotate(res[i],v,q)
+         quat.rotate(res[i],q,v)
          local d   = res[i] - data.result_rot_by_quat[i]
          local ce  = d:abs():max()
          if (ce > maxerr) then maxerr = ce end
@@ -104,38 +104,164 @@ function rotation_by_quat()
 end
 
 function quat_product()
-   print("Testing composition of rotations with quaternion")
+   print("Testing composition of rotations with quaternion product")
    local e = 0
    local maxerr = 0
+   local n_test = 0
    sys.tic()
-   local q1 = data.quat[1]
-   for j = 2,data.quat:size(1) do
-      local q2 = data.quat[j]
-      for k = 1,data.vec:size(1) do
-         local v    = data.vec[k]
-         local vr1  = quat.rotate(v,q1)
-         local vr2  = quat.rotate(vr1,q2)
+
+   local dq = data.quat
+   local dv = data.vec
+   local vr1  = quat.rotate(dq,dv)
+   local vr2  = quat.rotate(dq,vr1)
+   for i = 1,dq:size(1) do
+      local q1 = dq[i]
+      for j = 1,dq:size(1) do
+         local q2   = dq[j]
          local q12  = quat.product(q2,q1)
-         local vr12 = quat.rotate(v,q12)
-         local ce = torch.max(torch.abs(vr12 - vr2))
+
+         local vr12 = quat.rotate(q12,dv)
+         local ce = torch.abs(vr12 - vr2[j][i])
+         local mx = torch.max(ce)
+         if ( mx > maxerr) then maxerr = mx end
+         e = e + ce:gt(7e-4):sum()
+         n_test = n_test + dv:size(1)
+      end
+   end
+
+   -- test with conjugate also
+   local qr = torch.Tensor(data.quat:size())
+   for i = 1,data.quat:size(1) do
+      local q1 = data.quat[i]
+      for j = 1,data.quat:size(1) do
+         local q2 = data.quat[j]
+         quat.product(q1,q2,qr[j])
+         local qc = quat.product(qr[j],quat.conjugate(q2))
+         local ce = torch.max(torch.abs(qc - q1))
          if (ce > maxerr) then maxerr = ce end
          if (ce > 5e-4) then
-            print(ce,vr2,vr12)
+            print(ce,q1,qc)
             e = e + 1
          end
          q2 = q1
+         n_test = n_test + 1
+      end
+      -- test matrix version
+      local qmat = quat.product(q1,data.quat)
+      for j = 1,data.quat:size(1) do
+         local ce = torch.max(torch.abs(qr[j] - qmat[j]))
+         if (ce > maxerr) then maxerr = ce end
+         if (ce > 5e-4) then
+            print(ce,qr[j],qmat[j])
+            e = e + 1
+         end
+         n_test = n_test + 1
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,data.quat:size(1)*data.vec:size(1),maxerr,sys.toc()))
+                       e,n_test,maxerr,sys.toc()))
 end
 
+function quat_from_to_euler()
+   print("Testing conversion to euler (spherical angles) and back")
+   local eps = 0.002 -- terrible numerical results with all the trig functions
+   local e = 0
+   local maxerr = 0
+   sys.tic()
+   local ea = quat.to_euler_angle(data.quat)
+   local q  = quat.from_euler_angle(ea)
+   for j = 1,data.quat:size(1) do
+      local d = quat.distance(data.quat[j],q[j])
+      if d > maxerr then maxerr = d end
+      if d > eps then e = e + 1 end
+   end
+   -- test 2 edge cases
+   local qe = torch.eye(4)
+   ea = quat.to_euler_angle(qe)
+   q  = quat.from_euler_angle(ea)
+   for j = 1,4 do
+      local d = quat.distance(qe[j],q[j])
+      if d > maxerr then maxerr = d end
+      if d > eps then e = e + 1 end
+   end
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,data.quat:size(1)+4,maxerr,sys.toc()))
+end
+
+
+function euler_to_quat_directions()
+   print("Testing directions in euler to quat conversions")
+   sys.tic()
+   -- step = 25
+   -- angles = torch.linspace(-2*math.pi,2*math.pi,2*step+1)
+   local angles = data.euler_angles
+   local n_angles = data.euler_angles:size(1)
+   local ea = torch.zeros(3,n_angles)
+
+   local e = 0
+
+   local mid = math.ceil(n_angles/2)
+
+   local axes = torch.eye(3)
+   print("   rotate about quaternion axis is equivalent to euler angle")
+   print(" - quaternion X (Right)   <=> euler pitch (phi, elevation,latitude)")
+
+   ea[1] = angles
+   local q     = quat.from_euler_angle(ea)
+   local v     = quat.rotate(q,axes)
+
+   local x = v[{{},1,{}}]
+   local y = v[{{},2,{}}]
+   local z = v[{{},3,{}}]
+
+   if not (x:sum() == n_angles) then e = e + 1 end
+   if not (x[{{},1}]:sum() == n_angles) then e = e + 1 end
+   if not (q[{{},2}]:sum() == 0) then e = e + 1 end
+   if not (q[{{},3}]:sum() == 0) then e = e + 1 end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v - data.result_axes_about_x):max() < 1e-15) then e = e + 1 end
+
+   print(" - quaternion Y (Forward) <=> euler roll")
+   ea[1]:fill(0)
+   ea[3] = angles
+   quat.from_euler_angle(ea,q)
+   quat.rotate(v,q,axes)
+
+   if not (y:sum() == n_angles) then e = e + 1 end
+   if not (y[{{},2}]:sum() == n_angles) then e = e + 1 end
+   if not (q[{{},1}]:sum() == 0) then e = e + 1 end
+   if not (q[{{},3}]:sum() == 0) then e = e + 1 end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v - data.result_axes_about_y):max() < 1e-15) then e = e + 1 end
+
+   print(" - quaternion Z (Up)      <=> euler yaw (lambda,azimuth, longitude)")
+   ea[3]:fill(0)
+   ea[2] = angles
+   quat.from_euler_angle(ea,q)
+   quat.rotate(v,q,axes)
+
+   if not (z:sum() == n_angles) then e = e + 1 end
+   if not (z[{{},3}]:sum() == n_angles) then e = e + 1 end
+   if not (q[{{},1}]:sum() == 0) then e = e + 1 end
+   if not (q[{{},2}]:sum() == 0) then e = e + 1 end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
+   if not (torch.abs(v - data.result_axes_about_z):max() < 1e-15) then e = e + 1 end
+
+   printf(" - Passed %d/%d tests in %2.4fs", e, 8*3, sys.toc())
+end
 
 function all()
    quaternion_from_to()
-   quat2rot()
-   rot2quat()
+   quaternion_to_rotation_matrix()
+   rotation_matrix_to_quaternion()
    rotation_by_quat()
    quat_product()
+   quat_from_to_euler()
+   euler_to_quat_directions()
 end
-
