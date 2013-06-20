@@ -1,4 +1,5 @@
 local paths = require "paths"
+local fs = require 'fs'
 
 Class()
 
@@ -71,3 +72,11 @@ function glob(dir,match, out)
    end 
    return out
 end
+
+
+function is_dir(dir_path)
+  local stats = fs.statSync(dir_path)
+  return stats.isDirectory()
+end
+
+

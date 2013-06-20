@@ -14,9 +14,10 @@ local cookie
 
 function login(email, password)
   request.post(host..'/login.json', {email = email, password = password}, nil, nil, function(err, res, body)
-    print(err or res.status_code)
     if res and res.status_code == 200 then
       cookie = res.headers['set-cookie']:match("[^;]+")
+    else
+      log.error(err or res)
     end
   end)
 end
