@@ -1,4 +1,5 @@
 -- Class()
+local path = require 'path'
 
 require 'image'
 
@@ -26,7 +27,7 @@ scandir  = params.scandir
 out_size   = params.size
 
 -- load images
-if not paths.dirp(scandir) then
+if not util.fs.is_dir(scandir) then
    error("Must set a valid path to directory of images to process default -scandir images/")
 end
 images = util.util.file_match(scandir,"jpg$",images)
@@ -39,7 +40,7 @@ pose_file = util.util.file_match(scandir,"texture_info.txt$")
 poses = util.mp.load_poses(pose_file[1])
 
 img = image.load(images[1])
-depth_file = util.util.file_match(params.depthdir,paths.basename(images[1]))
+depth_file = util.util.file_match(params.depthdir,path.basename(images[1]))
 depth_img = image.load(depth_file[1])
 
 width      = img:size(3)
@@ -101,7 +102,7 @@ image.display{image={img_stereo,img_little}}
 
 for i = 2,#images do 
    img = image.load(images[i])
-   depth_file = util.util.file_match(params.depthdir,paths.basename(images[i]))
+   depth_file = util.util.file_match(params.depthdir,path.basename(images[i]))
    depth_img = image.load(depth_file[1])
 
    img_stereo = sphere_to_stereographic:remap(img)

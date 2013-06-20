@@ -32,7 +32,7 @@ cmd:text()
 params = cmd:parse(arg)
 
 imagesdir  = params.topdir..'/'..params.imagesdir..'/'..params.sweepnum
-if not paths.dirp(imagesdir) then
+if not util.fs.is_dir(imagesdir) then
    error("Must set a valid path to directory of images to process default -imagesdir images/")
 end
 

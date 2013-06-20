@@ -1,6 +1,6 @@
 --Class()
 
-require 'image'
+local fs = require 'fs'
 saliency = require 'saliency.init'
 
 cmd = torch.CmdLine()
@@ -82,10 +82,10 @@ smp_images={}
 if not images then
    images = {}
    fnames = {}
-   if not paths.dirp(imagesdir) then 
+   if not util.fs.is_dir(imagesdir) then 
       error("Must set a valid path to directory of images to process default -imagesdir images/")
    end
-   imgfiles = paths.files(imagesdir)
+   imgfiles = fs.readdirSync(imagesdir)
    imgfiles() -- .
    imgfiles() -- ..
    for f in imgfiles do

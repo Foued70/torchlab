@@ -1,5 +1,5 @@
-require 'image'
-require 'paths'
+local image = require 'image'
+local path = require 'path'
 require 'math'
 
 local LensSensor = projection.LensSensor
@@ -31,7 +31,7 @@ function Photo:__init(parent_sweep, image_path)
   self.image_coordinate_set = false
   self.white_wall = false
 
-  self.name = paths.basename(image_path)
+  self.name = path.basename(image_path)
   self.image_path = image_path
   self.image_data_raw = nil
   self.image_data_rectilinear = nil
@@ -298,7 +298,7 @@ end
 
 function Photo:file(scale, ps, filetype)
   local f = string.format('%s-%s-%s-s%s-', 
-    paths.basename(self.sweep.scan.model_file), paths.basename(self.sweep.scan.pose_file), self.name, scale)
+    path.basename(self.sweep.scan.model_file), path.basename(self.sweep.scan.pose_file), self.name, scale)
     
   if ps then f = f .."-grid".. ps end  
   return f..filetype..'.t7'
@@ -364,9 +364,9 @@ end
 function Photo:get_depth_map(scale, packetsize, only_cached)
   if not self.depth_map then
     if packetsize and packetsize < 1 then packetsize = nil end    
-    local filepath = paths.concat(self.sweep.path, self:depth_map_file(scale, packetsize))
+    local filepath = path.join(self.sweep.path, self:depth_map_file(scale, packetsize))
     
-    if paths.filep(filepath) then
+    if util.fs.is_file(filepath) then
       self.depth_map = torch.load(filepath)
     else
       if only_cached then

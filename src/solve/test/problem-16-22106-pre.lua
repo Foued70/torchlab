@@ -1,11 +1,8 @@
-require 'torch'
-
-
 local ncam = 16
 local npts = 22106
 local nobs = 83718
 
-local thisdir = paths.dirname(paths.thisfile())
+local thisdir = __dirname
 
 -- had to split the tensors into separate files as torch or lua has a
 -- limit (main function has more than 65536 constants)

@@ -21,7 +21,7 @@ cmd:text()
 params = cmd:parse(arg)
 
 images_dir  = params.imagesdir
-if not paths.dirp(images_dir) then 
+if not util.fs.is_dir(images_dir) then 
    error(string.format("Can't find directory: %s", images_dir))
 end
 

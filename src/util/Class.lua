@@ -124,7 +124,8 @@ end
 
 for _, file_name in ipairs(fs.readdirSync(CLOUDLAB_SRC)) do
   local dir_name = path.join(CLOUDLAB_SRC, file_name)
-  if paths.dirp(dir_name) then
+  local stats = fs.statSync(dir_name)
+  if stats.is_directory then
     _G[file_name] = {}
     setmetatable(_G[file_name], {
       __index = package_class_loader,

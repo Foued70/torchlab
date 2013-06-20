@@ -1,6 +1,4 @@
-require 'torch'
-
-local paths      = require 'paths'
+local path = require 'path'
 local config     = require 'model.config'
 local loader     = require 'data.loader'
 
@@ -32,7 +30,7 @@ end
 function Scan:__init(scan_path, pose_file, obj_file)
   if not scan_path then error('arg #1 invalid, cannot be nil') end
   
-  if paths.dirp(scan_path) then    
+  if util.fs.is_dir(scan_path) then    
     self.path = scan_path
 
     self:set_sweeps()
@@ -51,12 +49,12 @@ function Scan:set_model_file(file_path)
   -- if there's a file_path and it has the right extension, use it. 
   -- otherwise try looking in the file_path's folder, then in scan_path folder
     
-  if file_path and paths.filep(file_path) then
+  if file_path and util.fs.is_file(file_path) then
     if fs.extname(file_path) == MODEL_FILE_EXTENSION then 
       self.model_file = file_path
       return
     else
-      local model_files = fs.files_only(paths.dirname(file_path), MODEL_FILE_EXTENSION)
+      local model_files = fs.files_only(path.dirname(file_path), MODEL_FILE_EXTENSION)
       if model_files and #model_files > 0 then
         self.model_file = model_files[1]
         return
@@ -74,7 +72,7 @@ function Scan:set_model_file(file_path)
 end
 
 function Scan:get_model_data()
-  if not self.model_file or not paths.filep(self.model_file) then 
+  if not self.model_file or not util.fs.is_file(self.model_file) then 
     log.trace('Could not get model data. No file found.')
     return nil 
   end
@@ -118,7 +116,7 @@ end
 
 function Scan:set_poses(pose_file)
   -- guess the pose file based on scan path if pose file path not provided or isn't a file
-  if not pose_file or not paths.filep(pose_file) then
+  if not pose_file or not util.fs.is_file(pose_file) then
     local txt_files = fs.files_only(self.path, '.txt')
     if txt_files and #txt_files > 0 then 
       pose_file = txt_files[1] 
@@ -221,9 +219,9 @@ end
 function Scan:save(file_path)
   local default_filename = 'scan.lua'
   if file_path then 
-    if paths.dirp(file_path) then file_path = paths.concat(file_path, default_filename) end
+    if util.fs.is_dir(file_path) then file_path = path.join(file_path, default_filename) end
   else 
-    file_path = paths.concat(self.path, default_filename)
+    file_path = path.join(self.path, default_filename)
   end
   
   torch.save(file_path, self)

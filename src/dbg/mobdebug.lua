@@ -1083,7 +1083,7 @@ local function handle(params, client, options)
         local file = io.open(exp, "r")
         if not file and pcall(require, "winapi") then
           -- if file is not open and winapi is there, try with a short path;
-          -- this may be needed for unicode paths on windows
+          -- this may be needed for unicode path on windows
           winapi.set_encoding(winapi.CP_UTF8)
           file = io.open(winapi.short_path(exp), "r")
         end

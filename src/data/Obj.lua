@@ -143,7 +143,7 @@ local function load_materials(pathname, filename)
       elseif line:match('^illum ') then
         mtl.illumType = tonumber(line:sub(7))
       elseif line:match('^map_Kd ') then
-        mtl.diffuse_tex_path = paths.concat(pathname, trim(line:sub(8)))
+        mtl.diffuse_tex_path = path.join(pathname, trim(line:sub(8)))
       end
     end
     
@@ -233,7 +233,7 @@ function Obj:load(filename)
       table.insert(submeshes, {face_idx, 0, mtl_id})
     elseif line:match('^mtllib ') then
       local mtllib = trim(line:sub(8))    
-      materials, mtl_name_index_map = load_materials(paths.dirname(filename), mtllib)
+      materials, mtl_name_index_map = load_materials(path.dirname(filename), mtllib)
     end
   end
   if #submeshes > 0 then
@@ -334,7 +334,7 @@ function Obj:save(filename, mtlname)
   mtlname = mtlname or "scan.mtl"  
   
   local objf = assert(io.open(filename, "w"))  
-  objf:write(string.format("mtllib %s\n\n", paths.basename(mtlname)))
+  objf:write(string.format("mtllib %s\n\n", path.basename(mtlname)))
   
   -- print vertices
   log.trace('writing verts', self.n_verts)  
@@ -401,7 +401,7 @@ function Obj:save(filename, mtlname)
     write_mtl_prop(mtlf, material, 'illumType', 'illum')
 
     if material.diffuse_tex_path then      
-      mtlf:write(string.format("map_Kd %s\n", paths.basename(material.diffuse_tex_path)))
+      mtlf:write(string.format("map_Kd %s\n", path.basename(material.diffuse_tex_path)))
     end   
     
     mtlf:write("\n")

@@ -1,7 +1,5 @@
 -- Class()
 
-require 'image'
-
 profile = xlua.Profiler()
 
 cmd = torch.CmdLine()
@@ -33,13 +31,13 @@ ws = window_size
 lookup_h = params.lh
 lookup_w = params.lw
 
-if not paths.filep(image_file) then 
+if not util.fs.is_file(image_file) then 
    error(string.format("-imagefile %s not found",image_file))
 end
 
 img_rgb = image.load(image_file)
 
-if mask_file and paths.filep(mask_file) then 
+if mask_file and util.fs.is_file(mask_file) then 
    printf(" - attempt to load mask file %s", mask_file)
    mask = image.load(mask_file)
 elseif img_rgb:size(1) == 4 then 

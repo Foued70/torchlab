@@ -66,17 +66,17 @@ end
 --
 -- dot files are ignored
 function Arc:import(dir_file_glob)
-  local dir = paths.dirname(dir_file_glob)
+  local dir = path.dirname(dir_file_glob)
   local files
   if dir_file_glob:sub(-1) == '*' then
-    files = paths.dir(dir)
+    files = fs.readdirSync(dir)
   else
-    files = {paths.basename(dir_file_glob)}
+    files = {path.basename(dir_file_glob)}
   end
 
   for i, filename in ipairs(files) do
     if filename:sub(1, 1) ~= '.' then -- no dot files
-      local abs_name = paths.concat(dir, filename)
+      local abs_name = path.join(dir, filename)
       self:import_single(filename, abs_name)
     end
   end
@@ -84,12 +84,12 @@ end
 
 
 function Arc:import_all()
-  local dir = paths.concat(CACHE_ROOT, self.path)
-  local files = paths.dir(dir)
+  local dir = path.join(CACHE_ROOT, self.path)
+  local files = fs.readdirSync(dir)
   for i, filename in ipairs(files) do
     if filename:sub(1, 1) ~= '.' then -- no dot files
-      local abs_name = paths.concat(dir, filename)
-      if paths.dirp(abs_name) then
+      local abs_name = path.join(dir, filename)
+      if util.fs.is_dir(abs_name) then
         self:dir(filename):import_all()
       else
         self:file(filename)
@@ -100,7 +100,7 @@ end
 
 -- import the given file or dir to arc.<name>
 function Arc:import_single(name, file_or_dir)
-  if paths.dirp(file_or_dir) then
+  if util.fs.is_dir(file_or_dir) then
     self:dir(name):import(file_or_dir..'/*')
   else
     self:file(name):import(file_or_dir)

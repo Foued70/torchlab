@@ -1,7 +1,5 @@
 Class()
 
-require 'image'
-
 sys.tic()
 
 pi = math.pi
@@ -24,7 +22,7 @@ image_file  = params.imagefile
 out_size   = params.size
 out_file   = params.outfile
 
-if not paths.filep(image_file) then 
+if not util.fs.is_file(image_file) then 
    error(string.format("-imagefile %s not found",image_file))
 end
 

@@ -1,9 +1,8 @@
-require "torch"
-require "paths"
-require "sys"
+local path = require "path"
+local fs = require "fs"
 
-local cache_dir = paths.concat(paths.dirname(paths.thisfile()), 'cache')
-sys.execute("mkdir -p "..cache_dir)
+local cache_dir = path.join(__dirname, 'cache')
+if not fs.existsSync(cache_dir) then fs.mkdirSync(cache_dir)
 
 local function loader(file, init_fn, ...)
   local object = nil
@@ -13,12 +12,11 @@ local function loader(file, init_fn, ...)
   
   cached_file = cached_file:gsub("/", "_")
   if not torch_file then cached_file = cached_file..".t7" end  
-  cached_file = paths.concat(cache_dir, cached_file)
+  cached_file = path.join(cache_dir, cached_file)
 
-  if paths.filep(cached_file) then
-    sys.tic()
+  if util.fs.is_file(cached_file) then
     object = torch.load(cached_file)
-    log.trace('Loaded cached file', cached_file, sys.toc())
+    log.trace('Loaded cached file', cached_file)
   else
     if torch_file then
       object = init_fn(...)

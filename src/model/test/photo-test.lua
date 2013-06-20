@@ -1,9 +1,10 @@
+local path = require 'path'
 local Ray  = geom.Ray
 local geom = geom.util
 
 local test  = {}
 test.data = require 'model.test.data.photo-data'
-scan = model.mp.scan(paths.concat(paths.dirname(paths.thisfile()), 'data'))
+scan = model.mp.scan(path.join(__dirname, 'data'))
 photos = scan:get_photos()
 
 -- FIXME check serious numerical issues which are hopefully due to the

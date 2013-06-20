@@ -1,3 +1,5 @@
+local path = require 'path'
+
 Class()
 
 local Scan       = model.Scan
@@ -10,9 +12,9 @@ local loader     = require 'data.loader'
 function scan_name(posefile, objfile)
   local sn = ""
   if objfile then
-    sn = paths.basename(objfile)
+    sn = path.basename(objfile)
   end
-  return string.format("%s-%s-mp-scan.t7", sn, paths.basename(posefile))
+  return string.format("%s-%s-mp-scan.t7", sn, path.basename(posefile))
 end
 
 -- takes a posefile or scan folder path and obj path and return a scan object
@@ -30,8 +32,8 @@ function load_scan(file_or_dirpath, objfile)
   local scan_folder = file_or_dirpath
   local posefile = nil
   
-  if paths.filep(file_or_dirpath) then
-    scan_folder = paths.dirname(file_or_dirpath)
+  if util.fs.is_file(file_or_dirpath) then
+    scan_folder = path.dirname(file_or_dirpath)
     posefile = file_or_dirpath
   end
 
@@ -42,7 +44,7 @@ function load_scan(file_or_dirpath, objfile)
     local pose = scan.poses[i]
     local sweep = Sweep.new(scan, scan_folder)
     sweep.photos = {}
-    local photo = Photo.new(sweep, paths.concat(scan_folder, pose.name))
+    local photo = Photo.new(sweep, path.join(scan_folder, pose.name))
     local sensor = LensSensor.new('matterport')
     local img = photo:get_image()
    
@@ -84,7 +86,7 @@ end
 -- <center v> <degrees per px x> <degrees per px y> 
 -- origin of uv is bottom left
 function load_poses(posefile)
-  if not paths.filep(posefile) then return nil end
+  if not util.fs.is_file(posefile) then return nil end
   
   log.trace('Loading poses from', posefile)
   local mp_poses = {}

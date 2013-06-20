@@ -1,3 +1,4 @@
+local path = require 'path'
 hough = require 'hough'
 saliency = require 'saliency'
 require 'image'
@@ -17,8 +18,8 @@ cmd:text()
 
 -- parse input params
 params = cmd:parse(arg)
-dname = paths.dirname(params.image)
-fname = paths.basename(params.image)
+dname = path.dirname(params.image)
+fname = path.basename(params.image)
 
 img = image.load(params.image):type('torch.DoubleTensor')
 img = image.scale(img, 1580,412)

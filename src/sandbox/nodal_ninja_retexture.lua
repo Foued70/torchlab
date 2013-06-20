@@ -1,7 +1,5 @@
 -- Class()
 
-require 'image'
-
 dofile 'util.lua'
 
 pi = math.pi
@@ -40,7 +38,7 @@ obj_file   = params.obj_file
 
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
-if #matter_pose_fname > 0 and paths.filep(matter_pose_fname[1]) then
+if #matter_pose_fname > 0 and util.fs.is_file(matter_pose_fname[1]) then
    matter_pose_fname = matter_pose_fname[1]
    printf("using : %s", matter_pose_fname)
    --    poses = model.mp.load_poses(matter_pose_fname)
@@ -48,7 +46,7 @@ else
    error("Can't find the pose file (set -matter_dir correctly)")
 end
 
-if paths.filep(obj_file) then
+if util.fs.is_file(obj_file) then
    printf("using : %s", obj_file)
    scan = model.Scan.new(dslr_dir,matter_pose_fname,obj_file)
 else

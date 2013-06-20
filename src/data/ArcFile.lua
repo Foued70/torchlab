@@ -1,10 +1,11 @@
 local fs = require'fs'
+local path = require'path'
 
 local ArcFile = Class()
 
-function ArcFile:__init(name, path)
-  self.path = path..'/'..name
-  self.filename = paths.concat(data.Arc.CACHE_ROOT, path, name)
+function ArcFile:__init(name, arc_path)
+  self.path = arc_path..'/'..name
+  self.filename = path.join(data.Arc.CACHE_ROOT, arc_path, name)
   self.server_mod_time = 0 -- msecs, 0 means it doesn't exist on the server
 end
 

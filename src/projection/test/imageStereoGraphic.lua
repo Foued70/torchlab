@@ -1,3 +1,5 @@
+local path = require 'path'
+
 Class()
 
 require 'image'
@@ -20,7 +22,7 @@ params = cmd:parse(arg)
 
 image_file  = params.imagefile
 
-if not paths.filep(image_file) then 
+if not util.fs.is_file(image_file) then 
    error(string.format("-imagefile %s not found",image_file))
 end
 
