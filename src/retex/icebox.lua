@@ -383,7 +383,7 @@ function test_ray_plane_intersection(poses,pi,scale)
    local norms   = obj.normals
    local ds       = obj.d
 
-   sys.tic()
+   log.tic()
 
    local pt      = poses.xyz[pi] 
 
@@ -460,7 +460,7 @@ function test_ray_plane_intersection(poses,pi,scale)
       end
    end
    local ntests = norms:size(1) * dirs:size(1)
-   printf("-- Errors ( in %2.2fs) ", sys.toc())
+   printf("-- Errors ( in %2.2fs) ", log.toc())
    printf("-- Dot            : %d/%d", dperr, ntests)
    printf("-- Inv Dot        : %d/%d", idoterr, ntests)
    printf("-- Initial t      : %d/%d", initerr, ntests)
@@ -491,7 +491,7 @@ function test_ray_face_intersection ()
    dirs      = dirs[3][4]
    slow_ds   = torch.Tensor(dirs:size(1))
    slow_fids = torch.IntTensor(dirs:size(1))
-   sys.tic()
+   log.tic()
  
    for di = 1,dirs:size(1) do
       slow_ds[di],slow_fids[di] = get_occlusions(pt,dirs[di],obj)

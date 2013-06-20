@@ -127,7 +127,7 @@ lambda = 0
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 for pp = -phi_quant,phi_quant do
   

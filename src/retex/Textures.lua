@@ -19,7 +19,7 @@ function Textures:__init(scan, opts)
   self:load_target() 
   
   self.output_dir = path.join(scan.path, 'retexture')
-  sys.execute("mkdir -p " .. self.output_dir)
+  util.fs.mkdir_p(self.output_dir)
   
   self.textures = {}
   self.faces = {} -- store some info about faces
@@ -342,7 +342,7 @@ function Textures:make_img(fid, debug)
   local widthpx, heightpx, dx, dy = self:range_to_texture_dimensions(xrange[3], yrange[3], debug)
   
   log.trace(widthpx, 'x', heightpx, 'image for face', fid)
-  sys.tic()
+  log.tic()
   -- make the temporary per photo mixing alpha and color channels
   local normal = obj.face_normals[fid]
   local alpha  = torch.zeros(nphotos)
@@ -428,7 +428,7 @@ function Textures:make_img(fid, debug)
     end -- end w
     y = y + dy
   end -- end h
-  log.trace('texture for face', fid, 'created in', sys.toc())
+  log.trace('texture for face', fid, 'created in', log.toc())
   -- 6) store new texture file
   -- not sure about saving to disk, or saving in object.
   self.textures[fid] = fimg

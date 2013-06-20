@@ -1,4 +1,5 @@
 local debug = require 'debug'
+local glfw = require '../ui/glfw'
 
 setfenv(1, setmetatable({}, {__index = _G}))
 
@@ -58,6 +59,15 @@ function trace_x(level, color_func, ...)
     end
     print(color_func(short_file..':'..(info.name or '')..':'..info.currentline), rest) 
   end
+end
+
+local last_tic = 0
+function tic()
+ last_tic = glfw.GetTime()
+end
+
+function toc()
+ return glfw.GetTime() - last_tic
 end
 
 return (getfenv())

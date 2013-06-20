@@ -114,7 +114,7 @@ phi    = 0
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 mindist = torch.Tensor(#images);
 mindist:fill(9999999999999999999999);

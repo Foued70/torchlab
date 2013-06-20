@@ -19,7 +19,7 @@ function rotation_by_quatC()
    local groundt = data.result_rot_by_quat
    local i      = 1
    local offset = 1
-   sys.tic()
+   log.tic()
    for i = 1,nquats do
       local q   = quats[i]
       local out = res:narrow(1,offset,nvecs)
@@ -42,7 +42,7 @@ function rotation_by_quatC()
       end 
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,sys.toc()))
+                       e,res:size(1),maxerr,log.toc()))
 end
 
 function rotate_translate()
@@ -58,7 +58,7 @@ function rotate_translate()
    local i      = 1
    local offset = 1
 
-   sys.tic()
+   log.tic()
    for j = 1,nquats do
       local q = quats[j]
       for k = 1,nvecs do
@@ -66,9 +66,9 @@ function rotate_translate()
          i = i + 1
       end
    end
-   print(string.format(" - built ground truth in %2.4fs", sys.toc()))
+   print(string.format(" - built ground truth in %2.4fs", log.toc()))
 
-   sys.tic()
+   log.tic()
    for i = 1,nquats do
       local q   = quats[i]
       local out = res:narrow(1,offset,nvecs)
@@ -91,7 +91,7 @@ function rotate_translate()
       end 
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,sys.toc()))
+                       e,res:size(1),maxerr,log.toc()))
 end
 
 function translate_rotate()
@@ -107,7 +107,7 @@ function translate_rotate()
    local offset = 1
    local groundt = res:clone()
 
-   sys.tic()
+   log.tic()
    for j = 1,nquats do
       local q = quats[j]
       for k = 1,nvecs do
@@ -116,9 +116,9 @@ function translate_rotate()
          i = i + 1
       end
    end
-   print(string.format(" - built ground truth in %2.4fs", sys.toc()))
+   print(string.format(" - built ground truth in %2.4fs", log.toc()))
 
-   sys.tic()
+   log.tic()
    for i = 1,nquats do
       local q   = quats[i]
       local out = res:narrow(1,offset,nvecs)
@@ -141,7 +141,7 @@ function translate_rotate()
       end 
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,sys.toc()))
+                       e,res:size(1),maxerr,log.toc()))
 end
 
 
@@ -151,7 +151,7 @@ function rotation_by_mat()
    local maxerr = 0
    local res = torch.Tensor(data.vec:size(1)*data.quat:size(1),3)
    local i = 1
-   sys.tic()
+   log.tic()
    for j = 1,data.quat:size(1) do
       local mat = data.result_rot_mat[j]
       for k = 1,data.vec:size(1) do
@@ -168,14 +168,14 @@ function rotation_by_mat()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,sys.toc()))
+                       e,res:size(1),maxerr,log.toc()))
 end
 
 function z_rotation()
    print("Testing z-rotation")
    local e = 0
    local maxerr = 0
-   sys.tic()
+   log.tic()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]
       local q = rot.z_axis(tvec)
@@ -188,14 +188,14 @@ function z_rotation()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,data.vec:size(1),maxerr,sys.toc()))
+                       e,data.vec:size(1),maxerr,log.toc()))
 end
 
 function x_rotation()
    print("Testing x-rotation")
    local e = 0
    local maxerr = 0
-   sys.tic()
+   log.tic()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]
       local q     = rot.x_axis(tvec)
@@ -208,14 +208,14 @@ function x_rotation()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,data.vec:size(1),maxerr,sys.toc()))
+                       e,data.vec:size(1),maxerr,log.toc()))
 end
 
 function y_rotation()
    print("Testing y-rotation")
    local e = 0
    local maxerr = 0
-   sys.tic()
+   log.tic()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]
       local q    = rot.y_axis(tvec)
@@ -228,14 +228,14 @@ function y_rotation()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,data.vec:size(1),maxerr,sys.toc()))
+                       e,data.vec:size(1),maxerr,log.toc()))
 end
 
 function largest_rotation()
    print("Testing largest rotation")
    local e = 0
    local maxerr = 0
-   sys.tic()
+   log.tic()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]
       local q,d = rot.largest(tvec)
@@ -248,7 +248,7 @@ function largest_rotation()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,data.vec:size(1),maxerr,sys.toc()))
+                       e,data.vec:size(1),maxerr,log.toc()))
 end
 
 

@@ -78,7 +78,7 @@ function rotation_by_quat()
    local maxerr = 0
    local res = torch.Tensor(data.vec:size(1)*data.quat:size(1),3)
    local i = 1
-   sys.tic()
+   log.tic()
    for j = 1,data.quat:size(1) do
       local q = data.quat[j]
       for k = 1,data.vec:size(1) do
@@ -100,7 +100,7 @@ function rotation_by_quat()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,sys.toc()))
+                       e,res:size(1),maxerr,log.toc()))
 end
 
 function quat_product()
@@ -108,7 +108,7 @@ function quat_product()
    local e = 0
    local maxerr = 0
    local n_test = 0
-   sys.tic()
+   log.tic()
 
    local dq = data.quat
    local dv = data.vec
@@ -159,7 +159,7 @@ function quat_product()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,n_test,maxerr,sys.toc()))
+                       e,n_test,maxerr,log.toc()))
 end
 
 function quat_from_to_euler()
@@ -167,7 +167,7 @@ function quat_from_to_euler()
    local eps = 0.002 -- terrible numerical results with all the trig functions
    local e = 0
    local maxerr = 0
-   sys.tic()
+   log.tic()
    local ea = quat.to_euler_angle(data.quat)
    local q  = quat.from_euler_angle(ea)
    for j = 1,data.quat:size(1) do
@@ -185,13 +185,13 @@ function quat_from_to_euler()
       if d > eps then e = e + 1 end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,data.quat:size(1)+4,maxerr,sys.toc()))
+                       e,data.quat:size(1)+4,maxerr,log.toc()))
 end
 
 
 function euler_to_quat_directions()
    print("Testing directions in euler to quat conversions")
-   sys.tic()
+   log.tic()
    -- step = 25
    -- angles = torch.linspace(-2*math.pi,2*math.pi,2*step+1)
    local angles = data.euler_angles
@@ -253,7 +253,7 @@ function euler_to_quat_directions()
    if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
    if not (torch.abs(v - data.result_axes_about_z):max() < 1e-15) then e = e + 1 end
 
-   printf(" - Passed %d/%d tests in %2.4fs", e, 8*3, sys.toc())
+   printf(" - Passed %d/%d tests in %2.4fs", e, 8*3, log.toc())
 end
 
 function all()

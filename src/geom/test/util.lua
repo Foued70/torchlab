@@ -10,7 +10,7 @@ function compute_normals()
    local maxerr     = 0
    local normals    = data.face_plane:narrow(2,1,3)
    local face_verts = data.face_verts
-   sys.tic()
+   log.tic()
    for i = 1,normals:size(1) do
       cnt = cnt + 1
       local n = geom.compute_normal(face_verts[i])
@@ -25,7 +25,7 @@ function compute_normals()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,cnt, maxerr,sys.toc()))
+                       e,cnt, maxerr,log.toc()))
 end
 
 function spherical_angles_to_unit_cartesian()

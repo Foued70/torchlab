@@ -70,3 +70,7 @@ function extname(file_path)
   return path.extname(file_path)
 end
 
+
+function mkdir_p(dir_path, mode)
+  if not fs.existsSync(dir_path) then fs.mkdirSync(dir_path, mode) end
+end

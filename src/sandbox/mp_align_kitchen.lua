@@ -37,7 +37,7 @@ if not util.fs.is_dir(imagesdir) then
 end
 
 outdir = params.topdir..'/'..params.outdir
-sys.execute("mkdir -p " .. outdir)
+util.fs.mkdir_p(outdir)
 
 -- images are vertical
 vfov = (97/180) * pi
@@ -69,7 +69,7 @@ height = img:size(2)
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 mindist       = torch.Tensor(#images);
 mindist:fill(math.huge);

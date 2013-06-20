@@ -53,7 +53,7 @@ proj_to   = projection.SphericalProjection.new(out_width,out_height,out_hfov,out
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 indices     = {}
 masks       = {}
@@ -61,9 +61,9 @@ out_images  = {}
 
 rect_to_sphere = projection.Remap.new(proj_from,proj_to)
 
-time = sys.toc()
+time = log.toc()
 printf(" - make map %2.4fs", time)
-sys.tic()
+log.tic()
 force  = true 
 lambda = 0
 phi    = 0
@@ -81,9 +81,9 @@ for i = 1,#images do
    table.insert(masks,mask)
    table.insert(out_images,img_out)
 
-   time = sys.toc()
+   time = log.toc()
    printf(" - reproject %2.4fs", time)
-   sys.tic()
+   log.tic()
 
    lambda = lambda + delta
    collectgarbage()

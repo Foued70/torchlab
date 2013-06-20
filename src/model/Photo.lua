@@ -87,10 +87,10 @@ end
 
 function Photo:get_image()
   if not self.image_data_raw then
-    sys.tic()
+    log.tic()
     log.trace("Loading image from path:", "\""..self.image_path.."\"")
     self.image_data_raw = image.load(self.image_path)
-    log.trace('Completed image load in', sys.toc())
+    log.trace('Completed image load in', log.toc())
   end
   return self.image_data_raw
 end
@@ -111,9 +111,9 @@ end
 
 function Photo:get_lens()
   if not self.lens then
-    sys.tic()
+    log.tic()
     self.lens = self.sweep.scan:get_lens(self:get_image())
-    log.trace('Loaded lens in', sys.toc())
+    log.trace('Loaded lens in', log.toc())
   end
   return self.lens
 end
@@ -238,14 +238,14 @@ function Photo:dirs_file(scale, ps)
 end
 
 function Photo:build_dirs(scale,ps)  
-  sys.tic()
+  log.tic()
   local dirs = nil
   if ps then
     dirs = util.grid_contiguous(self:compute_dirs(scale),ps,ps)
   else
     dirs = self:compute_dirs(scale)
   end
-  log.trace("Built dirs in", sys.toc())
+  log.trace("Built dirs in", log.toc())
   return dirs
 end
 
@@ -316,7 +316,7 @@ function Photo:build_depth_map(scale, packetsize)
   local out_tree  = torch.Tensor(dirs:size(1),dirs:size(2))
   local fid_tree  = torch.LongTensor(dirs:size(1),dirs:size(2))
 
-  sys.tic()
+  log.tic()
   log.trace("Computing depth map for photo", self.name, 'at scale 1/'..scale)
 
   local tot = 0
@@ -349,12 +349,12 @@ function Photo:build_depth_map(scale, packetsize)
     end
   end
 
-  log.trace("Done computing depth map for photo", self.name, sys.toc())
+  log.trace("Done computing depth map for photo", self.name, log.toc())
 
   log.trace("Interpolating for", totmiss, "missed edges out of", tot)
-  sys.tic()
+  log.tic()
   interpolate.math_huge(out_tree)
-  log.trace("Interpolation done", sys.toc())
+  log.trace("Interpolation done", log.toc())
 
   image.display{image={out_tree},min=0,max=10,legend=self.name}
   

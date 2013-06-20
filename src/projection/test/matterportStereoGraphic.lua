@@ -2,7 +2,7 @@ Class()
 
 require 'image'
 
-sys.tic()
+log.tic()
 
 d2r = math.pi / 180
 pi = math.pi
@@ -56,13 +56,13 @@ proj_stereo =
 proj_little = 
    projection.StereographicProjection.new(out_size,out_size,out_fov,out_fov,nil,nil,0,pi2)
 
-time_prep = sys.toc()
+time_prep = log.toc()
 printf(" - prep in %2.4fs", time_prep)
-sys.tic()
+log.tic()
 
 p("Testing Stereographic LittleWorld Projection")
 
-sys.tic()
+log.tic()
 
 sphere_to_stereographic = projection.Remap.new(proj_sphere,proj_stereo)
 sphere_to_little = projection.Remap.new(proj_sphere,proj_little)
@@ -73,15 +73,15 @@ offsets = sphere_to_stereographic:get_offset_and_mask()
 offsetl = sphere_to_little:get_offset_and_mask()
 perElement = offsets:nElement()
 
-time_map = sys.toc()
+time_map = log.toc()
 printf(" - make map %2.4fs", time_map)
-sys.tic()
+log.tic()
 
 img_stereo = sphere_to_stereographic:remap(img)
 img_little = sphere_to_little:remap(img)
-time_reproject = sys.toc()
+time_reproject = log.toc()
 printf(" - reproject %2.4fs", time_reproject)
-sys.tic()
+log.tic()
 
 image.display{image={img_stereo,img_little}}
 
@@ -89,9 +89,9 @@ for i = 2,#images do
    img = image.load(images[i])
    img_stereo = sphere_to_stereographic:remap(img)
    img_little = sphere_to_little:remap(img)
-   time_reproject = sys.toc()
+   time_reproject = log.toc()
    printf(" - reproject %2.4fs", time_reproject)
-   sys.tic()
+   log.tic()
    image.display{image={img_stereo,img_little}} 
 end
 

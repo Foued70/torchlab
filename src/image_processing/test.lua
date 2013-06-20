@@ -25,12 +25,12 @@ function test_intImage(l)
    local dimc = l:size(3)
    local ii = torch.Tensor(l:size())
    print("TESTING: libsaliency.intImage -- DIAGONAL ONLY")
-   sys.tic()
+   log.tic()
    l.libsaliency.intImage(ii,l)
    print(
       string.format(" - time to compute intImage:           % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local s, v
    local errors = 0
    for i = 1,chan do
@@ -44,7 +44,7 @@ function test_intImage(l)
    end
    print(
       string.format(" - time to test (%d pts) intImage:   % 4.1f ms",
-                    chan*dimr,sys.toc()*1000))
+                    chan*dimr,log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,ii
 end
@@ -58,14 +58,14 @@ function test_fullintImage(l)
    local dimc = l:size(3)
    local ii = torch.Tensor(l:size())
    print("TESTING: libsaliency.intImage -- FULL")
-   sys.tic()
+   log.tic()
    l.libsaliency.intImage(ii,l)
    print(
       string.format(" - time to make intImage:              % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    local s, rs
    local errors = 0
-   sys.tic()
+   log.tic()
    for i = 1,chan do
       for r = 1,dimr do 
          for c = 1,dimc do
@@ -79,7 +79,7 @@ function test_fullintImage(l)
    end
    print(
       string.format(" - time to test intImage:              % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors, ii
 end
@@ -107,17 +107,17 @@ function test_intAvg(l,kr,kc,sr,sc)
    local ii = torch.Tensor(l:size())
    local rr = torch.Tensor(l:size())
    print("TESTING: libsaliency.intAvg -- DIAGONAL ONLY")
-   sys.tic() ;
+   log.tic() ;
    l.libsaliency.intImage(ii,l)
    print(
       string.format(" - time to compute intImage:           % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    ii.libsaliency.intAvg(rr,ii,kr,kc,sr,sc)
    print(
       string.format(" - time to compute intAvg:             % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local s,v
    local errors = 0
    for i = 1,chan do
@@ -133,7 +133,7 @@ function test_intAvg(l,kr,kc,sr,sc)
    end
    print(
       string.format(" - time to test intAvg:                % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,ii,rr
 end
@@ -160,17 +160,17 @@ function test_fullintAvg(l,kr,kc,sr,sc)
    local ii = torch.Tensor(l:size())
    local rr = torch.Tensor(l:size())
    print("TESTING: libsaliency.intAvg -- FULL")
-   sys.tic() ;
+   log.tic() ;
    l.libsaliency.intImage(ii,l)
    print(
       string.format(" - time to compute intImage:           % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    ii.libsaliency.intAvg(rr,ii,kr,kc,sr,sc)
    print(
       string.format(" - time to compute intAvg:             % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local s,v
    local errors = 0
    for i = 1,chan do
@@ -186,7 +186,7 @@ function test_fullintAvg(l,kr,kc,sr,sc)
    end
    print(
       string.format(" - time to test intAvg:                % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,ii,rr
 end
@@ -210,13 +210,13 @@ function test_intHist(l,nbins,lmin,lmax)
    local dimc = l:size(3)
    local rr = torch.Tensor(chan,dimr,dimc,nbins)
    print("TESTING: libsaliency.intHist -- DIAGONAL ONLY") 
-   sys.tic()
+   log.tic()
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    local s, rs
-   sys.tic()
+   log.tic()
    local errors = 0;
    for i = 1,chan do
       lmin = l[i]:min()
@@ -232,7 +232,7 @@ function test_intHist(l,nbins,lmin,lmax)
    end
    print(
       string.format(" - time to test intHist:               % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr
 end
@@ -257,18 +257,18 @@ function test_intLongHist(l,nbins,lmin,lmax)
    rrl = torch.LongTensor(chan,dimr,dimc,nbins)
    ft = torch.Tensor(nbins)
    print("TESTING: libsaliency.intHist -- DIAGONAL ONLY") 
-   sys.tic()
+   log.tic()
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    l.libsaliency.intHistLong(rrl,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHistLong:        % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    local s, rs
-   sys.tic()
+   log.tic()
    local errors = 0;
    for i = 1,chan do
       for r = 1,dimr do 
@@ -282,7 +282,7 @@ function test_intLongHist(l,nbins,lmin,lmax)
    end
    print(
       string.format(" - time to test intHist:               % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr,rrl
 end
@@ -302,13 +302,13 @@ function test_fullintHist(l,nbins)
    local rr = torch.Tensor(chan,dimr,dimc,nbins)
    local errors = 0
    print("TESTING: libsaliency.intHist -- FULL") 
-   sys.tic()
+   log.tic()
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to make intHist:               % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    local s, rs
-   sys.tic()
+   log.tic()
    for i = 1,chan do
       for r = 1,dimr do 
          for c = 1,dimc do
@@ -323,7 +323,7 @@ function test_fullintHist(l,nbins)
    end
    print(
       string.format(" - time to test intHist:               % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr
 end
@@ -357,18 +357,18 @@ function test_intHistAvg(l,nbins,kr,kc,sr,sc)
    local ii = torch.Tensor(chan,dimr,dimc,nbins)
    local aa = torch.Tensor(chan,outr,outc,nbins)
    print("TESTING: libsaliency.intAvg on intHist -- DIAGONAL ONLY") 
-   sys.tic()
+   log.tic()
    l.libsaliency.intHist(ii,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    l.libsaliency.intAvg(aa,ii,kr,kc,sr,sc)
    print(
       string.format(" - time to compute avgHist:            % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    local s, b, rs
-   sys.tic()
+   log.tic()
    local errors = 0;
    for i = 1,chan do
       -- doing perchannel min and max (for hsv)
@@ -388,7 +388,7 @@ function test_intHistAvg(l,nbins,kr,kc,sr,sc)
    end
    print(
       string.format(" - time to test intAvg on intHist:     % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr
 end
@@ -427,46 +427,46 @@ function test_intHistPackedAvg(l,nbins,kr,kc,sr,sc)
    aa  = torch.Tensor(1,outr,outc,chan*nbins)
    print("TESTING: libsaliency.intAvg on intHistPacked -- DIAGONAL ONLY")
 
-   sys.tic()
+   log.tic()
    l.libsaliency.intHist(tmp,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
  
    -- make packed
-   sys.tic()
+   log.tic()
    for i = 1,chan do 
       ii:narrow(4,1+(i-1)*nbins,nbins):copy(tmp[i])
    end
    print(
       string.format(" - time to pack           :            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    l.libsaliency.intHistPack(ip,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHistPacked:      % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    diffii = torch.abs(ii - ip):sum()
    print("Error hist: "..diffii)
    local d
    for i = 1,kr do 
       d = 3^i
-      sys.tic()
+      log.tic()
       l.libsaliency.intAvg(tmpa,ii,d,d,sr,sc)
       print(
          string.format(" - time to compute avgHist["..d.."]:  % 4.1f ms",
-                    sys.toc()*1000))
-      sys.tic()
+                    log.toc()*1000))
+      log.tic()
       l.libsaliency.intAvg(aa,ip,d,d,sr,sc)
       print(
          string.format(" - time to compute avgPack["..d.."]:  % 4.1f ms",
-                       sys.toc()*1000))
+                       log.toc()*1000))
       diffii = torch.abs(aa - tmpa):sum()
       print("Error Avg: "..diffii)
    end
    -- local s, b, rs
    s = torch.Tensor(chan*nbins)
-   sys.tic()
+   log.tic()
    local errors = 0;
    lmin = {}
    lmax = {}
@@ -489,7 +489,7 @@ function test_intHistPackedAvg(l,nbins,kr,kc,sr,sc)
    end
    print(
       string.format(" - time to test intAvg on intHist:     % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr
 end
@@ -523,18 +523,18 @@ function test_fullintHistAvg(l,nbins,kr,kc,sr,sc)
    local ii = torch.Tensor(chan,dimr,dimc,nbins)
    local aa = torch.Tensor(chan,outr,outc,nbins)
    print("TESTING: libsaliency.intAvg on intHist -- FULL") 
-   sys.tic()
+   log.tic()
    l.libsaliency.intHist(ii,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    l.libsaliency.intAvg(aa,ii,kr,kc,sr,sc)
    print(
       string.format(" - time to compute avgHist:            % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    local s, b, rs
-   sys.tic()
+   log.tic()
    local errors = 0;
    for i = 1,chan do
       for r = 1,dimr-kr+1 do 
@@ -551,7 +551,7 @@ function test_fullintHistAvg(l,nbins,kr,kc,sr,sc)
    end
    print(
       string.format(" - time to test intAvg on intHist:     % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr
 end
@@ -572,17 +572,17 @@ function test_spatialMax(l,nbins)
    local mm = torch.Tensor(chan,dimr,dimc)
    local errors = 0
    print("TESTING: libsaliency.spatialMax -- DIAGONAL ONLY")
-   sys.tic() ;
+   log.tic() ;
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    rr.libsaliency.spatialMax(mm,rr)
    print(
       string.format(" - time to compute spatialMax:         % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local m,v,tmp
    local errors = 0
    for r = 1,dimr do
@@ -599,7 +599,7 @@ function test_spatialMax(l,nbins)
    end
    print(
       string.format(" - time to test spatialMax:            % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr,mm
 end
@@ -620,17 +620,17 @@ function test_fullspatialMax(l,nbins)
    local mm = torch.Tensor(chan,dimr,dimc)
    local errors = 0
    print("TESTING: libsaliency.spatialMax -- FULL")
-   sys.tic() ;
+   log.tic() ;
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    rr.libsaliency.spatialMax(mm,rr)
    print(
       string.format(" - time to compute spatialMax:         % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local m,v,tmp
    local errors = 0
    for r = 1,dimr do 
@@ -649,7 +649,7 @@ function test_fullspatialMax(l,nbins)
    end
    print(
       string.format(" - time to test spatialMax:            % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr,mm
 end
@@ -670,17 +670,17 @@ function test_spatialOneOverMax(l,nbins)
    local mm = torch.Tensor(chan,dimr,dimc)
    local errors = 0
    print("TESTING: libsaliency.spatialOneOverMax -- DIAGONAL ONLY")
-   sys.tic() ;
+   log.tic() ;
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    rr.libsaliency.spatialOneOverMax(mm,rr)
    print(
       string.format(" - time to compute spatialOneOverMax:  % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local m,v
    local errors = 0
    for r = 1,dimr do
@@ -696,7 +696,7 @@ function test_spatialOneOverMax(l,nbins)
    end
    print(
       string.format(" - time to test spatialOneOverMax:     % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr,mm
 end
@@ -717,17 +717,17 @@ function test_fullspatialOneOverMax(l,nbins)
    local mm = torch.Tensor(dimr,dimc)
    local errors = 0
    print("TESTING: libsaliency.spatialOneOverMax -- FULL")
-   sys.tic() ;
+   log.tic() ;
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    rr.libsaliency.spatialOneOverMax(mm,rr)
    print(
       string.format(" - time to compute spatialOneOverMax:  % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local m,v,tmp
    local errors = 0
    for r = 1,dimr do 
@@ -745,7 +745,7 @@ function test_fullspatialOneOverMax(l,nbins)
    end
    print(
       string.format(" - time to test spatialOneOverMax:     % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr,mm
 end
@@ -766,17 +766,17 @@ function test_spatialMeanOverMax(l,nbins)
    local mm = torch.Tensor(dimr,dimc)
    local errors = 0
    print("TESTING: libsaliency.spatialMeanOverMax -- DIAGONAL ONLY")
-   sys.tic() ;
+   log.tic() ;
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    rr.libsaliency.spatialMeanOverMax(mm,rr)
    print(
       string.format(" - time to compute spatialMeanOverMax: % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local m,v
    local errors = 0
    for r = 1,dimr do
@@ -793,7 +793,7 @@ function test_spatialMeanOverMax(l,nbins)
    end
    print(
       string.format(" - time to test spatialMeanOverMax:    % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr,mm
 end
@@ -814,17 +814,17 @@ function test_fullspatialMeanOverMax(l,nbins)
    local mm = torch.Tensor(chan,dimr,dimc)
    local errors = 0
    print("TESTING: libsaliency.spatialMeanOverMax -- FULL")
-   sys.tic() ;
+   log.tic() ;
    l.libsaliency.intHist(rr,l,nbins,lmin,lmax)
    print(
       string.format(" - time to compute intHist:            % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    rr.libsaliency.spatialMeanOverMax(mm,rr)
    print(
       string.format(" - time to compute spatialMeanOverMax: % 4.1f ms",
-                    sys.toc()*1000))
-   sys.tic()
+                    log.toc()*1000))
+   log.tic()
    local m,v,tmp
    local errors = 0
    for r = 1,dimr do 
@@ -842,7 +842,7 @@ function test_fullspatialMeanOverMax(l,nbins)
    end
    print(
       string.format(" - time to test spatialMeanOverMax:    % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    print(" - found "..errors.." errors")
    return errors,rr,mm
 end
@@ -895,17 +895,17 @@ function test_getMaxN_multiGaussian(ng,gsize,imsize,msize)
    for i = 1,ng do
       img:narrow(1,xy[i][1],gsizes[i][1]):narrow(2,xy[i][2],gsizes[i][1]):add(image.gaussian(gsizes[i][1]))
    end
-   sys.tic()
+   log.tic()
    m,p,k = saliency.getMax(img,msize,ng)
    print(
       string.format(" - time to compute getMaxN:            % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
 
-   sys.tic()
+   log.tic()
    m,p,k = saliency.newNMS(img,msize,ng)
    print(
       string.format(" - time to compute newNMS:            % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
 
    
    local rgbimg = torch.Tensor(3,imsize,imsize)
@@ -916,7 +916,7 @@ function test_getMaxN_multiGaussian(ng,gsize,imsize,msize)
    local w      = 5
    local hw     = math.floor(w*0.5)
 
-   sys.tic()
+   log.tic()
    -- make green crosses
    for i = 1,k do
       local lh = math.min(math.max(1,m[i][2]-hw),imsize-w)
@@ -930,7 +930,7 @@ function test_getMaxN_multiGaussian(ng,gsize,imsize,msize)
    end
    print(
       string.format(" - time to test getMaxN:               % 4.1f ms",
-                    sys.toc()*1000))
+                    log.toc()*1000))
    image.display{image={rgbimg},zoom=2}
    return img,m,p,xy
 end   

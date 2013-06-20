@@ -1,3 +1,6 @@
+_G.CLOUDLAB_SRC = __dirname
+_G.HOME = process.env.HOME
+
 _G.module = function(name)
   local m = _G[name] or {}
   _G[name] = m
@@ -6,6 +9,8 @@ _G.module = function(name)
 end
 
 require'torch'
+require './util/Class'
+
 local mod = require'module'
 _G.math = require'math'
 _G.string = require'string'
@@ -16,10 +21,6 @@ _G.log = require './util/log'
 
 local path = require'path'
 
-_G.CLOUDLAB_SRC = __dirname
-_G.HOME = process.env.HOME
-
-require './util/Class'
 
 function printf (...)
    print(string.format(...))

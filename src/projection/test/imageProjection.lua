@@ -39,7 +39,7 @@ proj_to   = projection.SphericalProjection.new(width*scale,height*scale,hfov,vfo
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 rect_to_sphere = projection.Remap.new(proj_from,proj_to)
 
@@ -48,16 +48,16 @@ rect_to_sphere = projection.Remap.new(proj_from,proj_to)
 -- here we can compute the timing information.
 offset,stride,mask = rect_to_sphere:get_offset_and_mask()
 perElement = offset:nElement()
-time = sys.toc()
+time = log.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
-sys.tic()
+log.tic()
 
 for i = 1,#images do 
    img = image.load(images[i])
    img_out = rect_to_sphere:remap(img)
-   time = sys.toc()
+   time = log.toc()
    printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
-   sys.tic()
+   log.tic()
 
    img_scale = img_out:clone()
    image.scale(img,img_scale)

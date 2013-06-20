@@ -49,7 +49,7 @@ proj_stereo = projection.StereographicProjection.new(out_size,out_size,out_fov,o
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 sphere_to_stereographic = projection.Remap.new(proj_sphere,proj_stereo)
 -- do not need to call get_offset_and_mask explicitly as it will be
@@ -58,14 +58,14 @@ sphere_to_stereographic = projection.Remap.new(proj_sphere,proj_stereo)
 offset = sphere_to_stereographic:get_offset_and_mask()
 perElement = offset:nElement()
 
-time = sys.toc()
+time = log.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
-sys.tic()
+log.tic()
 
 img_out = sphere_to_stereographic:remap(img)
-time = sys.toc()
+time = log.toc()
 printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
-sys.tic()
+log.tic()
 
 force = true
 delta = torch.randn(2) * 0.1   

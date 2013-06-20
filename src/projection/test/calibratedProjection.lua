@@ -66,7 +66,7 @@ proj_sphere   =
 
 p("Testing Calibrated Image Projection")
 
-sys.tic()
+log.tic()
 
 cal_to_sphere         = projection.Remap.new(proj_cal,proj_sphere)
 rect_to_sphere        = projection.Remap.new(proj_rect,proj_sphere)
@@ -78,17 +78,17 @@ index1D_rect   = rect_to_sphere:get_offset_and_mask()
 
 perElement = index1D_sphere:nElement()
 
-time = sys.toc()
+time = log.toc()
 printf(" - make map %2.4fs %2.4es per px", time, time*perElement)
-sys.tic()
+log.tic()
 
 for i = 1,#images do 
    img = image.load(images[i])
    cal_img_out = cal_to_sphere:remap(img)
    rect_img_out = rect_to_sphere:remap(img)
-   time = sys.toc()
+   time = log.toc()
    printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
-   sys.tic()
+   log.tic()
 
    image.display{image={cal_img_out,rect_img_out}}
 end

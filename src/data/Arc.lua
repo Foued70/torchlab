@@ -15,7 +15,7 @@ end
 function Arc:__init(arc_path)
   self.path = arc_path
   local dir = path.join(CACHE_ROOT, arc_path)
-  if not fs.existsSync(dir) then fs.mkdirSync(dir, '0777') end
+  util.fs.mkdir_p(dir)
 end
 
 

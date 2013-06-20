@@ -114,7 +114,7 @@ end
 function Sweep:save_wireframes_red_alpha()   
   local ext = '_wireframe.png'
   local dir = path.join(self.path, 'wireframe')
-  sys.execute("mkdir -p " .. dir)
+  util.fs.mkdir_p(dir)
   
   for pi = 1,self.photos do
     local photo = self.photos[pi]
@@ -131,7 +131,7 @@ end
 function Sweep:save_wireframes_image_blacklines()
   local ext = '_wireframe_RGB.png'
   local dir = path.join(self.path, 'wireframe_RGB')
-  sys.execute("mkdir -p " .. dir)
+  util.fs.mkdir_p(dir)
   
   for pi = 1,self.photos do 
     local photo = self.photos[pi]

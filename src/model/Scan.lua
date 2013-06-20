@@ -78,10 +78,10 @@ function Scan:get_model_data()
   end
   
   if not self.model_data then 
-    sys.tic()
+    log.tic()
     log.trace("Loading model data from", self.model_file)    
     self.model_data = loader(self.model_file, Obj.new)
-    log.trace('Model loaded in', sys.toc())
+    log.trace('Model loaded in', log.toc())
   end
   
   return self.model_data
@@ -94,9 +94,9 @@ end
 
 function Scan:get_bihtree()
   if not self.bihtree then
-    sys.tic()
+    log.tic()
     self.bihtree = BIHTree.new(self:get_model_data())
-    log.trace('built tree in', sys.toc())
+    log.trace('built tree in', log.toc())
   end
 
   return self.bihtree

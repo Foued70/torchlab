@@ -2,7 +2,7 @@ local path = require "path"
 local fs = require "fs"
 
 local cache_dir = path.join(__dirname, 'cache')
-if not fs.existsSync(cache_dir) then fs.mkdirSync(cache_dir)
+util.fs.mkdir_p(cache_dir)
 
 local function loader(file, init_fn, ...)
   local object = nil

@@ -399,13 +399,13 @@ end
 -- compare aggregate to and exhaustive search through all polygons.
 -- FIXME write this test case.  Return get_occlusions from icebox.
 function BIHTree:test_traverse(obj,ray)
-   sys.tic()
+   log.tic()
    local tree_d, tree_fid = self:traverse(obj,ray)
-   local tree_duration = sys.toc()
+   local tree_duration = log.toc()
 
-   sys.tic()
+   log.tic()
    local slow_d,slow_fid = retex.Occlusions.get_occlusion_slow(ray,obj)
-   local brute_duration = sys.toc()
+   local brute_duration = log.toc()
 
    log.trace("tree: ", tree_d, ",", tree_fid, ",", tree_duration,"   exhaustive: ", slow_d, ",", slow_fid, "   Speedup:", (brute_duration/tree_duration))
 end
