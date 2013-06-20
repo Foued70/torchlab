@@ -1,3 +1,5 @@
+local debug = require 'debug'
+
 setfenv(1, setmetatable({}, {__index = _G}))
 
 TRACE = true

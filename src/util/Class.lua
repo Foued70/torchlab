@@ -1,5 +1,6 @@
 local fs = require'fs'
-local path = require'path'
+local path = require 'path'
+local debug = require 'debug'
 
 local loaded_classes = {}
 
@@ -12,9 +13,9 @@ local function get_class_for_name(name)
   return package
 end
 
-local function create_class_for_name(name)
+local function create_class_for_name(name, filename)
   local package = _G
-  for part in name:gmatch('[^.]+') do
+  for part in name:gmatch('[^/]+') do
     local next_package = rawget(package, part)
     if not next_package then rawset(package, part, {}) end
     package = package[part]
@@ -35,8 +36,7 @@ function _G.Class(parent)
   local filename = info.source:sub(2) -- remove the '@' prefix
   local name = filename:match('/?src/(.+).lua$')
   name = name or filename:match('/?(.+).lua$')
-  name = name:gsub('/','.')
-  local class = create_class_for_name(name)
+  local class = create_class_for_name(name, filename)
 
   if parent then
     setmetatable(class, {__index = parent})
@@ -101,18 +101,25 @@ function torch.custom_serializer.after_read(object)
 end
 
 
-
-
-function _G.reload() 
+local function reload() 
   for name, class in pairs(loaded_classes) do
-    new_time = fs.statSync(class.__filename__)
+    new_time = fs.statSync(class.__filename__).mtime
     if new_time > class.__mod_time__ then
       -- file has changed
-      package.loaded[name] = nil
+      name='../'..name
+      log.trace('reload', name)
       require(name)
     end
   end
 end
+
+local repl = require 'repl'
+local luvit_repl_evaluateLine = repl.evaluateLine
+function repl.evaluateLine(line)
+  reload()
+  return luvit_repl_evaluateLine(line)
+end
+
 
 
 local function package_class_loader(self, name)

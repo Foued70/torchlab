@@ -11,6 +11,7 @@
 -- @alias shell
 
 local xlua = require 'xlua'
+local debug = require 'debug'
 
 --- Adds VT100 control codes to colorize text anr resets settings.
 -- Result is `<ESC>[...m<text><ESC>[0m`

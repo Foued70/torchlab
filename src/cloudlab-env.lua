@@ -5,14 +5,12 @@ _G.module = function(name)
   setfenv(2, m)
 end
 
-
 require'torch'
 local mod = require'module'
 _G.math = require'math'
 _G.string = require'string'
 _G.table = require'table'
 _G.os = mod.require'os'
-_G.debug = require'debug'
 
 _G.log = require './util/log'
 
