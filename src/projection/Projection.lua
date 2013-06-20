@@ -107,7 +107,7 @@ end
 
 -- 
 -- offset : (LongTensor) for fast lookups
--- stride : (LongTensor) width, 1 of input image
+-- stride : (LongTensor) {width, 1} of input image
 --   mask : (ByteTensor) invalid locations marked with 1
 -- 
 function Projection:pixels_to_offset_and_mask(pixels, offset, mask)
