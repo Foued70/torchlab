@@ -12,7 +12,7 @@ function conjugate(quat,res)
    elseif (quat ~= res) then
       res:resizeAs(quat):copy(quat)
    end
-   res:narrow(1,1,3):mul(-1)
+   res:narrow(quat:nDimension(),1,3):mul(-1)
    return res
 end
 
@@ -25,24 +25,36 @@ end
 -- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
 function product(quat1,quat2,res)
 
+   local q1_nelem = quat1:nElement()
+   local q2_nelem = quat2:nElement()
+
    if (not res) then
-      res = torch.Tensor(quat2:size())
+      res = torch.Tensor(q1_nelem * q2_nelem / 4)
    end
 
-   if quat2:dim() == 1 then
+   if ((quat1:dim() == 1) and (quat2:dim() == 1)) then
+      res:resize(4)
       local v1 = quat1:narrow(1,1,3)
       local v2 = quat2:narrow(1,1,3)
       local vres = res:narrow(1,1,3)
       vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
       res[4] = quat1[4]*quat2[4] - v1:dot(v2)
    else
-      quat1 = quat1:reshape(1,4):expandAs(quat2)
+      if (q1_nelem == 4) then 
+         quat1 = quat1:reshape(1,4):expandAs(quat2)
+      elseif (q2_nelem == 4) then 
+         quat2 = quat2:reshape(1,4):expandAs(quat1)
+      else
+         error("currently product() only accepts 1x4,Nx4 or Nx4,1x4 pairs")
+      end
+      res:resize(quat1:size(1),4)
       local v1 = quat1:narrow(2,1,3)
       local v2 = quat2:narrow(2,1,3)
       local w1 = quat1[{{},{4}}]:expandAs(v1)
       local w2 = quat2[{{},{4}}]:expandAs(v2)
       local vres = res:narrow(2,1,3)
       local wres = res[{{},4}]
+      
       vres:copy(torch.cross(v1,v2,2)):add(torch.cmul(v1,w2)):add(torch.cmul(v2,w1))
       
       for i = 1,wres:size(1) do 
@@ -223,7 +235,7 @@ end
 -- + Yaw (east-ing): positive angle moves east 
 --   (+y -> +x -> -y) (+x -> -y -> -x)
 -- 
--- http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html
+-- See: Appendix of O'Reilly Physics for Game Developers
 
 function from_euler_angle(euler_angle, quat)
    if euler_angle:dim() == 1 then 
@@ -244,13 +256,13 @@ function from_euler_angle(euler_angle, quat)
    quat = quat or torch.Tensor(pitch:nElement(),4)
    quat:resize(pitch:nElement(),4)
 
-   local croll      =  roll:clone():mul( 0.5):cos()
-   local cyaw       =   yaw:clone():mul(-0.5):cos()
-   local cpitch     = pitch:clone():mul(-0.5):cos()
+   local croll      =  roll:clone():mul(0.5):cos()
+   local cyaw       =   yaw:clone():mul(0.5):cos()
+   local cpitch     = pitch:clone():mul(0.5):cos()
 
-   local sroll      =  roll:clone():mul( 0.5):sin()
-   local syaw       =   yaw:clone():mul(-0.5):sin()
-   local spitch     = pitch:clone():mul(-0.5):sin()
+   local sroll      =  roll:clone():mul(0.5):sin()
+   local syaw       =   yaw:clone():mul(0.5):sin()
+   local spitch     = pitch:clone():mul(0.5):sin()
 
    local cyaw_croll = torch.cmul(cyaw,croll)
    local syaw_sroll = torch.cmul(syaw,sroll)
@@ -268,7 +280,6 @@ end
 
 -- <quat> is Nx4
 -- <euler_angles> is 3xN
--- http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html
 
 function to_euler_angle(quat,euler_angle)
    local n_elem = 1
@@ -322,8 +333,8 @@ function to_euler_angle(quat,euler_angle)
    end
 
    -- make euler angles correspond to image projections (south-ing and east-ing)
-   euler_angle[1]:mul(-1)
-   euler_angle[2]:mul(-1)
+   -- euler_angle[1]:mul(-1)
+   -- euler_angle[2]:mul(-1)
 
    return euler_angle
 end
@@ -364,7 +375,7 @@ function rotate(...)
    -- call C function
    geom.rotation.by_quaternion(res,q,v)
 
-   return res
+   return res:squeeze()
 end
 
 -- rotate vector by quaternion and translate
@@ -398,7 +409,7 @@ function rotate_translate(...)
    -- call C function
    geom.rotation.rotate_translate(res,q,t,v)
 
-   return res
+   return res:squeeze()
 end
 
 -- translate a vector then rotate by quaternion
@@ -432,5 +443,5 @@ function translate_rotate(...)
    -- call C function
    geom.rotation.translate_rotate(res,t,q,v)
 
-   return res
+   return res:squeeze()
 end

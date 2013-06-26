@@ -25,7 +25,8 @@ cmd:option('-matter_dir',
            "../data/test/96_spring_kitchen/blonde-beach-9765/",
            "Directory for matterport data")
 cmd:option('-obj_file',
-           "../data/test/96_spring_kitchen/blonde-beach-cube-flip.obj",
+            "../data/test/96_spring_kitchen/blonde-beach-cube-flip.obj",
+--            "../data/test/96_spring_kitchen/blonde-beach-clean.obj",
            "Directory for obj to retexture")
 
 
@@ -45,7 +46,9 @@ matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 if #matter_pose_fname > 0 and paths.filep(matter_pose_fname[1]) then
    matter_pose_fname = matter_pose_fname[1]
    printf("using : %s", matter_pose_fname)
-   poses = model.mp.load_poses(matter_pose_fname)
+   local mpfile = model.Matterport_PoseFile.new(matter_pose_fname)
+   poses = mpfile.poses
+   
 else
    error("Can't find the pose file (set -matter_dir correctly)")
 end
@@ -90,14 +93,31 @@ offsets = {
 
 views = {}
 
-test_global_orientation = false
+test_global_orientation = true
 
 -- load sweeps
 for sweep_no = 1,4 do
    local pose = poses[sweep_no]
 
-   -- load DSLR image
+   -- load matter_view
+   local matter_image  = image.load(util.fs.glob(matter_dir , pose.name)[1])
+   local matter_width  = matter_image:size(3)
+   local matter_height = matter_image:size(2)
+   local matter_hfov   = matter_width * pose.degrees_per_px_x
+   local matter_vfov   = matter_height * pose.degrees_per_px_y
+   local matter_projection = projection.SphericalProjection.new(matter_width,matter_height,matter_hfov,matter_vfov)
+   
+   local matter_view = model.View.new(pose.global_to_local_position,
+                                      pose.global_to_local_rotation,
+                                      matter_hfov,
+                                      matter_vfov)  
+   
+   matter_view:set_image_path(images[i],scale)
+   matter_view:set_projection(camera)
+   matter_image = nil
+   collectgarbage()
 
+   -- load DSLR images
    local images = util.fs.glob(sweep_dir .. sweep_no, {".jpg", ".JPG"})
    sweep_offset = offsets[sweep_no]
 
@@ -109,18 +129,19 @@ for sweep_no = 1,4 do
    end
 
    euler_angles = torch.Tensor(2,#images)
-   local lambda = sweep_offset.initial
+   local lambda = sweep_offset.initial - math.pi
    local phi    = 0 
 
    for i = 1,#images do
       euler_angles[1][i] = phi
-      euler_angles[2][i] = lambda
+      euler_angles[2][i] = lambda 
       lambda = lambda + sweep_offset.delta[i] -- delta[i] moves from i -> i+1
    end
 
    -- compute orientation quaternions for each image in this sweep 
    q_rel_pose = geom.quaternion.from_euler_angle(euler_angles)
-   q_global   = geom.quaternion.product(geom.quaternion.conjugate(pose.rotation),q_rel_pose)
+   -- global to local rotation
+   q_global   = geom.quaternion.product(pose.global_to_local_rotation,q_rel_pose)
 
    -- TEST the orientations (setup) 
    if test_global_orientation then 
@@ -135,8 +156,12 @@ for sweep_no = 1,4 do
    end
 
    for i = 1,#images do
-      local view = model.View.new(pose.position,geom.quaternion.conjugate(q_global[i]),hfov,vfov)  
-      view.position[3] = view.position[3] + 0.25
+      -- setup View with the global to local
+      local view = model.View.new(pose.global_to_local_position,
+                                  q_global[i],hfov,vfov)  
+      
+      view:vertical_offset(0.25)
+      
       view:set_image_path(images[i],scale)
       view:set_projection(camera)
       table.insert(views,view)
@@ -145,7 +170,7 @@ for sweep_no = 1,4 do
       if test_global_orientation then 
          img = view:get_image()
          
-         ea = geom.quaternion.to_euler_angle(view.orientation)
+         ea = geom.quaternion.to_euler_angle(view.global_to_local_orientation)
          proj_from:set_lambda_phi(ea[2],ea[1])
 
          index1D,stride,mask = spherical_remapper:get_offset_and_mask(force)
@@ -162,6 +187,11 @@ for sweep_no = 1,4 do
    if test_global_orientation then 
       invert = true
       blend_image = blend(out_images,masks,invert)
+      -- add wireframes
+      for fid = 1,4 do -- scan.n_faces do 
+         rt:test_face_to_texture(fid)
+         face_xyz = rt:xyz_wireframe(fid)
+      
       image.display{image=blend_image, legend=string.format("Sweep %d", sweep_no)}
    end
 end
@@ -194,56 +224,14 @@ end
 
 get_view = make_view_getter(scan)
 
--- produce list of points in xyz for painting edges of a face at a
--- certain pixels per meter.
--- TODO move to scan object
-function face_wireframe_xyz(face_verts,n_verts,ppm)
-
-   n_verts = n_verts or face_verts:size(1)
-
-   ppm = ppm or 100   -- pixels per meter
-
-  -- don't need homogeneous coords here
-  local f = face_verts:narrow(1,1,n_verts):narrow(2,1,3)
-  local directions = torch.Tensor(n_verts, 3)
-  local pvert      = f[n_verts]
-  for vi = 1,n_verts do
-     local cvert = f[vi]
-     directions[vi]:copy(cvert - pvert)
-     pvert = cvert
-  end
-
-  local lengths = directions:norm(2,2)
-  local n_px    = torch.mul(lengths,ppm):ceil()
-  local steps    = torch.cdiv(directions,n_px:expand(directions:size()))
-
-  local total_pts   = n_px:sum()
-  local pts     = torch.Tensor(total_pts, 3)
-  local pi      = 1
-  prev  = f[n_verts]
-  for vi = 1,n_verts do
-     local step = steps[vi]
-     local nptx = n_px[vi]:squeeze() 
-     for s = 1,nptx do
-        pts[pi] = prev + step     
-        prev    = pts[pi]
-        pi      = pi + 1
-     end
-     -- local err = torch.abs(prev - f[vi])
-     -- printf("error[%d]: %f, %f, %f",vi, err[1],err[2],err[3])
-     
-  end
-  return pts
-end
 
 -- p(get_view(100))
 rt = retex.TextureBuilder.new(scan,{ppm=100})
 
 vseen = torch.ByteTensor(#scan.views):fill(0)
 for fid = 1,4 do -- scan.n_faces do 
-   -- xyz = rt:compute_xyz(fid)
-   -- rt:test_face_to_texture(fid)
-   face_xyz = face_wireframe_xyz(scan.face_verts[fid],scan.n_verts_per_face[fid])
+   rt:test_face_to_texture(fid)
+   face_xyz = rt:xyz_wireframe(fid)
 
    vs = get_view(fid)
 
@@ -254,7 +242,7 @@ for fid = 1,4 do -- scan.n_faces do
       local view = scan.views[vid]
       view.color = view.color or torch.rand(3)
       log.trace("face: ", fid, " view: ", vid)
-      woff, _ , wmask = view:global_xyz_to_offset_and_mask(face_xyz)
+      woff, _ , wmask = view:global_xyz_to_offset_and_mask(face_xyz,true)
       invmask = wmask:eq(0)
       if (invmask:sum() > 0) then 
          print(" - Computing")
