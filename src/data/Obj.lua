@@ -71,17 +71,16 @@ function Obj:add_derived_data()
   for face_idx = 1,n_faces do 
     local nverts = n_verts_per_face[face_idx]
     local fverts = face_verts[face_idx]:narrow(1, 1, nverts)
-    local face_center = face_centers[face_idx]
     -- a) compute face centers
-    face_center = fverts:mean(1):squeeze()
-    
+    face_centers[face_idx] = fverts:mean(1):squeeze()
+ 
     fverts = fverts:narrow(2,1,3)
 
     -- b) compute plane normal and face_center_dists distance from origin for plane eq.
     local face_norm = face_planes[{face_idx,{1,3}}] 
 
     face_norm:copy(geom.compute_normal(fverts))
-    face_planes[face_idx][4] = - torch.dot(face_norm, face_center:narrow(1,1,3))
+    face_planes[face_idx][4] = - torch.dot(face_norm, face_centers[face_idx]:narrow(1,1,3))
     
     -- c) compute bbox
     local thisbb   = face_bboxes[face_idx]
