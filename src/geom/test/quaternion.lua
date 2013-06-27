@@ -206,7 +206,7 @@ function euler_to_quat_directions()
    print("   rotate about quaternion axis is equivalent to euler angle")
    print(" - quaternion X (Right)   <=> euler pitch (phi, elevation,latitude)")
 
-   ea[1] = angles
+   ea[1] = angles * -1 
    local q     = quat.from_euler_angle(ea)
    local v     = quat.rotate(q,axes)
 
@@ -214,14 +214,14 @@ function euler_to_quat_directions()
    local y = v[{{},2,{}}]
    local z = v[{{},3,{}}]
 
-   if not (x:sum() == n_angles) then e = e + 1 end
-   if not (x[{{},1}]:sum() == n_angles) then e = e + 1 end
-   if not (q[{{},2}]:sum() == 0) then e = e + 1 end
-   if not (q[{{},3}]:sum() == 0) then e = e + 1 end
-   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v - data.result_axes_about_x):max() < 1e-15) then e = e + 1 end
+   if not (x:sum() == n_angles) then e = e + n_angles ; log.trace() end
+   if not (x[{{},1}]:sum() == n_angles) then e = e + n_angles ; log.trace() ; end
+   if not (q[{{},2}]:sum() == 0) then e = e + n_angles ; log.trace() ; end
+   if not (q[{{},3}]:sum() == 0) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v - data.result_axes_about_x):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
 
    print(" - quaternion Y (Forward) <=> euler roll")
    ea[1]:fill(0)
@@ -229,31 +229,66 @@ function euler_to_quat_directions()
    quat.from_euler_angle(ea,q)
    quat.rotate(v,q,axes)
 
-   if not (y:sum() == n_angles) then e = e + 1 end
-   if not (y[{{},2}]:sum() == n_angles) then e = e + 1 end
-   if not (q[{{},1}]:sum() == 0) then e = e + 1 end
-   if not (q[{{},3}]:sum() == 0) then e = e + 1 end
-   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v - data.result_axes_about_y):max() < 1e-15) then e = e + 1 end
+   if not (y:sum() == n_angles) then e = e + n_angles ; log.trace() ; end
+   if not (y[{{},2}]:sum() == n_angles) then e = e + n_angles ; log.trace() ; end
+   if not (q[{{},1}]:sum() == 0) then e = e + n_angles ; log.trace() ; end
+   if not (q[{{},3}]:sum() == 0) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v - data.result_axes_about_y):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
 
    print(" - quaternion Z (Up)      <=> euler yaw (lambda,azimuth, longitude)")
    ea[3]:fill(0)
-   ea[2] = angles
+   ea[2] = angles * -1
    quat.from_euler_angle(ea,q)
    quat.rotate(v,q,axes)
 
-   if not (z:sum() == n_angles) then e = e + 1 end
-   if not (z[{{},3}]:sum() == n_angles) then e = e + 1 end
-   if not (q[{{},1}]:sum() == 0) then e = e + 1 end
-   if not (q[{{},2}]:sum() == 0) then e = e + 1 end
-   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + 1 end
-   if not (torch.abs(v - data.result_axes_about_z):max() < 1e-15) then e = e + 1 end
+   if not (z:sum() == n_angles) then e = e + n_angles ; log.trace() ; end
+   if not (z[{{},3}]:sum() == n_angles) then e = e + n_angles ; log.trace() ; end
+   if not (q[{{},1}]:sum() == 0) then e = e + n_angles ; log.trace() ; end
+   if not (q[{{},2}]:sum() == 0) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[1]   - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[mid] - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v[-1]  - axes):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
+   if not (torch.abs(v - data.result_axes_about_z):max() < 1e-15) then e = e + n_angles ; log.trace() ; end
 
-   printf(" - Failed %d/%d tests in %2.4fs", e, 8*3, sys.toc())
+   printf(" - Failed %d/%d tests in %2.4fs", e, 8*3*n_angles, sys.toc())
+end
+
+function to_from_axis_angle()
+   sys.tic()
+   print("Testing conversion to axis angle and back")
+   local e = 0
+   local n_test = 0
+   local max_err = 0
+   local q = data.quat
+   local aa = quat.to_axis_angle(q)
+   -- test single
+   for i = 1,q:size(1) do 
+      local aa1 = quat.to_axis_angle(q[i])
+      local err = torch.abs(aa[i] - aa1)
+      max_err = math.max(max_err,err:max())
+      e = e + err:gt(1e-15):sum() 
+      n_test = n_test + 3
+   end
+   for i = 1,q:size(1) do 
+      local q1 = quat.from_axis_angle(aa[{i,{1,3}}],aa[{i,4}])
+      local err = torch.abs(q[i] - q1)
+      max_err = math.max(max_err,err:max())
+      e = e + err:gt(1e-13):sum()  
+      n_test = n_test + 4
+   end
+   -- test group
+   local aa = quat.to_axis_angle(q)
+   local qout = quat.from_axis_angle(aa[{{},{1,3}}],aa[{{},4}])
+   local err = torch.abs(q - qout)
+   max_err = math.max(max_err,err:max())
+   e = e + err:gt(1e-13):sum()  
+   n_test = n_test + q:size(1)
+
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,n_test,max_err,sys.toc()))   
 end
 
 function all()
@@ -264,4 +299,5 @@ function all()
    quat_product()
    quat_from_to_euler()
    euler_to_quat_directions()
+   to_from_axis_angle()
 end

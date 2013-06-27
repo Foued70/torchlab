@@ -32,10 +32,13 @@ function product(quat1,quat2,res)
       res = torch.Tensor(q1_nelem * q2_nelem / 4)
    end
 
-   if ((quat1:dim() == 1) and (quat2:dim() == 1)) then
+   if ((q1_nelem == 4) and (q2_nelem == 4)) then
+      
       res:resize(4)
-      local v1 = quat1:narrow(1,1,3)
-      local v2 = quat2:narrow(1,1,3)
+      quat1 = quat1:squeeze()
+      quat2 = quat2:squeeze()
+      local v1   = quat1:narrow(1,1,3)
+      local v2   = quat2:narrow(1,1,3)
       local vres = res:narrow(1,1,3)
       vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
       res[4] = quat1[4]*quat2[4] - v1:dot(v2)
@@ -68,47 +71,108 @@ end
 
 -- returns quaternion representing angle between two vectors
 function angle_between(from_vector, to_vector, quat)
-   local from = from_vector:narrow(1,1,3)
-   local to   = to_vector:narrow(1,1,3)
+   local from_nElem = from_vector:nElement()
+   local   to_nElem =   to_vector:nElement()
+   local from_nDim  = from_vector:nDimension()
+   local   to_nDim  =   to_vector:nDimension()
+   local from_nVec  = from_nElem/from_vector:size(from_nDim)
+   local   to_nVec  =   to_nElem/to_vector:size(to_nDim)
 
-   local rot_axis = torch.cross(from,to)
-   local rot_angle = 0
+   quat = quat or torch.Tensor(from_nVec * to_nVec , 4)
 
-   -- avoid the degenerate case when from_vector is very close to to_vector
-   local m = torch.norm(rot_axis)
-   if(m > 1e-8) then
-      rot_axis  = rot_axis/m
-      rot_angle = torch.acos(torch.dot(from, to))
+   -- TODO fix vectors to length 3 ...
+   local from = from_vector:narrow(from_nDim,1,3)
+   local to   = to_vector:narrow(to_nDim,1,3)
+   
+   from_nElem = from:nElement()
+   to_nElem   = to:nElement()
+
+   if (quat:size(1) == 1) then 
+      local rot_axis = torch.cross(from,to)
+      local rot_angle = 0
+
+      -- avoid the degenerate case when from_vector is very close to to_vector
+      local m = torch.norm(rot_axis)
+      if(m > 1e-8) then
+         rot_axis  = rot_axis/m
+         rot_angle = torch.acos(torch.dot(from, to))
+      end
+
+      return from_axis_angle(rot_axis, rot_angle, quat)
+   else
+      
+      
+      if (from_nElem == 3) then 
+         from = from:reshape(1,3):expandAs(to)
+      elseif (to_nElem == 3) then 
+         to = to:reshape(1,3):expandAs(from)
+      else
+         error("currently angle_between only accepts 1x(3or4),Nx(3or4) or Nx(3or4),1x(3or4) pairs")
+      end
+      
+      local rot_axis  = torch.cross(from,to,2)
+      
+
+      -- avoid the degenerate case when from_vector is very close to to_vector
+      local rot_angle = torch.cmul(from, to):sum(from:nDimension()):acos()
+      local m        = rot_axis:norm(2,2)
+      local invalid  = m:lt(1e-8)
+      rot_angle[invalid] = 0
+
+      m[m:lt(1e-8)]  = 1 
+
+      m = m:resize(m:size(1),1):expandAs(rot_axis)
+      rot_axis:cdiv(m)
+
+      return from_axis_angle(rot_axis, rot_angle, quat)
+
    end
-
-   return from_axis_angle(rot_axis, rot_angle, quat)
 end
 
 function from_axis_angle(rot_axis, rot_angle, quat)
-   if not quat then
-      quat = torch.Tensor(4)
-   end
-   quat[{{1,3}}] = rot_axis * torch.sin(rot_angle / 2)
-   quat[4]       = torch.cos(rot_angle / 2)
+   if (type(rot_angle) == "number") then
+      quat = quat or torch.Tensor(4)
+      quat:resize(4)
+      quat[{{1,3}}] = rot_axis * torch.sin(rot_angle / 2)
+      quat[4]       = torch.cos(rot_angle / 2)
+   else
+      local n_vec = rot_angle:nElement()
 
+      quat = quat or torch.Tensor(n_vec,4)
+      quat:resize(n_vec,4)
+
+      rot_axis = rot_axis:narrow(rot_axis:nDimension(),1,3)
+      local a = torch.mul(rot_angle,0.5):sin():resize(n_vec,1)
+      a = a:expandAs(rot_axis)
+      
+      quat[{{},{1,3}}]:copy(rot_axis):cmul(a)
+      quat[{{},4}] = rot_angle:clone():mul(0.5):cos()
+   end
+   
    return quat
 end
 
 function to_axis_angle(quat, axis_angle)
-   if not axis_angle then
-      axis_angle = quat:clone()
-   else
-      axis_angle:resize(quat):copy(quat)
-   end
 
-   axis_angle[4] = torch.acos(quat[4]) * 2
+   axis_angle = axis_angle or quat:clone()
+   axis_angle:resize(quat:size()):copy(quat)
+
+   if (quat:nDimension() == 1) then 
+      axis_angle[4] = torch.acos(quat[4]) * 2
+      local d = math.sqrt(1 - quat[4]*quat[4])
+      
+      axis_angle[{{1,3}}]:mul(1/d)
+   else
    
-   local d = math.sqrt(1 - quat[4]*quat[4])
-   
-   if d > 0 then
-      rot_axis:mul(1/d)
+      axis_angle[{{},4}]:acos():mul(2)
+      local rot_axis = axis_angle[{{},{1,3}}]
+      
+      local d = quat[{{},4}]:clone()
+      d:cmul(d):mul(-1):add(1):sqrt()
+      d = d:resize(d:size(1),1):expandAs(rot_axis)
+      rot_axis:cdiv(d) 
+
    end
-   
    return axis_angle
 end
 
