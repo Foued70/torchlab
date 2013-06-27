@@ -22,7 +22,6 @@ $(install): $(unpack)
 	cd $(unpack); mkdir -p build
 	cd $(unpack)/build; cmake $(args) ..
 	cd $(unpack)/build; make install
-	# cd $(unpack); install -c -m 755 lib/$(PLAT)/libglfw.dylib /Users/dustin/cloudlab/lib/libglfw.dylib
 
 $(unpack): $(tar_file)
 	cd $(build_dir)/deps; tar -xzf $(tar_file)

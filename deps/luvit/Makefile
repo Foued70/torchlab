@@ -7,9 +7,7 @@ git_clone=$(build_dir)/deps/luvit
 
 install=$(install_root)/bin/luvit
 
-args = PREFIX=$(install_root) \
-	CC=$(install_root)/bin/gcc CXX=$(install_root)/bin/g++ 
-
+args = $(default_args)
 
 all:$(install)
 

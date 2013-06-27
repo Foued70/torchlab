@@ -1,4 +1,3 @@
-
 get_filename_component(project_dir ${CMAKE_CURRENT_LIST_DIR} PATH)
 set(install_root ${project_dir}/build/usr/local)
 
@@ -6,17 +5,20 @@ if (DEFINED ENV{CLOUDLAB_INSTALL_ROOT})
   get_filename_component(install_root "$ENV{CLOUDLAB_INSTALL_ROOT}" ABSOLUTE)
 endif (DEFINED ENV{CLOUDLAB_INSTALL_ROOT})
 
-# set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH}:torch)
+message("${CMAKE_PREFIX_PATH}")
+set(CMAKE_PREFIX_PATH "${install_root}:${CMAKE_PREFIX_PATH}")
+message("${CMAKE_PREFIX_PATH}")
 
 set(CMAKE_INSTALL_PREFIX ${install_root} CACHE PATH "" FORCE)
-set(CMAKE_CXX_COMPILER ${install_root}/bin/g++ CACHE FILEPATH "" FORCE)
 set(CMAKE_CXX_FLAGS "-std=gnu++11" CACHE STRING "" FORCE)
+set(CMAKE_SHARED_LINKER_FLAGS "-undefined dynamic_lookup -L${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_SHARED_LINKER_FLAGS}")
 
-set(Torch_SOURCE_INCLUDES ${install_root}/include/torch ${install_root}/include/torch/TH )
+set(Lua_INCLUDES ${install_root}/include/luvit/luajit )
+set(Torch_INCLUDES ${install_root}/include ${install_root}/include/torch ${install_root}/include/torch/TH )
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${Lua_INCLUDES} ${Torch_INCLUDES})
 
 MACRO(ADD_LUVIT_LIB package src)
-  INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR} ${Torch_SOURCE_INCLUDES})
-
   ADD_LIBRARY(${package} SHARED ${src})
   
   SET_TARGET_PROPERTIES(${package} PROPERTIES
@@ -32,8 +34,6 @@ MACRO(ADD_LUVIT_LIB package src)
 ENDMACRO(ADD_LUVIT_LIB)
 
 MACRO(ADD_FFI_LIB package src)
-  INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR} ${Torch_SOURCE_INCLUDES})
-
   ADD_LIBRARY(${package} SHARED ${src})
   
   SET_TARGET_PROPERTIES(${package} PROPERTIES

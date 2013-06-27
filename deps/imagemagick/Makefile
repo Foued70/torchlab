@@ -9,7 +9,7 @@ unpack=$(build_dir)/deps/ImageMagick-$(ver)
 
 install=$(install_root)/bin/convert
 
-args = \
+args = $(default_args) \
 	--prefix=$(install_root) \
 	-disable-osx-universal-binary \
 	--without-perl \
@@ -24,16 +24,15 @@ args = \
 	--without-fontconfig \
 	--without-lzma \
 	--without-rsvg \
-	CC=$(install_root)/bin/gcc \
-	CXX=$(install_root)/bin/g++
 
 
-all:$(install)
+
+all: $(install)
 
 
 $(install): $(unpack)
 	cd $(unpack); ./configure $(args)
-	cd $(unpack); make install
+	cd $(unpack); make install V=1
 
 $(unpack): $(tar_file)
 	cd $(build_dir)/deps; tar -xjf $(tar_file)

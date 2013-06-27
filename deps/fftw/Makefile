@@ -9,7 +9,7 @@ unpack=$(build_dir)/deps/fftw-$(ver)
 
 install=$(install_root)/lib/libfftw3.a
 
-args = CC="$(install_root)/bin/gcc" \
+args = $(default_args) \
 	--prefix=$(install_root) \
 	--enable-shared \
 	--disable-debug \
