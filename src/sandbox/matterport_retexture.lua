@@ -20,10 +20,12 @@ cmd:option('-dslr_dir',
            'base directory for images placed in sweep_1,2, etc.')
 cmd:option('-matter_dir',
            "../data/test/96_spring_kitchen/blonde-beach-9765/",
+           -- "../data/test/96_spring_kitchen/raw_scan/",
            "Directory for matterport data")
 cmd:option('-obj_file',
-            "../data/test/96_spring_kitchen/blonde-beach-cube-flip.obj",
---            "../data/test/96_spring_kitchen/blonde-beach-clean.obj",
+--            "../data/test/96_spring_kitchen/blonde-beach-table.obj",
+--             "../data/test/96_spring_kitchen/blonde-beach-cube-flip.obj",
+             "../data/test/96_spring_kitchen/blonde-beach-clean.obj",
            "Directory for obj to retexture")
 
 
@@ -35,14 +37,12 @@ params     = cmd:parse(arg)
 matter_dir = params.matter_dir
 obj_file   = params.obj_file
 
-scale = 1
-
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
 if #matter_pose_fname > 0 and paths.filep(matter_pose_fname[1]) then
    matter_pose_fname = matter_pose_fname[1]
    printf("using : %s", matter_pose_fname)
-   local mpfile = model.Matterport_PoseFile.new(matter_pose_fname)
+   mpfile = model.Matterport_PoseFile.new(matter_pose_fname)
    poses = mpfile.poses
    
 else
@@ -58,10 +58,10 @@ end
 
 views = {}
 
-test_global_orientation = true
+test_global_rotation = true
 
 -- load sweeps
-for sweep_no = 1,1 do -- #poses do
+for sweep_no = 1,#poses do
    local pose = poses[sweep_no]
 
    -- load matter_view
@@ -72,26 +72,40 @@ for sweep_no = 1,1 do -- #poses do
    matter_image = nil
    collectgarbage()
    
-   local matter_hfov   = matter_width * pose.degrees_per_px_x * math.pi/180
-   local matter_vfov   = matter_height * pose.degrees_per_px_y * math.pi/180
-   local matter_proj   = projection.SphericalProjection.new(matter_width,matter_height,matter_hfov,matter_vfov)
-   local rot = pose.global_to_local_rotation:clone()
-   local step = geom.quaternion.from_euler_angle(torch.Tensor({0,math.pi*0.1}))
+   local matter_hfov   = matter_width  * pose.degrees_per_px_x * d2r
+   local matter_vfov   = matter_height * pose.degrees_per_px_y * d2r
 
-   for p = -math.pi,math.pi,math.pi*0.1 do
-      print("rot",rot)
-      print("step",step)
-      local matter_view = model.View.new(pose.global_to_local_position,
-                                         rot,
-                                         matter_hfov,
-                                         matter_vfov)  
-      rot = geom.quaternion.product(rot,step)
-      matter_view:set_image_path(matter_fname,scale)
-      matter_view:set_projection(matter_proj)
+   local matter_proj   = 
+      projection.SphericalProjection.new(
+         matter_width,
+         matter_height,
+         matter_hfov,
+         matter_vfov,
+         matter_width * pose.center_u,
+         matter_height * pose.center_v
+      )
+   local ea = geom.quaternion.to_euler_angle(pose.local_to_global_rotation)
+   log.trace(ea)
+   local matter_gnom = 
+      projection.GnomonicProjection.new(
+         matter_height, matter_height,
+         matter_vfov, matter_vfov)
+   matter_gnom:set_lambda_phi(ea[2],ea[1])
+
+   local remapper = projection.Remap.new(matter_proj,matter_gnom)
+
+   local matter_view   = 
+      model.View.new(pose.local_to_global_position,
+                     pose.local_to_global_rotation,
+                     matter_hfov,
+                     matter_vfov)  
+
+   matter_view:set_image_path(matter_fname)
+   matter_view:set_projection(matter_proj)
+   -- matter_view:vertical_offset(-0.10)
+   matter_view.remapper = remapper
    
-      table.insert(views,matter_view)
-   end
-   
+   table.insert(views,matter_view)
 end
 
 -- setup a "scan" object
@@ -99,8 +113,8 @@ scan.views = views
 
 rt = retex.TextureBuilder.new(scan,{ppm=100})
 
-for fid = 1,4 do -- scan.n_faces do 
-   rt:test_face_to_texture(fid)
+for fid = 1,scan.n_faces do 
+   -- rt:test_face_to_texture(fid)
 
    face_xyz = rt:xyz_wireframe(fid)
 
@@ -108,11 +122,11 @@ for fid = 1,4 do -- scan.n_faces do
    for vi = 1,#views do 
       local view = views[vi]
       view.color = view.color or torch.rand(3)
-      log.trace("face: ", fid, " view: ", vid)
-      woff, _ , wmask = view:global_xyz_to_offset_and_mask(face_xyz,true)
+      -- log.trace("face: ", fid, " view: ", vid)
+      woff, _ , wmask = view:global_xyz_to_offset_and_mask(face_xyz)
       invmask = wmask:eq(0)
       if (invmask:sum() > 0) then 
-         print(" - Computing")
+         -- print(" - Computing")
          woff = woff[invmask]
       
          img = view:get_image()
@@ -122,7 +136,7 @@ for fid = 1,4 do -- scan.n_faces do
              c[woff] = 1 -- view.color[cid]
          end
       else
-         print(" - Skipping")
+         -- print(" - Skipping")
       end
    end
 end
@@ -130,8 +144,11 @@ end
 imgs = {}
 sweep_no = 1
 for vid = 1,#scan.views do
-   euler = geom.quaternion.to_euler_angle(views[vid].global_to_local_orientation)
+   local view = scan.views[vid]
+   local euler = geom.quaternion.to_euler_angle(views[vid].global_to_local_rotation)
    euler = euler:squeeze():mul(180/math.pi)
    image.display{image=scan.views[vid]:get_image(), 
                  legend=string.format("Sweep: %d euler (% 3.2f % 3.2f % 3.2f)",vid, euler[1],euler[2],euler[3])}
+   image.display(view.remapper:remap(view:get_image()))
+   
 end 

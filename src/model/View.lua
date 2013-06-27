@@ -2,23 +2,29 @@ local View = Class()
 
 local normalize = geom.util.normalize
 
-function View:__init(global_to_local_position, global_to_local_orientation, hfov, vfov, clip_distance)
+function View:__init(local_to_global_position, 
+                     local_to_global_rotation, 
+                     hfov, vfov, clip_distance)
 
-   self.hfov                          = hfov
-   self.vfov                          = vfov
-   self.global_to_local_position      = global_to_local_position:clone()
-   self.global_to_local_orientation   = global_to_local_orientation:clone()
-   self.local_to_global_orientation   = geom.quaternion.conjugate(global_to_local_orientation)
-   self.local_to_global_position      = global_to_local_position:clone():mul(-1)
+   self.hfov                     = hfov
+   self.vfov                     = vfov
+   self.local_to_global_position = local_to_global_position:clone()
+   self.local_to_global_rotation = local_to_global_rotation:clone()
+   self.global_to_local_position = 
+      local_to_global_position:clone():mul(-1)
+   self.global_to_local_rotation = 
+      geom.quaternion.conjugate(local_to_global_rotation)
+   
 
    self:set_frustrum(hfov,vfov,clip_distance)
 
+   -- store this for information and xyz angle computation.  Can't change.
+   self.forward_vector = torch.Tensor({0,1,0})
 end
 
 -- move vertical
 function View:vertical_offset(z)
    self.local_to_global_position[3] = self.local_to_global_position[3] + z
-
    self.global_to_local_position[3] = self.local_to_global_position[3] * -1
 end
       
@@ -36,9 +42,9 @@ function View:set_frustrum(hfov,vfov,clip_distance)
    local frustrum_angles = torch.Tensor({{vfov,vfov,-vfov,-vfov,0},{hfov,-hfov,-hfov,hfov,0}})
    frustrum_angles:mul(0.5)
    local frustrum_quat = geom.quaternion.from_euler_angle(frustrum_angles)
-   -- move frustrum quat to global orientation
+   -- move frustrum quat to global rotation
    frustrum_quat = 
-      geom.quaternion.product(frustrum_quat,self.local_to_global_orientation)
+      geom.quaternion.product(frustrum_quat,self.local_to_global_rotation)
    local frustrum_vect = geom.quaternion.rotate(frustrum_quat,geom.quaternion.y)
 
    local frustrum_plane = torch.zeros(n_planes,4)
@@ -104,20 +110,28 @@ end
 -- global x,y,z to camera local x,y,z (origin at
 -- camera ray origin, and 0,0,0 direction in center of image)
 function View:global_to_local(v)
-   return geom.quaternion.translate_rotate(self.global_to_local_position,self.global_to_local_orientation,v)
+   return geom.quaternion.translate_rotate(
+      self.global_to_local_position,
+      self.global_to_local_rotation,
+      v)
 end
 
 -- Extrinsic Parameters:
 -- global x,y,z to camera local x,y,z (origin at
 -- camera ray origin, and 0,0,0 direction in center of image)
 function View:local_to_global(v)
-   return geom.quaternion.rotate_translate(self.local_to_global_orientation,self.local_to_global_position,v)
+   return geom.quaternion.rotate_translate(
+      self.local_to_global_rotation,
+      self.local_to_global_position,
+      v)
 end
 
 -- this is the inverse of local_xy_to_global_rot + self.local_to_global_position
 function View:global_xyz_to_local_angles(global_xyz,debug)
    -- xyz in photo coordinates
    local local_xyz       = self:global_to_local(global_xyz)
+   
+   local quat = geom.quaternion.angle
    -- TODO put xyz in first dimension or add dim parameter to all rotation operations
    -- for now transfer from Nx4 to 2xN
    local s       = local_xyz:size()
@@ -131,16 +145,20 @@ function View:global_xyz_to_local_angles(global_xyz,debug)
    local y = norm:select(d,2)
    local z = norm:select(d,3)
 
+
+   local quats = geom.quaternion.angle_between(norm,self.forward_vector)
+   local euler = geom.quaternion.to_euler_angle(quats)
+
    -- elevation
-   torch.asin(angles[1],z)
+   torch.asin(angles[1],-z) -- neg. phi is up
    -- azimuth
    torch.atan2(angles[2],x,y)
-   -- angles[2]:mul(-1)
+   
    if debug then
       log.trace("local_to_global_position", self.local_to_global_position)
-      log.trace("local_to_global_orientation", self.local_to_global_orientation)
+      log.trace("local_to_global_rotation", self.local_to_global_rotation)
       log.trace("global_to_local_position", self.global_to_local_position)
-      log.trace("global_to_local_orientation", self.global_to_local_orientation)
+      log.trace("global_to_local_rotation", self.global_to_local_rotation)
    end
 
    return angles

@@ -19,18 +19,19 @@ else
    error("Can't find the obj file (set -obj_file correctly)")
 end
 
-scan.face_verts[{1,{},1}] = -1.2
-scan.face_verts[{2,{},2}] =  1.2
-scan.face_verts[{3,{},1}] =  1.2
-scan.face_verts[{4,{},2}] = -1.2
-scan.face_verts[{5,{},3}] = -1.2
-scan.face_verts[{6,{},3}] =  1.2
 
-scale = 0.2
+y = scan.face_verts[{{},{},2}]
+y[y:gt(0)] = y[y:gt(0)] * 2
+y[y:lt(0)] = y[y:lt(0)] * 3
 
-force  = true
+scan.face_verts[{1,{},1}]:add(-0.1)
+scan.face_verts[{2,{},2}]:add( 0.1)
+scan.face_verts[{3,{},1}]:add( 0.1)
+scan.face_verts[{4,{},2}]:add(-0.1)
+scan.face_verts[{5,{},3}]:add(-0.1)
+scan.face_verts[{6,{},3}]:add( 0.1)
 
-vfov = math.pi - 0.1
+vfov =   math.pi
 hfov = 2*math.pi
 
 views = {}
@@ -47,7 +48,7 @@ euler_angles = torch.Tensor(2,n_views)
 
 local lambda = 0
 local phi    = 0 
-local step   = math.pi*0.1
+local step   = -math.pi*0.1
 
 for i = 1,n_views do
    euler_angles[1][i] = phi
@@ -60,7 +61,9 @@ end
 q_rel_pose = geom.quaternion.from_euler_angle(euler_angles)
 -- q_global   = geom.quaternion.product(pose.rotation,q_rel_pose)
 
-pose_global = torch.zeros(3)
+pose_global = torch.Tensor({-1,0,0})
+pose_local = pose_global * -1
+
 for i = 1,n_views do 
    local view = model.View.new(pose_global,q_rel_pose[i],hfov,vfov)  
    view:set_projection(camera)
@@ -91,7 +94,10 @@ for fid = 1,scan.n_faces do
       local view = views[vi]
       log.trace("face: ", fid, " view: ", vid)
 
-      woff, _ , wmask = view:global_xyz_to_offset_and_mask(face_xyz,true)
+      local local_xyz = view:global_to_local(face_xyz)
+      local global_xyz = view:local_to_global(local_xyz)
+      log.trace("global_to_local err:",torch.abs(global_xyz - face_xyz):max())
+      woff, _ , wmask = view:global_xyz_to_offset_and_mask(face_xyz)
       invmask = wmask:eq(0)
       if (invmask:sum() > 0) then 
          print(" - Computing")
