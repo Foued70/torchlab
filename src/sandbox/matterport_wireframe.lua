@@ -24,8 +24,9 @@ cmd:option('-matter_dir',
            "Directory for matterport data")
 cmd:option('-obj_file',
 --            "../data/test/96_spring_kitchen/blonde-beach-table.obj",
+            "../data/test/96_spring_kitchen/blonde-beach-cube-new.obj",
 --             "../data/test/96_spring_kitchen/blonde-beach-cube-flip.obj",
-             "../data/test/96_spring_kitchen/blonde-beach-clean.obj",
+--             "../data/test/96_spring_kitchen/blonde-beach-clean.obj",
            "Directory for obj to retexture")
 
 
@@ -141,14 +142,22 @@ for fid = 1,scan.n_faces do
    end
 end
 
-imgs = {}
-sweep_no = 1
+-- display
 for vid = 1,#scan.views do
    local view = scan.views[vid]
-   local euler = geom.quaternion.to_euler_angle(views[vid].global_to_local_rotation)
-   euler = euler:squeeze():mul(180/math.pi)
-   image.display{image=scan.views[vid]:get_image(), 
-                 legend=string.format("Sweep: %d euler (% 3.2f % 3.2f % 3.2f)",vid, euler[1],euler[2],euler[3])}
-   image.display(view.remapper:remap(view:get_image()))
-   
+
+   local base_name = paths.basename(matter_dir) .. "_-_" .. paths.basename(obj_file):gsub("%.[^%.]+$","")
+
+   local pano = scan.views[vid]:get_image()
+   local pano_name = string.format("%s_-_panorama_wireframe_%02d.png",base_name,vid)
+   log.trace("saving:",pano_name)
+   image.save(pano_name,pano)
+   image.display{image=pano, legend=pano_name}
+
+   local gnom = view.remapper:remap(view:get_image())
+   local gnom_name = string.format("%s_-_gnomonic_wireframe_%02d.png",base_name,vid)
+   log.trace("saving:",gnom_name)
+   image.save(gnom_name,gnom)
+   image.display{gnom, legend=gnom_name}
+
 end 

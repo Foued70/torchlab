@@ -9,11 +9,11 @@ pi2 = pi * 0.5
 
 d2r = math.pi / 180
 
+-- simple cube
 obj_file = "cube.obj"
 
 if paths.filep(obj_file) then
    printf("using : %s", obj_file)
-   -- scan = model.Scan.new(dslr_dir,matter_pose_fname,obj_file)
    scan = data.Obj.new(obj_file)
 else
    error("Can't find the obj file (set -obj_file correctly)")
@@ -48,24 +48,23 @@ euler_angles = torch.Tensor(2,n_views)
 
 local lambda = 0
 local phi    = 0 
+-- from local to global is backwards
 local step   = -math.pi*0.1
 
 for i = 1,n_views do
    euler_angles[1][i] = phi
    euler_angles[2][i] = lambda
    lambda = lambda + step
-   -- phi = phi + step
 end
 
 -- compute orientation quaternions for each image in this sweep 
 q_rel_pose = geom.quaternion.from_euler_angle(euler_angles)
--- q_global   = geom.quaternion.product(pose.rotation,q_rel_pose)
 
 pose_global = torch.Tensor({-1,0,0})
 pose_local = pose_global * -1
 
 for i = 1,n_views do 
-   local view = model.View.new(pose_global,q_rel_pose[i],hfov,vfov)  
+   local view = model.View.new(pose_local,q_rel_pose[i],hfov,vfov)  
    view:set_projection(camera)
    table.insert(views,view)
 end
