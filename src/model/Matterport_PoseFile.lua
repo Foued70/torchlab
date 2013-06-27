@@ -3,6 +3,8 @@ local Matterport_PoseFile = Class()
 -- A matterport pose file is provided by matterport with as a record
 -- of their estimated position and rotation for each sweep in a scan.
 
+-- Email from matterport:
+
 -- The file has one line for each texture, and the lines look like:
 
 --     scanner206_job108000_000.jpg 0.0015876 0.0115254 1.83032e-005 0.999932 0.727866 -0.311403 1.07462 0.5 0.499534 0.19043 0.209375
@@ -25,38 +27,15 @@ local Matterport_PoseFile = Class()
 -- 0.5, but the v will vary a little bit due to how we crop the
 -- texture. Origin of uv is bottom left
 
-
 -- The final two numbers are change in degrees per pixel as you move
 -- around in the image horizintally (x) or vertically (y).
 
--- An example of how to interpret all those numbers for a specific
--- pixel:
-
---  + The texture is 2048 x 512.  Center u and v are 0.5 and 0.49805,
---    which work out to pixel xy coordinates of (1024, 257).  If we're
---    looking at the pixel at xy coordinates (1600, 100), which means
---    the center of that pixel is at (1600.5, 100.5).  The distance
---    from the center coordinates is (576.5, -156.5).
-
---  + Our degrees per pixel are 0.19 (x) and 0.21 (y), meaning those
---    distances from the center turn into angles of: 109.535 degrees
---    right of center (azimuth), 32.865 degrees up from center
---    (elevation).
- 
---  + To convert this to a unit vector, we first consider azimuth in
---    xy only, which gives us (cos(-109.535), sin(-109.535)) =
---    (-0.334, -0.942).  Elevation then gives us a z of sin(32.865) =
---    0.543, and then we scale xy to make the whole thing a unit
---    vector, giving (-0.281, 0.792, 0.543). [MS math is wrong here]
-
---  + So in local sweep coordinates, the pixel at (1600.5, 100.5) is what
---    you'd see looking from the origin along the vector (-0.281, 0.792,
---    0.543).
-
---  + If you rotate that unit vector by the quaternion (qx, qy, qz, qw),
---    you'll get a new unit vector.  In global coordinates, that pixel at
---    (1600.5, 100.5) represents what you'd see looking from the point
---    (tx, ty, tz) along the new (rotated) unit vector.
+-- BUG FIX: There is an error in this formulation. The obj's load X
+-- right, Y forward, Z up (implies right handed coordinate
+-- systems). This is how all the rest of our code base works. So to
+-- have matterport's "looking down the +x axis" make sense with the
+-- rest of the system we rotate matterport's quaternion to "look down
+-- the +y axis" on load.
 
 function Matterport_PoseFile:__init(posefile)
 
@@ -87,7 +66,9 @@ function Matterport_PoseFile:loadfile(posefile)
          torch.Tensor({pose_values[2], pose_values[3], pose_values[4], pose_values[5]})
       pose.local_to_global_position = 
          torch.Tensor({pose_values[6], pose_values[7], pose_values[8]})
-      -- unit vector staring down +x axis needs to become unit vector staring down +y axis
+
+      -- Bug fix: unit vector staring down +x axis needs to become
+      -- unit vector staring down +y axis
       local offset = geom.quaternion.from_euler_angle(torch.Tensor({0,-math.pi/2}))
       pose.local_to_global_rotation = 
          geom.quaternion.product(offset,pose.local_to_global_rotation)
@@ -108,6 +89,9 @@ function Matterport_PoseFile:loadfile(posefile)
    local n_poses = #poses
    log.trace(n_poses, 'poses loaded.')
 
+   -- Make a single tensor for quickly accessing all the poses and
+   -- rotations together. TODO: Debateable whether we need to keep the
+   -- poses table at all.
    local positions_local  = torch.Tensor(n_poses,3)
    local rotations_local  = torch.Tensor(n_poses,4)
    local positions_global = torch.Tensor(n_poses,3)

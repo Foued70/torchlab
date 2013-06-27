@@ -1,11 +1,21 @@
 Class()
--- TODO: vectorize all these like the new spherical angles 
+
+-- TODO: change all these functions to apply for 
+-- 
+-- + single quats   dims: (4) or (1,4) or (4,1) and 
+-- + single vectors dims: (3),(4),(1,3),(3,1),(1,4),(4,1)
+-- 
+-- to muliple tensors of above dimensions plus  
+-- 
+-- + multiple quats   dims: (Nx4)
+-- + mulitple vectors dims: (Nx3),(Nx4)
 local axes   = torch.eye(3)
 
 x = axes[1]
 y = axes[2]
 z = axes[3]
 
+-- DONE: multiple
 function conjugate(quat,res)
    if (not res) then
       res = quat:clone()
@@ -22,7 +32,9 @@ function equals(quat1, quat2)
    return (diff:lt(1e-8):sum() == 4)
 end
 
--- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
+-- use to concatenate 2 rotations (careful: quat2 then quat1
+-- non-cummutative)
+-- DONE: multiple
 function product(quat1,quat2,res)
 
    local q1_nelem = quat1:nElement()
@@ -70,6 +82,7 @@ function product(quat1,quat2,res)
 end
 
 -- returns quaternion representing angle between two vectors
+-- DONE: multiple
 function angle_between(from_vector, to_vector, quat)
    local from_nElem = from_vector:nElement()
    local   to_nElem =   to_vector:nElement()
@@ -80,7 +93,6 @@ function angle_between(from_vector, to_vector, quat)
 
    quat = quat or torch.Tensor(from_nVec * to_nVec , 4)
 
-   -- TODO fix vectors to length 3 ...
    local from = from_vector:narrow(from_nDim,1,3)
    local to   = to_vector:narrow(to_nDim,1,3)
    
@@ -129,6 +141,8 @@ function angle_between(from_vector, to_vector, quat)
    end
 end
 
+-- DONE: multiple
+-- TODO: make axis_angle a single Nx4 tensor like quat
 function from_axis_angle(rot_axis, rot_angle, quat)
    if (type(rot_angle) == "number") then
       quat = quat or torch.Tensor(4)
@@ -152,6 +166,8 @@ function from_axis_angle(rot_axis, rot_angle, quat)
    return quat
 end
 
+-- DONE: multiple
+-- DONE: make axis_angle a single Nx4 tensor like quat
 function to_axis_angle(quat, axis_angle)
 
    axis_angle = axis_angle or quat:clone()
@@ -176,6 +192,7 @@ function to_axis_angle(quat, axis_angle)
    return axis_angle
 end
 
+-- TODO: multiple 
 function to_rotation_matrix(quat, res)
    if (not res) then
       res   = torch.Tensor(3,3)
@@ -199,6 +216,7 @@ function to_rotation_matrix(quat, res)
    return res
 end
 
+-- TODO: multiple
 -- returns nil on a badly formed rotation matrix
 function from_rotation_matrix(rmat, quat, debug)
    if (not quat) then
@@ -300,7 +318,8 @@ end
 --   (+y -> +x -> -y) (+x -> -y -> -x)
 -- 
 -- See: Appendix of O'Reilly Physics for Game Developers
-
+-- 
+-- DONE: multiple
 function from_euler_angle(euler_angle, quat)
    if euler_angle:dim() == 1 then 
       euler_angle:resize(euler_angle:size(1),1)
@@ -344,7 +363,8 @@ end
 
 -- <quat> is Nx4
 -- <euler_angles> is 3xN
-
+-- See: help for from_euler_angle above
+-- DONE: multiple
 function to_euler_angle(quat,euler_angle)
    local n_elem = 1
    if (quat:dim() == 1) then 
@@ -403,6 +423,7 @@ function to_euler_angle(quat,euler_angle)
    return euler_angle
 end
 
+-- TODO: multiple
 -- if two quaternions are equal they will rotate a vector the same distance
 function distance(quat1, quat2)
    local vec1 = rotate(quat1,axes)
@@ -414,6 +435,7 @@ end
 -- rotate vector by quaternion
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+-- DONE: multiple
 function rotate(...)
    local res,q,v
    local args = {...}
@@ -445,6 +467,7 @@ end
 -- rotate vector by quaternion and translate
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+-- DONE: multiple
 function rotate_translate(...)
    local res,q,t,v
    local args = {...}
@@ -479,6 +502,7 @@ end
 -- translate a vector then rotate by quaternion
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+-- DONE: multiple
 function translate_rotate(...)
    local res,t,q,v
    local args = {...}
