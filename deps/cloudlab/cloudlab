@@ -6,4 +6,4 @@ install_root="$( dirname "${bin_dir}" )"
 project_dir="@project_dir@"
 
 wrap=`which rlwrap`
-exec $wrap $install_root/bin/luvit -e "require '$project_dir/src/cloudlab-env'" -i
+exec $wrap $install_root/bin/luvit -e "require '$project_dir/src/cloudlab-env'" -i $*
