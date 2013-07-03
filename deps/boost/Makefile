@@ -1,9 +1,10 @@
 include ../Makefile.common
 
-ver=1.52.0
+ver=1.53.0
 ver_ubar=$(subst .,_,$(ver))
 
-url=http://voxel.dl.sourceforge.net/project/boost/boost/$(ver)/boost_$(ver_ubar).tar.bz2
+#url=http://voxel.dl.sourceforge.net/project/boost/boost/$(ver)/boost_$(ver_ubar).tar.bz2
+url=http://downloads.sourceforge.net/project/boost/boost/$(ver)/boost_$(ver_ubar).tar.bz2
 
 tar_file=$(build_dir)/deps/boost_$(ver_ubar).tar.bz2
 unpack=$(build_dir)/deps/boost_$(ver_ubar)

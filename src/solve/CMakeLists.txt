@@ -24,7 +24,7 @@ ENDIF(APPLE)
 
 set(CERES_LIBRARY ceres)
 
-# perhaps we can remove some of these mostly handle fileio which we do in torch anyways.
+# perhaps we can remove some of these mostly handle file which we do in torch anyways.
 set(GOOGLE_LIBS glog gflags protobuf)
 
 # many different ways to use ceres, suitesparse is LGPL'd full speedup
