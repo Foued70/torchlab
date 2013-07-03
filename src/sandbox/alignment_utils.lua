@@ -50,6 +50,12 @@ end
 function load_precalculated_deltas(numimages, option)
   local precalculated = torch.zeros(25)
   if option == 13 then
+    --local bd = torch.Tensor(4,13)
+    --bd[1] = torch.Tensor({0.4861, 0.4753, 0.4698, 0.4542, 0.4667, 0.4514, 0.7198, 0.4736, 0.4499, 0.4668, 0.4605, 0.0088, 0.9004}) --d_off=
+    --bd[2] = torch.Tensor({}) --d_off=
+    --bd[3] = torch.Tensor({}) --d_off=
+    --bd[4] = torch.Tensor({}) --d_off=
+    
     precalculated = torch.Tensor({0.4811, 0.5103, 0.4748, 0.4692, 0.4767, 0.5064, 0.5348, 0.4686, 0.4599, 0.4968, 0.4655, 0.2238, 0.7154})
   elseif option == 8 then
     local bd = torch.Tensor(6,8)
