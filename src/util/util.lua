@@ -1,3 +1,5 @@
+local debug = require 'debug'
+
 Class()
 
 -- Like unfold but produces contiguous chunks which would replicate

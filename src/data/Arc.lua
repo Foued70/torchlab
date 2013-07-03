@@ -1,6 +1,10 @@
 local Arc = Class()
 
-CACHE_ROOT = paths.concat(os.getenv('CLOUDLAB_TMP') or os.getenv('TMPDIR'), 'arcs') 
+local fs = require'fs'
+local path = require'path'
+
+
+CACHE_ROOT = path.join(util.Properties.cloudlab.tmp_dir or process.env.TMPDIR, 'arcs') 
 
 function get(id)
   local arc = Arc.new(id)
@@ -8,17 +12,19 @@ function get(id)
   return arc
 end
 
-function Arc:__init(path)
-  self.path = path
-  os.execute("mkdir -p '"..paths.concat(CACHE_ROOT, path).."'")
+function Arc:__init(arc_path)
+  self.path = arc_path
+  local dir = path.join(CACHE_ROOT, arc_path)
+  util.fs.mkdir_p(dir)
 end
 
 
 -- Get the latest tree from the server.
 -- This won't change any files, but will mark them as stale if a new version exists on the server.
 function Arc:refresh()
-  local tree = net.Depot.get_arc(self.path)
-  self:populate(tree)
+  net.Depot.get_arc(self.path, function(err, tree)
+    self:populate(tree)
+  end)
 end
 
 function Arc:populate(tree)
@@ -32,9 +38,14 @@ function Arc:populate(tree)
 end
 
 function Arc:file(name, server_mod_time)
-  self[name] = rawget(self, name) or data.ArcFile.new(name, self.path)
-  self[name].server_mod_time = server_mod_time or 0
-  return self[name]
+  local f = rawget(self, name)
+  if not f then
+    f = data.ArcFile.new(name, self.path)
+    f.server_mod_time = server_mod_time or 0
+    self[name] = f
+  end
+
+  return f
 end
 
 function Arc:dir(name)
@@ -55,25 +66,41 @@ end
 --
 -- dot files are ignored
 function Arc:import(dir_file_glob)
-  local dir = paths.dirname(dir_file_glob)
+  local dir = path.dirname(dir_file_glob)
   local files
   if dir_file_glob:sub(-1) == '*' then
-    files = paths.dir(dir)
+    files = fs.readdirSync(dir)
   else
-    files = {paths.basename(dir_file_glob)}
+    files = {path.basename(dir_file_glob)}
   end
 
   for i, filename in ipairs(files) do
     if filename:sub(1, 1) ~= '.' then -- no dot files
-      local abs_name = paths.concat(dir, filename)
+      local abs_name = path.join(dir, filename)
       self:import_single(filename, abs_name)
+    end
+  end
+end
+
+
+function Arc:import_all()
+  local dir = path.join(CACHE_ROOT, self.path)
+  local files = fs.readdirSync(dir)
+  for i, filename in ipairs(files) do
+    if filename:sub(1, 1) ~= '.' then -- no dot files
+      local abs_name = path.join(dir, filename)
+      if util.fs.is_dir(abs_name) then
+        self:dir(filename):import_all()
+      else
+        self:file(filename)
+      end
     end
   end
 end
 
 -- import the given file or dir to arc.<name>
 function Arc:import_single(name, file_or_dir)
-  if paths.dirp(file_or_dir) then
+  if util.fs.is_dir(file_or_dir) then
     self:dir(name):import(file_or_dir..'/*')
   else
     self:file(name):import(file_or_dir)

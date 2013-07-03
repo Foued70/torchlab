@@ -64,15 +64,15 @@ function UpCamera:rotate_a_around_b(a, b, unit_a, x, y, radians_per_unit)
     -- this would take us past vertical (up), so lock to Z up
     torch.mul(a, Z_AXIS_POS, a:norm())
     -- rotate up for x instead of eye
-    geom.rotate.axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
+    geom.rotation.axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
   elseif z_axis_angle - y_angle > math.pi then
     -- this would take us past vertical (down), so lock to Z down
     torch.mul(a, Z_AXIS_NEG, a:norm())
     -- rotate up for x instead of eye
-    geom.rotate.axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
+    geom.rotation.axis_angle(self.up_dir, Z_AXIS_POS, x_angle);
   else
-    geom.rotate.axis_angle(a, self.right_dir, y_angle);
-    geom.rotate.axis_angle(a, Z_AXIS_POS, x_angle);
+    geom.rotation.axis_angle(a, self.right_dir, y_angle);
+    geom.rotation.axis_angle(a, Z_AXIS_POS, x_angle);
   end
   
   -- move a back into position

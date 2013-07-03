@@ -1,14 +1,11 @@
 include ../Makefile.common
 
-build_dir = $(install_root)/build/deps/cloudlab
-
 all:
-	mkdir -p $(build_dir)
-	cd $(build_dir); CMAKE_PREFIX_PATH=$(install_root) cmake $(CURDIR)
-	cd $(build_dir); make install
+	sed -e "s,@project_dir@,$(project_dir)," $(CURDIR)/cloudlab > $(install_root)/bin/cloudlab
+	chmod a+x $(install_root)/bin/cloudlab
+	cp $(CURDIR)/cook $(install_root)/bin/
 
 
 clean:
-	rm -r $(build_dir)
 	rm $(install_root)/bin/cloudlab
 	rm $(install_root)/bin/cook

@@ -3,13 +3,16 @@
 -- TODO: n-gon support -- connect tri to associated ngon so that viewer can show "ngon"
 -- TODO: n-gon support -- do submeshes and uvs need to be updated?
 
-local paths = require "paths"
+local path = require 'path'
+local fs = require 'fs'
+local os = require 'os'
+local io = require 'io'
 local geom  = geom.util
 
-local _t = sys.clock()
+local _t = os.time()
 local function tic(msg)
-  local lapse = sys.clock() - _t
-  _t = sys.clock()
+  local lapse = os.time() - _t
+  _t = os.time()
   if msg then
     print(lapse, msg)
   end
@@ -18,7 +21,7 @@ end
 local Obj = Class()
 
 function Obj:__init(filename)
-  if filename and paths.filep(filename) then    
+  if filename and fs.existsSync(filename) then    
     self:load(filename)
     self:add_derived_data()
   end
@@ -71,17 +74,16 @@ function Obj:add_derived_data()
   for face_idx = 1,n_faces do 
     local nverts = n_verts_per_face[face_idx]
     local fverts = face_verts[face_idx]:narrow(1, 1, nverts)
-    local face_center = face_centers[face_idx]
     -- a) compute face centers
-    face_center = fverts:mean(1):squeeze()
-    
+    face_centers[face_idx] = fverts:mean(1):squeeze()
+ 
     fverts = fverts:narrow(2,1,3)
 
     -- b) compute plane normal and face_center_dists distance from origin for plane eq.
     local face_norm = face_planes[{face_idx,{1,3}}] 
 
     face_norm:copy(geom.compute_normal(fverts))
-    face_planes[face_idx][4] = - torch.dot(face_norm, face_center:narrow(1,1,3))
+    face_planes[face_idx][4] = - torch.dot(face_norm, face_centers[face_idx]:narrow(1,1,3))
     
     -- c) compute bbox
     local thisbb   = face_bboxes[face_idx]
@@ -111,13 +113,13 @@ local function default_material()
 end
 
 local function load_materials(pathname, filename)
-  filename = paths.concat(pathname, filename)
+  filename = path.join(pathname, filename)
   
   local materials = {}
   local mtl_name_index_map = {}
   local mtl
   
-  if paths.filep(filename) then 
+  if fs.existsSync(filename) then 
 
     for line in io.lines(filename) do
       if line:match('^newmtl ') then
@@ -140,7 +142,7 @@ local function load_materials(pathname, filename)
       elseif line:match('^illum ') then
         mtl.illumType = tonumber(line:sub(7))
       elseif line:match('^map_Kd ') then
-        mtl.diffuse_tex_path = paths.concat(pathname, trim(line:sub(8)))
+        mtl.diffuse_tex_path = path.join(pathname, trim(line:sub(8)))
       end
     end
     
@@ -230,7 +232,7 @@ function Obj:load(filename)
       table.insert(submeshes, {face_idx, 0, mtl_id})
     elseif line:match('^mtllib ') then
       local mtllib = trim(line:sub(8))    
-      materials, mtl_name_index_map = load_materials(paths.dirname(filename), mtllib)
+      materials, mtl_name_index_map = load_materials(path.dirname(filename), mtllib)
     end
   end
   if #submeshes > 0 then
@@ -331,7 +333,7 @@ function Obj:save(filename, mtlname)
   mtlname = mtlname or "scan.mtl"  
   
   local objf = assert(io.open(filename, "w"))  
-  objf:write(string.format("mtllib %s\n\n", paths.basename(mtlname)))
+  objf:write(string.format("mtllib %s\n\n", path.basename(mtlname)))
   
   -- print vertices
   log.trace('writing verts', self.n_verts)  
@@ -398,7 +400,7 @@ function Obj:save(filename, mtlname)
     write_mtl_prop(mtlf, material, 'illumType', 'illum')
 
     if material.diffuse_tex_path then      
-      mtlf:write(string.format("map_Kd %s\n", paths.basename(material.diffuse_tex_path)))
+      mtlf:write(string.format("map_Kd %s\n", path.basename(material.diffuse_tex_path)))
     end   
     
     mtlf:write("\n")

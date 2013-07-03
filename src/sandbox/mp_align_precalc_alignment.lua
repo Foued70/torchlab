@@ -31,11 +31,11 @@ mptex_num = swnum-1
 
 print("  check directory validity")
 --if outdir does not exists, setup outdir
-if not paths.dirp(projectdir) then
+if not util.fs.is_dir(projectdir) then
   error("-topdir %s is not a valid directory", params.topdir)
-elseif not paths.dirp(imagesdir) then
+elseif not util.fs.is_dir(imagesdir) then
   error("-imagesdir %s is not a valid subdirectory of %s", params.imagesdir, params.topdir)
-elseif not paths.dirp(outdir) then
+elseif not util.fs.is_dir(outdir) then
   outdir = projectdir
 end
 

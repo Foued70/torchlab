@@ -1,27 +1,25 @@
-local json = require "json"
-local paths = require "paths"
-local qs = require "net.qs"
-local request = require "net.request"
+local json = require'json'
+local qs = require'./qs'
+local request = require'./request'
+local core = require'core'
 
-local asset_dir = paths.concat(paths.dirname(paths.thisfile())..'/../assets')..'/'
+local table = require'table'
 
 local Depot = Class()
 
-local props = util.Properties.new(paths.concat(HOME, '.cloudlab'))
-local host = props.depot_url or "http://depot.floored.com"
+local props = util.Properties.cloudlab
+local host = props.depot_url or 'https://depot.floored.com'
+
+local cookie
 
 function login(email, password)
-  local resp, status_code = request.post(host.."/login.json", {data = {email = email, password = password}})
-  if status_code == 200 then
-    if email ~= props.email or password ~= props.password then
-      props.email = email
-      props.password = password
-      props:save()
+  request.post(host..'/login.json', {email = email, password = password}, nil, nil, function(err, res, body)
+    if res and res.status_code == 200 then
+      cookie = res.headers['set-cookie']:match("[^;]+")
+    else
+      log.error(err or res)
     end
-    return true
-  end
-
-  return false, resp
+  end)
 end
 
 function is_logged_in()
@@ -35,94 +33,45 @@ function is_logged_in()
   return false
 end
 
-local function scan_path(scan_name)
-  return scan_name:gsub('_', '/') 
-end
-
-local function load_local(scan_name)
-  local folder = asset_dir..scan_name
-  local found = false
-  
-  if paths.dirp(folder) then
-    for f in paths.files(folder) do
-      if paths.basename(f):find('.obj') then
-        found = asset_dir..f
-        break
-      end
-    end   
-  end 
-  
-  return found
-end
-
-local function job_url(scan_name)
-  return host.."/comrade/jobs/"..scan_path(scan_name)
-end
-
-local function load_remote(scan_name)
-  local folder = asset_dir..scan_name
-  local filepath = folder..".zip"    
-
-  local resp, stat_code = request.get(job_url(scan_name).."/download", {sink = filepath, redirect = false})
-  if paths.filep(filepath) then
-    if stat_code ~= 200 then
-      p('ERROR GETTING MODEL FROM DEPOT', stat_code)
-      os.execute("rm "..filepath)      
+function get_arc(id, callback)
+  request.get(host..'/arcs/'..id, {Cookie=cookie}, function(err, res, body)
+    print(err or res.status_code)
+    if res and res.status_code == 200 then
+      local arc = json.parse(body)
+      callback(nil, arc)
     else
-      os.execute("unzip ".. filepath.. " -d "..folder)
-      os.execute("rm "..filepath)      
-      return load_local(scan_name)      
+      callback(err or res)
     end
-  end
-  
-  return false
+  end)
 end
 
-function get(scan_name)
-  if not paths.dirp(asset_dir) then os.execute("mkdir -p "..asset_dir) end    
-  return load_local(scan_name) or load_remote(scan_name)  
-end
+local put_arc_file_emitter = core.Emitter:new()
+local put_arc_file_queue = setmetatable({}, {__index=table})
+local put_arc_file_count = 0
 
-local function job_name(scan_name)
-  return string.gsub(scan_name, "_%a_%d%d$", '')
-end
+put_arc_file_emitter:on('process', function()
+  if put_arc_file_count >= 3 or #put_arc_file_queue == 0 then return end
 
-function put(scan_name)
-  local success = false
-  local folder = asset_dir..scan_name  
-  if paths.dirp(folder) then    
-    local filepath = folder..".zip"        
-    os.execute("zip -9 -j "..filepath.." "..folder.."/*")    
-    local resp, stat_code, headers = request.put(job_url(job_name(scan_name))..'/edit.json', {files = {scan = filepath}})
-    os.execute("rm "..filepath)    
-    if stat_code == 200 then
-      success = true 
+  put_arc_file_count = put_arc_file_count + 1
+
+  local path, filename, callback = unpack(put_arc_file_queue:remove(1))
+  log.trace(path)
+  request.put(host..'/arcs/'..path, nil, {file = filename}, {Cookie=cookie}, function(err, res, body)
+    print(err or res.status_code)
+    if res and res.status_code == 200 then
+      callback(nil, tonumber(res.headers.last_modified))
+    else
+      callback(err or res)
     end
-  end
-  
-  return success
-end
 
+    put_arc_file_count = put_arc_file_count - 1
+    put_arc_file_emitter:emit('process')
+  end)
+end)
 
-function get_arc(id)
-  local resp, code = request.get(host.."/arcs/"..id, {redirect = false})
-  if code ~= 200 then
-    log.error(resp[1])
-    return
-  end
-
-  local arc = json.decode(table.concat(resp))
-  return arc
-end
-
-function put_arc_file(path, filename)
-  local resp, code, headers = request.put(host.."/arcs/"..path, {files = {file = filename}, redirect = false})
-  if code ~= 200 then
-    log.error(code, resp[1])
-    return false
-  end
-
-  return tonumber(headers.last_modified)
+function put_arc_file(path, filename, callback)
+  put_arc_file_queue:insert({path, filename, callback})
+  put_arc_file_emitter:emit('process')
 end
 
 function get_arc_file(path, filename)
@@ -135,4 +84,5 @@ function get_arc_file(path, filename)
   return true
 end
 
-Depot.login(props.username, props.password)
+
+Depot.login(props.email, props.password)

@@ -5,6 +5,7 @@
 -- tex:make()
 
 local loader = require 'data.loader'
+local path = require 'path'
 
 local Textures = Class()
 
@@ -17,8 +18,8 @@ function Textures:__init(scan, opts)
   self.scan = scan
   self:load_target() 
   
-  self.output_dir = paths.concat(scan.path, 'retexture')
-  sys.execute("mkdir -p " .. self.output_dir)
+  self.output_dir = path.join(scan.path, 'retexture')
+  util.fs.mkdir_p(self.output_dir)
   
   self.textures = {}
   self.faces = {} -- store some info about faces
@@ -341,7 +342,7 @@ function Textures:make_img(fid, debug)
   local widthpx, heightpx, dx, dy = self:range_to_texture_dimensions(xrange[3], yrange[3], debug)
   
   log.trace(widthpx, 'x', heightpx, 'image for face', fid)
-  sys.tic()
+  log.tic()
   -- make the temporary per photo mixing alpha and color channels
   local normal = obj.face_normals[fid]
   local alpha  = torch.zeros(nphotos)
@@ -427,7 +428,7 @@ function Textures:make_img(fid, debug)
     end -- end w
     y = y + dy
   end -- end h
-  log.trace('texture for face', fid, 'created in', sys.toc())
+  log.trace('texture for face', fid, 'created in', log.toc())
   -- 6) store new texture file
   -- not sure about saving to disk, or saving in object.
   self.textures[fid] = fimg
@@ -435,8 +436,8 @@ end
 
 -- get file path for a face's texture
 function Textures:file(fid)
-  local name = paths.basename(self.scan.model_file):gsub(".obj$", "_face-"..fid..".png")
-  return paths.concat(self.output_dir, name)
+  local name = path.basename(self.scan.model_file):gsub(".obj$", "_face-"..fid..".png")
+  return path.join(self.output_dir, name)
 end
 
 -- save the texture for a face and update the materials and submeshes
@@ -450,7 +451,7 @@ function Textures:save_img(fid)
     local img_file = self:file(fid)
     win = image.display{image=texture_img,min=0,max=1,win=win}    
     image.save(img_file, texture_img)
-    if paths.filep(img_file) then
+    if util.fs.is_file(img_file) then
       log.trace('Texture saved for face', fid, img_file)
       material.diffuse_tex_path = img_file
     else
@@ -509,7 +510,7 @@ function Textures:update_obj()
 end
 
 function Textures:save_obj()  
-  local objfile  = paths.concat(self.output_dir, paths.basename(self.scan.model_file))
+  local objfile  = path.join(self.output_dir, path.basename(self.scan.model_file))
   local mtlfile  = objfile:gsub(".obj$",".mtl")
   log.trace('Saving obj and mtl', objfile, mtlfile)
   self.target:save(objfile, mtlfile)

@@ -1,8 +1,8 @@
 # set a default path for the common system stuff
 PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
 # make sure a user's CC or CCX variable don't mess up config scripts
-CC=
-CXX=
+CC=gcc-4.8
+CXX=g++-4.8
 
 project_dir = $(abspath ../..)
 
@@ -11,10 +11,15 @@ install_root = $(CLOUDLAB_INSTALL_ROOT)
 
 build_dir = $(abspath $(install_root)/build)
 
+default_args = \
+  CC=gcc-4.8 \
+  CXX=g++-4.8 \
+  PREFIX=$(install_root)
+
 default_cmake_args = \
 	-D CMAKE_INSTALL_PREFIX:PATH=$(install_root) \
-	-D CMAKE_C_COMPILER:PATH=$(install_root)/bin/gcc \
-	-D CMAKE_CXX_COMPILER:PATH=$(install_root)/bin/g++ \
+	-D CMAKE_C_COMPILER:PATH=gcc-4.8 \
+	-D CMAKE_CXX_COMPILER:PATH=g++-4.8 \
 	-D CMAKE_BUILD_TYPE=Release
 
 # set this environment variable so that pkg-config knows where to find

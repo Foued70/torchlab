@@ -1,8 +1,8 @@
-require "paths"
+local path = require 'path'
 
 local AssetManager = Class()
 
-local ASSET_DIR = paths.concat(CLOUDLAB_SRC, 'assets')
+local ASSET_DIR = path.join(CLOUDLAB_SRC, 'assets')
 local MODEL_EXTENSION = 'obj'
 
 models = {}
@@ -13,9 +13,9 @@ end
 function get_model(model_name)
   if models[model_name] ~= nil then return models[model_name] end
 
-  local model_path = paths.concat(ASSET_DIR, model_name..'.'..MODEL_EXTENSION)
+  local model_path = path.join(ASSET_DIR, model_name..'.'..MODEL_EXTENSION)
 
-  if not paths.filep(model_path) then
+  if not util.fs.is_file(model_path) then
     log.trace("Model file ".."\""..model_path.."\"".." does not exist.")
     return nil 
   end

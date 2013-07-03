@@ -1,7 +1,8 @@
-local libui = require 'libui'
-local gl = require 'ui.gl'
+local gl = require './gl'
+local ffi = require 'ffi'
+local torch = require 'torch'
 
-require 'image' -- fucking image global
+local image = require '../image'
 
 local TextureManager = Class()
 
@@ -80,7 +81,7 @@ function TextureManager:create_from_image(image_path)
 
   local tex_img = image.load(image_path, nil, 'byte')
   tex_img = format_image(tex_img)
-  local img_data_ptr, img_data_size = libui.byte_storage_info(tex_img)
+  local img_data_ptr, img_data_size = util.ctorch.storage_info(tex_img)
   local width = tex_img:size()[2]
   local height = tex_img:size()[1]
 

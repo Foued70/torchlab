@@ -1,4 +1,3 @@
-require 'torch'
 require 'torchffi'
 
 local ffi = require 'ffi'
@@ -11,10 +10,7 @@ ffi.cdef[[
             int loadBALfile(char* fname); 
          ]]
 
--- FIXME make this loading cleaner for other ffi projects
--- ffi doesn't look in the right place by default
-local ffidir = paths.install_lib .. "/torch/"
-local solveC = ffi.load(ffidir .. "libsolve.dylib")
+local solveC = util.ffi.load("libsolve")
 
 local solve = {}
 

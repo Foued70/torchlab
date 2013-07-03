@@ -1,5 +1,4 @@
-require 'torch'
-local paths  = require 'paths'
+local path = require 'path'
 local config = require 'model.config'
 
 local fs    = util.fs
@@ -23,8 +22,8 @@ function Sweep:__init(parent_scan, sweep_dir)
 end
 
 function Sweep:set_photos()
-  local img_dir = self.path -- paths.concat(self.path, config.img_folder)
-  if not img_dir or not paths.dirp(img_dir) then log.trace(img_dir, 'not found. Photos not created') return end
+  local img_dir = self.path -- path.join(self.path, config.img_folder)
+  if not img_dir or not util.fs.is_dir(img_dir) then log.trace(img_dir, 'not found. Photos not created') return end
   
   self.photos = {}
   print(unpack(config.img_extensions))
@@ -114,8 +113,8 @@ end
 
 function Sweep:save_wireframes_red_alpha()   
   local ext = '_wireframe.png'
-  local dir = paths.concat(self.path, 'wireframe')
-  sys.execute("mkdir -p " .. dir)
+  local dir = path.join(self.path, 'wireframe')
+  util.fs.mkdir_p(dir)
   
   for pi = 1,self.photos do
     local photo = self.photos[pi]
@@ -123,7 +122,7 @@ function Sweep:save_wireframes_red_alpha()
     image.display(wimage)
     -- save
     local photo_ext = fs.extname(photo.name)
-    local wimagename = paths.concat(dir, photo.name:gsub(photo_ext,ext))
+    local wimagename = path.join(dir, photo.name:gsub(photo_ext,ext))
     log.trace("Saving:", wimagename)
     image.save(wimagename,wimage)
   end
@@ -131,8 +130,8 @@ end
 
 function Sweep:save_wireframes_image_blacklines()
   local ext = '_wireframe_RGB.png'
-  local dir = paths.concat(self.path, 'wireframe_RGB')
-  sys.execute("mkdir -p " .. dir)
+  local dir = path.join(self.path, 'wireframe_RGB')
+  util.fs.mkdir_p(dir)
   
   for pi = 1,self.photos do 
     local photo = self.photos[pi]
@@ -145,7 +144,7 @@ function Sweep:save_wireframes_image_blacklines()
     cimage[3]:cmul(wimage)
     image.display(cimage) 
     local photo_ext = fs.extname(photo.name)
-    local wimagename = paths.concat(dir, photo.name:gsub(photo_ext,ext))
+    local wimagename = path.join(dir, photo.name:gsub(photo_ext,ext))
     log.trace("Saving:", wimagename)
     image.save(wimagename,cimage)
   end

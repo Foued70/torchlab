@@ -5,6 +5,6 @@ INCLUDE(../common.cmake REQUIRED)
 
 SET(src rotation.c)
 
-ADD_TORCH_PACKAGE(geom "${src}" "" "Floored 3D utils")
+ADD_FFI_LIB(geom "${src}")
 
 TARGET_LINK_LIBRARIES(geom TH)

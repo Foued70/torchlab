@@ -1,6 +1,6 @@
 --Class()
 
-require 'image'
+local fs = require 'fs'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -21,11 +21,11 @@ cmd:text()
 params = cmd:parse(arg)
 
 imagesdir  = params.topdir..'/'..params.sweepnum..'/'..params.imagesdir
-if not paths.dirp(imagesdir) then
+if not util.fs.is_dir(imagesdir) then
    error("Must set a valid path to directory of images to process default -imagesdir images/")
 end
 outdir = params.topdir..'/'..params.outdir
-sys.execute("mkdir -p " .. outdir)
+util.fs.mkdir_p(outdir)
 
 pi = math.pi
 pi2 = pi * 0.5
@@ -79,7 +79,7 @@ rgb_images={}
 if not images then
    images = {}
    fnames = {}
-   imgfiles = paths.files(imagesdir)
+   imgfiles = fs.readdirSync(imagesdir)
    imgfiles() -- .
    imgfiles() -- ..
    for f in imgfiles do
@@ -118,7 +118,7 @@ lambda = 0
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 for pp = -phi_quant,phi_quant do
 

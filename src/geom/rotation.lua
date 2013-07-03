@@ -1,49 +1,49 @@
+local ffi = require 'ffi'
+
+local ctorch = util.ctorch -- ctorch needs to be loaded before we reference THTensor stuff in a cdef
+
 Class()
 
--- Below is a test for loading C backends using ffi
-local ffi_utils = require 'util.ffi'
+ -- load low level c functions
+ffi.cdef[[
+ void rotate_by_quat(THDoubleTensor *result,
+                     THDoubleTensor *quat,
+                     THDoubleTensor *vectors
+                     );
 
-local ffi = ffi_utils.ffi
-
-local geomlib = ffi_utils.lib_path("geom")
-
-if paths.filep(geomlib) then
-   -- load low level c functions
-   ffi.cdef[[
-               void rotate_by_quat(THDoubleTensor *result,
-                                   THDoubleTensor *quat,
-                                   THDoubleTensor *vectors
-                                   );
+ void rotate_translate(THDoubleTensor *result,
+                       THDoubleTensor *vectors,
+                       THDoubleTensor *trans,
+                       THDoubleTensor *quat);
 
                void rotate_translate(THDoubleTensor *result,
-                                     THDoubleTensor *vectors,
+                                     THDoubleTensor *quat,
                                      THDoubleTensor *trans,
-                                     THDoubleTensor *quat);
+                                     THDoubleTensor *vectors
+                                     );
 
                void translate_rotate(THDoubleTensor *result,
-                                     THDoubleTensor *vectors,
                                      THDoubleTensor *trans,
-                                     THDoubleTensor *quat);
+                                     THDoubleTensor *quat,
+                                     THDoubleTensor *vectors );
             ]]
+ -- don't want to call C functions directly
+local libgeom = util.ffi.load('libgeom')
 
-   -- don't want to call C functions directly
-   local C  = ffi.load(geomlib)
-
-   -- either there is a way to stick function on torch.DoubleTensor
-   -- for automatic type cast or we just do everything in doubles.
-   function by_quaternion (out, quat, vec)
-      C.rotate_by_quat(torch.cdata(out), 
-                       torch.cdata(quat),
-                       torch.cdata(vec))
-   end
-   function rotate_translate (out, vec, trans, quat)
-      C.rotate_translate(torch.cdata(out), torch.cdata(vec),
-                         torch.cdata(trans), torch.cdata(quat))
-   end
-   function translate_rotate (out, vec, trans, quat)
-      C.translate_rotate(torch.cdata(out), torch.cdata(vec),
-                         torch.cdata(trans), torch.cdata(quat))
-   end
+-- either there is a way to stick function on torch.DoubleTensor
+-- for automatic type cast or we just do everything in doubles.
+function by_quaternion (out, quat, vec)
+  libgeom.rotate_by_quat(torch.cdata(out), 
+                   torch.cdata(quat),
+                   torch.cdata(vec))
+end
+function rotate_translate (out, vec, trans, quat)
+  libgeom.rotate_translate(torch.cdata(out), torch.cdata(vec),
+                     torch.cdata(trans), torch.cdata(quat))
+end
+function translate_rotate (out, vec, trans, quat)
+  libgeom.translate_rotate(torch.cdata(out), torch.cdata(vec),
+                     torch.cdata(trans), torch.cdata(quat))
 end
 
 -- end of loading C backend
@@ -73,7 +73,7 @@ function z_axis(normal)
    return axis(normal,z)
 end
 
--- 
+-- rotation required to align normal to the nearest axis, and the dimension of that axis
 function largest (normal)
    local n   = normal:narrow(1,1,3)
    local p   = n:clone():abs()
@@ -90,7 +90,7 @@ end
 -- rotate a vector around axis by angle radians
 function axis_angle(vec, rot_axis, rot_angle)
    local quat = geom.quaternion.from_axis_angle(rot_axis, rot_angle)
-   return geom.quaternion.rotate(vec, vec, quat)
+   return geom.quaternion.rotate(vec, quat, vec)
 end
 
 -- rotate vector by rotation matrix

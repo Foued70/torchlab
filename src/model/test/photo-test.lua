@@ -1,9 +1,10 @@
+local path = require 'path'
 local Ray  = geom.Ray
 local geom = geom.util
 
 local test  = {}
 test.data = require 'model.test.data.photo-data'
-scan = model.mp.scan(paths.concat(paths.dirname(paths.thisfile()), 'data'))
+scan = model.mp.scan(path.join(__dirname, 'data'))
 photos = scan:get_photos()
 
 -- FIXME check serious numerical issues which are hopefully due to the
@@ -17,7 +18,7 @@ function test.global2local ()
 
    local gxyz   = test.data.global_positions
    local result = test.data.result_global2local
-   sys.tic()
+   log.tic()
    for i = 1, #photos do
       local photo = photos[i]      
       for j = 1,gxyz:size(1) do
@@ -38,7 +39,7 @@ function test.global2local ()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,cnt, maxerr,sys.toc()))
+                       e,cnt, maxerr,log.toc()))
 end
 
 function test.globalxyz2uv ()
@@ -49,7 +50,7 @@ function test.globalxyz2uv ()
    local cnt      = 0
    local gxyz     = test.data.global_positions
    local result   = test.data.result_globalxyz2uv
-   sys.tic()
+   log.tic()
    for i = 1,#photos do
       local photo = photos[i]
       for j = 1,gxyz:size(1) do
@@ -73,7 +74,7 @@ function test.globalxyz2uv ()
       end
    end
    print(string.format(" - Found %d/%d errors (max uv: %e px: %e) in %2.4fs",
-                       e,cnt, maxuverr,maxpxerr,sys.toc()))
+                       e,cnt, maxuverr,maxpxerr,log.toc()))
 end
 
 
@@ -84,7 +85,7 @@ function test.localxy2globalray ()
    local cnt    = 0
 
    local gxyz   = test.data.global_positions
-   sys.tic()
+   log.tic()
    for i = 1,#photos do
       local photo = photos[i]
       for j = 1,gxyz:size(1) do
@@ -111,7 +112,7 @@ function test.localxy2globalray ()
       end 
    end
    print(string.format(" - Found %d/%d errors (max %e ) in %2.4fs",
-                       e,cnt, maxerr,sys.toc()))
+                       e,cnt, maxerr,log.toc()))
 end
 
 -- tests 2globalray in context of photos
@@ -159,7 +160,7 @@ function test.compute_dirs_offbyone()
    local lens = photo:get_lens().sensor
    local dirs  = photo:compute_dirs(scale)
    local err   = 0
-   sys.tic()
+   log.tic()
    local outh  = lens.image_h*invscale
    local outw  = lens.image_w*invscale
    for h = 1,outh do
@@ -170,7 +171,7 @@ function test.compute_dirs_offbyone()
          end
       end
    end
-   printf("-- %d/%d Errors in %2.2fs", err, outh*outw, sys.toc()) 
+   printf("-- %d/%d Errors in %2.2fs", err, outh*outw, log.toc()) 
 end
 
 function test.compute_dirs_deep()   
@@ -190,7 +191,7 @@ function test.compute_dirs_deep()
          local xerr  = 0
          local yerr  = 0
          local tot   = 0
-         sys.tic()
+         log.tic()
          local outh  = lens.image_h*invscale
          local outw  = lens.image_w*invscale
          for h = 1,outh do

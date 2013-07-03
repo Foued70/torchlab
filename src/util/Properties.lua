@@ -1,8 +1,8 @@
 local Properties = Class()
 
-local io = _G.io
-local table = _G.table
-local p = _G.p
+local io = require'io'
+local table = require'table'
+local path = require'path'
 
 
 function __newindex(self, name, value)
@@ -53,3 +53,4 @@ function Properties:save()
 end
 
 
+Properties.cloudlab = util.Properties.new(path.join(HOME, '.cloudlab'))

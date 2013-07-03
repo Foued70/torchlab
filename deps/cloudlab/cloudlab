@@ -1,0 +1,9 @@
+#!/bin/bash
+
+bin_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+install_root="$( dirname "${bin_dir}" )"
+
+project_dir="@project_dir@"
+
+wrap=`which rlwrap`
+exec $wrap $install_root/bin/luvit -e "require '$project_dir/src/cloudlab-env'" -i

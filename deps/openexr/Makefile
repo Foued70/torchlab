@@ -14,7 +14,7 @@ ilm_unpack=$(build_dir)/deps/ilmbase-$(ilm_ver)
 install=$(install_root)/bin/exrheader
 ilm_install=$(install_root)/lib/libIlmThread.a
 
-args = CC="$(install_root)/bin/gcc" CXX="$(install_root)/bin/g++" \
+args = $(default_args) \
 	--prefix=$(install_root) \
 	--disable-debug \
 	--disable-dependency-tracking \

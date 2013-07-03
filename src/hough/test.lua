@@ -1,3 +1,4 @@
+local path = require 'path'
 hough = require 'hough'
 saliency = require 'saliency'
 require 'image'
@@ -22,7 +23,6 @@ end
 
 -- parse input params
 params = cmd:parse(arg)
-
 dname = params.image_dir
 
 image_mount = util.fs.glob(dname, "big_img_"..params.sweepnum..".jpg")[1];

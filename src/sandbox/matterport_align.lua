@@ -94,7 +94,7 @@ for sweep_no = 1,4 do
 
    p("Testing Image Projection")
 
-   sys.tic()
+   log.tic()
 
    indices     = {}
    masks       = {}
@@ -102,9 +102,9 @@ for sweep_no = 1,4 do
 
    rect_to_sphere = projection.Remap.new(proj_from,proj_to)
 
-   time = sys.toc()
+   time = log.toc()
    printf(" - make map %2.4fs", time)
-   sys.tic()
+   log.tic()
    lambda = offset
    phi    = 0 -- - 5 * rad_per_px_y
 
@@ -120,9 +120,9 @@ for sweep_no = 1,4 do
       table.insert(masks,mask)
       table.insert(out_images,img_out)
 
-      time = sys.toc()
+      time = log.toc()
       printf(" - reproject %2.4fs", time)
-      sys.tic()
+      log.tic()
 
       lambda = lambda + delta
    end

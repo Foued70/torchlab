@@ -262,7 +262,7 @@ function ray_plane_intersection()
    local plane_d = data.quat:select(2,4)
    local maxterr = 0
    local maxierr = 0
-   sys.tic()
+   log.tic()
    for i = 1,data.vec:size(1) do
       local tvec = data.vec[i]:narrow(1,1,3)
       for j = 1,plane_norm:size(1) do
@@ -293,7 +293,7 @@ function ray_plane_intersection()
       end
    end
    print(string.format(" - Found %d/%d errors (maxT: %e, maxI: %e) in %2.4fs",
-                       e,cnt, maxterr,maxierr,sys.toc()))
+                       e,cnt, maxterr,maxierr,log.toc()))
 end
 
 function ray_face_intersection()
@@ -308,7 +308,7 @@ function ray_face_intersection()
    local face_plane = data.face_plane
    local face_verts = data.face_verts
    local plane_d    = data.quat:select(2,4)
-   sys.tic()
+   log.tic()
    for i = 1,pts:size(1) do
       local pt  = pts[i]
       local dir = dirs[i]
@@ -338,7 +338,7 @@ function ray_face_intersection()
       end
    end
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,cnt, maxterr,sys.toc()))
+                       e,cnt, maxterr,log.toc()))
 end
 
 

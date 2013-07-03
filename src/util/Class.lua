@@ -1,3 +1,7 @@
+local fs = require'fs'
+local path = require 'path'
+local debug = require 'debug'
+
 local loaded_classes = {}
 
 local function get_class_for_name(name)
@@ -9,9 +13,9 @@ local function get_class_for_name(name)
   return package
 end
 
-local function create_class_for_name(name)
+local function create_class_for_name(name, filename)
   local package = _G
-  for part in name:gmatch('[^.]+') do
+  for part in name:gmatch('[^/]+') do
     local next_package = rawget(package, part)
     if not next_package then rawset(package, part, {}) end
     package = package[part]
@@ -32,8 +36,7 @@ function _G.Class(parent)
   local filename = info.source:sub(2) -- remove the '@' prefix
   local name = filename:match('/?src/(.+).lua$')
   name = name or filename:match('/?(.+).lua$')
-  name = name:gsub('/','.')
-  local class = create_class_for_name(name)
+  local class = create_class_for_name(name, filename)
 
   if parent then
     setmetatable(class, {__index = parent})
@@ -45,7 +48,7 @@ function _G.Class(parent)
   class.__class__ = class
   class.__classname__ = name
   class.__filename__ = filename
-  class.__mod_time__ = sys.fstat(filename)
+  class.__mod_time__ = fs.statSync(filename).mtime
   class.__super__ = parent
 
   function class.new(...)
@@ -98,30 +101,38 @@ function torch.custom_serializer.after_read(object)
 end
 
 
-
-
-function _G.reload() 
+local function reload() 
   for name, class in pairs(loaded_classes) do
-    new_time = sys.fstat(class.__filename__)
+    new_time = fs.statSync(class.__filename__).mtime
     if new_time > class.__mod_time__ then
       -- file has changed
-      package.loaded[name] = nil
+      name='../'..name
+      log.trace('reload', name)
       require(name)
     end
   end
 end
 
+local repl = require 'repl'
+local luvit_repl_evaluateLine = repl.evaluateLine
+function repl.evaluateLine(line)
+  reload()
+  return luvit_repl_evaluateLine(line)
+end
+
+
 
 local function package_class_loader(self, name)
   local package_name = getmetatable(self).package_name
-  require(package_name..'.'..name)
+  require('../'..package_name..'/'..name)
   return rawget(rawget(_G, package_name), name)
 end
 
 
-for file_name in paths.files(CLOUDLAB_SRC) do
-  local dir_name = paths.concat(CLOUDLAB_SRC, file_name)
-  if paths.dirp(dir_name) then
+for _, file_name in ipairs(fs.readdirSync(CLOUDLAB_SRC)) do
+  local dir_name = path.join(CLOUDLAB_SRC, file_name)
+  local stats = fs.statSync(dir_name)
+  if stats.is_directory then
     _G[file_name] = {}
     setmetatable(_G[file_name], {
       __index = package_class_loader,

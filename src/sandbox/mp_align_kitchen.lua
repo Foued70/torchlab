@@ -32,12 +32,12 @@ cmd:text()
 params = cmd:parse(arg)
 
 imagesdir  = params.topdir..'/'..params.imagesdir..'/'..params.sweepnum
-if not paths.dirp(imagesdir) then
+if not util.fs.is_dir(imagesdir) then
    error("Must set a valid path to directory of images to process default -imagesdir images/")
 end
 
 outdir = params.topdir..'/'..params.outdir
-sys.execute("mkdir -p " .. outdir)
+util.fs.mkdir_p(outdir)
 
 -- images are vertical
 vfov = (97/180) * pi
@@ -69,7 +69,7 @@ height = img:size(2)
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 mindist       = torch.Tensor(#images);
 mindist:fill(math.huge);

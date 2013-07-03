@@ -1,6 +1,3 @@
-require 'torch'
-require 'sys'
-
 local test = {}
 
 function test.grid_contiguous()

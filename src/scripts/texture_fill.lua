@@ -1,7 +1,5 @@
 -- Class()
 
-require 'image'
-
 profile = xlua.Profiler()
 
 cmd = torch.CmdLine()
@@ -33,13 +31,13 @@ ws = window_size
 lookup_h = params.lh
 lookup_w = params.lw
 
-if not paths.filep(image_file) then 
+if not util.fs.is_file(image_file) then 
    error(string.format("-imagefile %s not found",image_file))
 end
 
 img_rgb = image.load(image_file)
 
-if mask_file and paths.filep(mask_file) then 
+if mask_file and util.fs.is_file(mask_file) then 
    printf(" - attempt to load mask file %s", mask_file)
    mask = image.load(mask_file)
 elseif img_rgb:size(1) == 4 then 
@@ -176,7 +174,7 @@ function fill_patches (mask_offsets,debug)
    local s4 = 0
    local s5 = 0
    local s6 = 0
-   sys.tic()
+   log.tic()
    for pi = 1,mask_offsets:size(1) do
 
       collectgarbage()
@@ -343,7 +341,7 @@ function fill_patches (mask_offsets,debug)
       local t7 = timer:time()
       s6 = s6 + t7.real - t6.real
    end
-   printf(" - processed %d patches in %2.4fs", n_patches, sys.toc())
+   printf(" - processed %d patches in %2.4fs", n_patches, log.toc())
    print("time:")
    printf(" - setup                %2.4fs",s1)
    print("in loop:")

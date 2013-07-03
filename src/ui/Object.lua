@@ -1,4 +1,4 @@
-local gl = ui.gl
+local gl = require './gl'
 
 local Object = Class()
 

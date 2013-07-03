@@ -38,20 +38,20 @@ function report_error(err,str,eps)
 end
 
 p("Testing Stereographic projection")
-sys.tic()
+log.tic()
 
 for i,c in ipairs(centers) do
    printf("Tangent point at (%f,%f)", c[1],c[2])
    gp:set_lambda_phi(c[1],c[2])
    angles = gp:angles_map()
-   sys.tic()
+   log.tic()
    unit_coords = gp:angles_to_normalized_coords(angles,unit_coords)
-   time = sys.toc()
+   time = log.toc()
    printf(" - Time Stereographic angles to normalized_coords")
    printf("   %2.4fs, %2.4es per px", time, time*perElement)
-   sys.tic()
+   log.tic()
    unit_angles = gp:normalized_coords_to_angles(unit_coords,unit_angles)
-   time = sys.toc()
+   time = log.toc()
    printf(" - Time Stereographic normalized_coords to angles")
    printf("   %2.4fs, %2.4es per px", time, time*perElement)
 
@@ -62,15 +62,15 @@ for i,c in ipairs(centers) do
 
    -- test pixels
 
-   sys.tic()
+   log.tic()
    pixels = gp:angles_to_pixels(angles,pixels)
-   time = sys.toc()
+   time = log.toc()
    printf(" - Time Stereographic angles to pixels")
    printf("   %2.4fs %2.4es per px", time, time*perElement)
-   sys.tic()
+   log.tic()
 
    pixels_angles = gp:pixels_to_angles(pixels,pixels_angles)
-   time = sys.toc()
+   time = log.toc()
    printf(" - Time Stereographic pixels to angles")
    printf("   %2.4fs, %2.4es per px", time, time*perElement)
 

@@ -1,8 +1,6 @@
 Class()
 
-require 'image'
-
-sys.tic()
+log.tic()
 
 pi = math.pi
 
@@ -24,7 +22,7 @@ image_file  = params.imagefile
 out_size   = params.size
 out_file   = params.outfile
 
-if not paths.filep(image_file) then 
+if not util.fs.is_file(image_file) then 
    error(string.format("-imagefile %s not found",image_file))
 end
 
@@ -42,16 +40,16 @@ cy   = height * 0.5
 
 proj_from = projection.SphericalProjection.new(width,height, hfov,vfov,cx,cy)
 
-time_prep = sys.toc()
+time_prep = log.toc()
 printf(" - load image in %2.4fs", time_prep)
-sys.tic()
+log.tic()
 
 p("Creating Skybox Projection")
 cmap = projection.CubeMap.new(proj_from,out_size)
 
-time_map = sys.toc()
+time_map = log.toc()
 printf(" - make map %2.4fs", time_map)
-sys.tic()
+log.tic()
 
 faces = cmap:remap(img)
 for name,face in pairs(faces) do 
@@ -61,8 +59,8 @@ for name,face in pairs(faces) do
    image.save(outf,face)
 end
 
-time_reproject = sys.toc()
+time_reproject = log.toc()
 printf(" - reproject %2.4fs", time_reproject)
-sys.tic()
+log.tic()
 
 printf(" - Total %2.4fs", time_prep + time_map + time_reproject)

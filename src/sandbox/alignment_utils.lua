@@ -1,6 +1,6 @@
 hough = require 'hough'
 saliency = require 'saliency'
-require 'image'
+local fs = require 'fs'
 
 pi = math.pi
 pi2 = pi * 0.5
@@ -13,12 +13,10 @@ function load_alignment_images(imagesdir)
   if not images then
     images = {}
     fnames = {}
-    if not paths.dirp(imagesdir) then
+    if not util.fs.is_dir(imagesdir) then
       error("Must set a valid path to directory of images to process default -imagesdir images/")
     end
-    imgfiles = paths.files(imagesdir)
-    imgfiles() -- .
-    imgfiles() -- ..
+    imgfiles = fs.readdirSync(imagesdir)
     for f in imgfiles do
       if f == ".DS_Store" then -- exclude OS X automatically-created backup files
         printf("--- Skipping .DS_Store file")

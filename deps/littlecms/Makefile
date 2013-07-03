@@ -9,7 +9,7 @@ unpack=$(build_dir)/deps/lcms-$(ver)
 
 install=$(install_root)/lib/liblcms.a
 
-args = CC="$(install_root)/bin/gcc" \
+args = $(default_args) \
 	--prefix=$(install_root) \
 	--enable-shared \
 	--disable-debug \

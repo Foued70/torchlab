@@ -1,18 +1,28 @@
 Class()
--- TODO: vectorize all these like the new spherical angles 
+
+-- TODO: change all these functions to apply for 
+-- 
+-- + single quats   dims: (4) or (1,4) or (4,1) and 
+-- + single vectors dims: (3),(4),(1,3),(3,1),(1,4),(4,1)
+-- 
+-- to muliple tensors of above dimensions plus  
+-- 
+-- + multiple quats   dims: (Nx4)
+-- + mulitple vectors dims: (Nx3),(Nx4)
 local axes   = torch.eye(3)
 
 x = axes[1]
 y = axes[2]
 z = axes[3]
 
+-- DONE: multiple
 function conjugate(quat,res)
    if (not res) then
       res = quat:clone()
    elseif (quat ~= res) then
       res:resizeAs(quat):copy(quat)
    end
-   res:narrow(1,1,3):mul(-1)
+   res:narrow(quat:nDimension(),1,3):mul(-1)
    return res
 end
 
@@ -22,27 +32,44 @@ function equals(quat1, quat2)
    return (diff:lt(1e-8):sum() == 4)
 end
 
--- use to concatenate 2 rotations (careful: quat2 then quat1 non-cummutative)
+-- use to concatenate 2 rotations (careful: quat2 then quat1
+-- non-cummutative)
+-- DONE: multiple
 function product(quat1,quat2,res)
 
+   local q1_nelem = quat1:nElement()
+   local q2_nelem = quat2:nElement()
+
    if (not res) then
-      res = torch.Tensor(quat2:size())
+      res = torch.Tensor(q1_nelem * q2_nelem / 4)
    end
 
-   if quat2:dim() == 1 then
-      local v1 = quat1:narrow(1,1,3)
-      local v2 = quat2:narrow(1,1,3)
+   if ((q1_nelem == 4) and (q2_nelem == 4)) then
+      
+      res:resize(4)
+      quat1 = quat1:squeeze()
+      quat2 = quat2:squeeze()
+      local v1   = quat1:narrow(1,1,3)
+      local v2   = quat2:narrow(1,1,3)
       local vres = res:narrow(1,1,3)
       vres:copy(torch.cross(v1,v2) + v1*quat2[4] + v2*quat1[4])
       res[4] = quat1[4]*quat2[4] - v1:dot(v2)
    else
-      quat1 = quat1:reshape(1,4):expandAs(quat2)
+      if (q1_nelem == 4) then 
+         quat1 = quat1:reshape(1,4):expandAs(quat2)
+      elseif (q2_nelem == 4) then 
+         quat2 = quat2:reshape(1,4):expandAs(quat1)
+      else
+         error("currently product() only accepts 1x4,Nx4 or Nx4,1x4 pairs")
+      end
+      res:resize(quat1:size(1),4)
       local v1 = quat1:narrow(2,1,3)
       local v2 = quat2:narrow(2,1,3)
       local w1 = quat1[{{},{4}}]:expandAs(v1)
       local w2 = quat2[{{},{4}}]:expandAs(v2)
       local vres = res:narrow(2,1,3)
       local wres = res[{{},4}]
+      
       vres:copy(torch.cross(v1,v2,2)):add(torch.cmul(v1,w2)):add(torch.cmul(v2,w1))
       
       for i = 1,wres:size(1) do 
@@ -54,34 +81,118 @@ function product(quat1,quat2,res)
                 
 end
 
--- returns quaternion represnting angle between two vectors
+-- returns quaternion representing angle between two vectors
+-- DONE: multiple
 function angle_between(from_vector, to_vector, quat)
-   local from = from_vector:narrow(1,1,3)
-   local to   = to_vector:narrow(1,1,3)
+   local from_nElem = from_vector:nElement()
+   local   to_nElem =   to_vector:nElement()
+   local from_nDim  = from_vector:nDimension()
+   local   to_nDim  =   to_vector:nDimension()
+   local from_nVec  = from_nElem/from_vector:size(from_nDim)
+   local   to_nVec  =   to_nElem/to_vector:size(to_nDim)
 
-   local rot_axis = torch.cross(from, to)
-   local rot_angle = 0
+   quat = quat or torch.Tensor(from_nVec * to_nVec , 4)
 
-   -- avoid the degenerate case when from_vector is very close to to_vector
-   local m = torch.norm(rot_axis)
-   if(m > 1e-8) then
-      rot_axis  = rot_axis/m
-      rot_angle = torch.acos(torch.dot(from, to))
+   local from = from_vector:narrow(from_nDim,1,3)
+   local to   = to_vector:narrow(to_nDim,1,3)
+   
+   from_nElem = from:nElement()
+   to_nElem   = to:nElement()
+
+   if (quat:size(1) == 1) then 
+      local rot_axis = torch.cross(from,to)
+      local rot_angle = 0
+
+      -- avoid the degenerate case when from_vector is very close to to_vector
+      local m = torch.norm(rot_axis)
+      if(m > 1e-8) then
+         rot_axis  = rot_axis/m
+         rot_angle = torch.acos(torch.dot(from, to))
+      end
+
+      return from_axis_angle(rot_axis, rot_angle, quat)
+   else
+      
+      
+      if (from_nElem == 3) then 
+         from = from:reshape(1,3):expandAs(to)
+      elseif (to_nElem == 3) then 
+         to = to:reshape(1,3):expandAs(from)
+      else
+         error("currently angle_between only accepts 1x(3or4),Nx(3or4) or Nx(3or4),1x(3or4) pairs")
+      end
+      
+      local rot_axis  = torch.cross(from,to,2)
+      
+
+      -- avoid the degenerate case when from_vector is very close to to_vector
+      local rot_angle = torch.cmul(from, to):sum(from:nDimension()):acos()
+      local m        = rot_axis:norm(2,2)
+      local invalid  = m:lt(1e-8)
+      rot_angle[invalid] = 0
+
+      m[m:lt(1e-8)]  = 1 
+
+      m = m:resize(m:size(1),1):expandAs(rot_axis)
+      rot_axis:cdiv(m)
+
+      return from_axis_angle(rot_axis, rot_angle, quat)
+
    end
-
-   return from_axis_angle(rot_axis, rot_angle, quat)
 end
 
+-- DONE: multiple
+-- TODO: make axis_angle a single Nx4 tensor like quat
 function from_axis_angle(rot_axis, rot_angle, quat)
-   if not quat then
-      quat = torch.Tensor(4)
-   end
-   quat[{{1,3}}] = rot_axis * torch.sin(rot_angle / 2)
-   quat[4] = torch.cos(rot_angle / 2)
+   if (type(rot_angle) == "number") then
+      quat = quat or torch.Tensor(4)
+      quat:resize(4)
+      quat[{{1,3}}] = rot_axis * torch.sin(rot_angle / 2)
+      quat[4]       = torch.cos(rot_angle / 2)
+   else
+      local n_vec = rot_angle:nElement()
 
+      quat = quat or torch.Tensor(n_vec,4)
+      quat:resize(n_vec,4)
+
+      rot_axis = rot_axis:narrow(rot_axis:nDimension(),1,3)
+      local a = torch.mul(rot_angle,0.5):sin():resize(n_vec,1)
+      a = a:expandAs(rot_axis)
+      
+      quat[{{},{1,3}}]:copy(rot_axis):cmul(a)
+      quat[{{},4}] = rot_angle:clone():mul(0.5):cos()
+   end
+   
    return quat
 end
 
+-- DONE: multiple
+-- DONE: make axis_angle a single Nx4 tensor like quat
+function to_axis_angle(quat, axis_angle)
+
+   axis_angle = axis_angle or quat:clone()
+   axis_angle:resize(quat:size()):copy(quat)
+
+   if (quat:nDimension() == 1) then 
+      axis_angle[4] = torch.acos(quat[4]) * 2
+      local d = math.sqrt(1 - quat[4]*quat[4])
+      
+      axis_angle[{{1,3}}]:mul(1/d)
+   else
+   
+      axis_angle[{{},4}]:acos():mul(2)
+      local rot_axis = axis_angle[{{},{1,3}}]
+      
+      local d = quat[{{},4}]:clone()
+      d:cmul(d):mul(-1):add(1):sqrt()
+      d = d:resize(d:size(1),1):expandAs(rot_axis)
+      rot_axis:cdiv(d) 
+
+   end
+   return axis_angle
+end
+
+-- TODO: multiple 
 function to_rotation_matrix(quat, res)
    if (not res) then
       res   = torch.Tensor(3,3)
@@ -105,6 +216,7 @@ function to_rotation_matrix(quat, res)
    return res
 end
 
+-- TODO: multiple
 -- returns nil on a badly formed rotation matrix
 function from_rotation_matrix(rmat, quat, debug)
    if (not quat) then
@@ -205,8 +317,9 @@ end
 -- + Yaw (east-ing): positive angle moves east 
 --   (+y -> +x -> -y) (+x -> -y -> -x)
 -- 
--- http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html
-
+-- See: Appendix of O'Reilly Physics for Game Developers
+-- 
+-- DONE: multiple
 function from_euler_angle(euler_angle, quat)
    if euler_angle:dim() == 1 then 
       euler_angle:resize(euler_angle:size(1),1)
@@ -226,15 +339,13 @@ function from_euler_angle(euler_angle, quat)
    quat = quat or torch.Tensor(pitch:nElement(),4)
    quat:resize(pitch:nElement(),4)
 
-   -- negative signs in yaw and pitch are needed to correspond with
-   -- directions as stated in the comment above.
-   local croll      = roll:clone():mul(0.5):cos()
-   local cyaw       = yaw:clone():mul(-0.5):cos()
-   local cpitch     = pitch:clone():mul(-0.5):cos()
+   local croll      =  roll:clone():mul(0.5):cos()
+   local cyaw       =   yaw:clone():mul(0.5):cos()
+   local cpitch     = pitch:clone():mul(0.5):cos()
 
-   local sroll      = roll:clone():mul(0.5):sin()
-   local syaw       = yaw:clone():mul(-0.5):sin()
-   local spitch     = pitch:clone():mul(-0.5):sin()
+   local sroll      =  roll:clone():mul(0.5):sin()
+   local syaw       =   yaw:clone():mul(0.5):sin()
+   local spitch     = pitch:clone():mul(0.5):sin()
 
    local cyaw_croll = torch.cmul(cyaw,croll)
    local syaw_sroll = torch.cmul(syaw,sroll)
@@ -252,8 +363,8 @@ end
 
 -- <quat> is Nx4
 -- <euler_angles> is 3xN
--- http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html
-
+-- See: help for from_euler_angle above
+-- DONE: multiple
 function to_euler_angle(quat,euler_angle)
    local n_elem = 1
    if (quat:dim() == 1) then 
@@ -306,12 +417,13 @@ function to_euler_angle(quat,euler_angle)
    end
 
    -- make euler angles correspond to image projections (south-ing and east-ing)
-   euler_angle[1]:mul(-1)
-   euler_angle[2]:mul(-1)
+   -- euler_angle[1]:mul(-1)
+   -- euler_angle[2]:mul(-1)
 
    return euler_angle
 end
 
+-- TODO: multiple
 -- if two quaternions are equal they will rotate a vector the same distance
 function distance(quat1, quat2)
    local vec1 = rotate(quat1,axes)
@@ -323,6 +435,7 @@ end
 -- rotate vector by quaternion
 -- this is an optimized version of 30 ops which we will move C
 -- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+-- DONE: multiple
 function rotate(...)
    local res,q,v
    local args = {...}
@@ -348,5 +461,75 @@ function rotate(...)
    -- call C function
    geom.rotation.by_quaternion(res,q,v)
 
-   return res
+   return res:squeeze()
+end
+
+-- rotate vector by quaternion and translate
+-- this is an optimized version of 30 ops which we will move C
+-- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+-- DONE: multiple
+function rotate_translate(...)
+   local res,q,t,v
+   local args = {...}
+   local nargs = #args
+   if nargs == 4 then
+      res = args[1]
+      q   = args[2]
+      t   = args[3] 
+      v   = args[4] 
+   elseif nargs == 3 then
+      q   = args[1]
+      t   = args[2]
+      v   = args[3]
+      local n_elem = v:nElement() * (q:nElement() / 4)
+      res = torch.Tensor(n_elem)
+   else
+      print(dok.usage('rotate_translate',
+                      'rotate a vector by quaternion then translate',
+                      '> returns: rotated vector',
+                      {type='torch.Tensor', help='result'},
+                      {type='torch.Tensor', help='quaternion', req=true},
+                      {type='torch.Tensor', help='translate',  req=true},
+                      {type='torch.Tensor', help='vector',     req=true}))
+      dok.error('incorrect arguments', 'rotate_translate')
+   end
+   -- call C function
+   geom.rotation.rotate_translate(res,q,t,v)
+
+   return res:squeeze()
+end
+
+-- translate a vector then rotate by quaternion
+-- this is an optimized version of 30 ops which we will move C
+-- from http://physicsforgames.blogspot.com/2010/03/quaternion-tricks.html
+-- DONE: multiple
+function translate_rotate(...)
+   local res,t,q,v
+   local args = {...}
+   local nargs = #args
+   if nargs == 4 then
+      res = args[1]
+      t   = args[2]
+      q   = args[3] 
+      v   = args[4] 
+   elseif nargs == 3 then
+      t   = args[1]
+      q   = args[2]
+      v   = args[3]
+      local n_elem = v:nElement() * (q:nElement() / 4)
+      res = torch.Tensor(n_elem)
+   else
+      print(dok.usage('rotate_translate',
+                      'rotate a vector by quaternion then translate',
+                      '> returns: rotated vector',
+                      {type='torch.Tensor', help='result'},
+                      {type='torch.Tensor', help='translate',  req=true},
+                      {type='torch.Tensor', help='quaternion', req=true},
+                      {type='torch.Tensor', help='vector',     req=true}))
+      dok.error('incorrect arguments', 'rotate_translate')
+   end
+   -- call C function
+   geom.rotation.translate_rotate(res,t,q,v)
+
+   return res:squeeze()
 end

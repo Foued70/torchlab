@@ -4,5 +4,5 @@ include(../common.cmake REQUIRED)
 
 SET(src saliency.c)
 
-ADD_TORCH_PACKAGE(saliency "${src}" "" "Saliency using Entropy on Integer (integral) Histograms")
+ADD_LUVIT_LIB(saliency "${src}")
 TARGET_LINK_LIBRARIES(saliency luaT TH)

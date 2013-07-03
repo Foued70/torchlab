@@ -1,6 +1,4 @@
-local libui = require 'libui'
-local gl = require 'ui.gl'
-local key = require 'ui.key'
+local gl = require './gl'
 
 local Renderer = Class()
 

@@ -3641,7 +3641,7 @@ local frame_buffer_error_map = {
 function gl.CheckFramebuffer()
   local status = gl.CheckFramebufferStatus(gl.FRAMEBUFFER)
   if status ~= gl.FRAMEBUFFER_COMPLETE then
-    log.error(frame_buffer_error_map[status])
+    log.error(status, frame_buffer_error_map[status])
   end
 end
 

@@ -61,6 +61,7 @@ end
 -- angles - azimuth, elevation from 0,0 center of projection
 -- pixels (optional) - pixels from 0,0 in the upper left to width,height in the lower right
 function Projection:angles_to_pixels(angles, pixels)
+   angles = angles:narrow(1,1,2)
    pixels = pixels or torch.Tensor(angles:size())
    pixels:resize(angles:size())
 
@@ -107,7 +108,7 @@ end
 
 -- 
 -- offset : (LongTensor) for fast lookups
--- stride : (LongTensor) width, 1 of input image
+-- stride : (LongTensor) {width, 1} of input image
 --   mask : (ByteTensor) invalid locations marked with 1
 -- 
 function Projection:pixels_to_offset_and_mask(pixels, offset, mask)
@@ -132,6 +133,7 @@ function Projection:pixels_to_offset_and_mask(pixels, offset, mask)
 end
 
 function Projection:angles_to_offset_and_mask(angles, offset, mask)
+   angles = angles:narrow(1,1,2)
    offset = offset or torch.LongTensor(angles[1]:size())
    mask   =   mask or torch.ByteTensor(angles[1]:size())
    

@@ -126,11 +126,11 @@ function pixel_coords_to_offset(pixel_coords,stride,mask,offset)
    -- torch is 1 indexed.
    local output_map = pixel_coords[1]:clone():add(-0.5):floor():mul(stride[1])
 
-   local temp = torch.Tensor(output_map:size())
-   for d = 2,pixel_coords:size(1) do 
-      temp:copy(pixel_coords[d]):add(-0.5):floor():mul(stride[d])
-      output_map:add(temp)
+   for d = 2,pixel_coords:size(1)-1 do 
+      output_map:add(pixel_coords[d]:clone():add(-0.5):floor():mul(stride[d]))
    end
+   -- Last dimension is indexed starting at 1 (so no -0.5)
+   output_map:add(pixel_coords[-1]):floor()
    -- remove spurious out of bounds from output
    if mask then
       output_map[mask] = 1

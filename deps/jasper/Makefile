@@ -9,7 +9,7 @@ unpack=$(build_dir)/deps/jasper-$(ver).uuid
 
 install=$(install_root)/lib/libjasper.a
 
-args = CC="$(install_root)/bin/gcc" CXX="$(install_root)/bin/g++" \
+args = $(default_args) \
   CFLAGS="-I$(install_root)/include" \
 	--prefix=$(install_root) \
 	--enable-shared \

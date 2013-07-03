@@ -1,6 +1,6 @@
 --Class()
 
-require 'image'
+local fs = require 'fs'
 
 pi = math.pi
 pi2 = pi * 0.5
@@ -81,10 +81,10 @@ rgb_images={}
 if not images then
    images = {}
    fnames = {}
-   if not paths.dirp(imagesdir) then 
+   if not util.fs.is_dir(imagesdir) then 
       error("Must set a valid path to directory of images to process default -imagesdir images/")
    end
-   imgfiles = paths.files(imagesdir)
+   imgfiles = fs.readdirSync(imagesdir)
    imgfiles() -- .
    imgfiles() -- ..
    for f in imgfiles do
@@ -122,7 +122,7 @@ lambda = 0
 
 p("Testing Image Projection")
 
-sys.tic()
+log.tic()
 
 for pp = -phi_quant,phi_quant do
   

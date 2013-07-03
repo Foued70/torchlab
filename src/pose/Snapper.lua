@@ -13,7 +13,7 @@ end
 
 function Snapper:config_camera(width, height, vfov)
    self.camera.vfov = vfov
-   self.gl_viewport:resize_widget(width, height)
+   self.gl_viewport:resize(width, height)
 end
 
 function Snapper:snap(position, rotation_quat)

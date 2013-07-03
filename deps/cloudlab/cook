@@ -1,0 +1,21 @@
+#!/bin/bash
+
+bin_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+install_root="$( dirname "${bin_dir}" )"
+current_dir=`pwd`
+current_dir_name=`basename $current_dir`
+
+build_dir=$install_root/build/cloudlab/$current_dir_name
+
+cmake_args="\
+  -D CMAKE_INSTALL_PREFIX:PATH=${install_root} \
+  -D CMAKE_C_COMPILER:PATH=gcc-4.8 \
+  -D CMAKE_CXX_COMPILER:PATH=g++-4.8 \
+  -D CMAKE_BUILD_TYPE=Release\
+"
+
+
+mkdir -p $build_dir
+cd $build_dir
+cmake $cmake_args $current_dir
+make install VERBOSE=1

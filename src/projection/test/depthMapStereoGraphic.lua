@@ -1,8 +1,9 @@
 -- Class()
+local path = require 'path'
 
 require 'image'
 
-sys.tic()
+log.tic()
 
 d2r = math.pi / 180
 pi = math.pi
@@ -26,7 +27,7 @@ scandir  = params.scandir
 out_size   = params.size
 
 -- load images
-if not paths.dirp(scandir) then
+if not util.fs.is_dir(scandir) then
    error("Must set a valid path to directory of images to process default -scandir images/")
 end
 images = util.util.file_match(scandir,"jpg$",images)
@@ -39,7 +40,7 @@ pose_file = util.util.file_match(scandir,"texture_info.txt$")
 poses = util.mp.load_poses(pose_file[1])
 
 img = image.load(images[1])
-depth_file = util.util.file_match(params.depthdir,paths.basename(images[1]))
+depth_file = util.util.file_match(params.depthdir,path.basename(images[1]))
 depth_img = image.load(depth_file[1])
 
 width      = img:size(3)
@@ -62,13 +63,13 @@ proj_stereo =
 proj_little = 
    projection.StereographicProjection.new(out_size,out_size,out_fov,out_fov,nil,nil,0,pi2)
 
-time_prep = sys.toc()
+time_prep = log.toc()
 printf(" - prep in %2.4fs", time_prep)
-sys.tic()
+log.tic()
 
 p("Testing Stereographic LittleWorld Projection")
 
-sys.tic()
+log.tic()
 
 sphere_to_stereographic = projection.Remap.new(proj_sphere,proj_stereo)
 sphere_to_little = projection.Remap.new(proj_sphere,proj_little)
@@ -79,17 +80,17 @@ index1Ds = sphere_to_stereographic:get_index_and_mask()
 index1Dl = sphere_to_little:get_index_and_mask()
 perElement = index1Ds:nElement()
 
-time_map = sys.toc()
+time_map = log.toc()
 printf(" - make map %2.4fs", time_map)
-sys.tic()
+log.tic()
 
 img_stereo = sphere_to_stereographic:remap(img)
 img_little = sphere_to_little:remap(img)
 depth_stereo = sphere_to_stereographic:remap(depth_img)
 depth_little = sphere_to_little:remap(depth_img)
-time_reproject = sys.toc()
+time_reproject = log.toc()
 printf(" - reproject %2.4fs", time_reproject)
-sys.tic()
+log.tic()
 
 for c = 1,3 do 
    img_stereo[c]:cmul(depth_stereo)
@@ -101,7 +102,7 @@ image.display{image={img_stereo,img_little}}
 
 for i = 2,#images do 
    img = image.load(images[i])
-   depth_file = util.util.file_match(params.depthdir,paths.basename(images[i]))
+   depth_file = util.util.file_match(params.depthdir,path.basename(images[i]))
    depth_img = image.load(depth_file[1])
 
    img_stereo = sphere_to_stereographic:remap(img)
@@ -109,9 +110,9 @@ for i = 2,#images do
    depth_stereo = sphere_to_stereographic:remap(depth_img)
    depth_little = sphere_to_little:remap(depth_img)
 
-   time_reproject = sys.toc()
+   time_reproject = log.toc()
    printf(" - reproject %2.4fs", time_reproject)
-   sys.tic()
+   log.tic()
    for c = 1,3 do 
       img_stereo[c]:cmul(depth_stereo)
       img_little[c]:cmul(depth_little)
