@@ -16,12 +16,17 @@ ffi.cdef[[
                        THDoubleTensor *trans,
                        THDoubleTensor *quat);
 
- void translate_rotate(THDoubleTensor *result,
-                       THDoubleTensor *vectors,
-                       THDoubleTensor *trans,
-                       THDoubleTensor *quat);
-]]
+               void rotate_translate(THDoubleTensor *result,
+                                     THDoubleTensor *quat,
+                                     THDoubleTensor *trans,
+                                     THDoubleTensor *vectors
+                                     );
 
+               void translate_rotate(THDoubleTensor *result,
+                                     THDoubleTensor *trans,
+                                     THDoubleTensor *quat,
+                                     THDoubleTensor *vectors );
+            ]]
  -- don't want to call C functions directly
 local libgeom = util.ffi.load('libgeom')
 
@@ -68,7 +73,7 @@ function z_axis(normal)
    return axis(normal,z)
 end
 
--- 
+-- rotation required to align normal to the nearest axis, and the dimension of that axis
 function largest (normal)
    local n   = normal:narrow(1,1,3)
    local p   = n:clone():abs()
@@ -85,7 +90,7 @@ end
 -- rotate a vector around axis by angle radians
 function axis_angle(vec, rot_axis, rot_angle)
    local quat = geom.quaternion.from_axis_angle(rot_axis, rot_angle)
-   return geom.quaternion.rotate(vec, vec, quat)
+   return geom.quaternion.rotate(vec, quat, vec)
 end
 
 -- rotate vector by rotation matrix
