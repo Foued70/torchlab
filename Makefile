@@ -1,9 +1,11 @@
 packages = image
 
-all: $(packages)
+all: deps $(packages)
 
 $(packages):
 	cd src/$@; cook
+
+.PHONY: deps gphoto ceres opencv
 
 deps:
 	mkdir -p build
