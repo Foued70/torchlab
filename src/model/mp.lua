@@ -6,7 +6,7 @@ local Scan       = model.Scan
 local Sweep      = model.Sweep
 local Photo      = model.Photo
 local LensSensor = projection.LensSensor
-local loader     = require 'data.loader'
+local loader     = require '../data/loader'
 
 
 function scan_name(posefile, objfile)

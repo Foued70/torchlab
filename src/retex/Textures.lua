@@ -4,7 +4,7 @@
 -- tex = retex.Textures.new(scan, {ppm = 300})
 -- tex:make()
 
-local loader = require 'data.loader'
+local loader = require '../data/loader'
 local path = require 'path'
 
 local Textures = Class()

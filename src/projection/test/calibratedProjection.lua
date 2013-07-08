@@ -2,7 +2,7 @@ Class()
 
 require 'image'
 
-lens_data = require 'projection.lens_sensor_types'
+lens_data = require '../lens_sensor_types'
 
 cmd = torch.CmdLine()
 cmd:text()

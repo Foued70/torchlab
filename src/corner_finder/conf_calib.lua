@@ -1,5 +1,5 @@
-loader= require 'util.loader'
-LensSensor=data.LensSensor
+loader= require '../data/loader'
+LensSensor=projection.LensSensor
 projection=projection.util
 p3p=require 'p3p'
 
@@ -62,13 +62,13 @@ function first_sweep(scanref,cp,cpref)
     return mod
 end
 
-scanref=util.mp.scan(texfname, objfname);
+scanref=model.mp.scan(texfname, objfname);
 cp=load_corners(cfname);
 cp_ref=load_corners(creffname);
 mod=loader("tmplua_cache.t7",first_sweep,scanref,cp,cpref)
 
 myLens=LensSensor.new("nikon_10p5mm_r2t_full")
-img=image.load("/Users/lihui815/Downloads/damp-unicorn-2109_a_00/sweep_1/JPG/DSC_0008.jpg")
+img=image.load("/Users/aditya/Work/code/Floored/data/96_spring_kitchen/nikon_10.5mm/sweep_1/DSC_0182.jpg")
 img:resize(img:size(1),img:size(2), img:size(3))
 myLens:add_image(img)
 
