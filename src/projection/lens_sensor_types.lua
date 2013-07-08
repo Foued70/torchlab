@@ -2,8 +2,6 @@
 -- combinations we are using when capturing higher quality textures
 -- with DSLR
 
-Class()
-
 local lens_types = {
    nikon_D800E_w18mm = {
 
@@ -112,7 +110,6 @@ local lens_types = {
       cal_yc = 401.79351104,
       cal_xc = 602.2562304
    },
-
 
    nikon_10p5mm_r2t_full = {
 
