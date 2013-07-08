@@ -5,7 +5,8 @@ all: $(packages)
 $(packages):
 	cd src/$@; cook
 
-deps: build
+deps:
+	mkdir -p build
 	cd deps/luvit; make
 	cd deps/imagemagick; make
 	cd deps/jpeg; make
@@ -13,8 +14,6 @@ deps: build
 	cd deps/cloudlab; make
 	cd deps/glfw; make
 
-build: 
-	mkdir -p build
 
 gphoto:
 	cd deps/libusb; make
