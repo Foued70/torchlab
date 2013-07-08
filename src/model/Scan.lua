@@ -1,8 +1,8 @@
 local path = require 'path'
---local config     = require 'model.config'
---local loader     = require 'data.loader'
-local config     = model.config
-local loader     = data.loader
+local config     = require 'model.config'
+local loader     = require '../data.loader'
+--local config     = model.config
+--local loader     = data.loader
 
 local fs         = util.fs
 local Obj        = data.Obj

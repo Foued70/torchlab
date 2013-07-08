@@ -8,8 +8,8 @@ local Ray = geom.Ray
 -- local geom = geom.util
 
 local bihtree = model.bihtree
---local loader = require 'data.loader'
-local loader = data.loader
+local loader = require '../data.loader'
+--local loader = data.loader
 local interpolate = model.interpolate
 
 local Photo = Class()

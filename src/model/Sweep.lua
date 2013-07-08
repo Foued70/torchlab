@@ -1,6 +1,6 @@
 local path = require 'path'
---local config = require 'model.config'
-local config = model.config
+local config = require 'model.config'
+--local config = model.config
 
 local fs    = util.fs
 local Photo = model.Photo
