@@ -1,0 +1,3 @@
+brew install gcc48 libpng webp readline
+
+make
