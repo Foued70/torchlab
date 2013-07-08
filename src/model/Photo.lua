@@ -1,6 +1,6 @@
 local image = require '../image'
 local path = require 'path'
-require 'math'
+--require 'math'
 
 local LensSensor = projection.LensSensor
 local projection = projection.util

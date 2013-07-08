@@ -1,5 +1,5 @@
-local path = require "path"
-local fs = require "fs"
+local path = require 'path'
+local fs = require 'fs'
 
 local cache_dir = path.join(__dirname, 'cache')
 util.fs.mkdir_p(cache_dir)

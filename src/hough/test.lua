@@ -3,63 +3,46 @@ hough = require 'hough'
 saliency = require 'saliency'
 require 'image'
 
+dofile '/Users/lihui815/cloudlab/src/sandbox/alignment_utils.lua'
+
 
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text()
-cmd:text('Compute image projections')
+cmd:text('Compare hough transforms')
 cmd:text()
 cmd:text('Options')
-cmd:option('-image', '/Users/lihui815/Projects/PICSDIR/SWEEPS/jet-pizza-6780/scanner371_job362006/proces/sweep_3/JPG/DSC_0009.jpg', 'image file path')
+cmd:option('-image_dir', '/Users/lihui815/cloudlab/src/data/test/96_spring_kitchen/matterport_mount/output', 'image file path to supplementary picture')
+cmd:option('-sweepnum', 'sweep_3', 'sweep number')
 
 cmd:text()
 
--- arg = ''
+if arg == nil then
+  arg = ''
+end
 
 -- parse input params
 params = cmd:parse(arg)
-dname = path.dirname(params.image)
-fname = path.basename(params.image)
+dname = params.image_dir
 
-img = image.load(params.image):type('torch.DoubleTensor')
-img = image.scale(img, 1580,412)
-lab = image.rgb2lab(img);
-smp = saliency.high_entropy_features(lab[1],5,5)
+image_mount = util.fs.glob(dname, "big_img_"..params.sweepnum..".jpg")[1];
+swnum = tonumber(string.split(params.sweepnum, 'sweep_')[1])
+txnum = swnum-1
+image_mptex = util.fs.glob(dname, "0"..txnum..".jpg")[1];
 
-print('getting hough transform')
-ht = hough.get_hough_transform(smp, 1000,1080)
-disp1 = ht:clone()/ht:max()
-image.save(dname.."/disp_1_"..fname, disp1);
-disp1 = image.scale(disp1, 600,600)
-image.display(disp1);
+fname_1 = paths.basename(image_mount)
+fname_2 = paths.basename(image_mptex)
 
-print('applying local contrast normalization')
-ht = hough.local_contrast_normalization(ht);
-disp2 = ht:clone()/ht:max()
-image.save(dname.."/disp_2_"..fname, disp2);
-disp2 = image.scale(disp2, 600,600)
-image.display(disp2);
+numrads=2500
+numangs=1500
+numbest=100
+nb = numbest
 
-print('restricting angles')
-restA = 5.0
-ht1 = hough.restrict_angles(ht, 0.0, math.pi*(restA)/180.0)
-ht2 = hough.restrict_angles(ht, math.pi*(180.0-restA)/180.0, math.pi*(180.0+restA)/180.0)
-ht3 = hough.restrict_angles(ht, math.pi*(360.0-restA)/180.0, 2.0*math.pi)
-ht = ht1+ht2+ht3
-disp3 = ht:clone()/ht:max()
-disp3 = image.scale(disp3, 600,600)
-image.display(disp3);
+get_hough(dname, fname_1, image_mount, swnum, numrads, numangs, numbest, nb, "mount")
+collectgarbage()
+get_hough(dname, fname_2, image_mptex, swnum, numrads, numangs, numbest, nb, "mptex")
+collectgarbage()
+off = compare_bands(dname, fname_1, fname_2, swnum, nb)
 
-print('sorting lines')
-sorted = hough.find_best_lines(ht,10)
-smp = smp/(smp:max()+0.00000001)
-for i=1,sorted:size(1) do
-  local RR = sorted[i][1]
-  local AA = sorted[i][2]
-  local VV = sorted[i][3]
-  printf('drawing %d th best line RR: %s, AA: %s, val: %s', i,RR/600,AA*180/(1080*math.pi),VV)
-  --local dispi = smp:clone():repeatTensor(3,1,1)
-  local dispi = img:clone()
-  hough.draw_line(dispi, RR, AA, 1000, 1080)
-  image.display(dispi);
-end
+collectgarbage()
+

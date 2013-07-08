@@ -1,5 +1,7 @@
 local projection = projection.util
 
+Class()
+
 local pi = math.pi
 local piover2 = math.pi * 0.5
 local r2d = 180 / pi

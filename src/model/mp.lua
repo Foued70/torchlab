@@ -8,7 +8,6 @@ local Photo      = model.Photo
 local LensSensor = projection.LensSensor
 local loader     = require '../data/loader'
 
-
 function scan_name(posefile, objfile)
   local sn = ""
   if objfile then
