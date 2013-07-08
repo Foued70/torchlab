@@ -2,7 +2,9 @@
 -- combinations we are using when capturing higher quality textures
 -- with DSLR
 
-local lens_types = {
+Class()
+
+--local lens_types = {
    nikon_D800E_w18mm = {
 
       name     = "Nikon D800E with 18mm",
@@ -14,7 +16,8 @@ local lens_types = {
 
       lens_type = "rectilinear",
 
-   },
+   --},
+     
 
    nikon_D5100_w10p5mm = {
 
@@ -37,7 +40,8 @@ local lens_types = {
       focal    = 10.58, -- mm
 
       lens_type = "thoby"
-   },
+   --},
+  }
 
    nikon_10p5mm_calibrated = {
 
@@ -75,7 +79,8 @@ local lens_types = {
       -- for sanity\'s sake reverse the names x <-> y
       cal_yc = 401.79351104,
       cal_xc = 602.2562304
-   },
+   --},
+   }
 
    nikon_10p5mm_r2t = {
 
@@ -107,7 +112,8 @@ local lens_types = {
       -- for sanity\'s sake reverse the names x <-> y
       cal_yc = 401.79351104,
       cal_xc = 602.2562304
-   },
+   --},
+   }
 
    nikon_10p5mm_r2t_full = {
 
@@ -142,7 +148,9 @@ local lens_types = {
       -- for sanity\'s sake reverse the names x <-> y
       cal_yc = 1671.45181487971,
       cal_xc = 2507.100192805156
-   },
+   --},
+   }
+   
    matterport = {
      name = 'matterport',
      lens_type = 'equirectangular'
@@ -168,7 +176,7 @@ local lens_types = {
       -- p1, p2 in opencv docs
       tangential_coeff = torch.Tensor({0.00176747, -0.00192791})
    }
-}
+--}
 
 return lens_types
 

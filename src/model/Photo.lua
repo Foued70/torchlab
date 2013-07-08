@@ -1,6 +1,6 @@
-local image = require 'image'
+--local image = require 'image'
 local path = require 'path'
-require 'math'
+--require 'math'
 
 local LensSensor = projection.LensSensor
 local projection = projection.util
@@ -8,7 +8,8 @@ local Ray = geom.Ray
 -- local geom = geom.util
 
 local bihtree = model.bihtree
-local loader = require 'data.loader'
+--local loader = require 'data.loader'
+local loader = data.loader
 local interpolate = model.interpolate
 
 local Photo = Class()
