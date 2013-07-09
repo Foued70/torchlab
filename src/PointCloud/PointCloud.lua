@@ -107,6 +107,8 @@ function PointCloud:set_pc_file(pcfilename)
     end
     
     self.meanpoint = self.points:mean(1);
+    self.minval,self.minind = self.points:min(1)
+    self.maxval,self.maxind = self.points:max(1)
     
   else
     log.error('arg #1 must be a valid xyz file')
@@ -114,6 +116,19 @@ function PointCloud:set_pc_file(pcfilename)
   
   collectgarbage();
   
+end
+
+function PointCloud:flatten()
+	self.flattenx = torch.zeros(self.count, 2)
+	self.flatteny = torch.zeros(self.count, 2)
+	self.flattenz = torch.zeros(self.count, 2)
+	
+	for i=1,self.count do
+		self.flattenx[i] = torch.Tensor({self.points[i][2], self.points[i][3]})
+		self.flatteny[i] = torch.Tensor({self.points[i][1], self.points[i][3]})
+		self.flattenz[i] = torch.Tensor({self.points[i][1], self.points[i][2]})
+	end
+	collectgarbage()
 end
 
 function PointCloud:make_image()
@@ -128,10 +143,40 @@ function PointCloud:make_image()
         end
       end
     end
+    collectgarbage()
     self.image = img:transpose(1,3):transpose(2,3);
     self.image = self.image/self.image:max();
 end
 
-function PointCloud:make_kdtree()
-	self.kdtree = kdtree.new(self.points)
+function PointCloud:make_flattened_images(scale)
+	scale = scale + 0.000001
+	local ranges = self.maxval[1] - self.minval[1]
+	local pix = ranges/scale
+	self.imagex = torch.zeros(pix[3]+1,pix[2]+1,3)
+	self.imagey = torch.zeros(pix[3]+1,pix[1]+1,3)
+	self.imagez = torch.zeros(pix[1]+1,pix[2]+1,3)
+	for i=1,self.count do
+		local coord = (self.points[i]-self.minval[1])/scale
+		self.imagex[pix[3]-coord[3]+1][coord[2]+1] = torch.Tensor({1,1,1})
+		self.imagey[pix[3]-coord[3]+1][coord[1]+1] = torch.Tensor({1,1,1})
+		self.imagez[coord[1]+1][coord[2]+1] = torch.Tensor({1,1,1})
+	end
+	collectgarbage()
+	self.imagex = self.imagex:transpose(1,3):transpose(2,3)/self.imagex:max()
+	self.imagey = self.imagey:transpose(1,3):transpose(2,3)/self.imagey:max()
+	self.imagez = self.imagez:transpose(1,3):transpose(2,3)/self.imagez:max()
+end
+
+function PointCloud:make_3dtree()
+	local numaxis = 3
+	self.kdtree = kdtree.new(self.points,numaxis)
+	collectgarbage()
+end
+
+function PointCloud:make_2dtrees()
+	local numaxis = 2
+	self.flattenx_2dtree = kdtree.new(self.flattenx,numaxis)
+	self.flatteny_2dtree = kdtree.new(self.flatteny,numaxis)
+	self.flattenz_2dtree = kdtree.new(self.flattenz,numaxis)
+	collectgarbage()
 end
