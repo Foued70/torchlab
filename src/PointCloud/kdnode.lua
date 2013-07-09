@@ -1,3 +1,4 @@
+local log = require '../util/log'
 local kdnode = Class()
 
 function kdnode:__init(index, xyz, parent)	
@@ -16,7 +17,7 @@ function kdnode:__init(index, xyz, parent)
 			end
 		end
 	else
-		error('no values given')
+		log.error('no values given')
 	end	
 end
 	
@@ -29,7 +30,7 @@ function kdnode:add_child(index, xyz)
 		end
 		self.descendents = self.descendents + 1
 	else
-		error('no values given')
+		log.error('no values given')
 	end	
 end
 
@@ -49,5 +50,35 @@ function kdnode:add_right_child(index, xyz)
 		self.right_child:add_child(index, xyz)
 	end
 	self.height = math.max(self.height, self.right_child.height+1)
+end
+
+function kdnode:NNS(pt, bestnb, bestdist, bestind, exclusion)
+	local dst = pt:dist(self.xyz)
+	if dst < bestdist then
+		if (not exclusion) or exclusion[self.index] == 0 then
+			bestdist = dst
+			bestind = self.index
+			bestnb = self.xyz
+			--log.info('new best distance '..bestdist..' is not excluded: '..bestind)
+		end
+	end
+	if self.left_child or self.right_child then
+		if pt[self.axis] < self.xyz[self.axis] then
+			if self.left_child and self.left_child and pt[self.axis] - bestdist <= self.xyz[self.axis] then
+				bestnb, bestdist, bestind = self.left_child:NNS(pt, bestnb, bestdist, bestind, exclusion)
+			end
+			if self.right_child and pt[self.axis] + bestdist > self.xyz[self.axis] then
+				bestnb, bestdist, bestind = self.right_child:NNS(pt, bestnb, bestdist, bestind, exclusion)
+			end
+		else
+			if self.right_child and pt[self.axis] + bestdist > self.xyz[self.axis] then
+				bestnb, bestdist, bestind = self.right_child:NNS(pt, bestnb, bestdist, bestind, exclusion)
+			end
+			if self.left_child and pt[self.axis] - bestdist <= self.xyz[self.axis] then
+				bestnb, bestdist, bestind = self.left_child:NNS(pt, bestnb, bestdist, bestind, exclusion)
+			end
+		end
+	end
+	return bestnb, bestdist, bestind
 end
 	

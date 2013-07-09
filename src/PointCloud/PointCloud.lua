@@ -1,3 +1,4 @@
+local log = require '../util/log'
 local io = require 'io'
 local kdtree = PointCloud.kdtree
 
@@ -12,13 +13,13 @@ local PC_FILE_EXTENSION = '.xyz'
 local PC_BINARY_EXTENSION = 'bin'
 
 function PointCloud:__init(pcfilename)
-  self.index = torch.Tensor(0,0);
+  self.index = nil;
   self.height = 0;
   self.width = 0;
-  self.points = torch.Tensor(0,3);
-  self.rgb = torch.Tensor(0,3);
-  self.normals = torch.Tensor(0,3);
-  self.curvatures = torch.Tensor(0);
+  self.points = nil;
+  self.rgb = nil;
+  self.normals = nil;
+  self.curvatures = nil;
   self.count = 0;
   self.meanpoint = torch.Tensor({{0,0,0}});
   self.image = nil;
@@ -28,7 +29,7 @@ function PointCloud:__init(pcfilename)
     if util.fs.is_file(pcfilename) then
       self:set_pc_file(pcfilename);
     else
-      error('arg #1 must either be empty or a valid file')
+      log.error('arg #1 must either be empty or a valid file')
     end
   end
 end
@@ -67,7 +68,7 @@ function PointCloud:set_pc_file(pcfilename)
     self.index = torch.zeros(self.height, self.width);
     self.count = count;
 
-    print("count: "..self.count..", height: "..self.height..", width: "..self.width);
+    log.info("count: "..self.count..", height: "..self.height..", width: "..self.width);
     count = 0;
     file = io.open(pcfilename, 'r');
     while true do
@@ -108,7 +109,7 @@ function PointCloud:set_pc_file(pcfilename)
     self.meanpoint = self.points:mean(1);
     
   else
-    error('arg #1 must be a valid xyz file')
+    log.error('arg #1 must be a valid xyz file')
   end
   
   collectgarbage();
