@@ -1,7 +1,14 @@
 log.tic()
+if not inFile then 
+   imgfile =  CLOUDLAB_SRC .. "/gm/test/lena.jpg"
+end
+if not outFile then 
+   outFile = "test_lumninance_only.png"
+end
+
 -- notice graphicsmagic can load NEF files using dcraw !
-inImg = gm.Image.new("test.jpg")
-log.trace("Loading in",log.toc())
+inImg = gm.Image.new(imgfile)
+log.trace("Loaded",imgfile,"in",log.toc())
 
 -- print size gm.Image is not a tensor but a Class there are extra functions
 log.trace("inSize",inImg:size())
@@ -20,6 +27,8 @@ log.trace("torchSize",inTensor:size())
 -- make a gray scale image from luminance channel
 log.tic()
 outImg = gm.Image.new(inTensor[1])
+log.trace("outImg in",log.toc())
 
-outImg:save("test_luminance_only.png")
-log.trace("Save in",log.toc())
+log.tic()
+outImg:save(outFile)
+log.trace("Saved",outFile,"in",log.toc())
