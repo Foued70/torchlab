@@ -3,22 +3,22 @@ local kdnode = PointCloud.kdnode
 
 local kdtree = Class()
 
-function kdtree:__init(points)
+function kdtree:__init(points,numaxis)
 	self.points = nil;
 	self.head = nil;
 	if points then
-		self:make_tree_from_points(points)
+		self:make_tree_from_points(points,numaxis)
 	else
 		log.error('points is nil')
 	end
 end
 
-function kdtree:make_tree_from_points(points)
+function kdtree:make_tree_from_points(points, numaxis)
 	if points then
 		local count = points:size(1)
 		self.points = points
 		if count > 0 then
-			self.head = kdnode.new(1, points[1])
+			self.head = kdnode.new(1, points[1], nil, numaxis)
 			for i = 2,count do
 				self.head:add_child(i, points[i])
 			end

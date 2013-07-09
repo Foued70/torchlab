@@ -1,7 +1,7 @@
 local log = require '../util/log'
 local kdnode = Class()
 
-function kdnode:__init(index, xyz, parent)	
+function kdnode:__init(index, xyz, parent, numaxis)	
 	if index and xyz then
 		self.index = index
 		self.xyz = xyz
@@ -11,9 +11,10 @@ function kdnode:__init(index, xyz, parent)
 		self.axis = 1
 		self.height = 1
 		self.descendents = 0
+		self.numaxis = numaxis
 		if self.parent and self.parent.axis then
 			if self.parent.axis <= 3 and self.parent.axis > 0 then
-				self.axis = self.parent.axis % 3 + 1
+				self.axis = self.parent.axis % numaxis + 1
 			end
 		end
 	else
@@ -36,7 +37,7 @@ end
 
 function kdnode:add_left_child(index, xyz)
 	if self.left_child == nil then
-		self.left_child = kdnode.new(index, xyz, self)
+		self.left_child = kdnode.new(index, xyz, self, self.numaxis)
 	else
 		self.left_child:add_child(index, xyz)
 	end
@@ -45,7 +46,7 @@ end
 
 function kdnode:add_right_child(index, xyz)
 	if self.right_child == nil then
-		self.right_child = kdnode.new(index, xyz, self)
+		self.right_child = kdnode.new(index, xyz, self, self.numaxis)
 	else
 		self.right_child:add_child(index, xyz)
 	end
