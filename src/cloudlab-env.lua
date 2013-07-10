@@ -123,6 +123,45 @@ function querystring.stringify(params, order, sep, eq)
 end
 
 
+-- local repl = require 'repl'
+-- local readline = require './shell/readline'
+-- function repl.start()
+--   --_oldprint("repl.start")
+--   local function displayPrompt(prompt)
+--     --_oldprint("display_prompt " .. prompt)
+--     process.stdout:write(prompt .. ' ', noop)
+--   end
+
+--   print("Welcome to the " .. repl.colored_name())
+
+--   displayPrompt '>'
+
+--   process.stdin:setMode(1)
+--   readline.setup()
+
+--   process.stdin:on('data', function (data)
+--     local c = {data:byte(1,data:len())}
+--     if c[1] == 4 then  -- ctrl-d
+--       process.exit()
+--     else
+--       -- p(data)
+--       readline.stuff(c)
+--       readline.read_char()
+--     end 
+
+    
+--     -- local prompt = repl.evaluateLine(line)
+--     -- displayPrompt(prompt)
+--   end)
+
+--   process.stdin:on('end', function ()
+--     process.exit()
+--   end)
+
+--   process.stdin:readStart()
+-- end
+
+
 local d = net.Depot
 
 return ''
