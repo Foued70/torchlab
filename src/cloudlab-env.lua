@@ -23,10 +23,11 @@ require './image'
 
 local path = require'path'
 
-
 function printf (...)
    print(string.format(...))
 end
+
+_G.printf = printf
 
 -- local shell = require('./shell/shell')
 -- _G.shell_evaluate = shell.evaluate
