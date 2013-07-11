@@ -18,6 +18,8 @@ function Renderer:__init(parent, width, height)
   self:create_scene('viewport_scene')
   self:activate_scene('viewport_scene')
 
+  self:create_shaders()
+
   log.trace("Renderer Constructed")
 end
 
@@ -61,8 +63,6 @@ function Renderer:render()
   -- show objects
   for i, object in ipairs(self.active_scene) do
     self.context.object_id = i
-    self.context.screen_width = self.active_camera.width
-    self.context.screen_height = self.active_camera.height
     object:paint(self.context)
   end
 
@@ -95,7 +95,6 @@ function Renderer:create_camera(name, width, height, vfov, eye, center, camera_c
   camera.vfov = camera_vfov
   log.trace(camera_width, camera_height)
   camera:resize(camera_width, camera_height)
-  log.trace()
   camera:set_eye(camera_eye[1], camera_eye[2], camera_eye[3])
   camera:set_center(camera_center[1], camera_center[2], camera_center[3])
   camera:update()

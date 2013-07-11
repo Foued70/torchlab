@@ -18,12 +18,9 @@ function PointCloud:__init(pcfilename)
   self.width = 0;
   self.points = nil;
   self.rgb = nil;
-  self.normals = nil;
-  self.curvatures = nil;
   self.count = 0;
   self.meanpoint = torch.Tensor({{0,0,0}});
-  self.image = nil;
-  self.kdtree = nil;
+
   
   if pcfilename then
     if util.fs.is_file(pcfilename) then
@@ -63,8 +60,8 @@ function PointCloud:set_pc_file(pcfilename)
     
     self.points = torch.zeros(count,3);
     self.rgb = torch.zeros(count,3);
-    self.normals = torch.zeros(count,3);
-    self.curvatures = torch.zeros(count);
+    --self.normals = torch.zeros(count,3);
+    --self.curvatures = torch.zeros(count);
     self.index = torch.zeros(self.height, self.width);
     self.count = count;
 
@@ -157,14 +154,53 @@ function PointCloud:make_flattened_images(scale)
 	self.imagez = torch.zeros(pix[1]+1,pix[2]+1,3)
 	for i=1,self.count do
 		local coord = (self.points[i]-self.minval[1])/scale
-		self.imagex[pix[3]-coord[3]+1][coord[2]+1] = torch.Tensor({1,1,1})
-		self.imagey[pix[3]-coord[3]+1][coord[1]+1] = torch.Tensor({1,1,1})
-		self.imagez[coord[1]+1][coord[2]+1] = torch.Tensor({1,1,1})
+		self.imagex[pix[3]-coord[3]+1][coord[2]+1] = self.imagex[pix[3]-coord[3]+1][coord[2]+1]+torch.Tensor({1,1,1})
+		self.imagey[pix[3]-coord[3]+1][coord[1]+1] = self.imagey[pix[3]-coord[3]+1][coord[1]+1]+torch.Tensor({1,1,1})
+		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+torch.Tensor({1,1,1})
 	end
 	collectgarbage()
-	self.imagex = self.imagex:transpose(1,3):transpose(2,3)/self.imagex:max()
-	self.imagey = self.imagey:transpose(1,3):transpose(2,3)/self.imagey:max()
-	self.imagez = self.imagez:transpose(1,3):transpose(2,3)/self.imagez:max()
+	self.imagex = self.imagex:transpose(1,3):transpose(2,3)*15/self.imagex:max()
+	self.imagey = self.imagey:transpose(1,3):transpose(2,3)*15/self.imagey:max()
+	self.imagez = self.imagez:transpose(1,3):transpose(2,3)*15/self.imagez:max()
+end
+
+function PointCloud:downsample(leafsize)
+	scale = leafsize + 0.000001
+	local ranges = self.maxval[1] - self.minval[1]
+	local pix = ranges/scale
+	local bin = {}
+	local pts = {}
+	for i=1,self.count do
+		local coord = (self.points[i]-self.minval[1])/scale + 1
+		coord:floor()
+		if not bin[coord[1]] then
+			bin[coord[1]]={}
+		end
+		if not bin[coord[1]][coord[2]] then
+			bin[coord[1]][coord[2]]={}
+		end
+		if not bin[coord[1]][coord[2]][coord[3]] then
+			bin[coord[1]][coord[2]][coord[3]]=i
+			table.insert(pts, {i, (coord-1)*scale + self.minval[1]})
+		end
+	end
+	bin=nil
+	self.downsampled = PointCloud.new()
+	self.downsampled.height = self.height;
+  	self.downsampled.width = self.width;
+	self.downsampled.points = torch.Tensor(#pts,3)
+	self.downsampled.rgb = torch.Tensor(#pts,3)
+	self.downsampled.index = torch.Tensor(#pts,2)
+	self.downsampled.count = #pts
+	
+	for i=1,#pts do
+		self.downsampled.points[i]=pts[i][2]
+		self.downsampled.rgb[i] = self.rgb[pts[i][1]]
+	end
+	self.downsampled.meanpoint = self.downsampled.points:mean(1);
+    self.downsampled.minval,self.minind = self.downsampled.points:min(1)
+    self.downsampled.maxval,self.maxind = self.downsampled.points:max(1)
+	collectgarbage()
 end
 
 function PointCloud:make_3dtree()

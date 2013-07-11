@@ -10,8 +10,9 @@
 -- displayed.
 -- @alias shell
 
-local xlua = require 'xlua'
-local debug = require 'debug'
+local completer = require './completer'
+local stringio = require "pl.stringio"
+local pretty = require "pl.pretty"
 
 --- Adds VT100 control codes to colorize text anr resets settings.
 -- Result is `<ESC>[...m<text><ESC>[0m`
@@ -27,16 +28,7 @@ local function highlight_line(file, target, area)
   local tmpl   = "    %04d: %s"
   local buffer = { }
   local lineno = 1
-
-
-  local iter
-  if type(file) == 'string' then
-    iter = file:gmatch("[^\r\n]+")
-  else
-    iter = file:lines()
-  end
-
-  for line in iter do
+  for line in file:lines() do
     if lineno > target+area then break -- area to display is passed
     elseif lineno == target then
       buffer[#buffer+1] = tmpl:format(lineno, colorize(line, 31))
@@ -50,7 +42,49 @@ end
 
 local shell = { }
 
+--------------------------------------------------------------------------------
+-- Misc settings
+-- @section misc
 
+--- ILuaJIT version number.
+-- @setting _VERSION
+shell._VERSION = "0.1"
+
+--- ILuaJIT copyright information.
+-- @setting _COPYRIGHT
+shell._COPYRIGHT = "(c) 2011-2012 Julien Desgats, with contributions from Patrick Rapin and Reuben Thomas"
+
+--- ILuaJIT license information.
+-- @setting _LICENSE
+shell._LICENSE = "MIT License"
+
+--- Message displayed when ILuaJIT is started.
+-- @setting greetings
+if jit then
+  shell.greetings = ("ILuaJIT %s, running %s\nJIT:%s %s\n"):format(shell._VERSION, jit.version,
+    jit.status() and "ON" or "OFF", table.concat({ select(2, jit.status()) }, " "))
+else
+  shell.greetings = ("ILuaJIT %s, running %s\n"):format(shell._VERSION, _VERSION)
+end
+
+--- Completion engine.
+--
+-- Default value is the module @{completer}
+-- @setting completer
+shell.completer = completer
+
+--- Command count
+-- Number incremented for each new command. It is used internally to generate 
+-- chunk names. *This value should be **read only**, do not attempt to modify it !*
+-- @setting input_sequence
+shell.input_sequence = 1
+
+--- Generates prompt text.
+-- Called at each line to generate prompt text. Default implementation returns
+-- `>  ` for the first line and `>> ` for next ones.
+-- @param[type=boolean] primary `true` for first line, `false` for next ones.
+-- @return[type=string] Prompt to display.
+shell.prompt = function(primary) return primary and ">  " or ">> " end
 
 --------------------------------------------------------------------------------
 -- Values display
@@ -84,6 +118,31 @@ shell.value.prettyprint_tables = true
 -- @setting value.table_use_tostring
 shell.value.table_use_tostring = true -- when false, pretty print tables even if a __tostring method exists.
 
+--- Callback to transform result into a printable string.
+-- @param[type=number]  pos    Result position (starting at one).
+-- @param               value  Result to print (can be any type).
+-- @return[type=string] A printable representation of `value`.
+-- @function value.handler
+function shell.value.handler(pos, value)
+  local tvalue = type(value)
+  if tvalue == "table" and shell.value.prettyprint_tables then
+    -- if table has a __tostring metamethod, then use it
+    local mt = getmetatable(value)
+    if mt and mt.__tostring and shell.value.table_use_tostring then
+      value = tostring(value)
+    else
+      -- otherwise pretty-print it
+      -- TODO: make a custom pretty print function: short tables on a single line,
+      -- clearer indentation, ...
+      value = pretty.write(value)
+    end
+  else -- fall back to default tostring
+    value = tostring(value)
+  end
+  return colorize("["..pos.."]", 1, 30) .. " "..value
+end
+
+
 --------------------------------------------------------------------------------
 -- Error handling
 -- @section value
@@ -104,7 +163,7 @@ shell.onerror.print_code = true
 shell.onerror.area = 3
 
 -- mapping between typed commands (as chunk names) and corresponding source
-local last_cmd
+local src_history = { }
 
 --- Error handler.
 -- This function is directly called by @{xpcall} if command exection has failed
@@ -125,12 +184,8 @@ function shell.onerror.handler(err)
     buffer[#buffer+1] = tmpl:format(info.source, info.currentline or -1, info.namewhat, info.name or "?")
     if shell.onerror.print_code and (info.what == "Lua" or info.what == "main") and info.currentline then
       local file
-      if info.source:match("^@") then 
-        file = io.open(info.source:sub(2), "r")
-      elseif info.source == 'shell' then
-        file = last_cmd
-      end
-
+      if src_history[info.source]     then file = stringio.open(src_history[info.source])
+      elseif info.source:match("^@")  then file = io.open(info.source:sub(2), "r") end
       if file then
         buffer[#buffer+1] = highlight_line(file, info.currentline, shell.onerror.area)
       end
@@ -146,42 +201,20 @@ end
 -- exectly what original functions do.
 -- @section internal
 
-function shell.is_complete(cmd)
-  local func, err = loadstring('return '..cmd, 'shell')
-
-  if func then
-    return 1
-  end
-
-  func, err = loadstring(cmd, 'shell')
-  if func then
-    return 1
-  elseif err:sub(-7) == "'<eof>'" then
-    return 0
-  end
-
-  return 1
+--- Tries to execute a command.
+-- Called with command string (once syntax check has passed), this functions 
+-- compiles the code and execute it. Results are then handled by 
+-- @{result_handler}.
+-- @param[type=string]  cmd  Valid Lua string to execute.
+-- @return[type=string] Execution output.
+-- @function try
+function shell.try(cmd)
+  local chunkname = "stdin#"..shell.input_sequence
+  local func = assert(loadstring(cmd, chunkname))
+  shell.input_sequence = shell.input_sequence + 1
+  src_history[chunkname] = cmd
+  return shell.result_handler(xpcall(func, shell.onerror.handler))
 end
-
-
-function shell.evaluate(cmd)
-  reload()
-
-  last_cmd = cmd
-  local func, err = loadstring('return '..cmd, 'shell')
-
-  if func then
-    shell.result_handler(xpcall(func, shell.onerror.handler))
-  else
-    func, err = loadstring(cmd, 'shell')
-    if func then
-      shell.result_handler(xpcall(func, shell.onerror.handler))
-    else
-      print(err)
-    end
-  end
-end
-
 
 --- Handles command results
 -- Called by @{try} to format execution results. Default implementation calls 
@@ -191,46 +224,14 @@ end
 -- @return[type=string] Results as printable string.
 function shell.result_handler(success, ...)
   if success then
-    local n =  select("#", ...)
-    if n == 1 then 
-      shell.value.handler(false, select(1, ...))
-    else
-      for i = 1, n do
-        shell.value.handler(i, select(i, ...))
-      end
+    local buf = { }
+    for i=1, select("#", ...) do
+      buf[i] = shell.value.handler(i, select(i, ...))
     end
-  else
-    -- error
-    print (...)
+    return table.concat(buf, shell.value.separator)
   end
+  -- error
+  return (...)
 end
-
---- Callback to transform result into a printable string.
--- @param[type=number]  pos    Result position (starting at one).
--- @param               value  Result to print (can be any type).
--- @return[type=string] A printable representation of `value`.
--- @function value.handler
-function shell.value.handler(pos, value)
-  if pos then
-    io.stdout:write(colorize("["..pos.."]", 1, 30)..' ')
-  end
-
-  local tvalue = type(value)
-  if tvalue == "table" and shell.value.prettyprint_tables then
-    -- if table has a __tostring metamethod, then use it
-    local mt = getmetatable(value)
-    if mt and mt.__tostring and shell.value.table_use_tostring then
-      print(value)
-    else
-      -- otherwise pretty-print it
-      xlua.print(value)
-    end
-  else -- fall back to default tostring
-    print(value)
-  end
-end
-
-
-
 
 return shell

@@ -65,6 +65,9 @@ function Camera:update_matrix(context)
   context:set_projection(self.projection_matrix)
 
   self.model_view_matrix = context.model_view_matrix:double()
+
+  context.screen_width = self.width
+  context.screen_height = self.height
 end
 
 function Camera:update() end -- virtual

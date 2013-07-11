@@ -25,7 +25,8 @@ function Mesh:push_to_gl()
   gl.BindBuffer(gl.ARRAY_BUFFER, self.vert_buffer_id)
   gl.check_errors()
 
-  local ptr, size = util.ctorch.storage_info(self.faces - 1)
+  local faces = self.faces:int() - 1
+  local ptr, size = util.ctorch.storage_info(faces)
   gl.BufferData(
       gl.ELEMENT_ARRAY_BUFFER,
       size,
@@ -102,7 +103,7 @@ function Mesh:paint(context)
   gl.check_errors()
 
   for i, submesh in ipairs(self.submeshes) do
-    local submesh = self.submeshes[i]
+    -- local submesh = self.submeshes[i]
     context.submesh_start = submesh.start
     if (submesh.material) then
       submesh.material:use(context)

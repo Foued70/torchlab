@@ -91,7 +91,7 @@ function UpCamera:rotate_eye_around_center(x, y)
 end
 
 function UpCamera:eye_dist()
-  return geom.dist(self.eye, self.center)
+  return self.eye:dist(self.center)
 end
 
 
