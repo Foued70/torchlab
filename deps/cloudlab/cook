@@ -10,6 +10,9 @@ current_dir_name=`basename $current_dir`
 
 build_dir=$install_root/build/cloudlab/$current_dir_name
 
+#   -D CMAKE_C_COMPILER:PATH=gcc-4.8 \
+#  -D CMAKE_CXX_COMPILER:PATH=g++-4.8 \
+
 cmake_args="\
   -D CMAKE_INSTALL_PREFIX:PATH=${install_root} \
   -D CMAKE_BUILD_TYPE=Release\
