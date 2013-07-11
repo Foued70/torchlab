@@ -1,6 +1,5 @@
 -- Class()
 
-
 pi = math.pi
 pi2 = pi * 0.5
 
@@ -27,8 +26,8 @@ cmd:text()
 -- parse input params
 params = cmd:parse(process.argv)
 
-scan_dir = params.scan_dir or "../data/test/96_spring_kitchen/nodal_ninja/"
-matter_dir = params.matter_dir or "../data/test/96_spring_kitchen/blonde-beach-9765/"
+scan_dir = params.scan_dir
+matter_dir = params.matter_dir
 
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
@@ -81,7 +80,7 @@ for sweep_no = 1,4 do
       printf("using : %s", matter_texture_fname)
    end
 
-   matter_texture = gm.Image.new(matter_texture_fname):toTensor('double','RGB','DHW')
+   matter_texture = image.ops.load(matter_texture_fname)
 
    mp_width      = matter_texture:size(3)
    mp_height     = matter_texture:size(2)
@@ -98,7 +97,7 @@ for sweep_no = 1,4 do
 
    images = util.fs.glob(sweep_dir .. sweep_no, ".JPG")
 
-   img = image.load(images[1])
+   img = image.ops.load(images[1])
 
    width = img:size(3)
    height = img:size(2)
@@ -126,7 +125,7 @@ for sweep_no = 1,4 do
    
    for i = 1,#images do
       log.tic()
-      img    = image.load(images[i])
+      img    = image.ops.load(images[i])
       proj_from:set_lambda_phi(lambda,phi)
       index1D,stride,mask = rect_to_sphere:get_offset_and_mask(force)
       img_out = rect_to_sphere:remap(img)
@@ -152,14 +151,12 @@ for sweep_no = 1,4 do
    matter_texture:add(-matter_texture:min())
    matter_texture:mul(1/matter_texture:max())
 
-   blendOut = gm.Image.new(blend_image,'RGB','DHW')
    blendOutFname = string.format("blend_sweep_%d.png",sweep_no)
-   blendOut:save(blendOutFname)
    log.trace("Saving", blendOutFname)
+   image.ops.save(blendOutFname,blend_image)
 
-   matterOut = gm.Image.new(matter_texture,'RGB','DHW')
    matterOutFname = string.format("matter_sweep_%d.png",sweep_no)
-   matterOut:save(matterOutFname)
    log.trace("Saving", matterOutFname)
+   image.ops.save(matterOutFname,matter_texture)
 
 end

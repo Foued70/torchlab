@@ -19,8 +19,6 @@ _G.os = mod.require'os'
 
 _G.log = require './util/log'
 
-require './image'
-
 local path = require'path'
 
 function printf (...)

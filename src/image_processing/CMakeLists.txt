@@ -1,8 +1,0 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6 FATAL_ERROR)
-CMAKE_POLICY(VERSION 2.6)
-include(../common.cmake REQUIRED)
-
-SET(src saliency.c)
-
-ADD_LUVIT_LIB(saliency "${src}")
-TARGET_LINK_LIBRARIES(saliency luaT TH)

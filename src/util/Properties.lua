@@ -3,7 +3,7 @@ local Properties = Class()
 local io = require'io'
 local table = require'table'
 local path = require'path'
-
+local fs = require 'fs'
 
 function __newindex(self, name, value)
   table.insert(self.key_order, name)
@@ -24,15 +24,17 @@ function Properties:__init(filename)
     __newindex = __newindex
   })
 
-  for line in io.lines(filename) do
-    if line:match("^#") then
-      table.insert(self.key_order, line)
-    elseif line:match("^%s*$") then  
-    else
-      local name, value = line:match("([^%s:]+):%s*(.*)")
-      table.insert(self.key_order, name)
-      self.props[name] = value
-    end
+  if fs.statSync(filename).is_file then
+     for line in io.lines(filename) do
+        if line:match("^#") then
+           table.insert(self.key_order, line)
+        elseif line:match("^%s*$") then  
+        else
+           local name, value = line:match("([^%s:]+):%s*(.*)")
+           table.insert(self.key_order, name)
+           self.props[name] = value
+        end
+     end
   end
 end
 

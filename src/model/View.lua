@@ -78,9 +78,9 @@ function View:set_frustrum(hfov,vfov,clip_distance)
 
 end
 
-function View:set_image_path(image_path,scale)
+function View:set_image_path(image_path,max_size)
    self.image_path = image_path
-   self.image_scale = scale or 1
+   self.max_size   = max_size
 end
 
 function View:get_image()
@@ -90,10 +90,8 @@ function View:get_image()
       end
       sys.tic()
       log.trace("Loading image from path:", "\""..self.image_path.."\"")
-      local img = image.load(self.image_path)
-      if (self.image_scale ~= 1) then
-         img = image.scale(img,img:size(3)*self.scale,img:size(2)*self.scale)
-      end
+
+      local img = gm.Image.new(self.image_path,self.max_size):toTensor('double','RGB','DHW')
       self.image_data_raw = img
       collectgarbage()
       log.trace('Completed image load in', sys.toc())
