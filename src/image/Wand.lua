@@ -1,4 +1,4 @@
-local libgm  = require '../gm/libgm'
+local libgm  = require '../image/libgm'
 local ffi    = require 'ffi'
 local ctorch = util.ctorch
 
@@ -279,13 +279,13 @@ function Image:toTensor(dataType, colorspace, dims, nocopy)
    -- Type:
    dataType = dataType or 'byte'
    local tensorType, pixelType
-   if dataType == 'byte' then
+   if dataType == 'byte' or dataType == 'torch.ByteTensor' or dataType == 'torch.CharTensor' then
       tensorType = 'ByteTensor'
       pixelType = 'CharPixel'
-   elseif dataType == 'float' then
+   elseif dataType == 'float' or dataType == 'torch.FloatTensor' then
       tensorType = 'FloatTensor'
       pixelType = 'FloatPixel'
-   elseif dataType == 'double' then
+   elseif dataType == 'double' or dataType == 'torch.DoubleTensor' then
       tensorType = 'DoubleTensor'
       pixelType = 'DoublePixel'
    else

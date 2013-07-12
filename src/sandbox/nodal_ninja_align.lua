@@ -1,9 +1,5 @@
 -- Class()
 
-require 'image'
-
-dofile 'util.lua'
-
 pi = math.pi
 pi2 = pi * 0.5
 
@@ -28,10 +24,9 @@ cmd:option('-sweep_prefix',
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 scan_dir = params.scan_dir
-
 matter_dir = params.matter_dir
 
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
@@ -41,7 +36,7 @@ if #matter_pose_fname > 0 then
    printf("using : %s", matter_pose_fname)
 end
 
-poses = model.mp.load_poses(matter_pose_fname)
+poses = model.Matterport_PoseFile.new(matter_pose_fname).poses
 
 sweep_dir  = scan_dir .. "/" .. params.sweep_prefix
 
@@ -85,7 +80,7 @@ for sweep_no = 1,4 do
       printf("using : %s", matter_texture_fname)
    end
 
-   matter_texture = image.load(matter_texture_fname)
+   matter_texture = image.ops.load(matter_texture_fname)
 
    mp_width      = matter_texture:size(3)
    mp_height     = matter_texture:size(2)
@@ -102,7 +97,7 @@ for sweep_no = 1,4 do
 
    images = util.fs.glob(sweep_dir .. sweep_no, ".JPG")
 
-   img = image.load(images[1])
+   img = image.ops.load(images[1])
 
    width = img:size(3)
    height = img:size(2)
@@ -127,50 +122,41 @@ for sweep_no = 1,4 do
    lambda = offset.initial
    phi    = 0 
 
-   local pr = xlua.Profiler()
-
+   
    for i = 1,#images do
-      pr:start("image")
-      pr:start("load")
-      img    = image.load(images[i])
-      pr:lap("load")
-      pr:start("project")
-      pr:start("set lambda phi")
+      log.tic()
+      img    = image.ops.load(images[i])
       proj_from:set_lambda_phi(lambda,phi)
-      pr:lap("set lambda phi")
-      pr:start("get index")
       index1D,stride,mask = rect_to_sphere:get_offset_and_mask(force)
-      pr:lap("get index")
-      pr:start("rect to sphere")
       img_out = rect_to_sphere:remap(img)
-      pr:lap("rect to sphere")
-      pr:lap("project")
-      pr:start("store")
       table.insert(indices,index1D)
       table.insert(masks,mask)
       table.insert(out_images,img_out)
-      pr:lap("store")
-      time = log.toc()
-      printf(" - reproject %2.4fs", time)
-      log.tic()
-
+      
       lambda = lambda + offset.delta[i]
-      pr:lap("image")
-      pr:printAll()
+      printf(" - reproject %2.4fs", log.toc())
+
    end
 
    -- blend
    invert = true
-   blend_image = blend(out_images,masks,invert)
+   blend_image = util.alpha_masks.blend(out_images,masks,invert)
 
    orig_texture = matter_texture:clone()
 
-   matter_texture = matter_texture - blend_image
+   matter_texture:add(-1, blend_image)
+
    collectgarbage()
 
    matter_texture:add(-matter_texture:min())
    matter_texture:mul(1/matter_texture:max())
 
-   win = image.display{image={blend_image,orig_texture,matter_texture},nrow=1}
-   image.save(string.format("align_sweep_%d.png",sweep_no),win.image)
+   blendOutFname = string.format("blend_sweep_%d.png",sweep_no)
+   log.trace("Saving", blendOutFname)
+   image.ops.save(blendOutFname,blend_image)
+
+   matterOutFname = string.format("matter_sweep_%d.png",sweep_no)
+   log.trace("Saving", matterOutFname)
+   image.ops.save(matterOutFname,matter_texture)
+
 end

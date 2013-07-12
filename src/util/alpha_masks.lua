@@ -46,7 +46,7 @@ function blend (images, alpha, invert)
    all_alpha = all_alpha:expand(util.util.add_slices(3,all_alpha_size))
 
    all_images = torch.cmul(images[1],all_alpha)
-   for i = 2,#out_images do
+   for i = 2,#images do
       all_images:add(torch.cmul(images[i],all_alpha))
    end
    return all_images, all_alpha

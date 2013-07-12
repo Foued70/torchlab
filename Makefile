@@ -10,7 +10,7 @@ $(packages):
 deps:
 	mkdir -p build
 	cd deps/luvit; make
-	cd deps/imagemagick; make
+	cd deps/graphicsmagick; make
 	cd deps/jpeg; make
 	cd deps/torch; make
 	cd deps/cloudlab; make

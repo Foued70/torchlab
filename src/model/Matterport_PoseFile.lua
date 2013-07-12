@@ -37,6 +37,8 @@ local Matterport_PoseFile = Class()
 -- rest of the system we rotate matterport's quaternion to "look down
 -- the +y axis" on load.
 
+local io = require 'io'
+
 function Matterport_PoseFile:__init(posefile)
 
    self:loadfile(posefile)
@@ -44,7 +46,7 @@ function Matterport_PoseFile:__init(posefile)
 end
 
 function Matterport_PoseFile:loadfile(posefile)
-   if not paths.filep(posefile) then return nil end
+   if not util.fs.is_file(posefile) then return nil end
 
    log.trace('Loading poses from', posefile)
 

@@ -19,14 +19,13 @@ _G.os = mod.require'os'
 
 _G.log = require './util/log'
 
-require './image'
-
 local path = require'path'
-
 
 function printf (...)
    print(string.format(...))
 end
+
+_G.printf = printf
 
 -- local shell = require('./shell/shell')
 -- _G.shell_evaluate = shell.evaluate
