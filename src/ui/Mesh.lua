@@ -85,15 +85,6 @@ function Mesh:restore_materials()
   self.default_materials = nil
 end
 
-function Mesh:apply_material_to_all_(material)
-  log.trace(self.submeshes)
-  for i = 1, #self.submeshes do
-    log.trace('start= ' .. self.submeshes[i].start)
-    log.trace('length= ' .. self.submeshes[i].length)
-    log.trace('material= ' .. self.submeshes[i].material.name)
-  end
-end
-
 function Mesh:paint(context)
   if not self.pushed then self:push_to_gl() end
 
@@ -101,6 +92,8 @@ function Mesh:paint(context)
   gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.element_buffer_id)
   gl.BindBuffer(gl.ARRAY_BUFFER, self.vert_buffer_id)
   gl.check_errors()
+  
+  -- self:dump_buffers()
 
   for i, submesh in ipairs(self.submeshes) do
     -- local submesh = self.submeshes[i]
@@ -144,6 +137,7 @@ function Mesh:dump_buffer(buf_type, ptr_type, rows, columns)
 end
 
 function Mesh:dump_buffers()
+  log.trace(self.verts:size())
   self:dump_buffer(gl.ARRAY_BUFFER, gl.double_ptr, self.verts:size()[1], self.verts:size()[2])
   self:dump_buffer(gl.ELEMENT_ARRAY_BUFFER, gl.uint_ptr, self.faces:size()[1], self.faces:size()[2])
 end

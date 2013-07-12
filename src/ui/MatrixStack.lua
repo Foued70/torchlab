@@ -10,6 +10,7 @@ function MatrixStack:__init()
   self.stack = {}
 
   -- scratch
+  self.scale_matrix = torch.FloatTensor(4,4):eye(4,4)
   self.rotation_matrix = torch.FloatTensor(4,4):eye(4,4)
   self.translation_matrix = torch.FloatTensor(4,4):eye(4,4)
   self.model_matrix = torch.FloatTensor(4,4):t()
@@ -24,11 +25,21 @@ function MatrixStack:pop()
   self.model_view_matrix = table.remove(self.stack)
 end
 
+function MatrixStack:scale(scale)
+  self.scale_matrix[{1,1}] = scale[1]
+  self.scale_matrix[{2,2}] = scale[2]
+  self.scale_matrix[{3,3}] = scale[3]
+
+  -- we have to make a copy here because torch can't do *= with matices, prolly overwrites the data it needs as it goes
+  -- we use this method to maintain the :t() on the model_view_matrix
+  self.model_view_matrix:mm(self.model_view_matrix:clone(), self.scale_matrix)
+end
+
 function MatrixStack:translate(translation)
   self.translation_matrix[{{1,3},4}] = translation
 
   -- we have to make a copy here because torch can't do *= with matices, prolly overwrites the data it needs as it goes
-  -- we use this methof to maintain the :t() on the model_view_matrix
+  -- we use this method to maintain the :t() on the model_view_matrix
   self.model_view_matrix:mm(self.model_view_matrix:clone(), self.translation_matrix)
 end
 

@@ -54,7 +54,7 @@ function Material:set_textures()
     gl.ActiveTexture(gl.TEXTURE0 + slot)
     if self.widget.texture_manager.textures[name] == nil then
       if name:sub(name:len()-3, name:len()-3) == '.' then -- name is a path as it ends in a file extension
-        self.widget.texture_manager.textures[name] = self.widget.texture_manager:create_from_image(name)
+        self.widget.texture_manager:create_from_image_path(name)
       else
         log.trace('Texture '..name..' does not exist! Cannot bind nil texture to slot '..slot)
         return false

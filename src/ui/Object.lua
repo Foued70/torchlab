@@ -4,11 +4,15 @@ local Object = Class()
 
 function Object:__init(widget, obj_data)
   self.widget = widget;
-  self.obj_data = obj_data
-  self.mesh = Object.create_mesh(widget, obj_data)
 
   self.position = torch.Tensor(3):fill(0)
   self.rotation = torch.Tensor({0,0,0,1})
+  self.scale = torch.Tensor({1,1,1,1})
+end
+
+function Object:from_data(obj_data)
+  self.obj_data = obj_data
+  self.mesh = Object.create_mesh(widget, obj_data)
 end
 
 function Object.create_mesh(widget, obj_data)
@@ -31,6 +35,7 @@ function Object:paint(context)
   context:push()
 
   context:set_model(self.rotation, self.position)
+  context:scale(self.scale)
   --context:rotate(self.rotation)
   --context:translate(self.position)
 

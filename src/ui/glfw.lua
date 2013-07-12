@@ -357,6 +357,7 @@ GLFWglproc glfwGetProcAddress(const char* procname);
 
 
 local libglfw = util.ffi.load('libglfw')
+local int = ffi.typeof('int[?]')
 
 setmetatable(glfw, {
   __index = function(tbl, name)
@@ -377,6 +378,13 @@ end
 
 function glfw.Terminate()
   timer.clearTimer(timer_id)
+end
+
+function glfw.GetWindowSize(window)
+  local w = int(1)
+  local h = int(1)
+  libglfw.glfwGetWindowSize(window, w, h)
+  return w[0], h[0]
 end
 
 glfw.SetErrorCallback(function (error, description)

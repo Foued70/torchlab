@@ -24,11 +24,38 @@ function GLWidget:setup_callbacks()
   end)
 
   glfw.SetCursorPosCallback(self.window, function(window, x, y)
+    self.mouse_x = x
+    self.mouse_y = y
+
     self:mouse_move(x,y)
+
+    if self.mouse_button then
+      self:mouse_drag(self.mouse_button, x, y)
+    end
+
+    self.drag_last_x = self.mouse_x
+    self.drag_last_y = self.mouse_y
+
   end)
 
   glfw.SetMouseButtonCallback(self.window, function(window, button, action, mods)
-    if action == glfw.PRESS then self:mouse_press(button, mods) else self:mouse_release(button, mods) end
+    if action == glfw.PRESS then
+      self.drag_start_x = self.mouse_x
+      self.drag_start_y = self.mouse_y
+      self.drag_last_x = self.mouse_x
+      self.drag_last_y = self.mouse_y
+      self.mouse_button = button
+
+      self:mouse_press(button, mods, self.mouse_x, self.mouse_y) 
+    else
+      self:mouse_release(button, mods, self.mouse_x, self.mouse_y)
+      -- redirect simple clicks
+      if self.drag_start_x == self.mouse_x and self.drag_start_y == self.mouse_y then 
+        self:mouse_click(button, mods, self.mouse_x, self.mouse_y)
+      end
+
+      self.mouse_button = nil
+    end
   end)
 
   glfw.SetScrollCallback(self.window, function(window, xoffset, yoffset)
@@ -51,12 +78,16 @@ function GLWidget:update()
 end
 
 function GLWidget:resize(width, height)
+  self.window_width = width
+  self.window_height = height
+
   glfw.SetWindowSize(self.window, width, height)
   if self.renderer.cameras.viewport_camera == nil then
     self.renderer:init(width, height)
   else
     self.renderer.cameras.viewport_camera:resize(width, height)
   end
+  self:update()
 end
 
 function GLWidget:paint()
@@ -64,16 +95,19 @@ function GLWidget:paint()
   glfw.SwapBuffers(self.window)
 end
 
-function GLWidget:mouse_press(button, mods)
+function GLWidget:mouse_press(button, mods, x, y)
 end
 
-function GLWidget:mouse_release(button, mods)
+function GLWidget:mouse_release(button, mods, x, y)
 end
 
-function GLWidget:mouse_click(button, mods)
+function GLWidget:mouse_click(button, mods, x, y)
 end
 
 function GLWidget:mouse_move(x, y)
+end
+
+function GLWidget:mouse_drag(button, x, y)
 end
 
 function GLWidget:mouse_scroll(xoffset, yoffset)

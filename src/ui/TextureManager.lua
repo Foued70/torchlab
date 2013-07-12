@@ -18,7 +18,6 @@ local function format_image(img)
 end
 
 function TextureManager:__init()
-  log.trace('TextureManager constructed')
   self.textures = {}
 end
 
@@ -74,12 +73,17 @@ function TextureManager:create_blank(texture_name, pixel_format_internal, width,
   return self.textures[texture_name]
 end
 
-function TextureManager:create_from_image(image_path)
+function TextureManager:create_from_image_path(image_path)
   if self.textures[image_path] then
     return self.textures[image_path]
   end
 
   local tex_img = image.load(image_path, nil, 'byte')
+  return self:create_from_image(image_path, tex_img)
+end
+
+
+function TextureManager:create_from_image(name, tex_img)
   tex_img = format_image(tex_img)
   local img_data_ptr, img_data_size = util.ctorch.storage_info(tex_img)
   local width = tex_img:size()[2]
@@ -114,7 +118,7 @@ function TextureManager:create_from_image(image_path)
   gl.BindTexture(gl.TEXTURE_2D, 0)
   gl.check_errors()
 
-  self.textures[image_path] = id;
-  return self.textures[image_path]
+  self.textures[name] = id;
+  return id
 end
 

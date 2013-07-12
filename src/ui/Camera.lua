@@ -2,8 +2,8 @@ local gl = require './gl'
 
 local Camera = Class()
 
-function Camera:__init(widget, name)
-  self.widget = widget
+function Camera:__init(name)
+  self.widget = nil
   self.name = name
   self.eye = torch.Tensor({0,0,0})
   self.clip_near = 0.0001
@@ -11,8 +11,8 @@ function Camera:__init(widget, name)
   self.vfov = math.pi / 4 -- 45 degrees
 
   -- direction vectors
-  self.look_dir  = torch.Tensor({0,1,0})
-  self.up_dir    = torch.Tensor({0,0,1})
+  self.look_dir  = torch.Tensor({0,0,-1})
+  self.up_dir    = torch.Tensor({0,1,0})
   self.right_dir = torch.Tensor({1,0,0})
 
   self.projection_matrix = torch.Tensor(4,4):t()
@@ -28,21 +28,30 @@ function Camera:resize(width, height)
   self.height = height
 
   self:update_projection_matrix()
-  log.trace(self.name, " resized to:", self.width, self.height)
+  -- log.trace(self.name, " resized to:", self.width, self.height)
   self:rebuild_buffers()
 end
 
 function Camera:update_projection_matrix()
   local aspect = self.width / self.height
 
-  local f = 1 / (math.tan(self.vfov/2))
+  local m = self.projection_matrix
+  m:eye(4)
+  if self.vfov == 0 then
+    m[{1,1}] = 2/self.width
+    m[{2,2}] = 2/self.height
+    m[{3,3}] = -2/(self.clip_far + self.clip_near)
+    m[{3,4}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
+  else
+    local f = 1 / (math.tan(self.vfov/2))
+    m[{1,1}] = f / aspect
+    m[{2,2}] = f
+    m[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
+    m[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
+    m[{4,3}] = -1
+  end
   
-  self.projection_matrix:eye(4)
-  self.projection_matrix[{1,1}] = f / aspect
-  self.projection_matrix[{2,2}] = f
-  self.projection_matrix[{3,3}] = (self.clip_far + self.clip_near) / (self.clip_near - self.clip_far)
-  self.projection_matrix[{3,4}] = (2 * self.clip_far * self.clip_near) / (self.clip_near - self.clip_far)
-  self.projection_matrix[{4,3}] = -1
+  -- log.trace(self.projection_matrix)
 end
 
 function Camera:rebuild_buffers()
@@ -65,6 +74,7 @@ function Camera:update_matrix(context)
   context:set_projection(self.projection_matrix)
 
   self.model_view_matrix = context.model_view_matrix:double()
+  -- log.trace(self.model_view_matrix)
 
   context.screen_width = self.width
   context.screen_height = self.height
