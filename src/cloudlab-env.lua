@@ -21,6 +21,8 @@ _G.log = require './util/log'
 
 local path = require'path'
 
+require 'dok'
+
 function printf (...)
    print(string.format(...))
 end
