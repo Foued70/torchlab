@@ -3,18 +3,33 @@ Class()
 -- load C lib
 local libsaliency = require 'libsaliency'
 
--- TODO return of multiple argument parsing.
-function high_entropy_features (img, kr, kc, sr, sc, nscale, scalefactor, nbins, entropyType)
-   img = img or error("first argument img tensor required")
-   kr  = kr or 5
-   kc  = kc or 5
-   sr = sr or 1
-   sc = sc or 1
-   nscale = nscale or 3
-   scalefactor = scalefactor or 1.2
-   nbins = nbins or 8
-   entropyType = entropyType or "meanovermax"
 
+function high_entropy_features (...)
+   local _, img, kr, kc, sr, sc, nscale, scalefactor, nbins, entropyType, nmswinsize, npts = dok.unpack(
+      {...},
+      'high_entropy_features',
+      '[[ Implements a saliency detector based on entropy of histogram of input.  And searches for a saliency across scales. ]]',
+      {arg='img', type='torch.Tensor',
+       help='torch.Tensor image (though can have multiple channels', 
+       req=true},
+      {arg='kr', type='number',
+       help='size of hist window in pixels (row)', default=5},
+      {arg='kc', type='number',
+       help='size of hist window in pixels (col)', default=5},
+      {arg='sr', type='number',
+       help='step of hist window in pixels (row)', default=1},
+      {arg='sc', type='number',
+       help='step of hist window in pixels (col)', default=1}, 
+      {arg='nscale', type='number',
+       help='how many scales?', default=3},
+      {arg='scalefactor', type='number',
+       help='what is scaling factor between scales', default=1.2},
+      {arg='nbins', type='number',
+       help='how many bins in the histograms ?', default=8},
+      {arg='entropyType', type='string',
+       help='compute true entropy or fast approx (entropy or meanOverMax)',
+       default='meanovermax'}
+   )
 
    local t = torch.Timer()
    if img:dim() == 2 then 
