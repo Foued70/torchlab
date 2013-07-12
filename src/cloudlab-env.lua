@@ -22,12 +22,12 @@ _G.log = require './util/log'
 local path = require'path'
 
 require 'dok'
+require './image'
 
-function printf (...)
+function _G.printf (...)
    print(string.format(...))
 end
 
-_G.printf = printf
 
 -- local shell = require('./shell/shell')
 -- _G.shell_evaluate = shell.evaluate

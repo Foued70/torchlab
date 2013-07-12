@@ -2,8 +2,6 @@ local gl = require './gl'
 local ffi = require 'ffi'
 local torch = require 'torch'
 
-local image = require '../image'
-
 local TextureManager = Class()
 
 local function format_image(img)
