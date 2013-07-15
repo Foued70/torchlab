@@ -25,7 +25,7 @@ function GLWidget:setup_callbacks()
   end)
 
   glfw.SetFramebufferSizeCallback(self.window, function(window, width, height) 
-    self:resize(width, height) 
+    self:resized(width, height) 
   end)
 
   glfw.SetCursorPosCallback(self.window, function(window, x, y)
@@ -82,17 +82,19 @@ function GLWidget:update()
   end)
 end
 
-function GLWidget:resize(width, height)
+function GLWidget:resized(width, height)
   self.window_width = width
   self.window_height = height
 
-  glfw.SetWindowSize(self.window, width, height)
-  if self.renderer.cameras.viewport_camera == nil then
-    self.renderer:init(width, height)
-  else
+  if self.renderer.cameras.viewport_camera then
     self.renderer.cameras.viewport_camera:resize(width, height)
   end
+  
   self:update()
+end
+
+function GLWidget:resize(width, height)
+  glfw.SetWindowSize(self.window, width, height)
 end
 
 function GLWidget:paint()
