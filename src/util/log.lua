@@ -1,9 +1,13 @@
 local debug = require 'debug'
 local uv = require 'uv_native'
+local fs = require 'fs'
+local path = require 'path'
 
 setfenv(1, setmetatable({}, {__index = _G}))
 
 TRACE = true
+
+local logfilename = path.join(CLOUDLAB_ROOT, 'cloudlab.log')
 
 function color(code, str)
   return '\27['..code..'m'..str..'\27[0m'
@@ -25,8 +29,9 @@ function error(...)
 end
 
 function info(...)
-  local arg = {...}
-  print(green('(II)')..' '..(arg[1] or 'nil'), select(2, ...) or '')
+  local args = {...}
+  -- fs.appendFile(logfilename, green('(II)')..' '..(args[1] or 'nil'), select(2, ...) or '')
+  fs.appendFile(logfilename, green('(II)')..' '..table.concat(args, '  ')..'\n')
 end
 
 function trace(...)

@@ -1,5 +1,5 @@
 local json = require'json'
-local qs = require'./qs'
+local qs = net.qs
 local request = require'./request'
 local core = require'core'
 
