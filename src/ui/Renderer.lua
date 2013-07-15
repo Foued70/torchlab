@@ -123,7 +123,7 @@ end
 
 function Renderer:add_object(data_obj)
   local object = ui.Object.new(self)
-  if data_obj then object.from_data(data_obj) end
+  if data_obj then object:create_mesh(data_obj) end
   table.insert(self.active_scene, object)
   return object
 end

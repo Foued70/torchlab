@@ -13,16 +13,18 @@ install=$(install_root)/bin/gmx
 # sure that the correct libstdc++ is in the linking path fixes
 # errors. hopefully libstdc++.a is not OSX or unix specific
 libstdcpp=libstdc++.a
-libstdcppdir:=$(shell $(CC) -print-file-name=$(libstdcpp) | sed 's!\(.*\)'$(libstdcpp)'!-L\1!')
+libstdcppdir:=$(shell $(CC) -print-file-name=$(libstdcpp) | sed 's!\(.*\)'$(libstdcpp)'!\1!')
 
 args = 	$(default_args) \
-	LDFLAGS=$(libstdcppdir) \
+	CFLAGS=-I$(install_root)/include \
+	CXXFLAGS=-I$(install_root)/include \
+	LDFLAGS="-L$(libstdcppdir) -L$(install_root)/lib" \
 	--prefix=$(install_root) \
 	--disable-dependency-tracking \
 	--enable-shared \
 	--disable-static \
 	--with-quantum-depth=16 \
-	--without-x 
+	--without-x
 
 all: $(install)
 

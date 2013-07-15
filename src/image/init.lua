@@ -1,8 +1,8 @@
-function image.load (filename,max_size,colorspace,dimensions)
+function image.load (filename, pixel_type, max_size, colorspace, dimensions)
    colorspace = colorspace or "RGB"
    dimensions = dimensions or "DHW"
    log.trace("Loading", filename,max_size,colorspace,dimensions)
-   return image.Wand.new(filename,max_size):toTensor(torch.getdefaulttensortype(),colorspace,dimensions)
+   return image.Wand.new(filename,max_size):toTensor(pixel_type,colorspace,dimensions)
 end
 
 function image.save (filename,tensor,colorspace,dimensions)
@@ -11,6 +11,10 @@ function image.save (filename,tensor,colorspace,dimensions)
    log.trace("Saving", filename,colorspace,dimensions)
    image.Wand.new(tensor,colorspace,dimensions):save(filename)
    return
+end
+
+function image.display(img)
+   ui.ImgWidget.new():display(img)
 end
 
 ----------------------------------------------------------------------

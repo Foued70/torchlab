@@ -2,7 +2,7 @@ local gl = require './gl'
 
 local Object = Class()
 
-function Object:__init(widget, obj_data)
+function Object:__init(widget)
   self.widget = widget;
 
   self.position = torch.Tensor(3):fill(0)
@@ -10,15 +10,12 @@ function Object:__init(widget, obj_data)
   self.scale = torch.Tensor({1,1,1,1})
 end
 
-function Object:from_data(obj_data)
+function Object:create_mesh(obj_data)
   self.obj_data = obj_data
-  self.mesh = Object.create_mesh(widget, obj_data)
-end
 
-function Object.create_mesh(widget, obj_data)
   local materials = {}
   for _, mtl_data in ipairs(obj_data.materials) do
-    local material = ui.Material.new(widget, mtl_data)
+    local material = ui.Material.new(self.widget, mtl_data)
     table.insert(materials, material)
   end
 
@@ -28,7 +25,7 @@ function Object.create_mesh(widget, obj_data)
     table.insert(submeshes, {start = sub[1], length = sub[2] - sub[1] + 1, material = materials[sub[3]]})
   end
 
-  return ui.Mesh.new(obj_data.unified_verts, obj_data:get_tris(), submeshes)
+  self.mesh = ui.Mesh.new(obj_data.unified_verts, obj_data:get_tris(), submeshes)
 end
 
 function Object:paint(context)

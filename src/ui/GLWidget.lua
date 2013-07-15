@@ -15,6 +15,11 @@ function GLWidget:__init(width, height, title)
 end
 
 function GLWidget:setup_callbacks()
+  glfw.SetWindowCloseCallback(self.window, function(window)
+    self:__gc()
+  end)
+
+
   glfw.SetKeyCallback(self.window, function(window, key, scancode, action, mods) 
     self:key_press(key, scancode, action, mods) 
   end)

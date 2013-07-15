@@ -40,7 +40,19 @@ function ImgWidget:setup_geom()
 end
 
 function ImgWidget:display(image)
-  self.img_width = image:size()[3]
+  local typename = torch.typename(image)
+  if typename == 'torch.FloatTensor' or typename == 'torch.DoubleTensor' then
+    local max = image:max()
+    log.trace(max)
+    if max < 1 then max = 1 end
+    image = image * (255/max)
+  end
+
+  if typename ~= 'torch.ByteTensor' then
+    image = image:byte()
+  end
+
+  self.img_width  = image:size()[3]
   self.img_height = image:size()[2]
 
   local w_mult = math.ceil(self.img_width / WIN_MAX_W) 
@@ -63,6 +75,7 @@ function ImgWidget:display(image)
   self:resize(width, height)
 
   self:update()
+  glfw.SetWindowPos(self.window, 0, 0)
 end
 
 

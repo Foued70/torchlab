@@ -76,7 +76,7 @@ function TextureManager:create_from_image_path(image_path)
     return self.textures[image_path]
   end
 
-  local tex_img = image.load(image_path, nil, 'byte')
+  local tex_img = image.load(image_path, 'byte')
   return self:create_from_image(image_path, tex_img)
 end
 
