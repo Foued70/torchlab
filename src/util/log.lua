@@ -1,5 +1,5 @@
 local debug = require 'debug'
-local glfw = require '../ui/glfw'
+local uv = require 'uv_native'
 
 setfenv(1, setmetatable({}, {__index = _G}))
 
@@ -63,11 +63,11 @@ end
 
 local last_tic = 0
 function tic()
- last_tic = glfw.GetTime()
+ last_tic = uv.hrtime()
 end
 
 function toc()
- return glfw.GetTime() - last_tic
+ return uv.hrtime() - last_tic
 end
 
 return (getfenv())
