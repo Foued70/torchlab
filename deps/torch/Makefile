@@ -15,8 +15,7 @@ endif
 
 # env MACOSX_DEPLOYMENT_TARGET=10.3 gcc -bundle -undefined dynamic_lookup -o random.so lrandom.o
 
-install=$(install_root)/bin/torch
-
+install=$(install_root)/lib/luvit/torch/modules/libtorch.luvit
 
 args = $(default_cmake_args) \
        -D CMAKE_SHARED_LINKER_FLAGS="-undefined dynamic_lookup"\
@@ -24,16 +23,33 @@ args = $(default_cmake_args) \
 
 cmake=$(git_clone)/build/CMakeCache.txt
 
+torch_libdir=$(install_root)/lib/torch/lua/
+luvit_dir=$(install_root)/lib/luvit/
+
 all:$(install)
 
-
+#TODO make a loop for the libs to copy
 $(install): $(cmake)
 	cd $(git_clone)/build; make install VERBOSE=1
-	rm -rf $(install_root)/lib/luvit/torch $(install_root)/lib/luvit/dok
-	mv $(install_root)/share/torch/lua/* $(install_root)/lib/luvit/
-	mkdir -p $(install_root)/lib/luvit/torch/modules
-	mv $(install_root)/lib/torch/lua/libtorch.* $(install_root)/lib/luvit/torch/modules/libtorch.luvit
-	rm -rf $(install_root)/lib/torch
+	cp -rf $(install_root)/share/torch/lua/* $(luvit_dir)
+	mkdir -p $(luvit_dir)/torch/modules/
+	cp -f $(torch_libdir)/libtorch.* $(luvit_dir)/torch/modules/libtorch.luvit
+	if [ -a $(torch_libdir)/libnn.* ] ; \
+	then \
+		mkdir -p $(luvit_dir)/nn/modules/ ; \
+		cp -f $(torch_libdir)/libnn.* $(luvit_dir)/nn/modules/libnn.luvit ;\
+	fi
+	if [ -a $(torch_libdir)/libcutorch.* ] ;\
+	then \
+		mkdir -p $(luvit_dir)/cutorch/modules/ ; \
+		cp -f $(torch_libdir)/libcutorch.* $(luvit_dir)/cutorch/modules/libcutorch.luvit ;\
+	fi
+	if [ -a $(torch_libdir)/libcunn.* ] ; \
+	then \
+		mkdir -p $(luvit_dir)/cunn/modules/;\
+		cp -f $(torch_libdir)/libcunn.* $(luvit_dir)/cunn/modules/libcunn.luvit;\
+	fi
+	rm -rf $(install_root)/bin/torch*
 
 
 $(cmake): $(git_clone)

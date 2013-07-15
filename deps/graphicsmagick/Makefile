@@ -7,7 +7,7 @@ url=http://downloads.sourceforge.net/project/graphicsmagick/graphicsmagick/$(ver
 tar_file=$(build_dir)/deps/GraphicsMagick-$(ver).tar.bz2
 unpack=$(build_dir)/deps/GraphicsMagick-$(ver)
 
-install=$(install_root)/bin/gmx
+install=$(install_root)/bin/gm
 
 # LDFLAGS='-undefined dynamic_lookup' caused other errors but making
 # sure that the correct libstdc++ is in the linking path fixes
