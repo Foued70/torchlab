@@ -100,7 +100,6 @@ for sweep_no = 1,#poses do
 
    matter_view:set_image_path(matter_fname)
    matter_view:set_projection(matter_proj)
-   -- matter_view:vertical_offset(-0.10)
    matter_view.remapper = remapper
    
    table.insert(views,matter_view)
@@ -143,18 +142,18 @@ end
 for vid = 1,#scan.views do
    local view = scan.views[vid]
 
-   local base_name = path.basename(matter_dir) .. "_-_" .. path.basename(obj_file):gsub("%.[^%.]+$","")
+   local base_name = path.normalize(matter_dir):gsub("/","-") .. "_-_" .. path.basename(obj_file):gsub("%.[^%.]+$","")
 
    local pano = scan.views[vid]:get_image()
    local pano_name = string.format("%s_-_panorama_wireframe_%02d.png",base_name,vid)
    log.trace("saving:",pano_name)
    image.save(pano_name,pano)
-   image.display(pano)
+   -- image.display(pano)
 
    local gnom = view.remapper:remap(view:get_image())
    local gnom_name = string.format("%s_-_gnomonic_wireframe_%02d.png",base_name,vid)
    log.trace("saving:",gnom_name)
    image.save(gnom_name,gnom)
-   image.display(gnom)
+   -- image.display(gnom)
 
 end 

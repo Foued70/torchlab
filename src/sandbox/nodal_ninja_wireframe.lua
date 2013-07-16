@@ -21,13 +21,20 @@ cmd:option('-matter_dir',
 cmd:option('-sweep_prefix',
            "sweep_",
            "Directory prefix for DSLR image sweeps (relative to scan_dir)")
+cmd:option('-obj_file',
+--            "../tmp/test/96_spring_kitchen/blonde-beach-table.obj",
+            "../tmp/test/96_spring_kitchen/blonde-beach-cube-new.obj",
+--             "../tmp/test/96_spring_kitchen/blonde-beach-cube-flip.obj",
+--             "../tmp/test/96_spring_kitchen/blonde-beach-clean.obj",
+           "Directory for obj to retexture")
 cmd:text()
 
 -- parse input params
 params = cmd:parse(process.argv)
 
-scan_dir = params.scan_dir
+scan_dir   = params.scan_dir
 matter_dir = params.matter_dir
+obj_file   = params.obj_file
 
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
@@ -35,6 +42,15 @@ if #matter_pose_fname > 0 then
    matter_pose_fname = matter_pose_fname[1]
    printf("using : %s", matter_pose_fname)
 end
+
+if util.fs.is_file(obj_file) then
+   printf("using : %s", obj_file)
+   scan = data.Obj.new(obj_file)
+else
+   error("Can't find the obj file (set -obj_file correctly)")
+end
+
+rt = retex.TextureBuilder.new(scan,{ppm=100})
 
 poses = model.Matterport_PoseFile.new(matter_pose_fname).poses
 
@@ -84,17 +100,24 @@ for sweep_no = 1,4 do
 
    matter_texture = image.load(matter_texture_fname)
 
-   mp_width      = matter_texture:size(3)
-   mp_height     = matter_texture:size(2)
+   matter_width      = matter_texture:size(3)
+   matter_height     = matter_texture:size(2)
 
-   mp_rad_per_px_x = pose.degrees_per_px_x * d2r
-   mp_rad_per_px_y = pose.degrees_per_px_y * d2r
-   mp_hfov = mp_width * mp_rad_per_px_x
-   mp_vfov = mp_height * mp_rad_per_px_y
+   matter_rad_per_px_x = pose.degrees_per_px_x * d2r
+   matter_rad_per_px_y = pose.degrees_per_px_y * d2r
+   matter_hfov = matter_width * matter_rad_per_px_x
+   matter_vfov = matter_height * matter_rad_per_px_y
 
-   mp_cx   = mp_width  * pose.center_u
-   mp_cy   = mp_height * pose.center_v
+   matter_cx   = matter_width  * pose.center_u
+   matter_cy   = matter_height * pose.center_v
 
+   _G.matter_view   = 
+      model.View.new(pose.local_to_global_position,
+                     pose.local_to_global_rotation,
+                     matter_hfov,
+                     matter_vfov)  
+
+   -- matter_view:vertical_offset(0.20)
    -- load DSLR image
 
    images = util.fs.glob(sweep_dir .. sweep_no, ".JPG")
@@ -106,12 +129,14 @@ for sweep_no = 1,4 do
 
    proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
    proj_to   = 
-      projection.SphericalProjection.new(mp_width,
-                                         mp_height,
-                                         mp_hfov,
-                                         mp_vfov,
-                                         mp_cx,
-                                         mp_cy)
+      projection.SphericalProjection.new(matter_width,
+                                         matter_height,
+                                         matter_hfov,
+                                         matter_vfov,
+                                         matter_cx,
+                                         matter_cy)
+
+   matter_view:set_projection(proj_to)
 
    p("Testing Image Projection")
 
@@ -148,10 +173,34 @@ for sweep_no = 1,4 do
    -- blend
    invert = true
    blend_image = util.alpha_masks.blend(out_images,masks,invert)
-
    orig_texture = matter_texture:clone()
 
    matter_texture:add(-1, blend_image)
+
+   for fid = 1,scan.n_faces do 
+      face_xyz = rt:xyz_wireframe(fid)
+      woff, _ , wmask = matter_view:global_xyz_to_offset_and_mask(face_xyz)
+      invmask = wmask:eq(0)
+      if (invmask:sum() > 0) then 
+         woff = woff[invmask]
+      
+         img = blend_image
+         for cid = 1,1 do 
+             c  = img[cid]
+             c:resize(c:nElement())
+             c[woff] = 1 
+         end
+         img = matter_texture
+         for cid = 1,1 do 
+             c  = img[cid]
+             c:resize(c:nElement())
+             c[woff] = 1 
+         end
+      else
+         -- print(" - Skipping")
+      end
+   end
+
 
    collectgarbage()
 
