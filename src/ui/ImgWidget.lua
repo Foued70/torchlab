@@ -43,7 +43,6 @@ function ImgWidget:display(image)
   local typename = torch.typename(image)
   if typename == 'torch.FloatTensor' or typename == 'torch.DoubleTensor' then
     local max = image:max()
-    log.trace(max)
     if max < 1 then max = 1 end
     image = image * (255/max)
   end
@@ -55,11 +54,12 @@ function ImgWidget:display(image)
   self.img_width  = image:size()[3]
   self.img_height = image:size()[2]
 
-  local w_mult = math.ceil(self.img_width / WIN_MAX_W) 
-  local h_mult = math.ceil(self.img_height / WIN_MAX_H)
+  local w_mult = self.img_width / WIN_MAX_W
+  local h_mult = self.img_height / WIN_MAX_H
   self.zoom = math.max(w_mult, h_mult)
+  if self.zoom < 1 then self.zoom = 1 end
   self.default_zoom = self.zoom
-
+  
   -- focus in pixel coords
   self.focus_x = self.img_width / 2
   self.focus_y = self.img_height / 2
@@ -70,8 +70,8 @@ function ImgWidget:display(image)
   self.renderer.texture_manager:create_from_image('ImgWidget_image', image)
 
   -- set initial window size
-  local width = self.img_width / self.zoom
-  local height = self.img_height / self.zoom
+  local width  = math.ceil(self.img_width / self.zoom)
+  local height = math.ceil(self.img_height / self.zoom)
   self:resize(width, height)
 
   self:update()
