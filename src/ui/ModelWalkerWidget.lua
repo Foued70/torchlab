@@ -7,7 +7,7 @@ local NAV_MODE = 1
 local FOCUS_MODE = 2
 
 function ModelWalkerWidget:__init(width, height)
-  ui.GLWidget.__init(self, width, height, 'Model Walker')
+  ui.GLWidget.__init(self, 1, 1, 'Model Walker')
   self.renderer = ui.Renderer.new(self)
 
   self.mode = NAV_MODE
@@ -20,6 +20,7 @@ function ModelWalkerWidget:__init(width, height)
   viewport_camera:set_eye(eye[1], eye[2], eye[3])
   viewport_camera:set_center(center[1], center[2], center[3])
   self.renderer:activate_camera('viewport_camera')
+  self:resize(width, height)
 end
 
 function ModelWalkerWidget:resize(width, height)
@@ -39,7 +40,7 @@ function ModelWalkerWidget:mouse_click(button, mods, x, y)
     
   elseif button == glfw.MOUSE_BUTTON_RIGHT then
     self.mode = FOCUS_MODE
-    local object_id, triangle_index = self.renderer.cameras.viewport_camera.frame_buffer:read_pick_pixel(self.mouse_x, self.mouse_y)
+    local object_id, triangle_index = self.renderer.cameras.viewport_camera.frame_buffer:read_pick_pixel(x, y)
     local object = self.renderer.scenes.viewport_scene[object_id]
     local verts, center, normal = object:get_triangle(triangle_index)
 

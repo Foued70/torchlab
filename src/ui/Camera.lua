@@ -29,6 +29,14 @@ function Camera:resize(width, height)
 
   self:update_projection_matrix()
   -- log.trace(self.name, " resized to:", self.width, self.height)
+  -- self:rebuild_buffers()
+end
+
+function Camera:resize_framebuffer(width, height)
+  self.fb_width = width
+  self.fb_height = height
+
+  -- log.trace(self.name, " resized to:", self.width, self.height)
   self:rebuild_buffers()
 end
 
@@ -58,7 +66,7 @@ function Camera:rebuild_buffers()
   if self.frame_buffer then
     self.frame_buffer:__gc()
   end
-  self.frame_buffer = ui.FrameBuffer.new(self.widget, self.name..'_frame_buffer', self.width, self.height)
+  self.frame_buffer = ui.FrameBuffer.new(self.widget, self.name..'_frame_buffer', self.fb_width, self.fb_height)
 end
 
 function Camera:update_matrix(context)
@@ -110,15 +118,20 @@ function Camera:world_to_screen(world_position)
   return screen_position
 end
 
+function Camera:pixel_to_framebuffer(x, y)
+  return x * self.fb_width/self.width, y * self.fb_height/self.height
+end
+
 function Camera:pixel_to_world(x, y)
+  x, y = self:pixel_to_framebuffer(x, y)
   local z = self.frame_buffer:read_depth_pixel(x, y)
   if z >= 1 then
     return nil
   end
   
   local screen_position = torch.Tensor(4)
-  screen_position[1] = 2 * x / self.width - 1
-  screen_position[2] = 1 - 2 * y / self.height -- invert y
+  screen_position[1] = 2 * x / self.fb_width - 1
+  screen_position[2] = 1 - 2 * y / self.fb_height -- invert y
   screen_position[3] = 2 * z - 1
   screen_position[4] = 1
     

@@ -1,4 +1,4 @@
-packages = image
+packages = image geom
 
 all: deps $(packages)
 
