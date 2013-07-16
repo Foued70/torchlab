@@ -2,14 +2,14 @@ function image.load (filename, pixel_type, max_size, colorspace, dimensions)
    colorspace = colorspace or "RGB"
    dimensions = dimensions or "DHW"
    pixel_type = pixel_type or torch.getdefaulttensortype()
-   log.trace("Loading", filename,max_size,colorspace,dimensions)
+   log.info("Loading", filename,max_size,colorspace,dimensions)
    return image.Wand.new(filename,max_size):toTensor(pixel_type,colorspace,dimensions)
 end
 
 function image.save (filename,tensor,colorspace,dimensions)
    colorspace = colorspace or "RGB"
    dimensions = dimensions or "DHW"
-   log.trace("Saving", filename,colorspace,dimensions)
+   log.info("Saving", filename,colorspace,dimensions)
    image.Wand.new(tensor,colorspace,dimensions):save(filename)
    return
 end

@@ -146,6 +146,7 @@ function Renderer:create_raycast_camera()
   local raycast_camera = self:create_camera('raycast_camera', ui.Camera)
   raycast_camera.vfov = 0
   raycast_camera:resize(1, 1)
+  raycast_camera:resize_framebuffer(1, 1)
 end
 
 function Renderer:raycast(start, direction)

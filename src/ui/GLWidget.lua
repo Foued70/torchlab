@@ -19,44 +19,46 @@ function GLWidget:setup_callbacks()
     self:__gc()
   end)
 
+  glfw.SetFramebufferSizeCallback(self.window, function(window, width, height) 
+    self:framebuffer_resized(width, height) 
+  end)
+
+  glfw.SetWindowSizeCallback (self.window, function(window, width, height) 
+    self:resized(width, height) 
+  end)
+
 
   glfw.SetKeyCallback(self.window, function(window, key, scancode, action, mods) 
     self:key_press(key, scancode, action, mods) 
   end)
 
-  glfw.SetFramebufferSizeCallback(self.window, function(window, width, height) 
-    self:resized(width, height) 
-  end)
-
   glfw.SetCursorPosCallback(self.window, function(window, x, y)
-    self.mouse_x = x
-    self.mouse_y = y
-
     self:mouse_move(x,y)
 
     if self.mouse_button then
       self:mouse_drag(self.mouse_button, x, y)
     end
 
-    self.drag_last_x = self.mouse_x
-    self.drag_last_y = self.mouse_y
+    self.drag_last_x = x
+    self.drag_last_y = y
 
   end)
 
   glfw.SetMouseButtonCallback(self.window, function(window, button, action, mods)
+    local x, y = glfw.GetCursorPos(self.window)
     if action == glfw.PRESS then
-      self.drag_start_x = self.mouse_x
-      self.drag_start_y = self.mouse_y
-      self.drag_last_x = self.mouse_x
-      self.drag_last_y = self.mouse_y
+      self.drag_start_x = x
+      self.drag_start_y = y
+      self.drag_last_x = x
+      self.drag_last_y = y
       self.mouse_button = button
 
-      self:mouse_press(button, mods, self.mouse_x, self.mouse_y) 
+      self:mouse_press(button, mods, x, y) 
     else
-      self:mouse_release(button, mods, self.mouse_x, self.mouse_y)
+      self:mouse_release(button, mods, x, y)
       -- redirect simple clicks
-      if self.drag_start_x == self.mouse_x and self.drag_start_y == self.mouse_y then 
-        self:mouse_click(button, mods, self.mouse_x, self.mouse_y)
+      if self.drag_start_x == x and self.drag_start_y == y then 
+        self:mouse_click(button, mods, x, y)
       end
 
       self.mouse_button = nil
@@ -82,14 +84,24 @@ function GLWidget:update()
   end)
 end
 
+function GLWidget:framebuffer_resized(width, height)
+  -- log.trace(width, height)
+
+  if self.renderer.cameras.viewport_camera then
+    self.renderer.cameras.viewport_camera:resize_framebuffer(width, height)
+  end
+  
+end
+
 function GLWidget:resized(width, height)
+  -- log.trace(width, height)
   self.window_width = width
   self.window_height = height
 
   if self.renderer.cameras.viewport_camera then
     self.renderer.cameras.viewport_camera:resize(width, height)
   end
-  
+
   self:update()
 end
 
