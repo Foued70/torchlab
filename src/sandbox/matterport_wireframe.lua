@@ -1,8 +1,5 @@
 -- Class()
-
-require 'image'
-
-dofile 'util.lua'
+path = require 'path'
 
 pi = math.pi
 pi2 = pi * 0.5
@@ -16,31 +13,31 @@ cmd:text('Align images in a sweep')
 cmd:text()
 cmd:text('Options')
 cmd:option('-dslr_dir',
-           "../data/test/96_spring_kitchen/nodal_ninja/",
+           "../tmp/test/96_spring_kitchen/nodal_ninja/",
            'base directory for images placed in sweep_1,2, etc.')
 cmd:option('-matter_dir',
-           "../data/test/96_spring_kitchen/blonde-beach-9765/",
-           -- "../data/test/96_spring_kitchen/raw_scan/",
+           "../tmp/test/96_spring_kitchen/blonde-beach-9765/",
+           -- "../tmp/test/96_spring_kitchen/raw_scan/",
            "Directory for matterport data")
 cmd:option('-obj_file',
---            "../data/test/96_spring_kitchen/blonde-beach-table.obj",
-            "../data/test/96_spring_kitchen/blonde-beach-cube-new.obj",
---             "../data/test/96_spring_kitchen/blonde-beach-cube-flip.obj",
---             "../data/test/96_spring_kitchen/blonde-beach-clean.obj",
+--            "../tmp/test/96_spring_kitchen/blonde-beach-table.obj",
+            "../tmp/test/96_spring_kitchen/blonde-beach-cube-new.obj",
+--             "../tmp/test/96_spring_kitchen/blonde-beach-cube-flip.obj",
+--             "../tmp/test/96_spring_kitchen/blonde-beach-clean.obj",
            "Directory for obj to retexture")
 
 
 cmd:text()
 
 -- parse input params
-params     = cmd:parse(arg)
+params     = cmd:parse(process.argv)
 
 matter_dir = params.matter_dir
 obj_file   = params.obj_file
 
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
-if #matter_pose_fname > 0 and paths.filep(matter_pose_fname[1]) then
+if #matter_pose_fname > 0 and util.fs.is_file(matter_pose_fname[1]) then
    matter_pose_fname = matter_pose_fname[1]
    printf("using : %s", matter_pose_fname)
    mpfile = model.Matterport_PoseFile.new(matter_pose_fname)
@@ -50,7 +47,7 @@ else
    error("Can't find the pose file (set -matter_dir correctly)")
 end
 
-if paths.filep(obj_file) then
+if util.fs.is_file(obj_file) then
    printf("using : %s", obj_file)
    scan = data.Obj.new(obj_file)
 else
@@ -146,18 +143,18 @@ end
 for vid = 1,#scan.views do
    local view = scan.views[vid]
 
-   local base_name = paths.basename(matter_dir) .. "_-_" .. paths.basename(obj_file):gsub("%.[^%.]+$","")
+   local base_name = path.basename(matter_dir) .. "_-_" .. path.basename(obj_file):gsub("%.[^%.]+$","")
 
    local pano = scan.views[vid]:get_image()
    local pano_name = string.format("%s_-_panorama_wireframe_%02d.png",base_name,vid)
    log.trace("saving:",pano_name)
    image.save(pano_name,pano)
-   image.display{image=pano, legend=pano_name}
+   image.display(pano)
 
    local gnom = view.remapper:remap(view:get_image())
    local gnom_name = string.format("%s_-_gnomonic_wireframe_%02d.png",base_name,vid)
    log.trace("saving:",gnom_name)
    image.save(gnom_name,gnom)
-   image.display{gnom, legend=gnom_name}
+   image.display(gnom)
 
 end 
