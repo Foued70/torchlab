@@ -85,16 +85,16 @@ end
 
 function View:get_image()
    if not self.image_data_raw then
-      if not paths.filep(self.image_path) then
+      if not util.fs.is_file(self.image_path) then
          error("can't find ".. image_path)
       end
-      sys.tic()
+      log.tic()
       log.trace("Loading image from path:", "\""..self.image_path.."\"")
 
-      local img = gm.Image.new(self.image_path,self.max_size):toTensor('double','RGB','DHW')
+      local img = image.Wand.new(self.image_path,self.max_size):toTensor('double','RGB','DHW')
       self.image_data_raw = img
       collectgarbage()
-      log.trace('Completed image load in', sys.toc())
+      log.trace('Completed image load in', log.toc())
    end
    return self.image_data_raw
 end

@@ -2,7 +2,6 @@ local fs = require'fs'
 local path = require'path'
 local http = require'http'
 local url_lib = require'url'
-local querystring = require'querystring'
 
 local string = require'string'
 local math = require'math'
@@ -35,7 +34,7 @@ function request.request(method, url, data, files, headers, callback)
     content_length, req_body = multipart(files, data)
   elseif data then
     content_type = 'application/x-www-form-urlencoded'
-    req_body = querystring.stringify(data)
+    req_body = net.qs.stringify(data)
     content_length = #req_body
   else
     content_type = ''

@@ -3,8 +3,8 @@ local UpCamera = Class(ui.Camera)
 local Z_AXIS_POS = torch.Tensor({0,0,1})
 local Z_AXIS_NEG = torch.Tensor({0,0,-1})
 
-function UpCamera:__init(widget, name)
-  __super__.__init(self, widget, name)
+function UpCamera:__init(name)
+  __super__.__init(self, name)
   self.center = torch.Tensor({0,1,0})
 end
 

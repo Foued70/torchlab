@@ -3,7 +3,6 @@ Install prereqs:
 > brew install readline
 > brew link readline
 > brew install rlwrap
-> brew install libpng jpeg webp dcraw
 > brew tap homebrew/versions
 > brew install gcc48
 

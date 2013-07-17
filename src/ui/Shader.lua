@@ -135,7 +135,7 @@ function Shader:load()
   if not gl.IsProgram(self.program_id) then
     log.error('Error creating shader program:', self.name)
   else
-    log.trace('Shader created:', self.name)
+    -- log.trace('Shader created:', self.name)
   end
 end
 
@@ -150,6 +150,7 @@ function Shader:use(context)
   self:set_uniform_matrix('sModelViewMatrix', model_view_matrix)
   self:set_uniform_matrix('sNormalMatrix',normal_matrix)
   self:set_uniform_matrix('sModelViewProjectionMatrix', model_view_projection_matrix)
+  -- log.trace(model_view_matrix)
 
   self:set_uniform_uint('objectID', context.object_id)
   self:set_uniform_uint('submeshStart', context.submesh_start)

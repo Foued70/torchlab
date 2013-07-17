@@ -19,16 +19,9 @@ function Renderer:__init(parent, width, height)
   self:activate_scene('viewport_scene')
 
   self:create_shaders()
+  self:create_raycast_camera()
 
-  log.trace("Renderer Constructed")
-end
-
-function Renderer:init(viewport_width, viewport_height)
-  self:create_camera('viewport_camera', viewport_width, viewport_height, (math.pi/4), torch.Tensor({2,3,5}), torch.Tensor({0,1,0}))
-  self:activate_camera('viewport_camera')
-
-  self:create_camera('raycast_camera', viewport_width, viewport_height, (math.pi/4))  
-  self:create_shaders()
+  -- log.trace("Renderer Constructed")
 end
 
 function Renderer:render()
@@ -82,24 +75,11 @@ function Renderer:render()
   end
 end
 
-function Renderer:create_camera(name, width, height, vfov, eye, center, camera_class)
-  camera_class = camera_class or ui.UpCamera
-  local camera = camera_class.new(self, name)
-
-  local camera_width = width or self.cameras.viewport_camera.width
-  local camera_height = height or self.cameras.viewport_camera.height
-  local camera_vfov = vfov or self.cameras.viewport_camera.vfov
-  local camera_eye = eye or torch.Tensor({0,0,0})
-  local camera_center = center or torch.Tensor({0,1,0})
-
-  camera.vfov = camera_vfov
-  log.trace(camera_width, camera_height)
-  camera:resize(camera_width, camera_height)
-  camera:set_eye(camera_eye[1], camera_eye[2], camera_eye[3])
-  camera:set_center(camera_center[1], camera_center[2], camera_center[3])
-  camera:update()
-  self.cameras[camera.name] = camera
-  log.trace("Created camera", name)
+function Renderer:create_camera(name, camera_class)
+  local camera = camera_class.new(name)
+  camera.widget = self
+  self.cameras[name] = camera
+  return camera
 end
 
 function Renderer:activate_camera(camera_name)
@@ -125,7 +105,7 @@ function Renderer:activate_scene(scene_name)
     return
   end
   self.active_scene = self.scenes[scene_name]
-  log.trace("Scene "..scene_name.." activated.")
+  -- log.trace("Scene "..scene_name.." activated.")
 end
 
 function Renderer:create_shader(name)
@@ -142,7 +122,8 @@ function Renderer:create_shaders()
 end
 
 function Renderer:add_object(data_obj)
-  local object = ui.Object.new(self, data_obj)
+  local object = ui.Object.new(self)
+  if data_obj then object:create_mesh(data_obj) end
   table.insert(self.active_scene, object)
   return object
 end
@@ -154,11 +135,18 @@ end
 function Renderer:create_material(data_mat, shader, textures)
   local material = ui.Material.new(self, data_mat)
   material:set_shader(shader)
-  for t = 1, #textures do
-    material:attach_texture(textures[t], t-1)
+  for t, texture in ipairs(textures) do
+    material:attach_texture(texture, t-1)
   end
   self:add_material(material)
   return material
+end
+
+function Renderer:create_raycast_camera()
+  local raycast_camera = self:create_camera('raycast_camera', ui.Camera)
+  raycast_camera.vfov = 0
+  raycast_camera:resize(1, 1)
+  raycast_camera:resize_framebuffer(1, 1)
 end
 
 function Renderer:raycast(start, direction)
@@ -166,11 +154,12 @@ function Renderer:raycast(start, direction)
     return false
   end
 
-  self.cameras.raycast_camera.eye[{{1,3}}] = start
-  torch.add(self.cameras.raycast_camera.center, start, direction)
-  self.cameras.raycast_camera:update()
+  local cam = self.cameras.raycast_camera
+  cam.eye[{{1,3}}] = start
+  local rot = geom.quaternion.angle_between(cam.look_dir, direction)
+  cam:rotate(rot)
   
-  self.cameras.raycast_camera.frame_buffer:use()
+  cam.frame_buffer:use()
 
   gl.Clear(gl.DEPTH_BUFFER_BIT)
   gl.ClearColor(0, 0, 0, 0)
@@ -184,7 +173,7 @@ function Renderer:raycast(start, direction)
   gl.check_errors()
 
   -- setup camera
-  self.cameras.raycast_camera:update_matrix(self.context)
+  cam:update_matrix(self.context)
 
   -- show objects
   for i, object in ipairs(self.active_scene) do
@@ -195,55 +184,9 @@ function Renderer:raycast(start, direction)
   gl.Disable(gl.DEPTH_TEST)
   gl.check_errors()
 
-  self.cameras.raycast_camera.frame_buffer:unbind()
+  cam.frame_buffer:unbind()
   
-  local hit_location = self.cameras.raycast_camera:pixel_to_world(self.cameras.raycast_camera.width*0.5, self.cameras.raycast_camera.height*0.5)
+  local hit_location = cam:pixel_to_world(cam.width*0.5, cam.height*0.5)
   return hit_location
-end
-
-function Renderer:pick_vertices(screen_position_top_left, screen_position_bottom_right)
-  local pixels_min = self.active_camera:screen_to_pixel(screen_position_top_left)
-  local pixels_max = self.active_camera:screen_to_pixel(screen_position_bottom_right)
-
-  local pick_image = self.active_camera.frame_buffer:read_pick_pixels(pixels_min, pixels_max)
-  local pick_values = pick_image:resize(pick_image:size(1)*pick_image:size(2),3):double()
-
-  --Use hashing to create a unique list of object, submesh, primitive_id triplets
-  local hash_function = torch.Tensor({1, 10e3, 10e6})
-
-  local hashed_tensor = pick_values * hash_function
-
-  local hash = {}
-  local num_elements = 0
-  for i = 1, hashed_tensor:size(1) do 
-    if not hash[hashed_tensor[i]] then 
-      hash[hashed_tensor[i]] = i 
-      num_elements = num_elements + 1
-    end 
-  end
-
-  local unique_picks = torch.Tensor(num_elements, pick_values:size(2))
-  local j = 1
-  for _,i in pairs(hash) do
-      unique_picks[j] = pick_values[i]
-      j = j + 1
-  end
-
-  local selected_vertices = {}
-  for t=1, unique_picks:size(1) do
-    local object_index = unique_picks[t][1]
-    if object_index > 0 then
-      local triangle_index = unique_picks[t][2] + math.floor(unique_picks[t][3]/3)
-      local vertex_index = (unique_picks[t][3] % 3) + 1
-      local object = self.active_scene[object_index]
-      local verts, center, normal = object:get_triangle(triangle_index)
-      table.insert(selected_vertices, verts:narrow(2,1,3)[vertex_index])
-    end
-  end
-
-  if #selected_vertices > 0 then
-    return selected_vertices
-  end
-  return nil
 end
 

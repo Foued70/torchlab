@@ -1,5 +1,5 @@
 local json = require'json'
-local qs = require'./qs'
+local qs = net.qs
 local request = require'./request'
 local core = require'core'
 
@@ -13,9 +13,17 @@ local host = props.depot_url or 'https://depot.floored.com'
 local cookie
 
 function login(email, password)
+  if email == nil or password == nil then return end
+
   request.post(host..'/login.json', {email = email, password = password}, nil, nil, function(err, res, body)
     if res and res.status_code == 200 then
       cookie = res.headers['set-cookie']:match("[^;]+")
+
+      if email ~= props.email or password ~= props.password then
+        props.email = email
+        props.password = password
+        props:save()
+      end
     else
       log.error(err or res)
     end
@@ -23,10 +31,8 @@ function login(email, password)
 end
 
 function is_logged_in()
-  local floored_cookie = request.jar():get('floored_session')
-  if not floored_cookie then return false end
-  
-  floored_cookie = json.decode(qs.unescape(floored_cookie.value):match('{.*}'))
+  if not cookie then return false end
+  local floored_cookie = json.parse(qs.unescape(cookie):match('{.*}'))
   if floored_cookie.auth and floored_cookie.auth.comrade then 
     return true 
   end

@@ -57,7 +57,7 @@ mptex_rad_per_px_y = pose.degrees_per_px_y * d2r
 --load mp texture
 print("  load matterport texture")
 mptex_fname = util.fs.glob(params.alignto, "00"..mptex_num..".jpg")[1];
-mptex_img_orig    = image.load(mptex_fname):type('torch.DoubleTensor');
+mptex_img_orig    = image.load(mptex_fname);
 mptex_width_orig  = mptex_img_orig:size(3)
 mptex_height_orig = mptex_img_orig:size(2)
 

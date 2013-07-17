@@ -24,7 +24,7 @@ function Properties:__init(filename)
     __newindex = __newindex
   })
 
-  if fs.statSync(filename).is_file then
+  if fs.existsSync(filename) and fs.statSync(filename).is_file then
      for line in io.lines(filename) do
         if line:match("^#") then
            table.insert(self.key_order, line)

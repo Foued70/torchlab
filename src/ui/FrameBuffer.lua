@@ -8,7 +8,6 @@ function FrameBuffer:__init(widget, name, width, height)
   self.width = width
   self.height = height
   self.frame_buffer_id = gl.GenFramebuffer()
-  log.trace(self.frame_buffer_id)
   self:bind()
 
   local pass_name_color = self.name..'_pass_color'
@@ -29,7 +28,7 @@ function FrameBuffer:__init(widget, name, width, height)
   self.attachments[0] = gl.COLOR_ATTACHMENT0
   self.attachments[1] = gl.COLOR_ATTACHMENT1
 
-  log.trace("FrameBuffer Constructed.")
+  -- log.trace("FrameBuffer Constructed.")
 end
 
 function FrameBuffer:__gc()

@@ -1,4 +1,4 @@
-packages = image
+packages = image geom
 
 all: deps $(packages)
 
@@ -10,8 +10,11 @@ $(packages):
 deps:
 	mkdir -p build
 	cd deps/luvit; make
-	cd deps/graphicsmagick; make
 	cd deps/jpeg; make
+	cd deps/png; make
+	cd deps/jasper; make
+	cd deps/littlecms; make
+	cd deps/graphicsmagick; make
 	cd deps/torch; make
 	cd deps/cloudlab; make
 	cd deps/glfw; make

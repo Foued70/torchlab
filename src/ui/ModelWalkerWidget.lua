@@ -7,16 +7,20 @@ local NAV_MODE = 1
 local FOCUS_MODE = 2
 
 function ModelWalkerWidget:__init(width, height)
-  ui.GLWidget.__init(self, width, height, 'Model Walker')
+  ui.GLWidget.__init(self, 1, 1, 'Model Walker')
   self.renderer = ui.Renderer.new(self)
 
   self.mode = NAV_MODE
 
-  self.renderer:create_camera('viewport_camera', width, height, (math.pi/4), torch.Tensor({0,0,80}), torch.Tensor({0.1,0.1,0}))
+  local eye = torch.Tensor{0,0,80}
+  local center = torch.Tensor{0.1,0.1,0}
+  local viewport_camera = self.renderer:create_camera('viewport_camera', ui.UpCamera)
+  viewport_camera.vfov = (math.pi/4)
+  viewport_camera:resize(width, height)
+  viewport_camera:set_eye(eye[1], eye[2], eye[3])
+  viewport_camera:set_center(center[1], center[2], center[3])
   self.renderer:activate_camera('viewport_camera')
-
-  self.renderer:create_camera('raycast_camera', width, height, (math.pi/4))  
-
+  self:resize(width, height)
 end
 
 function ModelWalkerWidget:resize(width, height)
@@ -24,40 +28,19 @@ function ModelWalkerWidget:resize(width, height)
   self.renderer.cameras.viewport_camera:resize(width, height)
 end
 
-function ModelWalkerWidget:mouse_press(button, mods)
-  -- p('mouse_press', event)
-  self.drag_start_x = self.last_x
-  self.drag_start_y = self.last_y
-  self.drag_last_x = self.last_x
-  self.drag_last_y = self.last_y
-
-  if button == glfw.MOUSE_BUTTON_LEFT then self.left_button = true end
-  if button == glfw.MOUSE_BUTTON_RIGHT then self.right_button = true end
-end
-
-function ModelWalkerWidget:mouse_release(button, mods)
-  if button == glfw.MOUSE_BUTTON_LEFT then self.left_button = false end
-  if button == glfw.MOUSE_BUTTON_RIGHT then self.right_button = false end
-
-  -- redirtect simple clicks
-  if self.drag_start_x == self.last_x and self.drag_start_y == self.last_y then 
-    return self:mouse_click(button, mods)
-  end
-end
-
-function ModelWalkerWidget:mouse_click(button, mods)
+function ModelWalkerWidget:mouse_click(button, mods, x, y)
   if button == glfw.MOUSE_BUTTON_LEFT then
     self.mode = NAV_MODE
     rotateMode = false
     -- FlyTo Behavior
-    local clicked_pos_world = self.renderer.cameras.viewport_camera:pixel_to_world(self.last_x, self.last_y)
+    local clicked_pos_world = self.renderer.cameras.viewport_camera:pixel_to_world(x, y)
     if clicked_pos_world ~= nil then
       self:fly_to(clicked_pos_world)
     end
     
   elseif button == glfw.MOUSE_BUTTON_RIGHT then
     self.mode = FOCUS_MODE
-    local object_id, triangle_index = self.renderer.cameras.viewport_camera.frame_buffer:read_pick_pixel(self.last_x, self.last_y)
+    local object_id, triangle_index = self.renderer.cameras.viewport_camera.frame_buffer:read_pick_pixel(x, y)
     local object = self.renderer.scenes.viewport_scene[object_id]
     local verts, center, normal = object:get_triangle(triangle_index)
 
@@ -69,11 +52,8 @@ function ModelWalkerWidget:mouse_click(button, mods)
   self:update()
 end
 
-function ModelWalkerWidget:mouse_move(x, y)
-  self.last_x = x
-  self.last_y = y
-
-  if self.right_button then
+function ModelWalkerWidget:mouse_drag(button, x, y)
+  if button == glfw.MOUSE_BUTTON_RIGHT then
     -- p('mouse_move', event)
     local dx = x - self.drag_last_x
     local dy = y - self.drag_last_y
