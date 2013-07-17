@@ -1,3 +1,7 @@
+-- load other image libs
+image.saliency = require './saliency'
+image.hough    = require './hough'
+
 function image.load (filename, pixel_type, max_size, colorspace, dimensions)
    colorspace = colorspace or "RGB"
    dimensions = dimensions or "DHW"
