@@ -13,9 +13,17 @@ local host = props.depot_url or 'https://depot.floored.com'
 local cookie
 
 function login(email, password)
+  if email == nil or password == nil then return end
+
   request.post(host..'/login.json', {email = email, password = password}, nil, nil, function(err, res, body)
     if res and res.status_code == 200 then
       cookie = res.headers['set-cookie']:match("[^;]+")
+
+      if email ~= props.email or password ~= props.password then
+        props.email = email
+        props.password = password
+        props:save()
+      end
     else
       log.error(err or res)
     end
