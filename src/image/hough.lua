@@ -10,23 +10,23 @@ local twopi = 2*pi
 
 function hough.get_hough_transform(img, numRadius, numAngles)
   local hT = torch.zeros(numRadius, numAngles);
-  img.libhough.houghTransform(hT,img);
+  torch.Tensor.libhough.houghTransform(hT,img);
   hT = hT:type('torch.DoubleTensor');
-  hT = hT/hT:max();
+  hT = hT/(hT:max()+0.00001);
   return hT;
 end
 
 function hough.get_hough_transform_vertical(img, numRadius, numAngles)
   local hT = torch.zeros(numRadius, numAngles);
-  img.libhough.houghTransformVertical(hT,img);
+  torch.Tensor.libhough.houghTransformVertical(hT,img);
   hT = hT:type('torch.DoubleTensor');
-  hT = hT/hT:max();
+  hT = hT/(hT:max()+0.00001);
   return hT;
 end
 
 function hough.local_contrast_normalization(hT)
   local hTclone=hT:clone()
-  img.libhough.localContrastNormalization(hT,hTclone);
+  torch.Tensor.libhough.localContrastNormalization(hT,hTclone);
   return hT;
 end
 

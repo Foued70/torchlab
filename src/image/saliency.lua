@@ -44,7 +44,8 @@ function high_entropy_features (...)
 
    -- compute once for all images
    local tTotal = t:time().real
-   img.libsaliency.intHistPack(ii,img,nbins)
+   
+   torch.Tensor.libsaliency.intHistPack(ii,img,nbins)
    local tintHist = t:time().real - tTotal
    local tAvg = {}
    local tEnt = {}
@@ -54,7 +55,7 @@ function high_entropy_features (...)
       local lkr = math.floor(kr * scalefactor^(i-1))
       local lkc = math.floor(kc * scalefactor^(i-1))
       print(' - computing ('..lkr..','..lkc..')')
-      img.libsaliency.intAvg(rr,ii,lkr,lkc,sr,sc)
+      torch.Tensor.libsaliency.intAvg(rr,ii,lkr,lkc,sr,sc)
       tAvg[i] = t:time().real - tAvg[i]
       tEnt[i] = t:time().real
       local nch = rr:size(1)
@@ -64,11 +65,11 @@ function high_entropy_features (...)
       local outsizec = math.floor(0.5+(w-lkc+1)/sc)
       local fm  = torch.Tensor(outsizer,outsizec)
       if entropyType == 'entropy' then 
-         img.libsaliency.spatialEnt(fm,rr);
+         torch.Tensor.libsaliency.spatialEnt(fm,rr);
       elseif entropyType == 'MeanOver' then
-         img.libsaliency.spatialMeanOverMax(fm,rr);
+         torch.Tensor.libsaliency.spatialMeanOverMax(fm,rr);
       else 
-         img.libsaliency.spatialOneOverMax(fm,rr);
+         torch.Tensor.libsaliency.spatialOneOverMax(fm,rr);
       end
       -- print("["..i.."] min: "..fm:min().." max: "..fm:max())
       sm:select(1,i):narrow(1,math.floor(lkr/2),outsizer):narrow(2,math.floor(lkc/2),outsizec):copy(fm)
