@@ -1,5 +1,3 @@
--- Class()
-
 pi = math.pi
 pi2 = pi * 0.5
 
@@ -36,6 +34,9 @@ scan_dir   = params.scan_dir
 matter_dir = params.matter_dir
 obj_file   = params.obj_file
 
+maxsize = 1024
+ppm = 100
+
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
 if #matter_pose_fname > 0 then
@@ -50,7 +51,7 @@ else
    error("Can't find the obj file (set -obj_file correctly)")
 end
 
-rt = retex.TextureBuilder.new(scan,{ppm=100})
+rt = retex.TextureBuilder.new(scan,{ppm=ppm})
 
 poses = model.Matterport_PoseFile.new(matter_pose_fname).poses
 
@@ -85,51 +86,42 @@ offsets = {
    }
 }
 
-views     = {}
+_G.views     = {}
 
 -- load sweeps
 for sweep_no = 1,4 do
 
    pose = poses[sweep_no]
 
-   -- matterport texture
-   matter_texture_fname = util.fs.glob(matter_dir,poses[sweep_no].name)
-
-   -- matter_view:vertical_offset(0.20)
-   -- load DSLR image
+   -- gather and load DSLR images
 
    images = util.fs.glob(sweep_dir .. sweep_no, ".JPG")
 
    p("Testing Image Projection")
 
-   log.tic()
-
-
-   time = log.toc()
-   printf(" - make map %2.4fs", time)
-   log.tic()
    offset = offsets[sweep_no]
    lambda = offset.initial
    phi    = 0 
 
    for i = 1,#images do
       log.tic()
-      fname  = images[i]
-      img    = image.load(fname)
-      proj_from = projection.GnomonicProjection.new(width,height,hfov,vfov)
-      proj_from:set_lambda_phi(lambda,phi)
       view   = 
          model.View.new(pose.local_to_global_position,
                         pose.local_to_global_rotation,
                         hfov,
-                        vfov)  
+                        vfov) 
+
+      view:set_image_path(images[i],maxsize)
+
+      proj_from = projection.GnomonicProjection.new(view.width,view.height,hfov,vfov)
+      proj_from:set_lambda_phi(lambda,phi)
 
       view:set_projection(proj_from)
-      view:set_image_path(fname)
+
+      table.insert(views,view)
 
       lambda = lambda + offset.delta[i]
-      table.insert(views,view)
-      printf(" - reproject %2.4fs", log.toc())
+      printf(" - make view %2.4fs", log.toc())
       collectgarbage()
    end
 end
@@ -137,6 +129,7 @@ end
 for fid = 1,scan.n_faces do 
    plane_xyz = rt:xyz_plane(fid)
    for vi = 1,#views do 
+      log.tic()
       view = views[vi]
       woff, _ , wmask = view:global_xyz_to_offset_and_mask(plane_xyz)
       if (wmask:sum() < woff:nElement()) then 
@@ -152,9 +145,12 @@ for fid = 1,scan.n_faces do
             -- mask outof bounds
             outimg[cid][wmask] = 0
          end
+         printf(" - project image %2.4fs",log.toc()*0.001)
+         log.tic()
          outfname = string.format("face_%d_view_%d.png",fid,vi)
          log.trace("Saving:",outfname)
          image.save(outfname,outimg)
+         printf(" - save image %2.4fs",log.toc()*0.001)
       else
          -- print(" - Skipping")
       end

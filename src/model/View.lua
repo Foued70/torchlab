@@ -81,22 +81,31 @@ end
 function View:set_image_path(image_path,max_size)
    self.image_path = image_path
    self.max_size   = max_size
+   if not util.fs.is_file(self.image_path) then
+      error("can't find ".. self.image_path)
+   end
+   log.info("Loading image from path:", "\""..self.image_path.."\"")
+   -- use the wand to store the image data
+   self.wand = image.Wand.new(self.image_path,self.max_size)
+   self.width, self.height = self.wand:size()
 end
 
-function View:get_image()
-   if not self.image_data_raw then
-      if not util.fs.is_file(self.image_path) then
-         error("can't find ".. image_path)
-      end
-      log.tic()
-      log.trace("Loading image from path:", "\""..self.image_path.."\"")
 
-      local img = image.Wand.new(self.image_path,self.max_size):toTensor('double','RGB','DHW')
-      self.image_data_raw = img
-      collectgarbage()
+
+function View:get_image(tensorType,colorspace,dimensions)
+   local imagedata, nocopy
+   nocopy = true -- use wand to store imagedata
+   if self.wand then
+      log.tic()
+      tensorType = tensorType or torch.getdefaulttensortype()
+      colorspace = colorspace or "RGB"
+      dimensions = dimensions or "DHW"
+      imagedata = self.wand:toTensor(tensorType,colorspace,dimensions,nocopy)
       log.trace('Completed image load in', log.toc())
+   else
+      error("need to View:set_image_path first")
    end
-   return self.image_data_raw
+   return imagedata
 end
 
 function View:set_projection(projection)
