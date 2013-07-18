@@ -173,21 +173,22 @@ end
 
 function View:global_xyz_to_offset_and_mask(xyz,debug)
    local angles = self:global_xyz_to_local_angles(xyz,debug)
-   self.offset, self.stride, self.mask =
-      self.projection:angles_to_offset_and_mask(angles)
-   return self.offset, self.stride, self.mask
+   return self.projection:angles_to_offset_and_mask(angles)
 end
 
+-- rather than frustum just check a bunch of points on the face, reuse code hopefully fast enough.
+function View:check_overlap(xyz,percent)
+   percent = percent or 0.1
+   -- compute offset and mask for xyz is added.
+   offset,stride,mask = self:global_xyz_to_offset_and_mask(xyz)
+   return mask:eq(0):sum() > xyz:nElement() * percent
+end
+ 
 function View:project(xyz)
    local img  = self:get_image()
-   local proj = self.projection
-
-   -- recompute angles if xyz is added.
-   if xyz then
-      self:global_xyz_to_offset_and_mask(xyz)
-   end
-
+   -- compute offset and mask for xyz is added.
+   offset,stride,mask = self:global_xyz_to_offset_and_mask(xyz)
    -- do the projection
-   return util.addr.remap(img, self.offset, self.mask)
+   return util.addr.remap(img, offset, mask)
 end
 

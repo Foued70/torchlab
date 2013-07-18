@@ -35,7 +35,7 @@ matter_dir = params.matter_dir
 obj_file   = params.obj_file
 
 maxsize = 1024
-ppm     = 300
+ppm     = 100
 
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
@@ -46,12 +46,11 @@ end
 
 if util.fs.is_file(obj_file) then
    printf("using : %s", obj_file)
-   scan = data.Obj.new(obj_file)
+   _G.scan = data.Obj.new(obj_file)
 else
    error("Can't find the obj file (set -obj_file correctly)")
 end
 
-rt = retex.TextureBuilder.new(scan,{ppm=ppm})
 
 poses = model.Matterport_PoseFile.new(matter_pose_fname).poses
 
@@ -86,7 +85,7 @@ offsets = {
    }
 }
 
-_G.views     = {}
+views     = {}
 
 -- load sweeps
 for sweep_no = 1,4 do
@@ -126,34 +125,8 @@ for sweep_no = 1,4 do
    end
 end
 
-for fid = 1,scan.n_faces do 
-   plane_xyz = rt:xyz_plane(fid)
-   for vi = 1,#views do 
-      log.tic()
-      view = views[vi]
-      woff, _ , wmask = view:global_xyz_to_offset_and_mask(plane_xyz)
-      if (wmask:sum() < woff:nElement()) then 
-         woff:resize(woff:nElement())
-         wmask:resize(wmask:nElement())
-         img    = view:get_image()
-         outimg = torch.Tensor():typeAs(img):resize(3,plane_xyz:size(1),plane_xyz:size(2))
-         for cid = 1,3 do 
-            c  = img[cid]
-            c:resize(c:nElement())
-            -- copy image data
-            outimg[cid]:copy(c[woff])
-            -- mask outof bounds
-            outimg[cid][wmask] = 0
-         end
-         printf(" - project image %2.4fs",log.toc()*0.001)
-         log.tic()
-         outfname = string.format("face_%d_view_%d.png",fid,vi)
-         log.trace("Saving:",outfname)
-         image.save(outfname,outimg)
-         printf(" - save image %2.4fs",log.toc()*0.001)
-      else
-         -- print(" - Skipping")
-      end
-      collectgarbage()
-   end
-end
+scan.views = views
+
+texture = retex.TextureBuilder.new(scan,{ppm=ppm})
+
+texture:buildAll()

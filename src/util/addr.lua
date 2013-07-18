@@ -28,7 +28,7 @@ Class()
 -- using <offset> and (optional) <mask> remap <img> to
 -- <out_image>.  <out_image> gets it's dimensions from <offset>
 function remap(img, offset, mask, out_image)
-   out_image          = out_image or torch.Tensor()
+   out_image          = out_image or torch.Tensor():typeAs(img)
    local index_n_elem = offset:nElement()
    local index_size   = offset:size()
    local index_dim    = offset:nDimension()
