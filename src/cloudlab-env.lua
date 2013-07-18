@@ -23,6 +23,7 @@ _G.os = mod.require'os'
 _G.log = require './util/log'
 
 require 'dok'
+require 'nn'
 require './image'
 
 function _G.printf (...)

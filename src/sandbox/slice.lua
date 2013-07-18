@@ -130,7 +130,7 @@ for num_slice = 1, 10 do
 		end
 	end
 
-	filename = 'slices/slice' .. num_slice .. '.jpg'
+	filename = 'slices/slice' .. num_slice .. '.png'
 
 	print("  Saving slice " .. num_slice)
 	image.save(filename, slice);

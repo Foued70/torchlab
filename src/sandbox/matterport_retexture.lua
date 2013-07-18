@@ -26,7 +26,6 @@ cmd:option('-obj_file',
 --             "../tmp/test/96_spring_kitchen/blonde-beach-clean.obj",
            "Directory for obj to retexture")
 
-
 cmd:text()
 
 -- parse input params
@@ -111,48 +110,29 @@ scan.views = views
 rt = retex.TextureBuilder.new(scan,{ppm=100})
 
 for fid = 1,scan.n_faces do 
-   -- rt:test_face_to_texture(fid)
-
-   face_xyz = rt:xyz_wireframe(fid)
-
+   plane_xyz = rt:xyz_plane(fid)
    retexts = {}
    for vi = 1,#views do 
-      local view = views[vi]
-      woff, _ , wmask = view:global_xyz_to_offset_and_mask(face_xyz)
-      invmask = wmask:eq(0)
-      if (invmask:sum() > 0) then 
-         -- print(" - Computing")
-         woff = woff[invmask]
-      
+      view = views[vi]
+      woff, _ , wmask = view:global_xyz_to_offset_and_mask(plane_xyz)
+      if (wmask:sum() < woff:nElement()) then 
+         woff:resize(woff:nElement())
+         wmask:resize(wmask:nElement())
+         outimg = torch.Tensor(3,plane_xyz:size(1),plane_xyz:size(2))
          img = view:get_image()
-         for cid = 1,1 do 
+         for cid = 1,3 do 
              c  = img[cid]
              c:resize(c:nElement())
-             c[woff] = 1 -- view.color[cid]
+             -- copy image data
+             outimg[cid]:copy(c[woff])
+             -- mask outof bounds
+             outimg[cid][wmask] = 0
          end
+         image.save(string.format("face_%d_view_%d.png",fid,vi),outimg)
       else
          -- print(" - Skipping")
       end
+      collectgarbage()
    end
 end
 
--- display
-for vid = 1,#scan.views do
-   local view = scan.views[vid]
-
-   local base_name = path.normalize(matter_dir):gsub("/","-") .. 
-      "_-_" .. path.basename(obj_file):gsub("%.[^%.]+$","")
-
-   local pano = scan.views[vid]:get_image()
-   local pano_name = string.format("%s_-_panorama_wireframe_%02d.png",base_name,vid)
-   log.trace("saving:",pano_name)
-   image.save(pano_name,pano)
-   -- image.display(pano)
-
-   local gnom = view.remapper:remap(view:get_image())
-   local gnom_name = string.format("%s_-_gnomonic_wireframe_%02d.png",base_name,vid)
-   log.trace("saving:",gnom_name)
-   image.save(gnom_name,gnom)
-   -- image.display(gnom)
-
-end 

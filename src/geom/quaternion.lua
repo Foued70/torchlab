@@ -93,8 +93,8 @@ function angle_between(from_vector, to_vector, quat)
 
    quat = quat or torch.Tensor(from_nVec * to_nVec , 4)
 
-   local from = from_vector:narrow(from_nDim,1,3)
-   local to   = to_vector:narrow(to_nDim,1,3)
+   local from = from_vector:narrow(from_nDim,1,3):reshape(from_nVec,3)
+   local to   = to_vector:narrow(to_nDim,1,3):reshape(to_nVec,3)
    
    from_nElem = from:nElement()
    to_nElem   = to:nElement()
@@ -115,16 +115,15 @@ function angle_between(from_vector, to_vector, quat)
       
       
       if (from_nElem == 3) then 
-         from = from:reshape(1,3):expandAs(to)
+         from = from:reshape(1,3):expand(to_nVec,3)
       elseif (to_nElem == 3) then 
-         to = to:reshape(1,3):expandAs(from)
+         to = to:reshape(1,3):expand(from_nVec,3)
       else
          error("currently angle_between only accepts 1x(3or4),Nx(3or4) or Nx(3or4),1x(3or4) pairs")
       end
-      
+
       local rot_axis  = torch.cross(from,to,2)
       
-
       -- avoid the degenerate case when from_vector is very close to to_vector
       local rot_angle = torch.cmul(from, to):sum(from:nDimension()):acos()
       local m        = rot_axis:norm(2,2)

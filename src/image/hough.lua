@@ -2,7 +2,7 @@ local hough = {}
 
 -- load C lib
 
-require 'libhough'
+local libhough = require 'libhough'
 
 local pi = math.pi
 local twopi = 2*pi
@@ -10,15 +10,23 @@ local twopi = 2*pi
 
 function hough.get_hough_transform(img, numRadius, numAngles)
   local hT = torch.zeros(numRadius, numAngles);
-  libhough.libhough.houghTransform(hT,img);
+  torch.Tensor.libhough.houghTransform(hT,img);
   hT = hT:type('torch.DoubleTensor');
-  hT = hT/hT:max();
+  hT = hT/(hT:max()+0.00001);
+  return hT;
+end
+
+function hough.get_hough_transform_vertical(img, numRadius, numAngles)
+  local hT = torch.zeros(numRadius, numAngles);
+  torch.Tensor.libhough.houghTransformVertical(hT,img);
+  hT = hT:type('torch.DoubleTensor');
+  hT = hT/(hT:max()+0.00001);
   return hT;
 end
 
 function hough.local_contrast_normalization(hT)
   local hTclone=hT:clone()
-  libhough.libhough.localContrastNormalization(hT,hTclone);
+  torch.Tensor.libhough.localContrastNormalization(hT,hTclone);
   return hT;
 end
 
@@ -81,7 +89,31 @@ function hough.find_best_lines(hT, numBest)
   return ret
 end
 
-function hough.draw_line (img,r,a, numRadius, numAngles)
+function hough.find_best_lines_vertical(hT, numBest)
+  local numRadius = hT:size(1);
+  local numAngles = 1;
+  local ret = torch.zeros(numBest,3);
+  for ir = 1,numRadius do
+    for ja = 1,numAngles do
+      local val = hT[ir][ja]
+      if val > 0 and isBestInWindow(hT, ir, ja, math.ceil(numRadius/100), 0) then
+        for bb = 1,numBest do
+          if val > ret[bb][3] then
+            if bb < numBest then
+              local ret1 = ret:clone()
+              ret:sub(bb+1,numBest):add(0.000001):cdiv(ret:sub(bb+1,numBest)):cmul(ret1:sub(bb,numBest-1))
+            end
+            ret[bb]=torch.Tensor({ir,ja,val})
+            break;
+          end
+        end
+      end
+    end
+  end
+  return ret
+end
+
+function hough.draw_line (img,r,a, numRadius, numAngles, red, grn, blu)
 
   if (img:size():size() == 2 or (img:size() == 3 and img:size(1) == 1)) then
     img = img:repeatTensor(3,1,1)
@@ -103,8 +135,9 @@ function hough.draw_line (img,r,a, numRadius, numAngles)
       local row = math.ceil(y + heigt/2)
       if row > 0 and row <= heigt then
         img[1][row][col]=1.0
-        img:sub(1,1,math.max(1,row-2),math.min(heigt, row+2),math.max(1,col-1),math.min(width,col+1)):fill(1.0)
-        img:sub(2,3,math.max(1,row-2),math.min(heigt, row+2),math.max(1,col-1),math.min(width,col+1)):fill(0.0)
+        img:sub(1,1,math.max(1,row-2),math.min(heigt, row+2),math.max(1,col-1),math.min(width,col+1)):fill(red)
+        img:sub(2,2,math.max(1,row-2),math.min(heigt, row+2),math.max(1,col-1),math.min(width,col+1)):fill(grn)
+        img:sub(3,3,math.max(1,row-2),math.min(heigt, row+2),math.max(1,col-1),math.min(width,col+1)):fill(blu)
       end
       if row == 1 or row == heigt then
         printf("[row,col] : [%s, %s]", row, col)
@@ -122,8 +155,9 @@ function hough.draw_line (img,r,a, numRadius, numAngles)
       local col = math.ceil(x + width/2)
       if col > 0 and col <= width then
         img[1][row][col]=1.0
-        img:sub(1,1,math.max(1,row-1),math.min(heigt, row+1),math.max(1,col-2),math.min(width,col+2)):fill(1.0)
-        img:sub(2,3,math.max(1,row-1),math.min(heigt, row+1),math.max(1,col-2),math.min(width,col+2)):fill(0.0)
+        img:sub(1,1,math.max(1,row-1),math.min(heigt, row+1),math.max(1,col-2),math.min(width,col+2)):fill(red)
+        img:sub(2,2,math.max(1,row-1),math.min(heigt, row+1),math.max(1,col-2),math.min(width,col+2)):fill(grn)
+        img:sub(3,3,math.max(1,row-1),math.min(heigt, row+1),math.max(1,col-2),math.min(width,col+2)):fill(blu)
       end
       if row == 1 or row == heigt then
         printf("[row,col] : [%s, %s]", row, col)
@@ -134,6 +168,47 @@ function hough.draw_line (img,r,a, numRadius, numAngles)
       
     end
   
+  end
+  
+  return img
+  
+end
+
+function hough.draw_line_vertical (img,r,a, numRadius, numAngles, red, grn, blu)
+
+  if (img:size():size() == 2 or (img:size() == 3 and img:size(1) == 1)) then
+    img = img:repeatTensor(3,1,1)
+  end
+  
+  local heigt = img:size(2)
+  local width = img:size(3)
+  local maxRadius = width
+  local ang = 0
+  local rad = (r-1) * maxRadius/(numRadius-1)
+  
+  for row=1,heigt do
+    local y = row
+    local x = rad
+    local col = math.ceil(rad)
+    if col - rad > 0.5 then
+      col = col - 1
+    end
+    
+    if col > 0 and col <= width then
+      img[1][row][col]=1.0
+      img:sub(1,1,math.max(1,row),math.min(heigt, row),math.max(1,col),math.min(width,col)):fill(red)
+      img:sub(2,2,math.max(1,row),math.min(heigt, row),math.max(1,col),math.min(width,col)):fill(grn)
+      img:sub(3,3,math.max(1,row),math.min(heigt, row),math.max(1,col),math.min(width,col)):fill(blu)
+    else
+      printf("WEIRD STUFF: width - %s, maxRadius - %s, rad - %s, col - %s, numRadius - %s", width, maxRadius, rad, col, numRadius)
+    end
+    if row == 1 or row == heigt then
+      printf("[row,col] : [%s, %s]", row, col)
+    end
+    if col == 1 or col == width then
+      printf("[row,col] : [%s, %s]", row, col)
+    end
+
   end
   
   return img
