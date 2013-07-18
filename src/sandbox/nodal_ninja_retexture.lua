@@ -35,7 +35,7 @@ matter_dir = params.matter_dir
 obj_file   = params.obj_file
 
 maxsize = 1024
-ppm = 100
+ppm     = 300
 
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
@@ -135,8 +135,8 @@ for fid = 1,scan.n_faces do
       if (wmask:sum() < woff:nElement()) then 
          woff:resize(woff:nElement())
          wmask:resize(wmask:nElement())
-         outimg = torch.Tensor(3,plane_xyz:size(1),plane_xyz:size(2))
-         img = view:get_image()
+         img    = view:get_image()
+         outimg = torch.Tensor():typeAs(img):resize(3,plane_xyz:size(1),plane_xyz:size(2))
          for cid = 1,3 do 
             c  = img[cid]
             c:resize(c:nElement())

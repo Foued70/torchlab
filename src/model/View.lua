@@ -97,7 +97,7 @@ function View:get_image(tensorType,colorspace,dimensions)
    nocopy = true -- use wand to store imagedata
    if self.wand then
       log.tic()
-      tensorType = tensorType or torch.getdefaulttensortype()
+      tensorType = tensorType or "torch.ByteTensor"
       colorspace = colorspace or "RGB"
       dimensions = dimensions or "DHW"
       imagedata = self.wand:toTensor(tensorType,colorspace,dimensions,nocopy)
