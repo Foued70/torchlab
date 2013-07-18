@@ -1,1 +1,1 @@
-require("dbg/mobdebug").start()
+require("./mobdebug").start()
