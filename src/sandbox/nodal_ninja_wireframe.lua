@@ -210,11 +210,11 @@ for sweep_no = 1,4 do
    blendOutFname = string.format("blend_sweep_%d.png",sweep_no)
    log.trace("Saving", blendOutFname)
    image.save(blendOutFname,blend_image)
-   -- image.display(blend_image)
+   image.display(blend_image)
 
    matterOutFname = string.format("matter_sweep_%d.png",sweep_no)
    log.trace("Saving", matterOutFname)
    image.save(matterOutFname,matter_texture)
-   -- image.display(matter_texture)
+   image.display(matter_texture)
 
 end

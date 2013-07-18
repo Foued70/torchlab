@@ -193,30 +193,22 @@ function TextureBuilder:range_to_texture_dimensions(xrange, yrange, debug)
 end
 
 function TextureBuilder:xyz_plane(fid, debug)
-  local model         = self.model
+  local model       = self.model
   local scale_inv   = self.scale_inv
   local views       = model.views
-  -- Retexture Algo:
-  -- 1) get closest views:
-  local closest_views = get_view(fid)
-  local nviews = closest_views:size(1)
 
-  if not closest_views then
-    log.trace('No valid photos found for face', fid)
-    return
-  end
+  -- 1) find rotation and translation to texture coords and dimensions of texture
+  local rot,trans,dims,xrange,yrange = 
+     self:face_to_texture_transform_and_dimension(fid, debug)
 
-  -- 2) find rotation and translation to texture coords and dimensions of texture
-  local rot,trans,dims,xrange,yrange = self:face_to_texture_transform_and_dimension(fid, debug)
-
-  --  a) need rotation from texture to global
+  -- a) need rotation from texture to global
   local rotT = geom.quaternion.conjugate(rot)
 
-  -- 3) create the texture image which we will color, and temp variables
+  -- 2) create the texture image which we will color, and temp variables
 
   local widthpx, heightpx, linx, liny, dx, dy = self:range_to_texture_dimensions(xrange, yrange, debug)
 
-  local v      = torch.ones(heightpx,widthpx,4)
+  local v      = torch.ones(heightpx,widthpx,3)
 
   v:select(3,dims[1]):fill(0)
   v:select(3,dims[2]):copy(linx:reshape(1,widthpx):expand(heightpx,widthpx))
@@ -241,6 +233,8 @@ function TextureBuilder:xyz_wireframe(fid,ppm)
   local f = face_verts:narrow(1,1,n_verts):narrow(2,1,3)
   local directions = torch.Tensor(n_verts, 3)
   local pvert      = f[n_verts]
+
+  -- compute directions
   for vi = 1,n_verts do
      local cvert = f[vi]
      directions[vi]:copy(cvert - pvert)
@@ -249,11 +243,11 @@ function TextureBuilder:xyz_wireframe(fid,ppm)
 
   local lengths = directions:norm(2,2)
   local n_px    = torch.mul(lengths,ppm):ceil()
-  local steps    = torch.cdiv(directions,n_px:expand(directions:size()))
+  local steps   = torch.cdiv(directions,n_px:expand(directions:size()))
 
-  local total_pts   = n_px:sum()
-  local pts     = torch.Tensor(total_pts, 3)
-  local pi      = 1
+  local total_pts = n_px:sum()
+  local pts       = torch.Tensor(total_pts, 3)
+  local pi        = 1
   prev  = f[n_verts]
   for vi = 1,n_verts do
      local step = steps[vi]
@@ -263,9 +257,6 @@ function TextureBuilder:xyz_wireframe(fid,ppm)
         prev    = pts[pi]
         pi      = pi + 1
      end
-     -- local err = torch.abs(prev - f[vi])
-     -- printf("error[%d]: %f, %f, %f",vi, err[1],err[2],err[3])
-     
   end
   return pts
 end

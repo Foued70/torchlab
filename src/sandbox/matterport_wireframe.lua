@@ -118,8 +118,6 @@ for fid = 1,scan.n_faces do
    retexts = {}
    for vi = 1,#views do 
       local view = views[vi]
-      view.color = view.color or torch.rand(3)
-      -- log.trace("face: ", fid, " view: ", vid)
       woff, _ , wmask = view:global_xyz_to_offset_and_mask(face_xyz)
       invmask = wmask:eq(0)
       if (invmask:sum() > 0) then 
@@ -142,7 +140,8 @@ end
 for vid = 1,#scan.views do
    local view = scan.views[vid]
 
-   local base_name = path.normalize(matter_dir):gsub("/","-") .. "_-_" .. path.basename(obj_file):gsub("%.[^%.]+$","")
+   local base_name = path.normalize(matter_dir):gsub("/","-") .. 
+      "_-_" .. path.basename(obj_file):gsub("%.[^%.]+$","")
 
    local pano = scan.views[vid]:get_image()
    local pano_name = string.format("%s_-_panorama_wireframe_%02d.png",base_name,vid)

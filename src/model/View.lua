@@ -129,7 +129,6 @@ function View:global_xyz_to_local_angles(global_xyz,debug)
    -- xyz in photo coordinates
    local local_xyz       = self:global_to_local(global_xyz)
    
-   local quat = geom.quaternion.angle
    -- TODO put xyz in first dimension or add dim parameter to all rotation operations
    -- for now transfer from Nx4 to 2xN
    local s       = local_xyz:size()
@@ -144,11 +143,11 @@ function View:global_xyz_to_local_angles(global_xyz,debug)
    local z = norm:select(d,3)
 
 
-   local quats = geom.quaternion.angle_between(norm,self.forward_vector)
-   local euler = geom.quaternion.to_euler_angle(quats)
+   -- local quats = geom.quaternion.angle_between(norm,self.forward_vector)
+   -- local euler = geom.quaternion.to_euler_angle(quats)
 
    -- elevation
-   torch.asin(angles[1],-z) -- neg. phi is up
+   torch.asin(angles[1],z)
    -- azimuth
    torch.atan2(angles[2],x,y)
    
