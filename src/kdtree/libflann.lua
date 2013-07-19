@@ -453,13 +453,11 @@ function flann.radius_search(index, query, max_nn, radius, flann_params)
 	local indices_ptr = ffi.cast('int *', torch.data(indices))
 	local dists_ptr = ffi.cast('float *', torch.data(dists))
 	
-	local ret = clib.flann_radius_search(index, qset, indices_ptr, dist_ptr, max_nn, radius, flann_params)
-	
-	assert(ret == 0, "frs: flann_radius_search error, returned "..ret)
+	local numfound = clib.flann_radius_search(index, qset, indices_ptr, dists_ptr, max_nn, radius, flann_params)
 	
 	collectgarbage()
 	
-	return indices, dists
+	return indices, dists, numfound
 	
 end
 
