@@ -159,9 +159,9 @@ function PointCloud:make_flattened_images(scale)
 		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+torch.Tensor({1,1,1})
 	end
 	collectgarbage()
-	self.imagex = self.imagex:transpose(1,3):transpose(2,3)/self.imagex:max()
-	self.imagey = self.imagey:transpose(1,3):transpose(2,3)/self.imagey:max()
-	self.imagez = self.imagez:transpose(1,3):transpose(2,3)/self.imagez:max()
+	self.imagex = self.imagex:transpose(1,3):transpose(2,3) / self.imagex:max()
+	self.imagey = self.imagey:transpose(1,3):transpose(2,3) / self.imagey:max()
+	self.imagez = self.imagez:transpose(1,3):transpose(2,3) / self.imagez:max()
 end
 
 function PointCloud:downsample(leafsize)
