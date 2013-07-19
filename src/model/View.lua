@@ -81,22 +81,31 @@ end
 function View:set_image_path(image_path,max_size)
    self.image_path = image_path
    self.max_size   = max_size
+   if not util.fs.is_file(self.image_path) then
+      error("can't find ".. self.image_path)
+   end
+   log.info("Loading image from path:", "\""..self.image_path.."\"")
+   -- use the wand to store the image data
+   self.wand = image.Wand.new(self.image_path,self.max_size)
+   self.width, self.height = self.wand:size()
 end
 
-function View:get_image()
-   if not self.image_data_raw then
-      if not util.fs.is_file(self.image_path) then
-         error("can't find ".. image_path)
-      end
-      log.tic()
-      log.trace("Loading image from path:", "\""..self.image_path.."\"")
 
-      local img = image.Wand.new(self.image_path,self.max_size):toTensor('double','RGB','DHW')
-      self.image_data_raw = img
-      collectgarbage()
+
+function View:get_image(tensorType,colorspace,dimensions)
+   local imagedata, nocopy
+   nocopy = true -- use wand to store imagedata
+   if self.wand then
+      log.tic()
+      tensorType = tensorType or "torch.ByteTensor"
+      colorspace = colorspace or "RGB"
+      dimensions = dimensions or "DHW"
+      imagedata = self.wand:toTensor(tensorType,colorspace,dimensions,nocopy)
       log.trace('Completed image load in', log.toc())
+   else
+      error("need to View:set_image_path first")
    end
-   return self.image_data_raw
+   return imagedata
 end
 
 function View:set_projection(projection)
@@ -164,21 +173,22 @@ end
 
 function View:global_xyz_to_offset_and_mask(xyz,debug)
    local angles = self:global_xyz_to_local_angles(xyz,debug)
-   self.offset, self.stride, self.mask =
-      self.projection:angles_to_offset_and_mask(angles)
-   return self.offset, self.stride, self.mask
+   return self.projection:angles_to_offset_and_mask(angles)
 end
 
+-- rather than frustum just check a bunch of points on the face, reuse code hopefully fast enough.
+function View:check_overlap(xyz,percent)
+   percent = percent or 0.1
+   -- compute offset and mask for xyz is added.
+   offset,stride,mask = self:global_xyz_to_offset_and_mask(xyz)
+   return mask:eq(0):sum() > xyz:nElement() * percent
+end
+ 
 function View:project(xyz)
    local img  = self:get_image()
-   local proj = self.projection
-
-   -- recompute angles if xyz is added.
-   if xyz then
-      self:global_xyz_to_offset_and_mask(xyz)
-   end
-
+   -- compute offset and mask for xyz is added.
+   offset,stride,mask = self:global_xyz_to_offset_and_mask(xyz)
    -- do the projection
-   return util.addr.remap(img, self.offset, self.mask)
+   return util.addr.remap(img, offset, mask)
 end
 
