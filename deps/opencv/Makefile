@@ -11,7 +11,9 @@ default_cmake_args = \
 	-D CMAKE_CXX_COMPILER:PATH=/usr/bin/g++ \
 	-D CMAKE_BUILD_TYPE=Release
 
-ver=79e0e948a70ad585ac498feaa98f7fc6275a1139
+# make sure we update to versions which are official releases.  They are tagged in github. 
+# this is Release 2.4.6
+ver=eedc032b98a2735bbd2611e65a7e35086ada12f6
 branch=2.4
 
 git_clone=$(build_dir)/deps/opencv-$(branch)
@@ -24,13 +26,14 @@ args = $(default_cmake_args) \
 	-DBUILD_opencv_video:BOOL=ON \
 	-DBUILD_opencv_java:BOOL=OFF \
 	-DBUILD_opencv_python:BOOL=OFF \
+	-DWITH_CUDA=OFF \
 	-DENABLE_SSE41:BOOL=ON \
 	-DENABLE_SSE42:BOOL=ON \
 	-DENABLE_SSSE3:BOOL=ON
 
 all: $(install)
 
-$(install): $(git_clone)
+$(install): $(git_clone) .FORCE
 	cd $(git_clone); git checkout $(ver)
 	cd $(git_clone); mkdir -p build
 	cd $(git_clone)/build; cmake $(args) ..
@@ -38,3 +41,9 @@ $(install): $(git_clone)
 
 $(git_clone):
 	git clone -b $(branch) https://github.com/Itseez/opencv $(git_clone)
+
+rebuild:
+	rm -rf $(git_clone)/build
+
+.PHONY: .FORCE
+.FORCE:
