@@ -19,7 +19,7 @@ function PointCloud:__init(pcfilename)
   self.points = nil;
   self.rgb = nil;
   self.count = 0;
-  self.meanpoint = torch.Tensor({{0,0,0}});
+  self.centroid = torch.Tensor({{0,0,0}});
 
   
   if pcfilename then
@@ -103,7 +103,7 @@ function PointCloud:set_pc_file(pcfilename)
       self.index[h][w]=count;
     end
     
-    self.meanpoint = self.points:mean(1);
+    self.centroid = self.points:mean(1);
     self.minval,self.minind = self.points:min(1)
     self.maxval,self.maxind = self.points:max(1)
     
@@ -159,9 +159,9 @@ function PointCloud:make_flattened_images(scale)
 		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+torch.Tensor({1,1,1})
 	end
 	collectgarbage()
-	self.imagex = self.imagex:transpose(1,3):transpose(2,3)*15/self.imagex:max()
-	self.imagey = self.imagey:transpose(1,3):transpose(2,3)*15/self.imagey:max()
-	self.imagez = self.imagez:transpose(1,3):transpose(2,3)*15/self.imagez:max()
+	self.imagex = self.imagex:transpose(1,3):transpose(2,3)/self.imagex:max()
+	self.imagey = self.imagey:transpose(1,3):transpose(2,3)/self.imagey:max()
+	self.imagez = self.imagez:transpose(1,3):transpose(2,3)/self.imagez:max()
 end
 
 function PointCloud:downsample(leafsize)
@@ -185,22 +185,23 @@ function PointCloud:downsample(leafsize)
 		end
 	end
 	bin=nil
-	self.downsampled = PointCloud.new()
-	self.downsampled.height = self.height;
-  	self.downsampled.width = self.width;
-	self.downsampled.points = torch.Tensor(#pts,3)
-	self.downsampled.rgb = torch.Tensor(#pts,3)
-	self.downsampled.index = torch.Tensor(#pts,2)
-	self.downsampled.count = #pts
+	local downsampled = PointCloud.new()
+	downsampled.height = self.height;
+  	downsampled.width = self.width;
+	downsampled.points = torch.Tensor(#pts,3)
+	downsampled.rgb = torch.Tensor(#pts,3)
+	downsampled.index = torch.Tensor(#pts,2)
+	downsampled.count = #pts
 	
 	for i=1,#pts do
-		self.downsampled.points[i]=pts[i][2]
-		self.downsampled.rgb[i] = self.rgb[pts[i][1]]
+		downsampled.points[i]=pts[i][2]
+		downsampled.rgb[i] = self.rgb[pts[i][1]]
 	end
-	self.downsampled.meanpoint = self.downsampled.points:mean(1);
-    self.downsampled.minval,self.minind = self.downsampled.points:min(1)
-    self.downsampled.maxval,self.maxind = self.downsampled.points:max(1)
+	downsampled.centroid = downsampled.points:mean(1);
+    downsampled.minval,downsampled.minind = downsampled.points:min(1)
+    downsampled.maxval,downsampled.maxind = downsampled.points:max(1)
 	collectgarbage()
+	return downsampled
 end
 
 function PointCloud:make_3dtree()
@@ -215,4 +216,96 @@ function PointCloud:make_2dtrees()
 	self.flatteny_2dtree = kdtree.new(self.flatteny,numaxis)
 	self.flattenz_2dtree = kdtree.new(self.flattenz,numaxis)
 	collectgarbage()
+end
+
+function PointCloud:make_sub_pointcloud(index_tensor)
+	local sub_ptcld = PointCloud.new()
+	if index_tensor then
+		sub_ptcld.points = torch.zeros(index_tensor:size(1),3)
+		sub_ptcld.rgb = torch.zeros(index_tensor:size(1),3)
+		sub_ptcld.count = index_tensor:size(1)
+		sub_ptcld.centroid = torch.zeros(1,3)
+		
+		for i=1,index_tensor:size(1) do
+			sub_ptcld.points[i] = self.points[index_tensor[i]]
+			sub_ptcld.rgb[i] = self.rgb[index_tensor[i]]
+		end
+		sub_ptcld.centroid = sub_ptcld.points:mean(1)
+	    sub_ptcld.minval,sub_ptcld.minind = sub_ptcld.points:min(1)
+    	sub_ptcld.maxval,sub_ptcld.maxind = sub_ptcld.points:max(1)
+    end
+    collectgarbage()
+    return sub_ptcld
+end
+
+function PointCloud:compute_normals_at_all_points_nn(num)
+	if self.points then
+		if not self.kdtree then
+			self:make_3dtree()
+		end
+		self.normals = torch.zeros(self.count,3)
+		self.curvatures = torch.zeros(self.count)
+		for i=1,self.count do
+			local nnlist = self.kdtree:get_nearest_neighbors(self.points[i],num)
+			local ptcld = self:make_sub_pointcloud(nnlist)
+			local norm,curv = ptcld:compute_normal_for_cloud()
+			self.normals[i] = norm
+			self.curvatures[i] = curv
+		end
+	end
+	collectgarbage()
+end
+
+function PointCloud:compute_normals_at_all_points_rad(rad)
+	if self.points then
+		if not self.kdtree then
+			self:make_3dtree()
+		end
+		self.normals = torch.zeros(self.count,3)
+		self.curvatures = torch.zeros(self.count)
+		for i=1,self.count do
+			local nnlist = self.kdtree:get_neighbors_in_radius(self.points[i],rad)
+			local ptcld = self:make_sub_pointcloud(nnlist)
+			local norm,curv = ptcld:compute_normal_for_cloud()
+			self.normals[i] = norm
+			self.curvatures[i] = curv
+		end
+	end
+	collectgarbage()
+end
+
+function PointCloud:compute_normal_for_cloud()
+	local norm = torch.zeros(3)
+	local curv = 0
+	if self.points and self.points:size(1) > 0 then
+		local e = torch.zeros(3)
+		local v = torch.zeros(3,3)
+		local cov = self:compute_covariance_matrix()
+		e,v = torch.symeig(cov,'V')
+		minE = e[1]
+		minI = 1
+		for i=2,3 do
+			if e[i] < minE then
+				minI = i
+				minE = e[i]
+			end
+		end
+		norm = v:transpose(1,2)[minI]
+	end
+	collectgarbage()
+	return norm,curv
+end
+
+function PointCloud:compute_covariance_matrix()
+	local cov = torch.zeros(3,3)
+	if self.points and self.points:size(1) > 0 then
+		for i=1,self.count do
+			local DT = (self.points[i]:repeatTensor(1,1)-self.centroid)
+			local D = DT:transpose(1,2)
+			cov = cov + (D * DT)
+		end
+		cov = cov / self.count
+	end
+	collectgarbage()
+	return cov
 end
