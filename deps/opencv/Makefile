@@ -34,13 +34,13 @@ args = $(default_cmake_args) \
 all: $(install)
 
 $(install): $(git_clone) .FORCE
-	cd $(git_clone); git checkout $(ver)
 	cd $(git_clone); mkdir -p build
 	cd $(git_clone)/build; cmake $(args) ..
 	cd $(git_clone)/build; make -j8 install
 
 $(git_clone):
 	git clone -b $(branch) https://github.com/Itseez/opencv $(git_clone)
+	cd $(git_clone); git checkout $(ver)
 
 rebuild:
 	rm -rf $(git_clone)/build
