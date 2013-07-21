@@ -11,12 +11,25 @@ using namespace cv;
 using namespace std;
 
 extern "C"
-void detectfeatures(const CvMat* data,char* detector_type)
+CvMat detectfeatures(const CvMat* data,const char* detector_type)
 {
   /* Mat img(height, width, CV_8UC3, pixels, step); */
   Mat img(data);
   
   Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
-  vector<KeyPoint> keypoints1;
-  detector->detect( img, keypoints1 );
+  vector<KeyPoint> keypoints;
+  detector->detect( img, keypoints );
+
+  //-- Draw keypoints
+  Mat img_keypoints;
+  drawKeypoints( img, keypoints, img_keypoints, Scalar::all(-1), DrawMatchesFlags::DEFAULT );
+  //-- Show detected (drawn) keypoints
+  imshow("Keypoints", img_keypoints);
+
+  /* convert vector<KeyPoint> to CvMat */
+  vector<Point2f> points;
+  KeyPoint::convert(keypoints,points);
+  CvMat mat_points = Mat(points);
+  
+  return mat_points;
 }

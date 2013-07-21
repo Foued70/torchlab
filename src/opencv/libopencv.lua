@@ -83,7 +83,7 @@ typedef struct CvSize
 }
   CvSize;
 
-void detectfeatures(const CvMat* data,char* detector_type);
+CvMat detectfeatures(const CvMat* data, const char* detector_type);
 
 ]]
 
@@ -184,8 +184,8 @@ function opencv.fromTensor(tensor,dimensions)
       cvtype = "CV_64S"
       cvmat.data.i  = torch.data(tensor);
    elseif tensor_type == "torch.CharTensor" then 
-      cvtype = "CV_8S"
-      cvmat.data.s  = torch.data(tensor);
+      cvtype = "CV_8U"
+      cvmat.data.ptr  = torch.data(tensor);
    elseif tensor_type == "torch.ShortTensor" then 
       cvtype = "CV_16S"
       cvmat.data.s  = torch.data(tensor);
@@ -193,6 +193,16 @@ function opencv.fromTensor(tensor,dimensions)
    cvmat.type  = types[cvtype][depth]
 
    return cvmat
+end
+
+-- write in C ?
+function opencv.toTensor(cvmat)
+   height = cvmat.rows
+   width  = cvmat.cols
+   step   = cvmat.step
+   mtype  = cvmat.type
+   print(height,width,step,mtype)
+
 end
 
 return opencv
