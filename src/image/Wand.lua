@@ -2,10 +2,10 @@ local libgm  = require '../image/libgm'
 local ffi    = require 'ffi'
 local ctorch = util.ctorch
 
-local Image = Class()
+local Wand = Class()
 
 -- Constructor:
-function Image:__init(pathOrTensor, ...)
+function Wand:__init(pathOrTensor, ...)
    -- Create new instance:
    self.name = 'magick.Image'
    self.path = '<>'
@@ -36,7 +36,7 @@ function Image:__init(pathOrTensor, ...)
 end
 
 -- Load image:
-function Image:load(path, width, height)
+function Wand:load(path, width, height)
    -- Set canvas size:
    if width then
       -- This gives a cue to the wand that we don't need
@@ -62,7 +62,7 @@ function Image:load(path, width, height)
 end
 
 -- Save image:
-function Image:save(path, quality)
+function Wand:save(path, quality)
    -- Format?
    -- local format = (path:gfind('%.(...)$')() or path:gfind('%.(....)$')()):upper()
    -- if format == 'JPG' then format = 'JPEG' end
@@ -85,7 +85,7 @@ function Image:save(path, quality)
 end
 
 -- Size:
-function Image:size(width,height,filter)
+function Wand:size(width,height,filter)
    -- Set or get:
    if width or height then
       -- Get filter:
@@ -138,7 +138,7 @@ function Image:size(width,height,filter)
 end
 
 -- Depth:
-function Image:depth(depth)
+function Wand:depth(depth)
    -- Set or get:
    if depth then
       -- Set depth:
@@ -155,7 +155,7 @@ function Image:depth(depth)
 end
 
 -- Format:
-function Image:format(format)
+function Wand:format(format)
    -- Set or get:
    if format then
       -- Set format:
@@ -195,12 +195,12 @@ local colorspaces = {
 }
 
 -- Colorspaces:
-function Image:colorspaces()
+function Wand:colorspaces()
    return colorspaces
 end
 
 -- Colorspace:
-function Image:colorspace(colorspace)
+function Wand:colorspace(colorspace)
    -- Set or get:
    if colorspace then
       -- Set format:
@@ -218,7 +218,7 @@ function Image:colorspace(colorspace)
 end
 
 -- Flip:
-function Image:flip()
+function Wand:flip()
    -- Flip image:
    libgm.MagickFlipImage(self.wand)
 
@@ -227,7 +227,7 @@ function Image:flip()
 end
 
 -- Flop:
-function Image:flop()
+function Wand:flop()
    -- Flop image:
    libgm.MagickFlopImage(self.wand)
 
@@ -236,7 +236,7 @@ function Image:flop()
 end
 
 -- Export to Blob:
-function Image:toBlob()
+function Wand:toBlob()
    -- Size pointer:
    local sizep = ffi.new('size_t[1]')
 
@@ -248,7 +248,7 @@ function Image:toBlob()
 end
 
 -- Export to string:
-function Image:toString()
+function Wand:toString()
    -- To blob:
    local blob, size = self:toBlob()
 
@@ -260,7 +260,7 @@ function Image:toString()
 end
 
 -- To Tensor:
-function Image:toTensor(dataType, colorspace, dims, nocopy)
+function Wand:toTensor(dataType, colorspace, dims, nocopy)
 
    -- Dims:
    local width,height = self:size()
@@ -333,7 +333,7 @@ function Image:toTensor(dataType, colorspace, dims, nocopy)
 end
 
 -- Import from blob:
-function Image:fromBlob(blob,size)
+function Wand:fromBlob(blob,size)
    -- Read from blob:
    libgm.MagickReadImageBlob(self.wand, ffi.cast('const void *', blob), size)
    
@@ -345,7 +345,7 @@ function Image:fromBlob(blob,size)
 end
 
 -- Import from blob:
-function Image:fromString(string)
+function Wand:fromString(string)
    -- Convert blob (lua string) to C string
    local size = #string
    blob = ffi.new('char['..size..']', string)
@@ -355,7 +355,7 @@ function Image:fromString(string)
 end
 
 -- From Tensor:
-function Image:fromTensor(tensor, colorspace, dims)
+function Wand:fromTensor(tensor, colorspace, dims)
 
    -- Dims:
    local ndim = tensor:nDimension()
@@ -426,24 +426,8 @@ function Image:fromTensor(tensor, colorspace, dims)
    return self
 end
 
--- Show:
--- function Image:show(zoom)
---    -- Get Tensor from image:
---    local tensor = self:toTensor('float', nil,'DHW')
-   
---    -- Display this tensor:
---    require 'image'
---    image.display({
---       image = tensor,
---       zoom = zoom
---    })
-
---    -- return self
---    return self
--- end
-
 -- Description:
-function Image:info()
+function Wand:info()
    -- Get information
    local str = ffi.gc(libgm.MagickDescribeImage(self.wand), ffi.C.free)
    return ffi.string(str)
