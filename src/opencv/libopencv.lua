@@ -83,11 +83,15 @@ typedef struct CvSize
 }
   CvSize;
 
-static CvMat cvMat( int rows, int cols, int type, void* data );
+void detectfeatures(const CvMat* data,char* detector_type);
 
 ]]
 
+-- opencv_core has the C style CvMat stuff.
 libopencv_core = util.ffi.load('libopencv_core')
+
+-- load our wrappers.
+libopencv = util.ffi.load('libluaopencv')
 
 io = require 'io'
 ctorch = util.ctorch
@@ -158,27 +162,37 @@ function opencv.fromTensor(tensor,dimensions)
    -- Force contiguous:
    tensor = tensor:contiguous()
 
+   -- create cv Matrix
+   cvmat = ffi.new("CvMat")
+   cvmat.rows = height
+   cvmat.cols = width
+
    tensor_type = tensor:type()
    if tensor_type == "torch.DoubleTensor" then 
       cvtype = "CV_64F"
+      cvmat.data.db  = torch.data(tensor);
    elseif tensor_type == "torch.FloatTensor" then 
       cvtype = "CV_32F"
+      cvmat.data.fl  = torch.data(tensor);
    elseif tensor_type == "torch.ByteTensor" then 
       cvtype = "CV_8U"
+      cvmat.data.ptr  = torch.data(tensor);
    elseif tensor_type == "torch.IntTensor" then 
       cvtype = "CV_32S"
+      cvmat.data.i  = torch.data(tensor);
    elseif tensor_type == "torch.LongTensor" then 
       cvtype = "CV_64S"
+      cvmat.data.i  = torch.data(tensor);
    elseif tensor_type == "torch.CharTensor" then 
       cvtype = "CV_8S"
+      cvmat.data.s  = torch.data(tensor);
    elseif tensor_type == "torch.ShortTensor" then 
       cvtype = "CV_16S"
+      cvmat.data.s  = torch.data(tensor);
    end
-   -- create cv Matrix
-   libopencv_core.CvMat(height, -- row
-      width, -- col
-      types.[cvtype][depth], -- type
-      tensor.data)
+   cvmat.type  = types[cvtype][depth]
+
+   return cvmat
 end
 
 return opencv
