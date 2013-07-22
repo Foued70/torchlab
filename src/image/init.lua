@@ -13,6 +13,10 @@ end
 function image.save (filename,tensor,colorspace,dimensions)
    colorspace = colorspace or "RGB"
    dimensions = dimensions or "DHW"
+   if tensor:nDimension() == 2 or tensor:size(1) == 1 then 
+      colorspace = "I"
+      tensor = tensor:reshape(1,tensor:size(1),tensor:size(2))
+   end
    log.info("Saving", filename,colorspace,dimensions)
    image.Wand.new(tensor,colorspace,dimensions):save(filename)
    return
