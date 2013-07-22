@@ -1,6 +1,6 @@
 local log = require '../util/log'
 local io = require 'io'
-local kdtree = PointCloud.kdtree
+local kdtree = kdtree.kdtree
 
 -- angular to radians and back
 local pi = math.pi
@@ -116,19 +116,18 @@ function PointCloud:set_pc_file(pcfilename)
 end
 
 function PointCloud:flatten()
-	self.flattenx = torch.zeros(self.count, 2)
-	self.flatteny = torch.zeros(self.count, 2)
-	self.flattenz = torch.zeros(self.count, 2)
+	self.flattenx = self.points:sub(1,self.count,2,3):clone()
+	self.flattenz = self.points:sub(1,self.count,1,2):clone()
 	
-	for i=1,self.count do
-		self.flattenx[i] = torch.Tensor({self.points[i][2], self.points[i][3]})
-		self.flatteny[i] = torch.Tensor({self.points[i][1], self.points[i][3]})
-		self.flattenz[i] = torch.Tensor({self.points[i][1], self.points[i][2]})
-	end
+	self.flatteny = torch.zeros(2,self.count)
+	self.flatteny[1] = self.points:transpose(1,2)[1]:clone()
+	self.flatteny[2] = self.points:transpose(1,2)[3]:clone()
+	self.flatteny = self.flatteny:transpose(1,2)
+	
 	collectgarbage()
 end
 
-function PointCloud:make_image()
+function PointCloud:make_panoramic_image()
     self.image = torch.zeros(3, self.height, self.width);
     local img = torch.zeros(self.height,self.width,3);
     for i=1,self.height do
@@ -205,16 +204,7 @@ function PointCloud:downsample(leafsize)
 end
 
 function PointCloud:make_3dtree()
-	local numaxis = 3
-	self.kdtree = kdtree.new(self.points,numaxis)
-	collectgarbage()
-end
-
-function PointCloud:make_2dtrees()
-	local numaxis = 2
-	self.flattenx_2dtree = kdtree.new(self.flattenx,numaxis)
-	self.flatteny_2dtree = kdtree.new(self.flatteny,numaxis)
-	self.flattenz_2dtree = kdtree.new(self.flattenz,numaxis)
+	self.kdtree = kdtree.new(self.points)
 	collectgarbage()
 end
 
