@@ -7,6 +7,7 @@ ffi.cdef
 
   // Magick types:
   typedef void MagickWand;
+  typedef void PixelWand;
   typedef int MagickBooleanType;
   typedef int ExceptionType;
   typedef int size_t;
@@ -109,7 +110,15 @@ ffi.cdef
   // Magick Wand:
   MagickWand* NewMagickWand();
   MagickWand* DestroyMagickWand(MagickWand*);
-  
+
+  // Pixel Wand
+  PixelWand* NewPixelWand();
+  unsigned int DestroyPixelWand( PixelWand *wand );
+  unsigned int PixelSetBlack( PixelWand *wand, const double black );  
+  unsigned int PixelSetRed(   PixelWand *wand, const double red );
+  unsigned int PixelSetGreen( PixelWand *wand, const double green );
+  unsigned int PixelSetBlue(  PixelWand *wand, const double blue );
+
   // Read/Write:
   MagickBooleanType MagickReadImage(MagickWand*, const char*);
   MagickBooleanType MagickReadImageBlob(MagickWand*, const void*, const size_t);
@@ -133,6 +142,8 @@ ffi.cdef
   // Resize:
   MagickBooleanType MagickResizeImage(MagickWand*, const size_t, const size_t, const FilterTypes, const double);
 
+  // Rotate
+  unsigned int MagickRotateImage(MagickWand *wand, const PixelWand *background, const double degrees );
   // Set size:
   unsigned int MagickSetSize( MagickWand *wand, const unsigned long columns, const unsigned long rows );
 
