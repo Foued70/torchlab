@@ -1,4 +1,4 @@
-local path = require 'path'
+local path       = require 'path'
 local config     = require './config'
 local loader     = require '../data/loader'
 

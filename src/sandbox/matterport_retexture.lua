@@ -92,7 +92,7 @@ for sweep_no = 1,#poses do
    local remapper = projection.Remap.new(matter_proj,matter_gnom)
 
    local matter_view   = 
-      model.View.new(pose.local_to_global_position,
+      model.Photo.new(pose.local_to_global_position,
                      pose.local_to_global_rotation,
                      matter_hfov,
                      matter_vfov)  

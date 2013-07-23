@@ -16,7 +16,7 @@ function image.save (filename,tensor,colorspace,dimensions)
    if tensor:nDimension() == 2 then
       colorspace = "I"
       tensor = tensor:reshape(1,tensor:size(1),tensor:size(2))
-   elseif ((dimensions == "DHW") and (tensor:size(1) == 1)) or ((dimensions == "HWD") and (tensor:size(3) == 1) then 
+   elseif ((dimensions == "DHW") and (tensor:size(1) == 1)) or ((dimensions == "HWD") and (tensor:size(3) == 1)) then 
       colorspace = "I"
    end
    log.info("Saving", filename,colorspace,dimensions)
