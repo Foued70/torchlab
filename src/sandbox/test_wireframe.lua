@@ -64,7 +64,7 @@ pose_global = torch.Tensor({-1,0,0})
 pose_local = pose_global * -1
 
 for i = 1,n_views do 
-   local view = model.View.new(pose_local,q_rel_pose[i],hfov,vfov)  
+   local view = model.Photo.new(pose_local,q_rel_pose[i],hfov,vfov)  
    view:set_projection(camera)
    table.insert(views,view)
 end

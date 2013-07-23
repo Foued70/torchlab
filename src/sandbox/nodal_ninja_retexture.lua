@@ -35,7 +35,7 @@ matter_dir = params.matter_dir
 obj_file   = params.obj_file
 
 maxsize = 1024
-ppm     = 100
+ppm     = 300
 
 matter_pose_fname = util.fs.glob(matter_dir,"texture_info.txt")
 
@@ -46,7 +46,7 @@ end
 
 if util.fs.is_file(obj_file) then
    printf("using : %s", obj_file)
-   _G.scan = data.Obj.new(obj_file)
+   scan = data.Obj.new(obj_file)
 else
    error("Can't find the obj file (set -obj_file correctly)")
 end
@@ -105,7 +105,7 @@ for sweep_no = 1,4 do
    for i = 1,#images do
       log.tic()
       view   = 
-         model.View.new(pose.local_to_global_position,
+         model.Photo.new(pose.local_to_global_position,
                         pose.local_to_global_rotation,
                         hfov,
                         vfov) 
