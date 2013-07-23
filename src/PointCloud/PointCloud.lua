@@ -1,4 +1,3 @@
-local log = require '../util/log'
 local io = require 'io'
 local kdtree = kdtree.kdtree
 
@@ -26,7 +25,7 @@ function PointCloud:__init(pcfilename)
     if util.fs.is_file(pcfilename) then
       self:set_pc_file(pcfilename);
     else
-      log.error('arg #1 must either be empty or a valid file')
+      error('arg #1 must either be empty or a valid file')
     end
   end
 end
@@ -38,34 +37,58 @@ function PointCloud:set_pc_file(pcfilename)
     local count = 0;
     self.height = 0;
     self.width = 0;
+    self.format = 1;
     while true do
       local line = file:read();
       if line == nil or line:len() < 5 then 
         break 
       end
       count = count + 1
-      local begp = 1;
-      local endp = line:find(' ', begp) - 1;
-      local h = tonumber(line:sub(begp, endp)) + 1;
-      begp = endp + 2;
-      endp = line:find(' ', begp) - 1;
-      local w = tonumber(line:sub(begp, endp)) + 1;
-      if h > self.height then
-        self.height = h;
-      end
-      if w > self.width then
-        self.width = w;
-      end
+      if count == 1 then
+      	-- on first pass determine format
+      	local begp = 1;
+      	local endp = line:find(' ', begp) - 1;
+      	begp = endp + 2;
+	    endp = line:find(' ', begp) - 1;
+	    begp = endp + 2;
+	    endp = line:find(' ', begp) - 1;
+	    begp = endp + 2;
+	    endp = line:find(' ', begp) - 1;
+	    begp = endp + 2;
+	    endp = line:find(' ', begp) - 1;
+	    begp = endp + 2;
+	    endp = line:find(' ', begp);
+	    if not endp then
+	    	-- x y z r g b format
+	    	self.format = 0
+	    end	    
+	  end
+	  if self.format==1 then
+	      local begp = 1;
+    	  local endp = line:find(' ', begp) - 1;
+	      local h = tonumber(line:sub(begp, endp)) + 1;
+    	  begp = endp + 2;
+	      endp = line:find(' ', begp) - 1;
+    	  local w = tonumber(line:sub(begp, endp)) + 1;
+	      if h > self.height then
+    	    self.height = h;
+	      end
+    	  if w > self.width then
+        	self.width = w;
+	      end
+	    end
     end
     
     self.points = torch.zeros(count,3);
     self.rgb = torch.zeros(count,3);
     --self.normals = torch.zeros(count,3);
-    --self.curvatures = torch.zeros(count);
-    self.index = torch.zeros(self.height, self.width);
+    --self.curvatures = torch.zeros(count)
+    if self.format == 1 then
+	    self.index = torch.zeros(self.height, self.width);
+	end
     self.count = count;
 
-    log.info("count: "..self.count..", height: "..self.height..", width: "..self.width);
+    print("count: "..self.count..", height: "..self.height..", width: "..self.width);
     count = 0;
     file = io.open(pcfilename, 'r');
     while true do
@@ -74,33 +97,58 @@ function PointCloud:set_pc_file(pcfilename)
         break
       end
       count = count + 1
-      local begp = 1;
-      local endp = line:find(' ', begp) - 1;
-      local h = tonumber(line:sub(begp,endp)) + 1;
-      begp = endp + 2;
-      endp = line:find(' ', begp) - 1;
-      local w = tonumber(line:sub(begp,endp)) + 1;
-      begp = endp + 2;
-      endp = line:find(' ', begp) - 1;
-      local x = tonumber(line:sub(begp,endp));
-      begp = endp + 2;
-      endp = line:find(' ', begp) - 1;
-      local y = tonumber(line:sub(begp,endp));
-      begp = endp + 2;
-      endp = line:find(' ', begp) - 1;
-      local z = tonumber(line:sub(begp,endp));
-      begp = endp + 2;
-      endp = line:find(' ', begp) - 1;
-      local r = tonumber(line:sub(begp,endp));
-      begp = endp + 2;
-      endp = line:find(' ', begp) - 1;
-      local g = tonumber(line:sub(begp,endp));
-      begp = endp + 2;
-      endp = line:find('\r') - 1;
-      local b = tonumber(line:sub(begp,endp));
-      self.points[count] = torch.Tensor({x,y,z});
-      self.rgb[count] = torch.Tensor({r,g,b});
-      self.index[h][w]=count;
+      if self.format == 0 then
+      	-- x y z r g b format
+	  	local begp = 1;
+      	local endp = line:find(' ', begp) - 1;
+      	local x = tonumber(line:sub(begp,endp)) + 1;
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local y = tonumber(line:sub(begp,endp)) + 1;
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local z = tonumber(line:sub(begp,endp));
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local r = tonumber(line:sub(begp,endp));
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local g = tonumber(line:sub(begp,endp));
+      	begp = endp + 2;
+      	endp = line:len();
+      	local b = tonumber(line:sub(begp,endp));
+      	self.points[count] = torch.Tensor({x,y,z});
+      	self.rgb[count] = torch.Tensor({r,g,b});
+      else
+      	-- w h x y z r g b format
+      	local begp = 1;
+      	local endp = line:find(' ', begp) - 1;
+      	local h = tonumber(line:sub(begp,endp)) + 1;
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+	    local w = tonumber(line:sub(begp,endp)) + 1;
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local x = tonumber(line:sub(begp,endp));
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local y = tonumber(line:sub(begp,endp));
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local z = tonumber(line:sub(begp,endp));
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local r = tonumber(line:sub(begp,endp));
+      	begp = endp + 2;
+      	endp = line:find(' ', begp) - 1;
+      	local g = tonumber(line:sub(begp,endp));
+	    begp = endp + 2;
+     	endp = line:len();
+      	local b = tonumber(line:sub(begp,endp));
+      	self.points[count] = torch.Tensor({x,y,z});
+      	self.rgb[count] = torch.Tensor({r,g,b});
+      	self.index[h][w]=count;
+      end
     end
     
     self.centroid = self.points:mean(1);
@@ -108,7 +156,7 @@ function PointCloud:set_pc_file(pcfilename)
     self.maxval,self.maxind = self.points:max(1)
     
   else
-    log.error('arg #1 must be a valid xyz file')
+    error('arg #1 must be a valid xyz file')
   end
   
   collectgarbage();
@@ -204,7 +252,7 @@ function PointCloud:downsample(leafsize)
 end
 
 function PointCloud:make_3dtree()
-	self.kdtree = kdtree.new(self.points)
+	self.k3dtree = kdtree.new(self.points)
 	collectgarbage()
 end
 
