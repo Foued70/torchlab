@@ -176,7 +176,8 @@ function View:global_xyz_to_offset_and_mask(xyz,debug)
    return self.projection:angles_to_offset_and_mask(angles)
 end
 
--- rather than frustum just check a bunch of points on the face, reuse code hopefully fast enough.
+-- rather than frustum just check a bunch of points on the face, reuse
+-- code hopefully fast enough.
 function View:check_overlap(xyz,percent)
    percent = percent or 0.1
    -- compute offset and mask for xyz is added.
@@ -192,3 +193,6 @@ function View:project(xyz)
    return util.addr.remap(img, offset, mask)
 end
 
+function View:get_dirs(scale)
+   return geom.util.spherical_angles_to_unit_cartesian(self.projection:angles_map(scale))
+end
