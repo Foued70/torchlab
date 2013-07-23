@@ -11,7 +11,7 @@ local PointCloud = Class()
 local PC_FILE_EXTENSION = '.xyz'
 local PC_BINARY_EXTENSION = 'bin'
 
-function PointCloud:__init(pcfilename)
+function PointCloud:__init(pcfilename, radius)
   self.index = nil;
   self.height = 0;
   self.width = 0;
@@ -23,144 +23,147 @@ function PointCloud:__init(pcfilename)
   
   if pcfilename then
     if util.fs.is_file(pcfilename) then
-      self:set_pc_file(pcfilename);
+      self:set_pc_file(pcfilename, radius);
     else
       error('arg #1 must either be empty or a valid file')
     end
   end
 end
 
-function PointCloud:set_pc_file(pcfilename)
-  if pcfilename and util.fs.is_file(pcfilename) and util.fs.extname(pcfilename)==PC_FILE_EXTENSION then
+function PointCloud:set_pc_file(pcfilename, radius)
+	if pcfilename and util.fs.is_file(pcfilename) and util.fs.extname(pcfilename)==PC_FILE_EXTENSION then
     
-    local file = io.open(pcfilename, 'r');
-    local count = 0;
-    self.height = 0;
-    self.width = 0;
-    self.format = 1;
-    while true do
-      local line = file:read();
-      if line == nil or line:len() < 5 then 
-        break 
-      end
-      count = count + 1
-      if count == 1 then
-      	-- on first pass determine format
-      	local begp = 1;
-      	local endp = line:find(' ', begp) - 1;
-      	begp = endp + 2;
-	    endp = line:find(' ', begp) - 1;
-	    begp = endp + 2;
-	    endp = line:find(' ', begp) - 1;
-	    begp = endp + 2;
-	    endp = line:find(' ', begp) - 1;
-	    begp = endp + 2;
-	    endp = line:find(' ', begp) - 1;
-	    begp = endp + 2;
-	    endp = line:find(' ', begp);
-	    if not endp then
-	    	-- x y z r g b format
-	    	self.format = 0
-	    end	    
-	  end
-	  if self.format==1 then
-	      local begp = 1;
-    	  local endp = line:find(' ', begp) - 1;
-	      local h = tonumber(line:sub(begp, endp)) + 1;
-    	  begp = endp + 2;
-	      endp = line:find(' ', begp) - 1;
-    	  local w = tonumber(line:sub(begp, endp)) + 1;
-	      if h > self.height then
-    	    self.height = h;
-	      end
-    	  if w > self.width then
-        	self.width = w;
-	      end
-	    end
-    end
+    	local file = io.open(pcfilename, 'r');
+	    local count = 0;
+    	self.height = 0;
+	    self.width = 0;
+    	self.format = 1;
+    	local meanx = 0
+		local meany = 0
+	  	local meanz = 0
+	    while true do
+        	local line = file:read();
+			if line == nil or line:len() < 5 then 
+        		break 
+		    end
+		    
+      		count = count + 1
+      		
+	        if count == 1 then
+      	  		-- on first pass determine format
+      			local begp = 1;
+      			local endp = line:find(' ', begp) - 1;
+		      	begp = endp + 2;
+	    		endp = line:find(' ', begp) - 1;
+			    begp = endp + 2;
+	    		endp = line:find(' ', begp) - 1;
+			    begp = endp + 2;
+	    		endp = line:find(' ', begp) - 1;
+			    begp = endp + 2;
+	    		endp = line:find(' ', begp) - 1;
+			    begp = endp + 2;
+	    		endp = line:find(' ', begp);
+			    if not endp then
+	    			-- x y z r g b format
+			    	self.format = 0
+	    		end	    
+			end
+			
+	  		local begp = 1;
+		    local endp = line:find(' ', begp) - 1;
+		    local endp = line:find(' ', begp) - 1;
+		    if self.format==1 then
+		    	local h = tonumber(line:sub(begp, endp)) + 1;
+		   	  	begp = endp + 2;
+	      		endp = line:find(' ', begp) - 1;
+			   	local w = tonumber(line:sub(begp, endp)) + 1;
+	      		if h > self.height then
+    	    		self.height = h;
+	      		end
+    	  		if w > self.width then
+        			self.width = w;
+	      		end
+	      		begp = endp + 2;
+	      		endp = line:find(' ', begp) - 1;
+	      	end
+	  		--meanx = meanx + tonumber(line:sub(begp, endp));
+		    begp = endp + 2;
+			endp = line:find(' ', begp) - 1;
+	    	--meany = meany + tonumber(line:sub(begp, endp));
+			begp = endp + 2;
+		    endp = line:find(' ', begp) - 1;
+    		meanz = meanz + tonumber(line:sub(begp, endp));	
+    	end
     
-    self.points = torch.zeros(count,3);
-    self.rgb = torch.zeros(count,3);
-    --self.normals = torch.zeros(count,3);
-    --self.curvatures = torch.zeros(count)
-    if self.format == 1 then
-	    self.index = torch.zeros(self.height, self.width);
-	end
-    self.count = count;
+    	local meanpt = torch.Tensor({meanx, meany, meanz})/(count+0.000001)
+    
+	    self.points = torch.zeros(count,3);
+    	self.rgb = torch.zeros(count,3);
+	    if self.format == 1 then
+		    self.index = torch.zeros(self.height, self.width);
+		end
+    	self.count = count;
 
-    print("count: "..self.count..", height: "..self.height..", width: "..self.width);
-    count = 0;
-    file = io.open(pcfilename, 'r');
-    while true do
-      local line = file:read();
-      if line == nil or line:len() < 5 then
-        break
-      end
-      count = count + 1
-      if self.format == 0 then
-      	-- x y z r g b format
-	  	local begp = 1;
-      	local endp = line:find(' ', begp) - 1;
-      	local x = tonumber(line:sub(begp,endp)) + 1;
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local y = tonumber(line:sub(begp,endp)) + 1;
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local z = tonumber(line:sub(begp,endp));
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local r = tonumber(line:sub(begp,endp));
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local g = tonumber(line:sub(begp,endp));
-      	begp = endp + 2;
-      	endp = line:len();
-      	local b = tonumber(line:sub(begp,endp));
-      	self.points[count] = torch.Tensor({x,y,z});
-      	self.rgb[count] = torch.Tensor({r,g,b});
-      else
-      	-- w h x y z r g b format
-      	local begp = 1;
-      	local endp = line:find(' ', begp) - 1;
-      	local h = tonumber(line:sub(begp,endp)) + 1;
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-	    local w = tonumber(line:sub(begp,endp)) + 1;
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local x = tonumber(line:sub(begp,endp));
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local y = tonumber(line:sub(begp,endp));
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local z = tonumber(line:sub(begp,endp));
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local r = tonumber(line:sub(begp,endp));
-      	begp = endp + 2;
-      	endp = line:find(' ', begp) - 1;
-      	local g = tonumber(line:sub(begp,endp));
-	    begp = endp + 2;
-     	endp = line:len();
-      	local b = tonumber(line:sub(begp,endp));
-      	self.points[count] = torch.Tensor({x,y,z});
-      	self.rgb[count] = torch.Tensor({r,g,b});
-      	self.index[h][w]=count;
-      end
-    end
+    	print("count: "..self.count..", height: "..self.height..", width: "..self.width);
+	    count = 0;
+    	file = io.open(pcfilename, 'r');
+	    while true do
+    		local line = file:read();
+	      	if line == nil or line:len() < 5 then
+    	    	break
+	      	end
+    	  	local w,h,x,y,z,r,g,b
+    	  	local begp = 1;
+    	  	local endp = line:find(' ', begp) - 1;
+	      	if self.format == 1 then
+	      		h = tonumber(line:sub(begp,endp)) + 1;
+      			begp = endp + 2;
+		      	endp = line:find(' ', begp) - 1;
+	    		w = tonumber(line:sub(begp,endp)) + 1;
+		      	begp = endp + 2;
+      			endp = line:find(' ', begp) - 1;
+      		end
+    	  	
+		  	x = tonumber(line:sub(begp,endp));
+		  	begp = endp + 2;
+	  		endp = line:find(' ', begp) - 1;
+	        y = tonumber(line:sub(begp,endp));
+		    begp = endp + 2;
+    	  	endp = line:find(' ', begp) - 1;
+      		z = tonumber(line:sub(begp,endp));
+	      	begp = endp + 2;
+    	  	endp = line:find(' ', begp) - 1;
+      		r = tonumber(line:sub(begp,endp));
+	      	begp = endp + 2;
+    	  	endp = line:find(' ', begp) - 1;
+      		g = tonumber(line:sub(begp,endp));
+	      	begp = endp + 2;
+     		endp = line:len();
+  			b = tonumber(line:sub(begp,endp));
+      
+	    	if (not radius) or meanpt:dist(torch.Tensor({x,y,z})) < radius then
+      	  		count = count + 1
+      	  		self.points[count] = torch.Tensor({x,y,z});
+    	  		self.rgb[count] = torch.Tensor({r,g,b});
+	      		if self.format == 1 then
+    	  			self.index[h][w]=count;
+	      		end
+      		end
+    	end
     
-    self.centroid = self.points:mean(1);
-    self.minval,self.minind = self.points:min(1)
-    self.maxval,self.maxind = self.points:max(1)
+    	self.count = count
+    	self.points = self.points:sub(1,count)
+	    self.rgb = self.rgb:sub(1,count)
     
-  else
-    error('arg #1 must be a valid xyz file')
-  end
+    	self.centroid = self.points:mean(1);
+	    self.minval,self.minind = self.points:min(1)
+    	self.maxval,self.maxind = self.points:max(1)
+    
+	else
+    	error('arg #1 must be a valid xyz file')
+  	end
   
-  collectgarbage();
-  
+  	collectgarbage();
 end
 
 function PointCloud:flatten()
@@ -176,20 +179,24 @@ function PointCloud:flatten()
 end
 
 function PointCloud:make_panoramic_image()
-    self.image = torch.zeros(3, self.height, self.width);
-    local img = torch.zeros(self.height,self.width,3);
-    for i=1,self.height do
-      for j=1,self.width do
-        if self.index[i][j]==0 then
-          img[i][j]=torch.Tensor({0,0,0});
-        else
-          img[i][j]=self.rgb[self.index[i][j]];
-        end
-      end
+	if self.format == 1 then
+	    self.image = torch.zeros(3, self.height, self.width);
+    	local img = torch.zeros(self.height,self.width,3);
+	    for i=1,self.height do
+    	  for j=1,self.width do
+        	if self.index[i][j]==0 then
+	          img[i][j]=torch.Tensor({0,0,0});
+    	    else
+        	  img[i][j]=self.rgb[self.index[i][j]];
+	        end
+    	  end
+	    end
+    	collectgarbage()
+	    self.image = img:transpose(1,3):transpose(2,3);
+    	self.image = self.image/self.image:max();
+    else
+    	print("can't make panoramic image, no w/h info given")
     end
-    collectgarbage()
-    self.image = img:transpose(1,3):transpose(2,3);
-    self.image = self.image/self.image:max();
 end
 
 function PointCloud:make_flattened_images(scale)
