@@ -166,6 +166,14 @@ function PointCloud:set_pc_file(pcfilename, radius)
   	collectgarbage();
 end
 
+function PointCloud:write(filename)
+	local file = io.open(filename, 'w');
+	for i=1,self.count do
+		file:write(''..self.points[i][1]..' '..self.points[i][2]..' '..self.points[i][3]..' '..self.rgb[i][1]..' '..self.rgb[i][2]..' '..self.rgb[i][3]..'\n')
+	end
+	file:close()
+end
+
 function PointCloud:flatten()
 	self.flattenx = self.points:sub(1,self.count,2,3):clone()
 	self.flattenz = self.points:sub(1,self.count,1,2):clone()
@@ -199,27 +207,13 @@ function PointCloud:make_panoramic_image()
     end
 end
 
-function PointCloud:make_flattened_images(scale)
-	scale = scale + 0.000001
-	local ranges = self.maxval[1] - self.minval[1]
-	local pix = ranges/scale
-	self.imagex = torch.zeros(pix[3]+1,pix[2]+1,3)
-	self.imagey = torch.zeros(pix[3]+1,pix[1]+1,3)
-	self.imagez = torch.zeros(pix[1]+1,pix[2]+1,3)
-	for i=1,self.count do
-		local coord = (self.points[i]-self.minval[1])/scale
-		self.imagex[pix[3]-coord[3]+1][coord[2]+1] = self.imagex[pix[3]-coord[3]+1][coord[2]+1]+torch.Tensor({1,1,1})
-		self.imagey[pix[3]-coord[3]+1][coord[1]+1] = self.imagey[pix[3]-coord[3]+1][coord[1]+1]+torch.Tensor({1,1,1})
-		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+torch.Tensor({1,1,1})
+function PointCloud:downsample(leafsize, thresh)
+	--leafsize is edge length of voxel
+	--thresh is number of points required for a bin to count
+	if not thresh then
+		thresh = 1
 	end
-	collectgarbage()
-	self.imagex = self.imagex:transpose(1,3):transpose(2,3)/self.imagex:max()
-	self.imagey = self.imagey:transpose(1,3):transpose(2,3)/self.imagey:max()
-	self.imagez = self.imagez:transpose(1,3):transpose(2,3)/self.imagez:max()
-end
-
-function PointCloud:downsample(leafsize)
-	scale = leafsize + 0.000001
+	scale = leafsize + 0.000000001
 	local ranges = self.maxval[1] - self.minval[1]
 	local pix = ranges/scale
 	local bin = {}
@@ -234,7 +228,12 @@ function PointCloud:downsample(leafsize)
 			bin[coord[1]][coord[2]]={}
 		end
 		if not bin[coord[1]][coord[2]][coord[3]] then
-			bin[coord[1]][coord[2]][coord[3]]=i
+			bin[coord[1]][coord[2]][coord[3]]=0
+		end
+		if bin[coord[1]][coord[2]][coord[3]] <= thresh then
+			bin[coord[1]][coord[2]][coord[3]]=bin[coord[1]][coord[2]][coord[3]]+1
+		end
+		if bin[coord[1]][coord[2]][coord[3]] == thresh then
 			table.insert(pts, {i, (coord-1)*scale + self.minval[1]})
 		end
 	end
@@ -256,6 +255,26 @@ function PointCloud:downsample(leafsize)
     downsampled.maxval,downsampled.maxind = downsampled.points:max(1)
 	collectgarbage()
 	return downsampled
+end
+
+function PointCloud:make_flattened_images(scale)
+	scale = scale + 0.000000001
+	local ranges = self.maxval[1] - self.minval[1]
+	local pix = ranges/scale
+	
+	--self.imagex = torch.zeros(pix[3]+1,pix[2]+1,3)
+	--self.imagey = torch.zeros(pix[3]+1,pix[1]+1,3)
+	self.imagez = torch.zeros(pix[1]+1,pix[2]+1,3)
+	for i=1,self.count do
+		local coord = (self.points[i]-self.minval[1])/scale
+		--self.imagex[pix[3]-coord[3]+1][coord[2]+1] = self.imagex[pix[3]-coord[3]+1][coord[2]+1]+1
+		--self.imagey[pix[3]-coord[3]+1][coord[1]+1] = self.imagey[pix[3]-coord[3]+1][coord[1]+1]+1
+		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+1
+	end
+	collectgarbage()
+	--self.imagex = (self.imagex:pow(2):transpose(1,3):transpose(2,3)*256/self.imagex:max()):floor()
+	--self.imagey = (self.imagey:pow(2):transpose(1,3):transpose(2,3)*256/self.imagey:max()):floor()
+	self.imagez = (self.imagez:pow(2):transpose(1,3):transpose(2,3)*256/self.imagez:max()):floor()
 end
 
 function PointCloud:make_3dtree()
