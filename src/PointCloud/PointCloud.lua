@@ -289,7 +289,8 @@ function PointCloud:make_flattened_images(scale)
 	for i=1,self.count do
 		local coord = (self.points[i]-minv)/scale
 		--local dist = self.points[i]:dist(self.centroid[1])
-		local dist = math.sqrt(math.pow(self.points[i][1],2)+math.pow(self.points[i][2],2))
+		--local dist = math.sqrt(math.pow(self.points[i][1],2)+math.pow(self.points[i][2],2))
+		local dist = math.pow(self.points[i][1],2)+math.pow(self.points[i][2],2)
 		--self.imagex[pix[3]-coord[3]+1][coord[2]+1] = self.imagex[pix[3]-coord[3]+1][coord[2]+1]+1
 		--self.imagey[pix[3]-coord[3]+1][coord[1]+1] = self.imagey[pix[3]-coord[3]+1][coord[1]+1]+1
 		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+dist
