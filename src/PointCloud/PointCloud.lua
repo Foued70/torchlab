@@ -37,6 +37,15 @@ function PointCloud:__init(pcfilename, radius, numstd)
   end
 end
 
+function PointCloud:reset_point_stats()
+	self.centroid=torch.Tensor({{0,0,self.point:mean(1)[1][3]}})
+	self.minval,self.minind = self.points:min(1)
+    self.maxval,self.maxind = self.points:max(1)
+    local d1 = (self.maxval-self.centroid)[1]
+    local d2 = (self.centroid-self.minval)[1]
+    self.radius=torch.Tensor({math.max(d1[1],d2[1]),math.max(d1[2],d2[2]),math.max(d1[3],d2[3])})
+end
+
 function PointCloud:set_pc_file(pcfilename, radius, numstd)
 	if pcfilename and util.fs.is_file(pcfilename) and util.fs.extname(pcfilename)==PC_FILE_EXTENSION then
     
@@ -179,11 +188,7 @@ function PointCloud:set_pc_file(pcfilename, radius, numstd)
 		end
 		collectgarbage()
 
-    	self.minval,self.minind = self.points:min(1)
-    	self.maxval,self.maxind = self.points:max(1)
-    	local d1 = (self.maxval-self.centroid)[1]
-    	local d2 = (self.centroid-self.minval)[1]
-    	self.radius=torch.Tensor({math.max(d1[1],d2[1]),math.max(d1[2],d2[2]),math.max(d1[3],d2[3])})
+    	self:reset_point_stats()
     	
     	print("pass 2: count: "..self.count..", height: "..self.height..", width: "..self.width);
     
@@ -267,12 +272,7 @@ function PointCloud:downsample(leafsize)
 	downsampled.rgb = torch.Tensor(rgb)
 	downsampled.count = #pts
 	
-	downsampled.centroid = self.centroid;
-    downsampled.minval,downsampled.minind = downsampled.points:min(1)
-    downsampled.maxval,downsampled.maxind = downsampled.points:max(1)
-    local d1 = (downsampled.maxval-downsampled.centroid)[1]
-    local d2 = (downsampled.centroid-downsampled.minval)[1]
-    downsampled.radius=torch.Tensor({math.max(d1[1],d2[1]),math.max(d1[2],d2[2]),math.max(d1[3],d2[3])})
+	downsampled:reset_point_stats()
 	collectgarbage()
 	return downsampled
 end
@@ -318,11 +318,7 @@ function PointCloud:make_sub_pointcloud(index_tensor)
 			sub_ptcld.points[i] = self.points[index_tensor[i]]
 			sub_ptcld.rgb[i] = self.rgb[index_tensor[i]]
 		end
-		sub_ptcld.minval,sub_ptcld.minind = sub_ptcld.points:min(1)
-    	sub_ptcld.maxval,sub_ptcld.maxind = sub_ptcld.points:max(1)
-	    local d1 = (sub_ptcld.maxval-sub_ptcld.centroid)[1]
-    	local d2 = (sub_ptcld.centroid-sub_ptcld.minval)[1]
-	    sub_ptcld.radius=torch.Tensor({math.max(d1[1],d2[1]),math.max(d1[2],d2[2]),math.max(d1[3],d2[3])})
+		sub_ptcld:reset_point_stats()
     end
     collectgarbage()
     return sub_ptcld
