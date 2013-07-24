@@ -60,8 +60,15 @@ local function isBestInWindow(hT, r, a, winR, winA)
       if val < hT[i][jj] then
         return false
       end
+      if (r < winR) then
+      	jj = (a+j-1+(numAngles/2)) % numAngles + 1
+      	if val < hT[i][jj] then
+        	return false
+      	end
+      end
     end
   end
+  
   return true
 end
 
@@ -72,7 +79,7 @@ function hough.find_best_lines(hT, numBest)
   for ir = 1,numRadius do
     for ja = 1,numAngles do
       local val = hT[ir][ja]
-      if val > 0 and isBestInWindow(hT, ir, ja, math.ceil(numRadius/100), math.ceil(numAngles/90)) then
+      if val > 0 and isBestInWindow(hT, ir, ja, math.ceil(numRadius/50), math.ceil(numAngles/45)) then
         for bb = 1,numBest do
           if val > ret[bb][3] then
             if bb < numBest then
@@ -96,7 +103,7 @@ function hough.find_best_lines_vertical(hT, numBest)
   for ir = 1,numRadius do
     for ja = 1,numAngles do
       local val = hT[ir][ja]
-      if val > 0 and isBestInWindow(hT, ir, ja, math.ceil(numRadius/100), 0) then
+      if val > 0 and isBestInWindow(hT, ir, ja, math.ceil(numRadius/50), 0) then
         for bb = 1,numBest do
           if val > ret[bb][3] then
             if bb < numBest then
@@ -140,10 +147,10 @@ function hough.draw_line (img,r,a, numRadius, numAngles, red, grn, blu)
         img:sub(3,3,math.max(1,row-2),math.min(heigt, row+2),math.max(1,col-1),math.min(width,col+1)):fill(blu)
       end
       if row == 1 or row == heigt then
-        printf("[row,col] : [%s, %s]", row, col)
+        print("[row,col] : ["..row..", "..col.."]")
       end
       if col == 1 or col == width then
-        printf("[row,col] : [%s, %s]", row, col)
+        print("[row,col] : ["..row..", "..col.."]")
       end
     end
     
@@ -160,10 +167,10 @@ function hough.draw_line (img,r,a, numRadius, numAngles, red, grn, blu)
         img:sub(3,3,math.max(1,row-1),math.min(heigt, row+1),math.max(1,col-2),math.min(width,col+2)):fill(blu)
       end
       if row == 1 or row == heigt then
-        printf("[row,col] : [%s, %s]", row, col)
+        print("[row,col] : ["..row..", "..col.."]")
       end
       if col == 1 or col == width then
-        printf("[row,col] : [%s, %s]", row, col)
+        print("[row,col] : ["..row..", "..col.."]")
       end
       
     end
@@ -200,13 +207,13 @@ function hough.draw_line_vertical (img,r,a, numRadius, numAngles, red, grn, blu)
       img:sub(2,2,math.max(1,row),math.min(heigt, row),math.max(1,col),math.min(width,col)):fill(grn)
       img:sub(3,3,math.max(1,row),math.min(heigt, row),math.max(1,col),math.min(width,col)):fill(blu)
     else
-      printf("WEIRD STUFF: width - %s, maxRadius - %s, rad - %s, col - %s, numRadius - %s", width, maxRadius, rad, col, numRadius)
+      print("WEIRD STUFF: width - "..width..", maxRadius - "..maxRadius..", rad - "..rad..", col - "..col..", numRadius - "..numRadius)
     end
     if row == 1 or row == heigt then
-      printf("[row,col] : [%s, %s]", row, col)
+      print("[row,col] : ["..row..", "..col.."]")
     end
     if col == 1 or col == width then
-      printf("[row,col] : [%s, %s]", row, col)
+      print("[row,col] : ["..row..", "..col.."]")
     end
 
   end
