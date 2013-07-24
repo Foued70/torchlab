@@ -86,7 +86,8 @@ function PointCloud:set_pc_file(pcfilename, radius, numstd)
 		    		if h==nil then
 		    			break
 		    		end
-		    		
+		    		h=h+1
+		    		w=w+1
 		    	end
 		   	  	x,y,z,r,g,b = file:read('*number', '*number','*number', '*number','*number', '*number')
 	  			if x == nil then
@@ -145,6 +146,8 @@ function PointCloud:set_pc_file(pcfilename, radius, numstd)
 		    		if h==nil then
 		    			break
 		    		end
+		    		h=h+1
+		    		w=w+1
 		    	end
 		   	  	x,y,z,r,g,b = file:read('*number', '*number','*number', '*number','*number', '*number')
 	  			if x == nil then
@@ -174,7 +177,14 @@ function PointCloud:set_pc_file(pcfilename, radius, numstd)
 	    if self.format == 1 then
 		    self.index = torch.zeros(self.height, self.width);
 		    for i=1,#hw_table do
-		    	self.index[hw_table[i][1]][hw_table[i][2]]=hw_table[i][3]
+		    	local h = hw_table[i][1]
+		    	local w = hw_table[i][2]
+		    	local c = hw_table[i][3]
+		    	if h==0 or w == 0 or h>self.index:size(1) or w>self.index:size(2) then
+		    		print('i: '..i..', h: '..h..', w: '..w..', c: '..c)
+		    		print(self.index:size())
+		    	end
+		    	self.index[h][w]=c
 		    end
 		end
 		collectgarbage()
