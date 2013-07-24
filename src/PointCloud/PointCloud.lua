@@ -38,7 +38,7 @@ function PointCloud:__init(pcfilename, radius, numstd)
 end
 
 function PointCloud:reset_point_stats()
-	self.centroid=torch.Tensor({{0,0,self.point:mean(1)[1][3]}})
+	self.centroid=torch.Tensor({{0,0,self.points:mean(1)[1][3]}})
 	self.minval,self.minind = self.points:min(1)
     self.maxval,self.maxind = self.points:max(1)
     local d1 = (self.maxval-self.centroid)[1]
