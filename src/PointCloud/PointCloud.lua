@@ -11,7 +11,7 @@ local PointCloud = Class()
 local PC_FILE_EXTENSION = '.xyz'
 local PC_BINARY_EXTENSION = 'bin'
 
-function PointCloud:__init(pcfilename, radius)
+function PointCloud:__init(pcfilename, radius, numstd)
   self.index = nil;
   self.height = 0;
   self.width = 0;
@@ -19,38 +19,48 @@ function PointCloud:__init(pcfilename, radius)
   self.rgb = nil;
   self.count = 0;
   self.centroid = torch.Tensor({{0,0,0}});
-
+  if (not radius) then
+  	--default radius prune
+  	radius = 250
+  end
+  if (not numstd) then
+  	--default number of standard dev prune
+  	numstd = 3
+  end
   
   if pcfilename then
     if util.fs.is_file(pcfilename) then
-      self:set_pc_file(pcfilename, radius);
+      self:set_pc_file(pcfilename, radius, numstd);
     else
       error('arg #1 must either be empty or a valid file')
     end
   end
 end
 
-function PointCloud:set_pc_file(pcfilename, radius)
+function PointCloud:set_pc_file(pcfilename, radius, numstd)
 	if pcfilename and util.fs.is_file(pcfilename) and util.fs.extname(pcfilename)==PC_FILE_EXTENSION then
     
     	local file = io.open(pcfilename, 'r');
 	    local count = 0;
     	self.height = 0;
 	    self.width = 0;
-    	self.format = 1;
     	local meanx = 0
 		local meany = 0
 	  	local meanz = 0
+		local hw_table={}
+		local xyz_table={}
+		local rgb_table={}
+		-- assume z is flatter
+		local rad2d = math.sqrt(math.pow(radius,2)*2/2.25)
+		
 	    while true do
-        	local line = file:read();
-			if line == nil or line:len() < 5 then 
-        		break 
-		    end
-		    
-      		count = count + 1
-      		
-	        if count == 1 then
-      	  		-- on first pass determine format
+	    	if (not self.format) then
+	    		self.format = 1
+	        	local line = file:read();
+				if line == nil or line:len() < 5 then 
+        			break 
+		    	end
+		    	-- on first pass determine format
       			local begp = 1;
       			local endp = line:find(' ', begp) - 1;
 		      	begp = endp + 2;
@@ -66,98 +76,116 @@ function PointCloud:set_pc_file(pcfilename, radius)
 			    if not endp then
 	    			-- x y z r g b format
 			    	self.format = 0
-	    		end	    
+	    		end
+	    		file:close()
+	    		file = io.open(pcfilename, 'r');
+	    	else
+	    		local h,w,x,y,z,r,g,b
+				if self.format==1 then
+		    		h,w = file:read('*number', '*number')
+		    		if h==nil then
+		    			break
+		    		end
+		    		
+		    	end
+		   	  	x,y,z,r,g,b = file:read('*number', '*number','*number', '*number','*number', '*number')
+	  			if x == nil then
+	  				break
+	  			end
+	  			
+	  			if math.sqrt(math.pow(x,2)+math.pow(y,2)) < rad2d then
+	  				count = count + 1
+      	  			meanz = meanz + z
+					table.insert(xyz_table,{x,y,z})
+					table.insert(rgb_table,{r,g,b})
+	    	  		if self.format == 1 then
+    	  				if h > self.height then
+	    	    			self.height = h;
+			      		end
+    			  		if w > self.width then
+        					self.width = w;
+	      				end
+	      				table.insert(hw_table,{h,w,count})
+	      			end
+      			end
 			end
-			
-	  		local begp = 1;
-		    local endp = line:find(' ', begp) - 1;
-		    local endp = line:find(' ', begp) - 1;
-		    if self.format==1 then
-		    	local h = tonumber(line:sub(begp, endp)) + 1;
-		   	  	begp = endp + 2;
-	      		endp = line:find(' ', begp) - 1;
-			   	local w = tonumber(line:sub(begp, endp)) + 1;
-	      		if h > self.height then
-    	    		self.height = h;
-	      		end
-    	  		if w > self.width then
-        			self.width = w;
-	      		end
-	      		begp = endp + 2;
-	      		endp = line:find(' ', begp) - 1;
-	      	end
-	  		--meanx = meanx + tonumber(line:sub(begp, endp));
-		    begp = endp + 2;
-			endp = line:find(' ', begp) - 1;
-	    	--meany = meany + tonumber(line:sub(begp, endp));
-			begp = endp + 2;
-		    endp = line:find(' ', begp) - 1;
-    		meanz = meanz + tonumber(line:sub(begp, endp));	
     	end
     
-    	local meanpt = torch.Tensor({meanx, meany, meanz})/(count+0.000001)
+    	file:close()
+    	collectgarbage()
     
-	    self.points = torch.zeros(count,3);
-    	self.rgb = torch.zeros(count,3);
+	    self.points = torch.Tensor(xyz_table)
+		self.count = count;
+		self.centroid = torch.Tensor({{meanx, meany, meanz}})/(count+0.000001)
+		local stdrd = math.sqrt((self.points-self.centroid:repeatTensor(self.count,1)):pow(2):sum(2):mean())
+		local perc = 0.75
+		
+		print("pass 1: count: "..self.count..", height: "..self.height..", width: "..self.width);
+		print("radius: "..radius..", stdrd: "..(stdrd*numstd))
+		
+		if (perc*radius) > (stdrd * numstd) then
+			--only run this if stdrd significantly smaller
+			radius = stdrd * numstd
+			print("make second pass with new radius: "..radius)
+		
+			count = 0
+			hw_table={}
+			xyz_table={}
+			rgb_table={}
+			meanx = 0
+			meany = 0
+	  		meanz = 0
+			
+			file = io.open(pcfilename, 'r');
+		
+		    while true do
+	    		local h,w,x,y,z,r,g,b
+				if self.format==1 then
+		    		h,w = file:read('*number', '*number')
+		    		if h==nil then
+		    			break
+		    		end
+		    	end
+		   	  	x,y,z,r,g,b = file:read('*number', '*number','*number', '*number','*number', '*number')
+	  			if x == nil then
+	  				break
+	  			end
+	  			
+	  			if self.centroid[1]:dist(torch.Tensor({x,y,z})) < radius then
+	  				count = count + 1
+      	  			meanz = meanz + z
+					table.insert(xyz_table,{x,y,z})
+					table.insert(rgb_table,{r,g,b})
+	    	  		if self.format == 1 then
+	      				table.insert(hw_table,{h,w,count})
+	      			end
+      			end
+			end
+			file:close()
+			collectgarbage()
+			
+			self.points = torch.Tensor(xyz_table)
+			self.count = count;
+			self.centroid = torch.Tensor({{meanx, meany, meanz}})/(count+0.000001)
+    	end
+    	collectgarbage()
+    	
+    	self.rgb = torch.Tensor(rgb_table)
 	    if self.format == 1 then
 		    self.index = torch.zeros(self.height, self.width);
+		    for i=1,#hw_table do
+		    	self.index[hw_table[i][1]][hw_table[i][2]]=hw_table[i][3]
+		    end
 		end
-    	self.count = count;
+		collectgarbage()
 
-    	print("count: "..self.count..", height: "..self.height..", width: "..self.width);
-	    count = 0;
-    	file = io.open(pcfilename, 'r');
-	    while true do
-    		local line = file:read();
-	      	if line == nil or line:len() < 5 then
-    	    	break
-	      	end
-    	  	local w,h,x,y,z,r,g,b
-    	  	local begp = 1;
-    	  	local endp = line:find(' ', begp) - 1;
-	      	if self.format == 1 then
-	      		h = tonumber(line:sub(begp,endp)) + 1;
-      			begp = endp + 2;
-		      	endp = line:find(' ', begp) - 1;
-	    		w = tonumber(line:sub(begp,endp)) + 1;
-		      	begp = endp + 2;
-      			endp = line:find(' ', begp) - 1;
-      		end
-    	  	
-		  	x = tonumber(line:sub(begp,endp));
-		  	begp = endp + 2;
-	  		endp = line:find(' ', begp) - 1;
-	        y = tonumber(line:sub(begp,endp));
-		    begp = endp + 2;
-    	  	endp = line:find(' ', begp) - 1;
-      		z = tonumber(line:sub(begp,endp));
-	      	begp = endp + 2;
-    	  	endp = line:find(' ', begp) - 1;
-      		r = tonumber(line:sub(begp,endp));
-	      	begp = endp + 2;
-    	  	endp = line:find(' ', begp) - 1;
-      		g = tonumber(line:sub(begp,endp));
-	      	begp = endp + 2;
-     		endp = line:len();
-  			b = tonumber(line:sub(begp,endp));
-      
-	    	if (not radius) or meanpt:dist(torch.Tensor({x,y,z})) < radius then
-      	  		count = count + 1
-      	  		self.points[count] = torch.Tensor({x,y,z});
-    	  		self.rgb[count] = torch.Tensor({r,g,b});
-	      		if self.format == 1 then
-    	  			self.index[h][w]=count;
-	      		end
-      		end
-    	end
-    
-    	self.count = count
-    	self.points = self.points:sub(1,count)
-	    self.rgb = self.rgb:sub(1,count)
-    
-    	self.centroid = self.points:mean(1);
-	    self.minval,self.minind = self.points:min(1)
+    	self.minval,self.minind = self.points:min(1)
     	self.maxval,self.maxind = self.points:max(1)
+    	local d1 = (self.maxval-self.centroid)[1]
+    	local d2 = (self.centroid-self.minval)[1]
+    	self.radius=torch.Tensor({math.max(d1[1],d2[1]),math.max(d1[2],d2[2]),math.max(d1[3],d2[3])})
+    	
+    	print("pass 2: count: "..self.count..", height: "..self.height..", width: "..self.width);
     
 	else
     	error('arg #1 must be a valid xyz file')
@@ -207,17 +235,14 @@ function PointCloud:make_panoramic_image()
     end
 end
 
-function PointCloud:downsample(leafsize, thresh)
+function PointCloud:downsample(leafsize)
 	--leafsize is edge length of voxel
-	--thresh is number of points required for a bin to count
-	if not thresh then
-		thresh = 1
-	end
 	scale = leafsize + 0.000000001
 	local ranges = self.maxval[1] - self.minval[1]
 	local pix = ranges/scale
 	local bin = {}
 	local pts = {}
+	local rgb = {}
 	for i=1,self.count do
 		local coord = (self.points[i]-self.minval[1])/scale + 1
 		coord:floor()
@@ -228,48 +253,46 @@ function PointCloud:downsample(leafsize, thresh)
 			bin[coord[1]][coord[2]]={}
 		end
 		if not bin[coord[1]][coord[2]][coord[3]] then
-			bin[coord[1]][coord[2]][coord[3]]=0
-		end
-		if bin[coord[1]][coord[2]][coord[3]] <= thresh then
-			bin[coord[1]][coord[2]][coord[3]]=bin[coord[1]][coord[2]][coord[3]]+1
-		end
-		if bin[coord[1]][coord[2]][coord[3]] == thresh then
-			table.insert(pts, {i, (coord-1)*scale + self.minval[1]})
+			bin[coord[1]][coord[2]][coord[3]]=1
+			local pt = (coord-1)*scale + self.minval[1]
+			table.insert(pts, {pt[1],pt[2],pt[3]})
+			table.insert(rgb, {self.rgb[i][1],self.rgb[i][2],self.rgb[i][3]})
 		end
 	end
 	bin=nil
 	local downsampled = PointCloud.new()
-	downsampled.height = self.height;
-  	downsampled.width = self.width;
-	downsampled.points = torch.Tensor(#pts,3)
-	downsampled.rgb = torch.Tensor(#pts,3)
-	downsampled.index = torch.Tensor(#pts,2)
+	downsampled.height = 0;
+  	downsampled.width = 0;
+	downsampled.points = torch.Tensor(pts)
+	downsampled.rgb = torch.Tensor(rgb)
 	downsampled.count = #pts
 	
-	for i=1,#pts do
-		downsampled.points[i]=pts[i][2]
-		downsampled.rgb[i] = self.rgb[pts[i][1]]
-	end
-	downsampled.centroid = downsampled.points:mean(1);
+	downsampled.centroid = self.centroid;
     downsampled.minval,downsampled.minind = downsampled.points:min(1)
     downsampled.maxval,downsampled.maxind = downsampled.points:max(1)
+    local d1 = (downsampled.maxval-downsampled.centroid)[1]
+    local d2 = (downsampled.centroid-downsampled.minval)[1]
+    downsampled.radius=torch.Tensor({math.max(d1[1],d2[1]),math.max(d1[2],d2[2]),math.max(d1[3],d2[3])})
 	collectgarbage()
 	return downsampled
 end
 
 function PointCloud:make_flattened_images(scale)
 	scale = scale + 0.000000001
-	local ranges = self.maxval[1] - self.minval[1]
+	local ranges = self.radius*2
+	local minv = self.radius*(-1)
+	local maxv = self.radius
 	local pix = ranges/scale
-	
 	--self.imagex = torch.zeros(pix[3]+1,pix[2]+1,3)
 	--self.imagey = torch.zeros(pix[3]+1,pix[1]+1,3)
 	self.imagez = torch.zeros(pix[1]+1,pix[2]+1,3)
 	for i=1,self.count do
-		local coord = (self.points[i]-self.minval[1])/scale
+		local coord = (self.points[i]-minv)/scale
+		--local dist = self.points[i]:dist(self.centroid[1])
+		local dist = math.sqrt(math.pow(self.points[i][1],2)+math.pow(self.points[i][2],2))
 		--self.imagex[pix[3]-coord[3]+1][coord[2]+1] = self.imagex[pix[3]-coord[3]+1][coord[2]+1]+1
 		--self.imagey[pix[3]-coord[3]+1][coord[1]+1] = self.imagey[pix[3]-coord[3]+1][coord[1]+1]+1
-		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+1
+		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+dist
 	end
 	collectgarbage()
 	--self.imagex = (self.imagex:pow(2):transpose(1,3):transpose(2,3)*256/self.imagex:max()):floor()
@@ -294,9 +317,11 @@ function PointCloud:make_sub_pointcloud(index_tensor)
 			sub_ptcld.points[i] = self.points[index_tensor[i]]
 			sub_ptcld.rgb[i] = self.rgb[index_tensor[i]]
 		end
-		sub_ptcld.centroid = sub_ptcld.points:mean(1)
-	    sub_ptcld.minval,sub_ptcld.minind = sub_ptcld.points:min(1)
+		sub_ptcld.minval,sub_ptcld.minind = sub_ptcld.points:min(1)
     	sub_ptcld.maxval,sub_ptcld.maxind = sub_ptcld.points:max(1)
+	    local d1 = (sub_ptcld.maxval-sub_ptcld.centroid)[1]
+    	local d2 = (sub_ptcld.centroid-sub_ptcld.minval)[1]
+	    sub_ptcld.radius=torch.Tensor({math.max(d1[1],d2[1]),math.max(d1[2],d2[2]),math.max(d1[3],d2[3])})
     end
     collectgarbage()
     return sub_ptcld
