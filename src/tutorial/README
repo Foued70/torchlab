@@ -1,0 +1,18 @@
+These tutorials expand on Clement's 
+
+https://github.com/clementfarabet/torch-tutorials
+
+and have been adapted for cloudlab (torch+luvit)
+
+You should defintely look up torch's manual
+
+http://www.torch.ch/manual/index
+
+You can run the tutorials in this directory in cloudlab
+
+$ cloudlab
+> require './1_tensor_storage'
+
+...
+
+> require './2_tensor_ops'
