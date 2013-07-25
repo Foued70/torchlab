@@ -5,8 +5,12 @@ INCLUDE(../common.cmake REQUIRED)
 
 FIND_PACKAGE( OpenCV REQUIRED )
 
+LINK_DIRECTORIES(${install_lib})
+
+SET(package luaopencv)
+
 SET(src luaopencv.cpp)
 
-ADD_FFI_LIB(luaopencv "${src}")
+ADD_FFI_LIB(${package} ${src})
 
-TARGET_LINK_LIBRARIES(luaopencv ${OpenCV_LIBS})
+TARGET_LINK_LIBRARIES(${package} ${OpenCV_LIBS} luaT TH)

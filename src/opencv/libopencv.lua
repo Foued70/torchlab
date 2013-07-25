@@ -94,7 +94,7 @@ libopencv_core = util.ffi.load('libopencv_core')
 libopencv = util.ffi.load('libluaopencv')
 
 io = require 'io'
-ctorch = util.ctorch
+require '../util/ctorch'
 
 opencv = {}
 
