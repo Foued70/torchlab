@@ -490,3 +490,5 @@ eval [[ U:min(),U:max() ]]
 eval [[ V:min(),V:max() ]]
 
 print [[ Still 3x slower than our best DHW ]] 
+
+print [[ More tensor operations at http://www.torch.ch/manual/torch/maths ]]
