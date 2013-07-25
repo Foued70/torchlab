@@ -57,10 +57,23 @@ function kdtree:radius_search(reference_point, radius, max_num_neighbors, flann_
 		mnn = max_num_neighbors
 	end
 	
-	local indices, dists
+	local indices, dists, retsize
 	if self.index then
 		indices, dists = libflann.radius_search(self.index, reference_point, mnn, radius, flann_params)
+		local size = 0
+		while (size < mnn) and (indices[size+1] > -1) do
+			size = size + 1
+		end
+		
+		retsize = size
+		
+		if size == 0 then
+			size = 1	
+		end
+	
+		indices = indices:sub(1,size):clone()
+		dists = dists:sub(1,size):clone()
 	end
 	
-	return indices, dists
+	return indices, dists, retsize
 end
