@@ -2,7 +2,6 @@ Install prereqs:
 > brew install cmake
 > brew install readline
 > brew link readline
-> brew install rlwrap
 > brew tap homebrew/versions
 > brew install gcc48
 

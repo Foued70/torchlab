@@ -89,3 +89,5 @@ clean:
 	rm -rf $(install_root)/lib/luvit/libpaths.luvit
 	rm -rf $(install_root)/lib/luvit/libsys.luvit
 	rm -rf $(install_root)/lib/luvit/libtorch.luvit
+
+	cd $(git_clone); git pull; git checkout $(ver)

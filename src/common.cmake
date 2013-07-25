@@ -14,9 +14,10 @@ set(CMAKE_CXX_FLAGS "-std=gnu++11" CACHE STRING "" FORCE)
 set(CMAKE_SHARED_LINKER_FLAGS "-undefined dynamic_lookup -L${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_SHARED_LINKER_FLAGS}")
 
 set(Lua_INCLUDES ${install_root}/include/luvit/luajit )
+set(Luvit_INCLUDES ${install_root}/include/luvit ${install_root}/include/luvit/uv )
 set(Torch_INCLUDES ${install_root}/include ${install_root}/include/torch ${install_root}/include/torch/TH )
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${Lua_INCLUDES} ${Torch_INCLUDES})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${Lua_INCLUDES} ${Luvit_INCLUDES} ${Torch_INCLUDES})
 
 MACRO(ADD_LUVIT_LIB package src)
   ADD_LIBRARY(${package} SHARED ${src})
