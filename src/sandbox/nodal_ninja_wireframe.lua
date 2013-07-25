@@ -112,7 +112,7 @@ for sweep_no = 1,4 do
    matter_cy   = matter_height * pose.center_v
 
    _G.matter_view   = 
-      model.View.new(pose.local_to_global_position,
+      model.Photo.new(pose.local_to_global_position,
                      pose.local_to_global_rotation,
                      matter_hfov,
                      matter_vfov)  

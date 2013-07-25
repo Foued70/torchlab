@@ -1,299 +1,167 @@
-local image = require '../image'
-local path = require 'path'
---require 'math'
+local Photo = Class()
 
-local LensSensor = projection.LensSensor
-local projection = projection.util
 local Ray = geom.Ray
--- local geom = geom.util
 
 local bihtree = model.bihtree
 local loader = require '../data/loader'
 local interpolate = model.interpolate
+local normalize = geom.util.normalize
 
-local Photo = Class()
+-- TODO add back the link to sweep
+-- function Photo:__init(parent_sweep, image_path)
+--   self.sweep = parent_sweep
 
-local REQUIRED_CALIBRATION_PAIRS = 4
+function Photo:__init(local_to_global_position, 
+                     local_to_global_rotation, 
+                     hfov, vfov, clip_distance)
 
-function Photo:__write_keys()
-  return {
-    'calibration_pairs', 'pairs_calibrated', 'vertex_set', 'image_coordinate_set', 
-    'white_wall', 'name', 'image_path', 'offset_position', 'offset_rotation', 'lens',
-    'rotation', 'rotation_r', 'position'
-  }
+   self.hfov                     = hfov
+   self.vfov                     = vfov
+   self.local_to_global_position = local_to_global_position:clone()
+   self.local_to_global_rotation = local_to_global_rotation:clone()
+   self.global_to_local_position = 
+      local_to_global_position:clone():mul(-1)
+   self.global_to_local_rotation = 
+      geom.quaternion.conjugate(local_to_global_rotation)
+
+   -- store this for information and xyz angle computation.  Can't change.
+   self.forward_vector = torch.Tensor({0,1,0})
 end
 
-function Photo:__init(parent_sweep, image_path)
-  self.sweep = parent_sweep
-  self.calibration_pairs = torch.Tensor(REQUIRED_CALIBRATION_PAIRS,5):fill(0)
-  self.pairs_calibrated = 0
-  self.vertex_set = false
-  self.image_coordinate_set = false
-  self.white_wall = false
-
-  self.name = path.basename(image_path)
-  self.image_path = image_path
-  self.image_data_raw = nil
-  self.image_data_rectilinear = nil
-  self.image_data_equirectangular = nil
-  
-  self.offset_position = nil
-  self.offset_rotation = nil
-  self.rotation = nil
-  self.rotation_r = nil
-  self.position = nil
-  
-  self.lens = nil
+-- move vertical
+function Photo:vertical_offset(z)
+   self.local_to_global_position[3] = self.local_to_global_position[3] + z
+   self.global_to_local_position[3] = self.local_to_global_position[3] * -1
 end
 
-function Photo:add_vertex(vertex_position)
-  if self.pairs_calibrated < REQUIRED_CALIBRATION_PAIRS then
-    local pair_index = self.pairs_calibrated + 1
-    self.calibration_pairs[pair_index]:sub(1, 3):copy(vertex_position)
-    self.vertex_set = true
-    self:update_calibration_status()
-  end
+function Photo:set_image_path(image_path,max_size)
+   self.image_path = image_path
+   self.max_size   = max_size
+   if not util.fs.is_file(self.image_path) then
+      error("can't find ".. self.image_path)
+   end
+   log.info("Loading image from path:", "\""..self.image_path.."\"")
+   -- use the wand to store the image data
+   self.wand = image.Wand.new(self.image_path,self.max_size)
+   self.width, self.height = self.wand:size()
 end
 
-function Photo:add_image_coordinate(screen_position)
-  if self.pairs_calibrated < REQUIRED_CALIBRATION_PAIRS then
-    local pair_index = self.pairs_calibrated + 1
-    self.calibration_pairs[pair_index]:sub(4, 5):copy(screen_position)
-    self.image_coordinate_set = true
-    self:update_calibration_status()
-  end
+function Photo:get_image(tensorType,colorspace,dimensions)
+   local nocopy = true -- use wand to store imagedata
+   if self.wand then
+      log.tic()
+      tensorType = tensorType or "torch.ByteTensor"
+      colorspace = colorspace or "RGB"
+      dimensions = dimensions or "DHW"
+      imagedata = self.wand:toTensor(tensorType,colorspace,dimensions,nocopy)
+      log.trace('Completed image load in', log.toc())
+   else
+      error("need to Photo:set_image_path first")
+   end
+   return imagedata
 end
 
-function Photo:update_calibration_status()
-  if (self.vertex_set == true) and (self.image_coordinate_set == true) then
-    self.pairs_calibrated = self.pairs_calibrated + 1
-    self.vertex_set = false
-    self.image_coordinate_set = false
-  end
+function Photo:set_projection(projection)
+   self.projection = projection
 end
 
-function Photo:calibration_complete()
-  return (self.pairs_calibrated == REQUIRED_CALIBRATION_PAIRS)
-end
-
-function Photo:delete_calibration_pair(pair_index)
-  for i = pair_index + 1, self.pairs_calibrated do
-    self.calibration_pairs[i-1]:copy(self.calibration_pairs[i])
-  end
-
-  self.calibration_pairs[self.pairs_calibrated]:fill(0)
-  self.pairs_calibrated = self.pairs_calibrated - 1
-end
-
-function Photo:get_image()
-  if not self.image_data_raw then
-    log.tic()
-    log.trace("Loading image from path:", "\""..self.image_path.."\"")
-    self.image_data_raw = image.load(self.image_path)
-    log.trace('Completed image load in', log.toc())
-  end
-  return self.image_data_raw
-end
-
-function Photo:get_image_rectilinear()
-  if not self.image_data_rectilinear then
-    self.image_data_rectilinear = projection.remap(self:get_image(), self:get_lens().rectilinear)
-  end
-  return self.image_data_rectilinear
-end
-
-function Photo:get_image_equirectangular()
-  if not self.image_data_equirectangular then
-    self.image_data_equirectangular = projection.remap(self:get_image(), self:get_lens().equirectangular)
-  end
-  return self.image_data_equirectangular
-end
-
-function Photo:get_lens()
-  if not self.lens then
-    log.tic()
-    self.lens = self.sweep.scan:get_lens(self:get_image())
-    log.trace('Loaded lens in', log.toc())
-  end
-  return self.lens
-end
-
-function Photo:flush_image()
-  self.image_data_raw = nil
-  self.image_data_rectilinear = nil
-  self.image_data_equirectangular = nil
-  collectgarbage()
-end
-
--- Extrinsic Parameters: 
+-- Extrinsic Parameters:
 -- global x,y,z to camera local x,y,z (origin at
 -- camera ray origin, and 0,0,0 direction in center of image)
-function Photo:global2local(v)
-  return geom.quaternion.rotate(v - self.position, self.rotation_r)
+function Photo:global_to_local(v)
+   return geom.quaternion.translate_rotate(
+      self.global_to_local_position,
+      self.global_to_local_rotation,
+      v)
 end
 
-function Photo:local2global(v)
-   return geom.quaternion.rotate(v,self.rotation) + self.position
+-- Extrinsic Parameters:
+-- global x,y,z to camera local x,y,z (origin at
+-- camera ray origin, and 0,0,0 direction in center of image)
+function Photo:local_to_global(v)
+   return geom.quaternion.rotate_translate(
+      self.local_to_global_rotation,
+      self.local_to_global_position,
+      v)
 end
 
--- FIXME optimize (in C) these funcs.
--- FIXME simplify number of ops.
--- this is the inverse of local_xy_to_global_rot + self.position
-function Photo:global_xyz_to_2d(pt)
-  local lens = self:get_lens()
-  
-  -- xyz in photo coordinates  
-  local v       = self:global2local(pt)  
-  local azimuth = torch.atan2(v[1],v[2])
-  local norm    = geom.util.normalize(v)
-  local elevation = torch.asin(norm[3])  
-  
-  -- TODO: fix this mp fix
-  if lens.sensor.name == 'matterport' then
-    azimuth = -torch.atan2(v[2],v[1])
-  end
-  
-  -- TODO: calc proj_x and proj_y with inv_hfov and inv_vfov and kill px_per_rad_x, px_per_rad_y?
-  -- 0.5 because we're looking at the middle of a pixel
-  local proj_x  = -0.5 + lens.sensor.center_x + (  azimuth * lens.sensor.px_per_rad_x)
-  local proj_y  = -0.5 + lens.sensor.center_y - (elevation * lens.sensor.px_per_rad_y)
+-- this is the inverse of local_xy_to_global_rot + self.local_to_global_position
+function Photo:global_xyz_to_local_angles(global_xyz)
+   -- xyz in photo coordinates
+   local local_xyz       = self:global_to_local(global_xyz)
    
-  -- u,v = 0,0 in upper left
-  local proj_u  = proj_x * lens.sensor.inv_image_w
-  local proj_v  = proj_y * lens.sensor.inv_image_h
+   -- TODO put xyz in first dimension or add dim parameter to all rotation operations
+   -- for now transfer from Nx4 to 2xN
+   local s       = local_xyz:size()
+   local st      = {2}
+   for i   = 1,local_xyz:nDimension()-1 do table.insert(st,s[i]) end
+   angles  = torch.Tensor(torch.LongStorage(st))
+   local d = local_xyz:nDimension()
+   local norm    = geom.util.normalize(local_xyz:narrow(d,1,3),d)
 
-  -- matterport thinks that uv is in the bottom left
-  if lens.sensor.name == 'matterport' then
-    proj_v = 1 - (proj_y * lens.sensor.inv_image_h)
-  end
-  return proj_u, proj_v, proj_x, proj_y
+   local x = norm:select(d,1)
+   local y = norm:select(d,2)
+   local z = norm:select(d,3)
+
+   -- local quats = geom.quaternion.angle_between(norm,self.forward_vector)
+   -- local euler = geom.quaternion.to_euler_angle(quats)
+
+   -- elevation
+   torch.asin(angles[1],z)
+   -- azimuth
+   torch.atan2(angles[2],x,y)
+   
+   return angles
+
 end
 
-
--- for pixel xy (0,0 in top left, w,h in bottom right) to 
--- direction ray for intersection work
-function Photo:local_xy_to_global_rot(x, y)
-  local lens = self:get_lens()
-
-  -- TODO: calc azimuth and elevation with hfov and vfov and kill rad_per_px_x, rad_per_px_y?
-  -- 0.5 because we're looking at the middle of a pixel
-  local azimuth   = (x + 0.5 - lens.sensor.center_x) * lens.sensor.rad_per_px_x    
-  -- same as elevation = - (y + 0.5 - lens.sensor.center_y) * lens.sensor_rad_per_px_y
-  local elevation = (lens.sensor.center_y - (y+0.5)) * lens.sensor.rad_per_px_y
-  
-  local dir = torch.Tensor(3)
-  -- local direction
-  local h =       torch.cos(elevation)  
-    
-  dir[3]  =       torch.sin(elevation) -- z'
-  dir[2]  =   h * torch.cos(azimuth)   -- y'
-  dir[1]  =   h * torch.sin(azimuth)   -- x'
-  
-  -- TODO: fix this fix for matterport 
-  if lens.sensor.name == 'matterport' then
-    azimuth = -azimuth -- mp flips their textures horizontally 
-    dir[2]  =   h * torch.sin(azimuth)   -- y'
-    dir[1]  =   h * torch.cos(azimuth)   -- x'
-  end
-  
-  geom.util.normalize(dir)
-  -- return point and direction rotated to global coordiante
-  return geom.quaternion.rotate(dir,self.rotation)
+function Photo:global_xyz_to_offset_and_mask(xyz,debug)
+   local angles = self:global_xyz_to_local_angles(xyz,debug)
+   return self.projection:angles_to_offset_and_mask(angles)
 end
 
-function Photo:compute_dirs(scale)
-  local lens = self:get_lens()
-  
-  if not scale then 
-    scale = 1
-  end
-  log.trace("Computing dirs for photo", self.name, "at scale 1/", scale)
-
-  local image_w = lens.sensor.image_w
-  local image_h = lens.sensor.image_h
-
-  local outw = math.ceil(image_w/scale)
-  local outh = math.ceil(image_h/scale)
-
-  -- dirs are 2D x 3
-  local dirs = torch.Tensor(outh,outw,3)
-  local cnt = 1
-  local inh = 0
-  local inw = 0
-  for h = 1,outh do
-    for w = 1,outw do
-      local dir = self:local_xy_to_global_rot(inw,inh)
-      dirs[h][w]:copy(dir:narrow(1,1,3))
-      cnt = cnt + 1
-      inw = inw + scale
-    end
-    inh = inh + scale
-    inw = 0
-  end
-  return dirs
+-- rather than frustum just check a bunch of points on the face, reuse
+-- code hopefully fast enough.
+function Photo:check_overlap(xyz,percent)
+   percent = percent or 0.1
+   -- compute offset and mask for xyz is added.
+   offset,stride,mask = self:global_xyz_to_offset_and_mask(xyz)
+   return mask:eq(0):sum() > xyz:nElement() * percent
 end
-
-function Photo:dirs_file(scale, ps)
-  return self:file(scale, ps, 'dirs')
-end
-
-function Photo:build_dirs(scale,ps)  
-  log.tic()
-  local dirs = nil
-  if ps then
-    dirs = util.grid_contiguous(self:compute_dirs(scale),ps,ps)
-  else
-    dirs = self:compute_dirs(scale)
-  end
-  log.trace("Built dirs in", log.toc())
-  return dirs
+ 
+function Photo:project(xyz, offset, mask)
+   local img  = self:get_image()
+   -- compute offset and mask for xyz is added.
+   if not offset or not mask then
+      offset,stride,mask = self:global_xyz_to_offset_and_mask(xyz)
+   end
+   -- do the projection
+   return util.addr.remap(img, offset, mask), offset, mask
 end
 
 -- loads if needed or return
+-- TODO return of loader
 function Photo:get_dirs(scale, ps)
   self.dirs = self.dirs or {}
   if not self.dirs[scale] then 
-    self.dirs[scale] = loader(self:dirs_file(scale, ps), self.build_dirs, self, scale, ps)
+     self.dirs[scale] = 
+        geom.util.spherical_angles_to_unit_cartesian(self.projection:angles_map(scale))
   end
   return self.dirs[scale]  
 end
 
-function Photo:draw_wireframe()
-  local obj = self.sweep.scan:get_model_data()
-  local pimage = self:get_image()
-  
-  local psize = pimage:size()
-  psize[1] = 4
-  
-  local wimage = torch.Tensor(psize):fill(0)
-  local face_verts = obj.face_verts
-  local nverts = obj.n_verts_per_face
-  for fi = 1,face_verts:size(1) do
-    local nv = nverts[fi]
-    local f = face_verts[fi]:narrow(1,1,nv)
-    local pvert = f[nv]
-    for vi = 1,nv do
-       local cvert = f[vi]
-       local dir = cvert - pvert
-       local len = torch.norm(dir)
-       if (len > 1e-8) then
-          dir = dir/len
-          step = dir * mpp
-          -- printf("step: %f,%f,%f",step[1],step[2],step[3])
-          for s = 0,len,mpp do
-             -- draw verts first
-             local u,v,x,y = self:global_xyz_to_2d(pvert)
-             -- printf("u: %f v: %f x: %f y %f", u, v, x, y)
-             if (u > 0) and (u < 1) and (v > 0) and (v < 1) then
-                wimage[{1,y,x}] = 1  -- RED
-                wimage[{4,y,x}] = 1  -- Alpha Channel
-             end
-             pvert = pvert + step 
-          end
-       end
-    end
-  end
-  return wimage
+function Photo:project_dirs(xyz, offset, mask)
+   dirs = self:get_dirs()
+   if not offset or not mask then
+      -- compute offset and mask for xyz is added.
+      offset,stride,mask = self:global_xyz_to_offset_and_mask(xyz)
+   end
+   -- do the projection
+   return util.addr.remap(dirs, offset, mask), offset, mask
+end
+
+function Photo:dirs_file(scale, ps)
+  return self:file(scale, ps, 'dirs')
 end
 
 function Photo:file(scale, ps, filetype)

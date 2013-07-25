@@ -166,6 +166,7 @@ end
 -- compute_alpha(dir,d,norm)
 --  prefer smaller angle w/ respect to norm
 -- (normalize with pi/2 as that is the biggest angle)
+-- TODO vector version.
 function TextureBuilder:compute_alpha(dir,d,norm,debug)
    if debug then log.trace('computing alpha - dir', dir, 'd', d, 'norm', norm) end
    if (d < self.mindist) or (d > self.maxdist) then return 0 end
@@ -302,7 +303,8 @@ function TextureBuilder:build(fid)
       log.tic()
       view = views[vi]
       if view:check_overlap(check_xyz) then 
-         outimg = view:project(plane_xyz)
+         -- get pixel data, offset and mask
+         outimg, offset, mask = view:project(plane_xyz)
          printf(" - project image %2.4fs",log.toc()*0.001)
          log.tic()
          outfname = string.format("face_%d_view_%d.png",fid,vi)

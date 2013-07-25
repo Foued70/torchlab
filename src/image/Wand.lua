@@ -433,4 +433,21 @@ function Wand:info()
    return ffi.string(str)
 end
 
-
+-- Rotate
+function Wand:rotate(angle_in_degrees,rgb)
+   -- Create PixelWand:
+   local background = 
+      ffi.gc(libgm.NewPixelWand(), function(background)
+                -- Collect:
+                libgm.DestroyPixelWand(background)
+                                   end)
+   
+   if rgb then 
+      libgm.PixelSetRed(  background,rgb[1])
+      libgm.PixelSetGreen(background,rgb[2])      
+      libgm.PixelSetBlue( background,rgb[3])
+   else
+      libgm.PixelSetBlack(background,1)
+   end
+   libgm.MagickRotateImage(self.wand,background,angle_in_degrees)
+end

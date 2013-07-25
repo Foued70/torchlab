@@ -1,7 +1,7 @@
 Class()
 local geom      = geom.util
 
-data = require "geom.test.data"
+data = require "../geom/test/data"
 
 function compute_normals()
    print("Testing compute normals")
@@ -51,7 +51,7 @@ function spherical_angles_to_unit_cartesian()
          {  pi,  pi2}, -- right:  0 forward: 0 up:  1 
          {  pi, -pi2}, -- right:  0 forward: 0 up: -1 
       })
-   
+   angles = angles:t()   
    local unit = geom.spherical_angles_to_unit_cartesian(angles)
    
    local unit_check = torch.Tensor(
@@ -71,9 +71,10 @@ function spherical_angles_to_unit_cartesian()
          { 0,0, 1}, --   pi,  pi2
          { 0,0,-1}, --   pi, -pi2
       })
-   
-   local error = unit:dist(unit_check,1)
-   if error < 1e-8 then error = 0 end
+   unit_check = unit_check:t()
+   local d = torch.abs(unit - unit_check)
+   local error = d:gt(1e-15):sum()
+
    print(string.format(" - Found %d errors", error)) 
 end
 
@@ -102,6 +103,7 @@ function unit_cartesian_to_spherical_angles()
          { 0,0,-1}, --   pi, -pi2
       })
 
+   unit_check = unit_cartesian:t()
    local angles = geom.unit_cartesian_to_spherical_angles(unit_cartesian)
 
    local angles_check = torch.Tensor(
@@ -122,45 +124,28 @@ function unit_cartesian_to_spherical_angles()
          {  pi, -pi2}, -- right:  0 forward: 0 up: -1 
       })
    
-   
-   local error = 0 
- 
-   for i = 1,angles:size(1) do 
-      local d = angles[i]:dist(angles_check[i])
-      -- trig functions have error of 2 sig bits
-      if d > 1e-14 then
-         print("["..i.."] "..d)
-         print(angles[i])
-         print(angles_check[i])
-         error = error + 1
-      end
-   end
+   angles_check = angles_check:t()
+
+   local d = torch.abs(angles - angles_check)
+   local error = d:gt(1e-15):sum()
+
    print(string.format(" - Found %d/%d errors", error,angles:size(1))) 
 end
 
 function sphere_to_unit_and_back()
    print("Testing spherical_angles_to_unit_cartesian and back")
    local npts = 1000
-   local uc = torch.randn(npts,3)
+   local uc = torch.randn(3,npts)
 
-   for i = 1,npts do uc[i]:mul(1/uc[i]:norm()) end
+   geom.normalize(uc,1)
 
    local a = geom.unit_cartesian_to_spherical_angles(uc)
 
    local ucp = geom.spherical_angles_to_unit_cartesian(a)
-   local error = 0
-   for i = 1,npts do 
-      local d = ucp[i]:dist(uc[i])
-      -- trig functions have error of 2 sig bits
-      if d > 1e-14 then
-         print("["..i.."] "..d)
-         print(uc[i])
-         print(a[i])
-         print(ucp[i])
-         error = error + 1
-      end
-   end
-   print(string.format(" - Found %d/%d errors", error, npts)) 
+   local d = torch.abs(ucp - uc)
+   local error = d:gt(1e-14):sum()
+
+   print(string.format(" - Found %d/%d errors (max %e)", error, npts,d:max())) 
 end
 
 function all()
@@ -169,3 +154,5 @@ function all()
    -- unit_cartesian_to_spherical_angles()
    sphere_to_unit_and_back()
 end
+
+all()
