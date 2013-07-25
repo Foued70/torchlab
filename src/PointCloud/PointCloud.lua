@@ -292,23 +292,30 @@ function PointCloud:make_flattened_images(scale)
 	local ranges = self.radius*2
 	local minv = self.radius*(-1)
 	local maxv = self.radius
-	local pix = ranges/scale
-	--self.imagex = torch.zeros(pix[3]+1,pix[2]+1,3)
-	--self.imagey = torch.zeros(pix[3]+1,pix[1]+1,3)
-	self.imagez = torch.zeros(pix[1]+1,pix[2]+1,3)
-	for i=1,self.count do
-		local coord = (self.points[i]-minv)/scale
-		--local dist = self.points[i]:dist(self.centroid[1])
-		--local dist = math.sqrt(math.pow(self.points[i][1],2)+math.pow(self.points[i][2],2))
-		local dist = math.pow(self.points[i][1],2)+math.pow(self.points[i][2],2)
-		--self.imagex[pix[3]-coord[3]+1][coord[2]+1] = self.imagex[pix[3]-coord[3]+1][coord[2]+1]+1
-		--self.imagey[pix[3]-coord[3]+1][coord[1]+1] = self.imagey[pix[3]-coord[3]+1][coord[1]+1]+1
-		self.imagez[coord[1]+1][coord[2]+1] = self.imagez[coord[1]+1][coord[2]+1]+dist
-	end
+	local pix = (ranges/scale):floor()
+	local height = pix[1]+1
+	local width = pix[2]+1
+	local imagez = torch.zeros(height*width)
+	
+	--sort points
+	local points = self.points:clone()[{{},{1,2}}]
+	local coords = ((points-minv:sub(1,2):repeatTensor(self.count,1))/scale):floor()+1
+	local index = (coords[{{},1}]-1):mul(width)+coords[{{},2}]
+	--local dists = (points-self.centroid:squeeze():sub(1,2):repeatTensor(self.count,1)):pow(2):sum(2):sqrt():squeeze()
+	local dists = (points-self.centroid:squeeze():sub(1,2):repeatTensor(self.count,1)):pow(2):sum(2):squeeze()
+	
+	local i=1
+	index:apply(function(x)
+					imagez[x]=imagez[x]+dists[i]
+					i=i+1
+					return x
+				end)
+	
+	imagez=imagez:pow(2)
+	imagez=(imagez*256/(imagez:max()+0.000001)):floor()
+	self.imagez = imagez:resize(height,width):repeatTensor(3,1,1)
 	collectgarbage()
-	--self.imagex = (self.imagex:pow(2):transpose(1,3):transpose(2,3)*256/self.imagex:max()):floor()
-	--self.imagey = (self.imagey:pow(2):transpose(1,3):transpose(2,3)*256/self.imagey:max()):floor()
-	self.imagez = (self.imagez:pow(2):transpose(1,3):transpose(2,3)*256/self.imagez:max()):floor()
+	
 end
 
 function PointCloud:make_3dtree()
