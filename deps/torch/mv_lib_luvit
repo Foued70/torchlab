@@ -1,0 +1,15 @@
+#!/bin/bash
+
+install_root=$1
+lib=$2
+
+torch_libdir=${install_root}/lib/torch/lua/
+luvit_dir=${install_root}/lib/luvit/
+
+
+if [ -a ${torch_libdir}/lib${lib}.* ]
+then
+  mkdir -p ${luvit_dir}/${lib}/modules
+  cp -f ${torch_libdir}/lib${lib}.* ${luvit_dir}/${lib}/modules/lib${lib}.luvit
+  rm ${torch_libdir}/lib${lib}.*
+fi

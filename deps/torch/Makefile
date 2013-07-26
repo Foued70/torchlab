@@ -33,23 +33,11 @@ $(install): $(cmake)
 	cd $(git_clone)/build; make install VERBOSE=1
 	cp -rf $(install_root)/share/torch/lua/* $(luvit_dir)
 	mkdir -p $(luvit_dir)/torch/modules/
-	cp -f $(torch_libdir)/libtorch.* $(luvit_dir)/torch/modules/libtorch.luvit
-	if [ -a $(torch_libdir)/libnn.* ] ; \
-	then \
-		mkdir -p $(luvit_dir)/nn/modules/ ; \
-		cp -f $(torch_libdir)/libnn.* $(luvit_dir)/nn/modules/libnn.luvit ;\
-	fi
-	if [ -a $(torch_libdir)/libcutorch.* ] ;\
-	then \
-		mkdir -p $(luvit_dir)/cutorch/modules/ ; \
-		cp -f $(torch_libdir)/libcutorch.* $(luvit_dir)/cutorch/modules/libcutorch.luvit ;\
-	fi
-	if [ -a $(torch_libdir)/libcunn.* ] ; \
-	then \
-		mkdir -p $(luvit_dir)/cunn/modules/;\
-		cp -f $(torch_libdir)/libcunn.* $(luvit_dir)/cunn/modules/libcunn.luvit;\
-	fi
-	rm -rf $(install_root)/bin/torch*
+
+	$(CURDIR)/mv_lib_luvit "$(install_root)" torch
+	$(CURDIR)/mv_lib_luvit "$(install_root)" nn
+	$(CURDIR)/mv_lib_luvit "$(install_root)" cutorch
+	$(CURDIR)/mv_lib_luvit "$(install_root)" cunn
 
 
 $(cmake): $(git_clone)
@@ -62,6 +50,8 @@ $(git_clone):
 	git clone $(git_source) $(git_clone)
 	cd $(git_clone); git checkout $(ver)
 
+update:
+	cd $(git_clone); git pull; git checkout $(ver)
 
 clean:
 	rm -f $(install)*
@@ -90,4 +80,3 @@ clean:
 	rm -rf $(install_root)/lib/luvit/libsys.luvit
 	rm -rf $(install_root)/lib/luvit/libtorch.luvit
 
-	cd $(git_clone); git pull; git checkout $(ver)
