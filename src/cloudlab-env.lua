@@ -33,4 +33,4 @@ end
 
 local d = net.Depot
 
--- require('repl').start = shell.repl.start
+require('repl').start = shell.repl.start
