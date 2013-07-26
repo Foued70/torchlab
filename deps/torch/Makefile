@@ -52,6 +52,7 @@ $(git_clone):
 
 update:
 	cd $(git_clone); git pull; git checkout $(ver)
+	rm $(install)
 
 clean:
 	rm -f $(install)*
