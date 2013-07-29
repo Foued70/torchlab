@@ -1,11 +1,10 @@
-Class()
-
 local uv = require 'uv'
 local utils = require 'utils'
 local debug = require('debug')
 local libreadline_async = require 'libreadline_async'
 local completer = require './completer'
 
+Class()
 
 local buffer = ''
 
