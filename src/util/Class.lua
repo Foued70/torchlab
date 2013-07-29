@@ -13,16 +13,19 @@ local function get_class_for_name(name)
   return package
 end
 
-local function create_class_for_name(name, filename)
+
+local function create_class_for_name(name, class)
   local package = _G
+  local last_package, last_part
   for part in name:gmatch('[^/]+') do
     local next_package = rawget(package, part)
     if not next_package then rawset(package, part, {}) end
+    last_package = package
+    last_part = part
     package = package[part]
   end
 
-  -- the last item in the package chain is the actual class
-  local class = package
+  last_package[last_part] = class
   if not class.__instance_mt__ then
     class.__instance_mt__ = {__index = class}
     loaded_classes[name] = class
@@ -36,7 +39,7 @@ function _G.Class(parent)
   local filename = info.source:sub(2) -- remove the '@' prefix
   local name = filename:match('/?src/(.+).lua$')
   name = name or filename:match('/?(.+).lua$')
-  local class = create_class_for_name(name, filename)
+  local class = create_class_for_name(name, getfenv(2))
 
   if parent then
     setmetatable(class, {__index = parent})
