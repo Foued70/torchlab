@@ -9,66 +9,66 @@ ffi.cdef
 /* Nearest neighbour index algorithms */
 enum flann_algorithm_t
 {
-    FLANN_INDEX_LINEAR 			= 0,
-    FLANN_INDEX_KDTREE 			= 1,
-    FLANN_INDEX_KMEANS 			= 2,
-    FLANN_INDEX_COMPOSITE 		= 3,
-    FLANN_INDEX_KDTREE_SINGLE 	= 4,
-    FLANN_INDEX_HIERARCHICAL 	= 5,
-    FLANN_INDEX_LSH 			= 6,
-    FLANN_INDEX_KDTREE_CUDA 	= 7,
-    FLANN_INDEX_SAVED 			= 254,
-    FLANN_INDEX_AUTOTUNED 		= 255,
+    FLANN_INDEX_LINEAR          = 0,
+    FLANN_INDEX_KDTREE          = 1,
+    FLANN_INDEX_KMEANS          = 2,
+    FLANN_INDEX_COMPOSITE       = 3,
+    FLANN_INDEX_KDTREE_SINGLE   = 4,
+    FLANN_INDEX_HIERARCHICAL    = 5,
+    FLANN_INDEX_LSH             = 6,
+    FLANN_INDEX_KDTREE_CUDA     = 7,
+    FLANN_INDEX_SAVED           = 254,
+    FLANN_INDEX_AUTOTUNED       = 255,
 };
 
 enum flann_centers_init_t
 {
-    FLANN_CENTERS_RANDOM = 0,
+    FLANN_CENTERS_RANDOM   = 0,
     FLANN_CENTERS_GONZALES = 1,
     FLANN_CENTERS_KMEANSPP = 2,
 };
 
 enum flann_log_level_t
 {
-    FLANN_LOG_NONE = 0,
+    FLANN_LOG_NONE  = 0,
     FLANN_LOG_FATAL = 1,
     FLANN_LOG_ERROR = 2,
-    FLANN_LOG_WARN = 3,
-    FLANN_LOG_INFO = 4,
+    FLANN_LOG_WARN  = 3,
+    FLANN_LOG_INFO  = 4,
     FLANN_LOG_DEBUG = 5
 };
 
 enum flann_distance_t
 {
-    FLANN_DIST_EUCLIDEAN 			= 1,
-    FLANN_DIST_L2 					= 1,
-    FLANN_DIST_MANHATTAN 			= 2,
-    FLANN_DIST_L1 					= 2,
-    FLANN_DIST_MINKOWSKI 			= 3,
-    FLANN_DIST_MAX   				= 4,
-    FLANN_DIST_HIST_INTERSECT  		= 5,
-    FLANN_DIST_HELLINGER 			= 6,
-    FLANN_DIST_CHI_SQUARE		 	= 7,
-    FLANN_DIST_KULLBACK_LEIBLER  	= 8,
-    FLANN_DIST_HAMMING         		= 9,
-    FLANN_DIST_HAMMING_LUT			= 10,
-    FLANN_DIST_HAMMING_POPCNT   	= 11,
-    FLANN_DIST_L2_SIMPLE	   		= 12,
+    FLANN_DIST_EUCLIDEAN        = 1,
+    FLANN_DIST_L2               = 1,
+    FLANN_DIST_MANHATTAN        = 2,
+    FLANN_DIST_L1               = 2,
+    FLANN_DIST_MINKOWSKI        = 3,
+    FLANN_DIST_MAX              = 4,
+    FLANN_DIST_HIST_INTERSECT   = 5,
+    FLANN_DIST_HELLINGER        = 6,
+    FLANN_DIST_CHI_SQUARE       = 7,
+    FLANN_DIST_KULLBACK_LEIBLER = 8,
+    FLANN_DIST_HAMMING          = 9,
+    FLANN_DIST_HAMMING_LUT      = 10,
+    FLANN_DIST_HAMMING_POPCNT   = 11,
+    FLANN_DIST_L2_SIMPLE        = 12,
 };
 
 enum flann_datatype_t
 {
-    FLANN_NONE 		= -1,
-    FLANN_INT8 		= 0,
-    FLANN_INT16 	= 1,
-    FLANN_INT32 	= 2,
-    FLANN_INT64 	= 3,
-    FLANN_UINT8 	= 4,
-    FLANN_UINT16 	= 5,
-    FLANN_UINT32 	= 6,
-    FLANN_UINT64 	= 7,
-    FLANN_FLOAT32 	= 8,
-    FLANN_FLOAT64 	= 9
+    FLANN_NONE          = -1,
+    FLANN_INT8          = 0,
+    FLANN_INT16         = 1,
+    FLANN_INT32         = 2,
+    FLANN_INT64         = 3,
+    FLANN_UINT8         = 4,
+    FLANN_UINT16        = 5,
+    FLANN_UINT32        = 6,
+    FLANN_UINT64        = 7,
+    FLANN_FLOAT32       = 8,
+    FLANN_FLOAT64       = 9
 };
 
 enum flann_checks_t {
@@ -83,11 +83,11 @@ struct FLANNParameters
     enum flann_algorithm_t algorithm; /* the algorithm to use */
 
     /* search time parameters */
-    int checks;                /* how many leafs (features) to check in one search */
-    float eps;     /* eps parameter for eps-knn search */
-    int sorted;     /* indicates if results returned by radius search should be sorted or not */
+    int checks;         /* how many leafs (features) to check in one search */
+    float eps;          /* eps parameter for eps-knn search */
+    int sorted;         /* indicates if results returned by radius search should be sorted or not */
     int max_neighbors;  /* limits the maximum number of neighbors should be returned by radius search */
-    int cores;      /* number of paralel cores to use for searching */
+    int cores;          /* number of paralel cores to use for searching */
 
     /*  kdtree index parameters */
     int trees;                 /* number of randomized trees to use (for kdtree) */
@@ -106,13 +106,13 @@ struct FLANNParameters
     float sample_fraction;     /* what fraction of the dataset to use for autotuning */
 
     /* LSH parameters */
-    unsigned int table_number_; /** The number of hash tables to use */
-    unsigned int key_size_;     /** The length of the key in the hash tables */
+    unsigned int table_number_;      /** The number of hash tables to use */
+    unsigned int key_size_;          /** The length of the key in the hash tables */
     unsigned int multi_probe_level_; /** Number of levels to use in multi-probe LSH, 0 for standard LSH */
 
     /* other parameters */
-    enum flann_log_level_t log_level;    /* determines the verbosity of each flann function */
-    long random_seed;            /* random seed to use */
+    enum flann_log_level_t log_level; /* determines the verbosity of each flann function */
+    long random_seed;                 /* random seed to use */
 };
 
 
@@ -312,185 +312,186 @@ local flann = {}
 flann.clib = clib
 
 function flann.read_xyz_file(fname)
-	if util.fs.is_file(fname) and util.fs.extname(fname)=='.xyz' then
-	
-		local file = io.open(fname, 'r');
-    	local count = 0;
-    	while true do
-      		local line = file:read();
-      		if line == nil or line:len() < 5 then 
-        		break 
-      		end
-      		count = count + 1
-      	end
-      	io.close(file)
-      	local rows = count
-      	local cols = 3
-      	
-	    local dataset = torch.Tensor(rows,cols);
-    	count = 0;
-    	
-	    file = io.open(fname, 'r');
-    	
-    	while true do
-      		local line = file:read();
-		    if line == nil or line:len() < 5 then
-        		break
-		    end
-      		count=count+1;
-      		local begp = 1;
-	      	local endp = line:find(' ', begp) - 1;
-		    begp = endp + 2;
-      		endp = line:find(' ', begp) - 1;
-      		begp = endp + 2;
-      		endp = line:find(' ', begp) - 1;
+   if util.fs.is_file(fname) and util.fs.extname(fname)=='.xyz' then
 
-      		local x = tonumber(line:sub(begp,endp));
-      		begp = endp + 2;
-      		endp = line:find(' ', begp) - 1;
-      		local y = tonumber(line:sub(begp,endp));
-      		begp = endp + 2;
-      		endp = line:find(' ', begp) - 1;
-      		local z = tonumber(line:sub(begp,endp));
-     
-      		dataset[count] = torch.Tensor({x,y,z})
-    	end
-    	io.close(file)
-    	
-    	collectgarbage()
-		return dataset
-	end
+      local file = io.open(fname, 'r');
+      local count = 0;
+      while true do
+         local line = file:read();
+         if line == nil or line:len() < 5 then
+            break
+         end
+         count = count + 1
+      end
+      io.close(file)
+      local rows = count
+      local cols = 3
+
+      local dataset = torch.Tensor(rows,cols);
+      count = 0;
+
+      file = io.open(fname, 'r');
+
+      while true do
+         local line = file:read();
+         if line == nil or line:len() < 5 then
+            break
+         end
+         count=count+1;
+         local begp = 1;
+         local endp = line:find(' ', begp) - 1;
+         begp = endp + 2;
+         endp = line:find(' ', begp) - 1;
+         begp = endp + 2;
+         endp = line:find(' ', begp) - 1;
+
+         local x = tonumber(line:sub(begp,endp));
+         begp = endp + 2;
+         endp = line:find(' ', begp) - 1;
+         local y = tonumber(line:sub(begp,endp));
+         begp = endp + 2;
+         endp = line:find(' ', begp) - 1;
+         local z = tonumber(line:sub(begp,endp));
+
+         dataset[count] = torch.Tensor({x,y,z})
+      end
+      io.close(file)
+
+      collectgarbage()
+      return dataset
+   end
 end
 
-local flann_parameter_list={'algorithm','checks','cb_index','trees','branching',
-							'iterations','centers_init','target_precision','build_weight',
-							'memory_weight','sample_fraction','table_number_','key_size_',
-							'multi_probe_level_','log_level','random_seed'}
+local flann_parameter_list=
+   {'algorithm','checks','cb_index','trees','branching',
+    'iterations','centers_init','target_precision','build_weight',
+    'memory_weight','sample_fraction','table_number_','key_size_',
+    'multi_probe_level_','log_level','random_seed'}
 
 function flann.new_flann_params_pointer(flann_params_table)
-	flann_params=clib.DEFAULT_FLANN_PARAMETERS
-	for i = 1,#flann_parameter_list do
-		local param = flann_parameter_list[i]
-		if flann_params_table[param] then
-			flann_params[param] = flann_params_table[param]
-		end
-	end
-	collectgarbage()
-	return ffi.cast('struct FLANNParameters *', flann_params)
+   flann_params=clib.DEFAULT_FLANN_PARAMETERS
+   for i = 1,#flann_parameter_list do
+      local param = flann_parameter_list[i]
+      if flann_params_table[param] then
+         flann_params[param] = flann_params_table[param]
+      end
+   end
+   collectgarbage()
+   return ffi.cast('struct FLANNParameters *', flann_params)
 end
 
 function flann.build_index(dataset, flann_params)
 
-	dataset = dataset:type('torch.FloatTensor')
-	local speedup = ffi.gc(clib.malloc(ffi.sizeof('float')), clib.free)
-	local dset = ffi.cast('float*',torch.data(dataset));
-	local rows = dataset:size(1);
-	local cols = dataset:size(2);
-	
-	collectgarbage()
-	
-	return clib.flann_build_index(dset, rows, cols, ffi.cast('float *', speedup), flann_params), 
-				speedup
+   dataset = dataset:type('torch.FloatTensor')
+   local speedup = ffi.gc(clib.malloc(ffi.sizeof('float')), clib.free)
+   local dset = ffi.cast('float*',torch.data(dataset));
+   local rows = dataset:size(1);
+   local cols = dataset:size(2);
+
+   collectgarbage()
+
+   return clib.flann_build_index(dset, rows, cols, ffi.cast('float *', speedup), flann_params),
+   speedup
 end
 
 function flann.find_nearest_neighbors_index(index, testset, nn, flann_params)
 
-	testset = testset:type('torch.FloatTensor')
-	local tset = ffi.cast('float*', torch.data(testset));
-	local trows = testset:size(1);
-	
-	local indices = torch.IntTensor(trows * nn);
-	local dists = torch.FloatTensor(trows *nn);
-	
-	local indices_ptr = ffi.cast('int *', torch.data(indices))
-	local dists_ptr = ffi.cast('float *', torch.data(dists))
-	
-	local ret = clib.flann_find_nearest_neighbors_index(index, tset, trows, indices_ptr, dists_ptr,
-					nn, flann_params)
-										
-	assert(ret == 0, "ffnni: flann_find_nearest_neighbors_index error, returned "..ret)
-	
-	collectgarbage()
-	
-	return indices, dists
+   testset = testset:type('torch.FloatTensor')
+   local tset = ffi.cast('float*', torch.data(testset));
+   local trows = testset:size(1);
+
+   local indices = torch.IntTensor(trows * nn);
+   local dists = torch.FloatTensor(trows *nn);
+
+   local indices_ptr = ffi.cast('int *', torch.data(indices))
+   local dists_ptr = ffi.cast('float *', torch.data(dists))
+
+   local ret = clib.flann_find_nearest_neighbors_index(index, tset, trows, indices_ptr, dists_ptr,
+                                                       nn, flann_params)
+
+   assert(ret == 0, "ffnni: flann_find_nearest_neighbors_index error, returned "..ret)
+
+   collectgarbage()
+
+   return indices, dists
 end
 
 function flann.find_nearest_neighbors(dataset, testset, nn, flann_params)
-	
-	dataset = dataset:type('torch.FloatTensor')
-	testset = testset:type('torch.FloatTensor')
-	local dset = ffi.cast('float*',torch.data(dataset));
-	local rows = dataset:size(1);
-	local cols = dataset:size(2);
-	local tset = ffi.cast('float*', torch.data(testset));
-	local trows = testset:size(1);
-	
-	local indices = torch.IntTensor(trows * nn);
-	local dists = torch.FloatTensor(trows *nn);
-	
-	local indices_ptr = ffi.cast('int *', torch.data(indices))
-	local dists_ptr = ffi.cast('float *', torch.data(dists))
-	
-	local ret = clib.flann_find_nearest_neighbors(dset, rows, cols, tset, trows, 
-					indices_ptr, dists_ptr, nn, flann_params)
-	
-	assert(ret == 0, "ffnn: flann_find_nearest_neighbors error, returned "..ret)
-	
-	collectgarbage()
-	
-	return indices, dists
-	
+
+   dataset = dataset:type('torch.FloatTensor')
+   testset = testset:type('torch.FloatTensor')
+   local dset = ffi.cast('float*',torch.data(dataset));
+   local rows = dataset:size(1);
+   local cols = dataset:size(2);
+   local tset = ffi.cast('float*', torch.data(testset));
+   local trows = testset:size(1);
+
+   local indices = torch.IntTensor(trows * nn);
+   local dists = torch.FloatTensor(trows *nn);
+
+   local indices_ptr = ffi.cast('int *', torch.data(indices))
+   local dists_ptr = ffi.cast('float *', torch.data(dists))
+
+   local ret = clib.flann_find_nearest_neighbors(dset, rows, cols, tset, trows,
+                                                 indices_ptr, dists_ptr, nn, flann_params)
+
+   assert(ret == 0, "ffnn: flann_find_nearest_neighbors error, returned "..ret)
+
+   collectgarbage()
+
+   return indices, dists
+
 end
 
 function flann.radius_search(index, query, max_nn, radius, flann_params)
-	
-	query = query:type('torch.FloatTensor')
-	local qset = ffi.cast('float *',torch.data(query));
-	
-	local indices = torch.IntTensor(max_nn);
-	local dists = torch.FloatTensor(max_nn);
-	
-	local indices_ptr = ffi.cast('int *', torch.data(indices))
-	local dists_ptr = ffi.cast('float *', torch.data(dists))
-	
-	local numfound = clib.flann_radius_search(index, qset, indices_ptr, dists_ptr, max_nn, radius, flann_params)
-	
-	collectgarbage()
-	
-	return indices, dists, numfound
-	
+
+   query = query:type('torch.FloatTensor')
+   local qset = ffi.cast('float *',torch.data(query));
+
+   local indices = torch.IntTensor(max_nn);
+   local dists = torch.FloatTensor(max_nn);
+
+   local indices_ptr = ffi.cast('int *', torch.data(indices))
+   local dists_ptr = ffi.cast('float *', torch.data(dists))
+
+   local numfound = clib.flann_radius_search(index, qset, indices_ptr, dists_ptr, max_nn, radius, flann_params)
+
+   collectgarbage()
+
+   return indices, dists, numfound
+
 end
 
 flann.distance_types = {
-	euclidean       =clib.FLANN_DIST_EUCLIDEAN,
-	manhattan       =clib.FLANN_DIST_MANHATTAN,
-	minkowski       =clib.FLANN_DIST_MINKOWSKI,
-	hist_intersect  =clib.FLANN_DIST_HIST_INTERSECT,
-	hellinger       =clib.FLANN_DIST_HELLINGER,
-	chi_square      =clib.FLANN_DIST_CHI_SQUARE,
-	kullback_leibler=clib.FLANN_DIST_KULLBACK_LEIBLER
+   euclidean       =clib.FLANN_DIST_EUCLIDEAN,
+   manhattan       =clib.FLANN_DIST_MANHATTAN,
+   minkowski       =clib.FLANN_DIST_MINKOWSKI,
+   hist_intersect  =clib.FLANN_DIST_HIST_INTERSECT,
+   hellinger       =clib.FLANN_DIST_HELLINGER,
+   chi_square      =clib.FLANN_DIST_CHI_SQUARE,
+   kullback_leibler=clib.FLANN_DIST_KULLBACK_LEIBLER
 }
 
 function flann.set_distance_type(distance_type, order)
-	return clib.flann_set_distance_type(distance_types[distance_type],order)
+   return clib.flann_set_distance_type(distance_types[distance_type],order)
 end
 
 function flann.save_index(index, filename)
-	return clib.flann_save_index(index, ffi.cast('char *', filename))
+   return clib.flann_save_index(index, ffi.cast('char *', filename))
 end
 
 function flann.load_index(filename, rows, cols)
-	local dataset = torch.FloatTensor(rows,cols)
-	local dset = ffi.cast('float*',torch.data(dataset))
-	local index = clib.flann_load_index(ffi.cast('char *', filename), dset, rows, cols)
-	
-	collectgarbage()
-	
-	return index, dataset
+   local dataset = torch.FloatTensor(rows,cols)
+   local dset = ffi.cast('float*',torch.data(dataset))
+   local index = clib.flann_load_index(ffi.cast('char *', filename), dset, rows, cols)
+
+   collectgarbage()
+
+   return index, dataset
 end
 
 function flann.free_index(index, flann_params)
-	return clib.flann_free_index(index, flann_params);
+   return clib.flann_free_index(index, flann_params);
 end
 
 return flann;

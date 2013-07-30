@@ -62,7 +62,7 @@ function unit_cartesian_to_spherical_angles(uc)
    local y = uc[2]
    local z = uc[3]
 
-   local angles = torch.Tensor(2,uc:size(2))
+   local angles = torch.Tensor(util.util.add_slices(2,uc:size()))
 
    angles[1] = torch.atan2(x,y) -- azimuth
    angles[2] = torch.asin(z)   -- elevation
@@ -82,7 +82,8 @@ function spherical_angles_to_unit_cartesian(angles)
    local azimuth   = angles[1]
    local elevation = angles[2]
 
-   local unit_vec = torch.Tensor(3,angles:size(2))
+   local unit_vec = torch.Tensor(util.util.add_slices(3,azimuth:size()))
+
    local cos_elevation = torch.cos(elevation)
 
    -- right = sin(azimuth) * cos(elevation)

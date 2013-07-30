@@ -14,18 +14,20 @@ ffi.cdef[[
  void rotate_translate(THDoubleTensor *result,
                        THDoubleTensor *vectors,
                        THDoubleTensor *trans,
-                       THDoubleTensor *quat);
+                       THDoubleTensor *quat
+                       );
 
-               void rotate_translate(THDoubleTensor *result,
-                                     THDoubleTensor *quat,
-                                     THDoubleTensor *trans,
-                                     THDoubleTensor *vectors
-                                     );
+ void rotate_translate(THDoubleTensor *result,
+                       THDoubleTensor *quat,
+                       THDoubleTensor *trans,
+                       THDoubleTensor *vectors
+                       );
 
-               void translate_rotate(THDoubleTensor *result,
-                                     THDoubleTensor *trans,
-                                     THDoubleTensor *quat,
-                                     THDoubleTensor *vectors );
+ void translate_rotate(THDoubleTensor *result,
+                       THDoubleTensor *trans,
+                       THDoubleTensor *quat,
+                       THDoubleTensor *vectors
+                       );
             ]]
  -- don't want to call C functions directly
 local libgeom = util.ffi.load('libgeom')
