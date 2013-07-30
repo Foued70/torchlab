@@ -1,7 +1,10 @@
 -- FFI bindings to Opencv:
 local ffi = require "ffi"
 
--- /* data types CV_<bit_depth>{U|S|F}C{num_channels} */
+-- data types CV_<bit_depth>{U|S|F}C{num_channels} 
+
+-- copy needed structs from opencv2/core/types_c.h
+-- these will create the interface between torch and opencv
 
 ffi.cdef
 [[
@@ -32,6 +35,36 @@ typedef struct CvMat
 }
   CvMat;
 
+typedef struct CvPoint
+{
+    int x;
+    int y;
+}
+CvPoint;
+
+typedef struct CvPoint2D32f
+{
+    float x;
+    float y;
+}
+CvPoint2D32f;
+
+typedef struct CvPoint3D32f
+{
+    float x;
+    float y;
+    float z;
+}
+CvPoint3D32f;
+
+typedef struct CvRect
+{
+    int x;
+    int y;
+    int width;
+    int height;
+} CvRect;
+
 typedef struct CvMatND
 {
   int type;
@@ -55,8 +88,7 @@ typedef struct CvMatND
     int step;
   }
     dim[32];
-}
-  CvMatND;
+} CvMatND;
 
 struct CvSet;
 
@@ -73,18 +105,42 @@ typedef struct CvSparseMat
   int valoffset;
   int idxoffset;
   int size[32];
-}
-  CvSparseMat;
+} CvSparseMat;
 
 typedef struct CvSize
 {
   int width;
   int height;
-}
-  CvSize;
+} CvSize;
 
-CvMat detectfeatures(const CvMat* data, const char* detector_type);
+// from opencv2/features2d/features2d.hpp
+typedef struct KeyPoint
+{
+    CvPoint2D32f pt; //!< coordinates of the keypoints
+    float size;      //!< diameter of the meaningful keypoint neighborhood
+    float angle;     //!< computed orientation of the keypoint (-1 if not applicable);
+                     //!< it's in [0,360) degrees and measured relative to
+                     //!< image coordinate system, ie in clockwise.
+    float response;  //!< the response by which the most strong keypoints have been selected. Can be used for the further sorting or subsampling
+    int   octave;    //!< octave (pyramid layer) from which the keypoint has been extracted
+    int   class_id;  //!< object class (if the keypoints need to be clustered by an object they belong to)
+} KeyPoint ;
 
+typedef struct KeyPointVector
+{
+  int length;
+  KeyPoint *data;
+} KeyPointVector;
+
+]]
+
+-- This is a list of wrapper functions encapsulating the opencv
+-- functions we want.  The wrapper functions are defined in opencv.cpp
+-- in an extern "C" block to make the C++ callable from lua C.) These
+-- functions call the needed C++ operators. They accept and return the
+-- opencv C structs defined above.
+ffi.cdef [[ 
+KeyPointVector detect(const CvMat* data, const char* detector_type);
 ]]
 
 -- opencv_core has the C style CvMat stuff.
@@ -99,6 +155,7 @@ require '../util/ctorch'
 opencv = {}
 
 types = {}
+
 -- expanded macros from opencv2/core/types_c.h
 types.CV_8U  = {}
 types.CV_8S  = {}
@@ -166,25 +223,27 @@ function opencv.fromTensor(tensor,dimensions)
    cvmat = ffi.new("CvMat")
    cvmat.rows = height
    cvmat.cols = width
-
    tensor_type = tensor:type()
    if tensor_type == "torch.DoubleTensor" then 
       cvtype = "CV_64F"
       cvmat.data.db  = torch.data(tensor);
+      cvmat.step = 8 * width
    elseif tensor_type == "torch.FloatTensor" then 
       cvtype = "CV_32F"
       cvmat.data.fl  = torch.data(tensor);
+      cvmat.step = 4 * width
    elseif tensor_type == "torch.ByteTensor" then 
       cvtype = "CV_8U"
       cvmat.data.ptr  = torch.data(tensor);
+      cvmat.step = 1 * width
    elseif tensor_type == "torch.IntTensor" then 
       cvtype = "CV_32S"
       cvmat.data.i  = torch.data(tensor);
    elseif tensor_type == "torch.LongTensor" then 
-      cvtype = "CV_64S"
-      cvmat.data.i  = torch.data(tensor);
+      cvtype = "CV_32S"
+      cvmat.data.i  = torch.data(tensor:int());
    elseif tensor_type == "torch.CharTensor" then 
-      cvtype = "CV_8U"
+      cvtype = "CV_8S"
       cvmat.data.ptr  = torch.data(tensor);
    elseif tensor_type == "torch.ShortTensor" then 
       cvtype = "CV_16S"
@@ -195,35 +254,21 @@ function opencv.fromTensor(tensor,dimensions)
    return cvmat
 end
 
--- write in C ?
-function opencv.toTensor(cvmat)
+-- datatype,colorspace, and dims determine the type of tensor we want.
+function opencv.toTensor(cvmat, dataType, colorspace, dims, nocopy)
+
+   -- Dims:
+   local width,height = self:size()
+
    height = cvmat.rows
    width  = cvmat.cols
+   -- bytes per row
    step   = cvmat.step
    mtype  = cvmat.type
    print(height,width,step,mtype)
-
+   t = torch.Tensor()
 end
 
 return opencv
 
--- idea for automatically parsing the c headers
-
--- shell : (careful additionally need to change uchar to unsigned char)
-
--- for header in `find ${CLOUDLAB_INSTALL_ROOT}/include/opencv2/ -name '*_c.h'`
--- do gcc -E -I${CLOUDLAB_INSTALL_ROOT}/include/ $header >>opencv.h 
--- done
-
--- luvit : (but I still can't figure out the childprocess stuff)
--- local include_dir = CLOUDLAB_ROOT .. "/include/"
--- local header_files = { "opencv2/core/types_c.h", "opencv2/core/core_c.h" }
--- local ffi_string = ""
--- for i,v in pairs(header_files) do 
---    file_path = include_dir .. v
---    if not util.fs.is_file(file_path) then 
---       error("can't find header" .. file_path)
---    end
---    --execute 
--- end
 
