@@ -1,3 +1,16 @@
+-- This file contains two parts.  First the ffi interface to opencv
+-- and our C wrappers for opencv. Then the lua wrappers.
+
+-- The lua wrappers to C functions which call the opencv C++
+-- functions. The ffi interface is in libopencv.lua and the c wrapper
+-- functions are written in luaopencv.cpp.
+
+-- All functions in the opencv package take pointers to opencv objects
+-- as input.  There are functions to convert to and from torch.Tensors
+-- which don't copy data when then can.
+
+-- TODO figure out how to put this in another file. To make code more readable.
+
 -- FFI bindings to Opencv:
 local ffi = require "ffi"
 
@@ -140,19 +153,16 @@ typedef struct KeyPointVector
 -- functions call the needed C++ operators. They accept and return the
 -- opencv C structs defined above.
 ffi.cdef [[ 
-KeyPointVector detect(const CvMat* data, const char* detector_type);
+KeyPointVector detect(const CvMat* data, const char* detector_type, const CvMat* mask);
+void draw_keypoints(const CvMat* data, const KeyPointVector kpv);
+
 ]]
 
--- opencv_core has the C style CvMat stuff.
-libopencv_core = util.ffi.load('libopencv_core')
+-- below starts our lua wrappers
+libopencv = {}
+-- load our C wrappers.
+C = util.ffi.load('libcopencv')
 
--- load our wrappers.
-libopencv = util.ffi.load('libluaopencv')
-
-io = require 'io'
-require '../util/ctorch'
-
-opencv = {}
 
 types = {}
 
@@ -194,9 +204,7 @@ types.CV_64F[2] = 14
 types.CV_64F[3] = 22
 types.CV_64F[4] = 30
 
-opencv.types = types
-
-function opencv.fromTensor(tensor,dimensions)
+function libopencv.fromTensor(tensor,dimensions)
    dimensions = dimensions or 'DHW'
    
    local ndim = tensor:nDimension()
@@ -255,8 +263,7 @@ function opencv.fromTensor(tensor,dimensions)
 end
 
 -- datatype,colorspace, and dims determine the type of tensor we want.
-function opencv.toTensor(cvmat, dataType, colorspace, dims, nocopy)
-
+function libopencv.toTensor(cvmat, dataType, colorspace, dims, nocopy)
    -- Dims:
    local width,height = self:size()
 
@@ -269,6 +276,32 @@ function opencv.toTensor(cvmat, dataType, colorspace, dims, nocopy)
    t = torch.Tensor()
 end
 
-return opencv
 
+libopencv.detector_type = {
+   "FAST",      -- FastFeatureDetector
+   "STAR",      -- StarFeatureDetector
+   "SIFT",      -- SIFT (nonfree module)
+   "SURF",      -- SURF (nonfree module)
+   "ORB",       -- ORB
+   "BRISK",     -- BRISK
+   "MSER",      -- MSER
+   "GFTT",      -- GoodFeaturesToTrackDetector
+   "HARRIS",    -- GoodFeaturesToTrackDetector with Harris detector enabled
+   "Dense",     -- DenseFeatureDetector
+   "SimpleBlob" -- SimpleBlobDetector
+}
 
+-- <input> CvMat, String detectorType , CvMat mask
+-- <output> KeyPointsVector
+function libopencv.detect(img_cvmat,detectorType,mask)
+   detectorType = detectorType or "FAST"
+   mask = mask or ffi.new("CvMat")
+   kpvect = C.detect(img_cvmat,detectorType,mask)
+   return kpvect
+end
+
+function libopencv.draw_keypoints(img_cvmat,kpvect)
+   C.draw_keypoints(img_cvmat,kpvect)
+end
+-- function opencv.draw_keypoints()
+return libopencv

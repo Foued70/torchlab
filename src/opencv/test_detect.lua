@@ -1,29 +1,28 @@
-opencv = require './libopencv.lua'
+libopencv = require './libopencv.lua'
+
 img = image.load("DSC_0130.png","byte",nil,"LAB","DHW")
 
-cvmat = opencv.fromTensor(img[1])
-libopencv = util.ffi.load('libluaopencv')
-detector_type = {
-   "FAST",      -- FastFeatureDetector
-   "STAR",      -- StarFeatureDetector
-   "SIFT",      -- SIFT (nonfree module)
-   "SURF",      -- SURF (nonfree module)
-   "ORB",       -- ORB
-   "BRISK",     -- BRISK
-   "MSER",      -- MSER
-   "GFTT",      -- GoodFeaturesToTrackDetector
-   "HARRIS",    -- GoodFeaturesToTrackDetector with Harris detector enabled
-   "Dense",     -- DenseFeatureDetector
-   "SimpleBlob" -- SimpleBlobDetector
-}
+-- TODO: check userdata type
+img_cvmat = libopencv.fromTensor(img[1])
 
-kpvect = libopencv.detect(cvmat,"FAST")
-print(kpvect)
-npts = kpvect.length
+for _,dtype in pairs(libopencv.detector_type) do 
+   print("------------ "..dtype.." ------------------")
+   kptsvect  = libopencv.detect(img_cvmat,dtype)
+   -- keep top 25
+   kptsvect.length = 25
+   -- debug draw in opencv
+   draw_img = libopencv.fromTensor(img[1]:clone())
+   libopencv.draw_keypoints(draw_img,kptsvect)
 
-for i = 0,npts-1 do 
-   cvp = kpvect.data[i]
-   print(i,cvp.pt.x, cvp.pt.y, cvp.response)
+   print(kptsvect)
+   
+   npts = kptsvect.length
+   kpts = kptsvect.data
+   
+   for i = 0,npts do 
+      cvp = kpts[i]
+      print(i,cvp.pt.x, cvp.pt.y, cvp.response)
+   end
 end
 
 -- opencv.toTensor(cvpoints)

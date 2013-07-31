@@ -7,9 +7,9 @@ FIND_PACKAGE( OpenCV REQUIRED )
 
 LINK_DIRECTORIES(${install_lib})
 
-SET(package luaopencv)
+SET(package copencv)
 
-SET(src luaopencv.cpp)
+SET(src copencv.cpp)
 
 ADD_FFI_LIB(${package} ${src})
 
