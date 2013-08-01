@@ -1,5 +1,6 @@
 /* make several C wrappers to access opencv 2.4 c++ objects from lua */
 /* extern "C" makes the functions callable from C */
+#include <iostream>
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/features2d/features2d.hpp"
@@ -21,30 +22,38 @@ typedef struct KeyPointVector
 } KeyPointVector;
 
 extern "C" {
-KeyPointVector detect(const CvMat* data, const char* detector_type, const CvMat* mask)
+  int detect(const CvMat* data, const char* detector_type, const CvMat* mask, KeyPoint* keypointsC, int npts) 
 {
   /* Mat img(height, width, CV_8UC3, pixels, step); */
   Mat img(data);
   
   Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
-  vector<KeyPoint> keypoints;
-  detector->detect( img, keypoints );
+  vector <KeyPoint> keypoints ;
+  detector->detect( img, keypoints, mask);
 
-  // Sort the keypoints by value. The keypoints which fall outside the mask
-  // have been given a low value.
+  // Sort the keypoints by response.
 
   sort(keypoints.begin(), keypoints.end(), KeyPointCompare());
 
-  return {.length = (int)keypoints.size(), .data = keypoints.data()};
+  if (npts > keypoints.size()) {
+    npts = keypoints.size();
+  }
+
+  // memory at &keypoints[0] is guaranteed contiguous.
+  memcpy(keypointsC,keypoints.data(),npts * sizeof(KeyPoint));
+
+  return npts;
 }
 
-void draw_keypoints(const CvMat* data, const KeyPointVector kpv)
+  void debug_keypoints(const CvMat* data, const KeyPoint* keyptr, int npts)
 {
-  vector<KeyPoint> keypoints (kpv.data, kpv.data + kpv.length);
+  vector<KeyPoint> keypoints (keyptr, keyptr + npts);
   Mat img(data);
 
   for(int i=0; i < keypoints.size(); i++){
-    printf("[%d] (%d, %d) %d\n",i,(int)keypoints[i].pt.x, (int)keypoints[i].pt.y, (int)keypoints[i].response);
+    printf("[%d] (%d, %d) %f\n",i,
+           (int)keypoints[i].pt.x, (int)keypoints[i].pt.y, 
+           keypoints[i].response);
   }
   
   drawKeypoints( img, keypoints, img, Scalar::all(-1),

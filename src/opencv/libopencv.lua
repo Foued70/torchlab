@@ -153,8 +153,8 @@ typedef struct KeyPointVector
 -- functions call the needed C++ operators. They accept and return the
 -- opencv C structs defined above.
 ffi.cdef [[ 
-KeyPointVector detect(const CvMat* data, const char* detector_type, const CvMat* mask);
-void draw_keypoints(const CvMat* data, const KeyPointVector kpv);
+int detect(const CvMat* data, const char* detector_type, const CvMat* mask, KeyPoint* kpC, int npts);
+void debug_keypoints(const CvMat* data, const KeyPoint* kptr, int npts);
 
 ]]
 
@@ -292,16 +292,18 @@ libopencv.detector_type = {
 }
 
 -- <input> CvMat, String detectorType , CvMat mask
--- <output> KeyPointsVector
-function libopencv.detect(img_cvmat,detectorType,mask)
+-- <output> KeyPoint*, npts
+function libopencv.detect(img_cvmat,detectorType,npts,mask)
    detectorType = detectorType or "FAST"
    mask = mask or ffi.new("CvMat")
-   kpvect = C.detect(img_cvmat,detectorType,mask)
-   return kpvect
+   npts = npts or 1000
+   keypoints = ffi.new("KeyPoint[?]", npts)
+   npts = C.detect(img_cvmat,detectorType,mask,keypoints[0],npts)
+   return keypoints, npts
 end
 
-function libopencv.draw_keypoints(img_cvmat,kpvect)
-   C.draw_keypoints(img_cvmat,kpvect)
+function libopencv.debug_keypoints(img_cvmat,kpts,npts)
+   C.debug_keypoints(img_cvmat,kpts,npts)
 end
--- function opencv.draw_keypoints()
+
 return libopencv
