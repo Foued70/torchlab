@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <vector>
 #include <math.h>
+#include <string>
+#include <sstream>
 
 using namespace cv;
 using namespace std;
@@ -22,11 +24,8 @@ int max_thresh = 255;
 char* source_window = "Source image";
 char* corners_window = "Corners detected";
 
-std::vector<Point> src_points;
-std::vector<Point> target_points;
-
 /// Function header
-void cornerHarris_demo(Mat img, std::vector<Point> &points);
+void extractHarrisCorners(Mat img, std::vector<Point> &points, int threshold);
 
 void solveAffinePoint(Point p0, Point p1, Point p0_, Point p1_, double * b)
 {
@@ -62,6 +61,14 @@ void solveAffinePoint(Point p0, Point p1, Point p0_, Point p1_, double * b)
     }*/
 }
 
+void resizeMat(Mat& m, size_t rows, size_t cols, const Scalar& s)
+{
+    Mat tm(m.rows + rows, m.cols + cols, m.type());
+    tm.setTo(s);
+    m.copyTo(tm(Rect(Point(0, 0), m.size())));
+    m = tm;
+}
+
 float dist(Point a, Point b)
 {
 	return sqrt( pow((float)(a.x - b.x), 2) + pow((float)(a.y - b.y), 2));
@@ -76,19 +83,17 @@ Point transformPoint(Point p, double * b)
     return ret;
 }
 
-/** @function main */
-int main( int argc, char** argv )
+Point transformPoint(Point p, Mat xform)
 {
-	/// Load source image and convert it to gray
-	
-	cout<< argv[1]<<endl;
-	cout<< argv[2]<<endl;
-	cout<< argv[3]<<endl;
-	
-	src = imread( argv[1], 1 );
-	target = imread ( argv[2], 1);
-	char* result_path = argv[3];
+    Mat point = (Mat_<float>(3, 1) << p.x, p.y, 1);
+    
+    Mat transformed_point = xform * point;
+    
+    return Point(transformed_point.at<float>(1,1)/transformed_point.at<float>(3,1), transformed_point.at<float>(2,1)/transformed_point.at<float>(3,1));
+}
 
+Mat getTransfromation(Mat src, Mat target)
+{
 	cvtColor( src, src_gray, CV_BGR2GRAY );
 	cvtColor( target, target_gray, CV_BGR2GRAY );
 
@@ -102,24 +107,20 @@ int main( int argc, char** argv )
 	
 	cv::dilate(target_gray, target_gray, element);
 	cv::erode(target_gray, target_gray, element);
+	
+	std::vector<Point> src_points;
+	std::vector<Point> target_points;
 
-
-	/// Create a window and a trackbar
-	namedWindow( source_window, CV_WINDOW_AUTOSIZE );
-	//createTrackbar( "Threshold: ", source_window, &thresh, max_thresh, cornerHarris_demo );
-
-	namedWindow( corners_window, CV_WINDOW_AUTOSIZE );
-	//createTrackbar( "Radius: ", corners_window, &radius, max_radius, cornerHarris_demo );
-
-	//imshow( source_window, src_gray );
-
-	cornerHarris_demo(src_gray, src_points);
-	cornerHarris_demo(target_gray, target_points);
+	extractHarrisCorners(src_gray, src_points, thresh);
+	extractHarrisCorners(target_gray, target_points, thresh);
 	
 	int max_inliers = -1;
 	int max_tx = 0;
 	int max_ty = 0;
 	double max_b[4] = {0, 1, 0, 0};
+	
+		int candidate = 0;
+
 	
 	for (std::vector<Point>::iterator it = src_points.begin(); it != src_points.end(); ++it)
     {
@@ -158,12 +159,15 @@ int main( int argc, char** argv )
 								}
 							}
 							
-							if(inliers > max_inliers)
+							if(inliers >= max_inliers)
 							{
+								//do validation here
 								//cout<<"Max found at "<<p_src << "-->"<< p_target << p1_src<< "-->" << p1_target<<endl;
 															
 								max_inliers = inliers;								
 								std::copy(b, b+4, max_b);
+								
+								candidate++;
 							}
 						}
 						
@@ -171,31 +175,80 @@ int main( int argc, char** argv )
 				}
 		}
     }
+    
+    cout<<"Candidate "<<candidate<<endl;
 	
-	Mat warp_mat = (Mat_<float>(2, 3) << max_b[1], -max_b[0], max_b[2], max_b[0], max_b[1], max_b[3]);
+	Mat warp_mat = (Mat_<float>(3, 3) << max_b[1], -max_b[0], max_b[2], max_b[0], max_b[1], max_b[3], 0, 0, 1);
 
 	cout<<"Affine Warp has "<<max_inliers<<" inliers"<<endl;
 	
 	cout<<warp_mat<<endl;
 	
-	Point src_bounds = transformPoint(Point(src.rows, src.cols), max_b);
-	
-	Mat translated_src = Mat::zeros( std::max(src_bounds.x, target.rows), std::max(src_bounds.y, target.cols), src.type() );
-	warpAffine( src, translated_src, warp_mat, translated_src.size() );
-	
-	Mat result = Mat::zeros(translated_src.rows, translated_src.cols, src.type());
-	
-	for (int i = 0; i < result.rows; i++)
-	{
-		for (int j = 0; j < result.cols; j++)
-		{
-			if(i < translated_src.rows && j < translated_src.cols)
-				result.data[result.step[0]*i + result.step[1]* j + 2] += translated_src.data[translated_src.step[0]*i + translated_src.step[1]* j + 2];
-				
-			if(i < target.rows && j < target.cols)
-				result.data[result.step[0]*i + result.step[1]* j + 1] += target.data[target.step[0]*i + target.step[1]* j + 1];
+	return warp_mat;
+}
 
+/** @function main */
+int main( int argc, char** argv )
+{
+
+	int start = 90;
+	int end = 70;
+	
+	char* result_path = argv[1];
+	
+	int result_size = 2700;
+	int result_center_x = 500;
+	int result_center_y = 1700;
+	
+	//x-form accumulator;
+	Mat Acc = (Mat_<float>(3, 3) << 1, 0, result_center_x, 0, 1, result_center_y, 0, 0, 1);
+	
+	Mat result;
+
+	int ctr = 10;
+	
+	for(int img_num = start; img_num > end; img_num--)
+	{
+		std::stringstream ss;
+		ss << img_num;
+		
+		std::stringstream ss1;
+		ss1 << (img_num - 1);
+
+		
+		std::string target_num(ss.str());
+		std::string src_num(ss1.str());
+	
+		string src_filename = std::string("flattened_input_15/") + src_num + std::string(".png");
+		string target_filename = std::string("flattened_input_15/") + target_num + std::string(".png");
+		
+		cout<<"Target: "<<target_filename<<endl;
+		cout<<"Source: "<<src_filename<<endl;
+		
+		src = imread( src_filename, 1 );
+		target = imread ( target_filename, 1);
+		
+		//copy first target into result
+		if(img_num == start)
+		{
+			result = Mat::zeros(result_size, result_size, target.type());			
+			warpPerspective( target, result, Acc, result.size() );
 		}
+		
+		//get transformation of source
+		Mat xform = getTransfromation(src, target);
+		
+		//accumulate transformation
+		Acc = Acc * xform; 
+		
+		//save target
+		Mat tempresult = result.clone();
+
+		warpPerspective( src, result, Acc, result.size() );
+		
+		result = result + tempresult;
+		
+		imwrite( src_num+result_path, result );
 	}
 	
 	imwrite( result_path, result );
@@ -204,7 +257,7 @@ int main( int argc, char** argv )
 }
 
 /** @function cornerHarris_demo */
-void cornerHarris_demo(Mat img, std::vector<Point> &points)
+void extractHarrisCorners(Mat img, std::vector<Point> &points, int threshold)
 {
 
 	Mat dst, dst_norm, dst_norm_scaled;
@@ -225,7 +278,7 @@ void cornerHarris_demo(Mat img, std::vector<Point> &points)
 	int h = dst_norm.rows;
 	int w = dst_norm.cols;
 
-	cout << "Finding interest points at threshold "<<thresh << " & radius " << radius << endl;
+	cout << "Finding interest points at threshold "<<threshold << " & radius " << radius << endl;
 
 	/// Drawing a circle around corners
 	for( int y = 0; y < h ; y++ )
@@ -252,7 +305,7 @@ void cornerHarris_demo(Mat img, std::vector<Point> &points)
 			}
 
 			//ensure interest point is above threshold and is local minimum
-			if((int)dst_norm.at<float>(y,x) > thresh && x == max_x && y==max_y)
+			if((int)dst_norm.at<float>(y,x) > threshold && x == max_x && y==max_y)
 				//circle( dst_norm_scaled, Point(x, y), 5,  Scalar(0), 2, 8, 0 );
 				points.push_back(Point(x, y));
 		  }
