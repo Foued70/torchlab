@@ -7,8 +7,6 @@
 #include <stdlib.h>
 #include <vector>
 #include <math.h>
-#include <string>
-#include <sstream>
 
 using namespace cv;
 using namespace std;
@@ -24,8 +22,11 @@ int max_thresh = 255;
 char* source_window = "Source image";
 char* corners_window = "Corners detected";
 
+std::vector<Point> src_points;
+std::vector<Point> target_points;
+
 /// Function header
-void extractHarrisCorners(Mat img, std::vector<Point> &points, int threshold);
+void cornerHarris_demo(Mat img, std::vector<Point> &points);
 
 void solveAffinePoint(Point p0, Point p1, Point p0_, Point p1_, double * b)
 {
@@ -61,14 +62,6 @@ void solveAffinePoint(Point p0, Point p1, Point p0_, Point p1_, double * b)
     }*/
 }
 
-void resizeMat(Mat& m, size_t rows, size_t cols, const Scalar& s)
-{
-    Mat tm(m.rows + rows, m.cols + cols, m.type());
-    tm.setTo(s);
-    m.copyTo(tm(Rect(Point(0, 0), m.size())));
-    m = tm;
-}
-
 float dist(Point a, Point b)
 {
 	return sqrt( pow((float)(a.x - b.x), 2) + pow((float)(a.y - b.y), 2));
@@ -83,21 +76,10 @@ Point transformPoint(Point p, double * b)
     return ret;
 }
 
-Point transformPoint(Point p, Mat xform)
-{
-    Mat point = (Mat_<float>(3, 1) << p.x, p.y, 1);
-    
-    Mat transformed_point = xform * point;
-    
-    return Point(transformed_point.at<float>(1,1)/transformed_point.at<float>(3,1), transformed_point.at<float>(2,1)/transformed_point.at<float>(3,1));
-}
+int debug_ctr = 0;
 
-float scoreTransformation(Mat src, Mat target, double * max_b)
+void writeImage(Mat src, Mat target, double * max_b, string result_path)
 {	
-	float score; 
-	int overlapping = 0;
-	int total = 0;
-
 	Point transformed_src_bounds_1 = transformPoint(Point(0, 0), max_b);
 	Point transformed_src_bounds_2 = transformPoint(Point(0, src.rows), max_b);
 	Point transformed_src_bounds_3 = transformPoint(Point(src.cols, 0), max_b);
@@ -112,14 +94,23 @@ float scoreTransformation(Mat src, Mat target, double * max_b)
 	Point transformed_src_min_bounds = Point(aa, bb);
 	Point transformed_src_max_bounds = Point(cc, dd);
 	
+	//cerr<<"transformed_src_min_bounds :"<< transformed_src_min_bounds <<endl;
+	//cerr<<"transformed_src_max_bounds :"<< transformed_src_max_bounds <<endl;
+	
 	int transformed_src_rows = transformed_src_max_bounds.y - transformed_src_min_bounds.y;
 	int transformed_src_cols = transformed_src_max_bounds.x - transformed_src_min_bounds.x;
 	
 	Point transformed_src_translation = Point(std::max(transformed_src_min_bounds.x, 0), std::max(transformed_src_min_bounds.y, 0));
 	Point target_translation = Point(std::max(-1*transformed_src_min_bounds.x, 0), std::max(-1*transformed_src_min_bounds.y, 0));
 	
+	//cerr<<"transformed_src_translation :"<< transformed_src_translation <<endl;
+	//cerr<<"target_translation :"<< target_translation <<endl;
+	
 	Point transformed_src_center = transformPoint(Point(src.cols/2, src.rows/2), max_b) - transformed_src_min_bounds + transformed_src_translation;
 	Point target_center = Point(target.cols/2, target.rows/2) + target_translation;
+
+	cerr<<"Source Center :"<<transformed_src_center<<endl;
+	cerr<<"Target Center :"<<target_center<<endl;
 
 	Mat transformed_src = Mat::zeros( transformed_src_rows, transformed_src_cols, src.type() );
 	
@@ -147,27 +138,32 @@ float scoreTransformation(Mat src, Mat target, double * max_b)
 				
 			if(target_row > 0 && target_row < target.rows && target_col > 0 && target_col < target.cols)
 				result.data[result.step[0]*i + result.step[1]* j + 1] += target.data[target.step[0]*target_row + target.step[1]* target_col + 1];
-			
-			//calculate score
-			if(result.data[result.step[0]*i + result.step[1]* j + 2] > 0 || result.data[result.step[0]*i + result.step[1]* j + 1] > 0)
-			{
-				total++;
-				if(result.data[result.step[0]*i + result.step[1]* j + 2] == result.data[result.step[0]*i + result.step[1]* j + 1])
-					overlapping++;
-			}
+
 		}
 	}
 	
-	//write debug image
-	//imwrite( result_path, result );
+// 	stringstream ss;
+// 	ss << debug_ctr++;
+// 	string str = ss.str();
+// 	
+// 	imwrite( str+std::string("_transformed_src.png"), transformed_src );
 	
-	score = (float) overlapping / (float) total * 100.0;
-	
-	return score;
+	imwrite( result_path, result );
 }
 
-Mat getTransfromation(Mat src, Mat target)
+/** @function main */
+int main( int argc, char** argv )
 {
+	/// Load source image and convert it to gray
+	
+	cout<< argv[1]<<endl;
+	cout<< argv[2]<<endl;
+	cout<< argv[3]<<endl;
+	
+	src = imread( argv[1], 1 );
+	target = imread ( argv[2], 1);
+	char* result_path = argv[3];
+
 	cvtColor( src, src_gray, CV_BGR2GRAY );
 	cvtColor( target, target_gray, CV_BGR2GRAY );
 
@@ -181,22 +177,19 @@ Mat getTransfromation(Mat src, Mat target)
 	
 	cv::dilate(target_gray, target_gray, element);
 	cv::erode(target_gray, target_gray, element);
-	
-	std::vector<Point> src_points;
-	std::vector<Point> target_points;
 
-	extractHarrisCorners(src_gray, src_points, thresh);
-	extractHarrisCorners(target_gray, target_points, thresh);
+
+	cornerHarris_demo(src_gray, src_points);
+	cornerHarris_demo(target_gray, target_points);
 	
 	int max_inliers = -1;
-	float max_score = -1.0;
-	int max_candidate = -1;
 	int max_tx = 0;
 	int max_ty = 0;
 	double max_b[4] = {0, 1, 0, 0};
 	
 	int candidate = 0;
-
+	
+	cout<<argv[1]<<" to "<<argv[2]<<endl;
 	
 	for (std::vector<Point>::iterator it = src_points.begin(); it != src_points.end(); ++it)
     {
@@ -237,28 +230,24 @@ Mat getTransfromation(Mat src, Mat target)
 							
 							if(inliers >= max_inliers)
 							{
-								//do validation here
+								//cout<<"Max found at "<<p_src << "-->"<< p_target << p1_src<< "-->" << p1_target<<endl;
+															
+								max_inliers = inliers;								
+								std::copy(b, b+4, max_b);
 								
-								if(inliers > max_inliers)
-								{
-									max_inliers = inliers;	
-									max_score = scoreTransformation(src, target, b);							
-									max_candidate = candidate;
-									std::copy(b, b+4, max_b);
-								}
-								else if(inliers == max_inliers)
-								{
-									float score = scoreTransformation(src, target, b);
+								std::stringstream ss1;
+								ss1 << (candidate);
+
+								std::string result_num(ss1.str());
+	
+								string result_path_str = std::string(result_path) + std::string("/") + result_num + std::string(".png");
+																		
+								cerr<<"Candidate "<<candidate<<endl;
+								cerr<<"Inliers : "<<inliers<<endl;
 								
-									if(score > max_score)
-									{
-									//cout<<"Max found at "<<p_src << "-->"<< p_target << p1_src<< "-->" << p1_target<<endl;															
-										max_inliers = inliers;	
-										max_score = score;
-										max_candidate = candidate;					
-										std::copy(b, b+4, max_b);
-									}								
-								}							
+								writeImage(src, target, b, result_path_str);
+								
+								//cerr<<endl;
 								
 								candidate++;
 							}
@@ -268,91 +257,12 @@ Mat getTransfromation(Mat src, Mat target)
 				}
 		}
     }
-    
-    cout<<"Candidates :"<<candidate<<endl;
-    cout<<"Max Candidate :"<<max_candidate<<endl;
-    cout<<"Max Score :"<<max_score<<endl;
-	
-	Mat warp_mat = (Mat_<float>(3, 3) << max_b[1], -max_b[0], max_b[2], max_b[0], max_b[1], max_b[3], 0, 0, 1);
-
-	cout<<"Affine Warp has "<<max_inliers<<" inliers"<<endl;
-	
-	cout<<warp_mat<<endl;
-	
-	return warp_mat;
-}
-
-/** @function main */
-int main( int argc, char** argv )
-{
-
-	int start = 90;
-	int end = 70;
-	
-	char* result_path = argv[1];
-	
-	int result_size = 2700;
-	int result_center_x = 500;
-	int result_center_y = 1700;
-	
-	//x-form accumulator;
-	Mat Acc = (Mat_<float>(3, 3) << 1, 0, result_center_x, 0, 1, result_center_y, 0, 0, 1);
-	
-	Mat result;
-
-	int ctr = 10;
-	
-	for(int img_num = start; img_num > end; img_num--)
-	{
-		std::stringstream ss;
-		ss << img_num;
-		
-		std::stringstream ss1;
-		ss1 << (img_num - 1);
-
-		
-		std::string target_num(ss.str());
-		std::string src_num(ss1.str());
-	
-		string src_filename = std::string("flattened_input_15/") + src_num + std::string(".png");
-		string target_filename = std::string("flattened_input_15/") + target_num + std::string(".png");
-		
-		cout<<"Target: "<<target_filename<<endl;
-		cout<<"Source: "<<src_filename<<endl;
-		
-		src = imread( src_filename, 1 );
-		target = imread ( target_filename, 1);
-		
-		//copy first target into result
-		if(img_num == start)
-		{
-			result = Mat::zeros(result_size, result_size, target.type());			
-			warpPerspective( target, result, Acc, result.size() );
-		}
-		
-		//get transformation of source
-		Mat xform = getTransfromation(src, target);
-		
-		//accumulate transformation
-		Acc = Acc * xform; 
-		
-		//save target
-		Mat tempresult = result.clone();
-
-		warpPerspective( src, result, Acc, result.size() );
-		
-		result = result + tempresult;
-		
-		imwrite( src_num+result_path, result );
-	}
-	
-	imwrite( result_path, result );
 	
 	return(0);
 }
 
 /** @function cornerHarris_demo */
-void extractHarrisCorners(Mat img, std::vector<Point> &points, int threshold)
+void cornerHarris_demo(Mat img, std::vector<Point> &points)
 {
 
 	Mat dst, dst_norm, dst_norm_scaled;
@@ -373,7 +283,7 @@ void extractHarrisCorners(Mat img, std::vector<Point> &points, int threshold)
 	int h = dst_norm.rows;
 	int w = dst_norm.cols;
 
-	cout << "Finding interest points at threshold "<<threshold << " & radius " << radius << endl;
+	cout << "Finding interest points at threshold "<<thresh << " & radius " << radius << endl;
 
 	/// Drawing a circle around corners
 	for( int y = 0; y < h ; y++ )
@@ -400,7 +310,7 @@ void extractHarrisCorners(Mat img, std::vector<Point> &points, int threshold)
 			}
 
 			//ensure interest point is above threshold and is local minimum
-			if((int)dst_norm.at<float>(y,x) > threshold && x == max_x && y==max_y)
+			if((int)dst_norm.at<float>(y,x) > thresh && x == max_x && y==max_y)
 				//circle( dst_norm_scaled, Point(x, y), 5,  Scalar(0), 2, 8, 0 );
 				points.push_back(Point(x, y));
 		  }
