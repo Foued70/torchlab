@@ -1,27 +1,37 @@
+libopencv = require './libopencv.lua'
 
-opencv = require './libopencv.lua'
--- t = torch.CharTensor(256,256)
 img = image.load("DSC_0130.png","byte",nil,"LAB","DHW")
 
-cvmat = opencv.fromTensor(img[1])
-libopencv = util.ffi.load('libluaopencv')
-detector_type = {
-   "FAST",      -- FastFeatureDetector
-   "STAR",      -- StarFeatureDetector
-   "SIFT",      -- SIFT (nonfree module)
-   "SURF",      -- SURF (nonfree module)
-   "ORB",       -- ORB
-   "BRISK",     -- BRISK
-   "MSER",      -- MSER
-   "GFTT",      -- GoodFeaturesToTrackDetector
-   "HARRIS",    -- GoodFeaturesToTrackDetector with Harris detector enabled
-   "Dense",     -- DenseFeatureDetector
-   "SimpleBlob" -- SimpleBlobDetector
-}
+img_cvmat = libopencv.fromTensor(img[1])
 
-cvpoints = libopencv.detectfeatures(cvmat,"FAST")
-print(cvpoints)
-opencv.toTensor(cvpoints)
+kptbl = {}
+nptbl = {}
 
-cvpoints = libopencv.detectfeatures(cvmat,"HARRIS")
-cvpoints = libopencv.detectfeatures(cvmat,"GFTT")
+for _,dtype in pairs(libopencv.detector_type) do 
+
+   kpts, npts  = libopencv.detect(img_cvmat,dtype,25)
+
+   -- save the kpts
+   table.insert(kptbl,kpts)
+   table.insert(nptbl,npts)
+   
+end
+
+-- now show that the memory is still around
+for ti,kpts in pairs(kptbl) do 
+   dtype = libopencv.detector_type[ti]
+   npts = nptbl[ti]
+
+   print("------------ "..dtype.." ------------------")
+
+   -- debug draw in opencv
+   draw_img = libopencv.fromTensor(img[1]:clone())
+   libopencv.debug_keypoints(draw_img,kpts,npts)
+
+
+   for i = 0,npts-1 do 
+      cvp = kpts[i]
+      print(i,cvp.pt.x, cvp.pt.y, cvp.response)
+   end
+end
+

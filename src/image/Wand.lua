@@ -4,6 +4,9 @@ local ctorch = util.ctorch
 
 local Wand = Class()
 
+-- TODO: add info function for reading exif information.
+-- TODO: return call function to chain commands.
+
 -- Constructor:
 function Wand:__init(pathOrTensor, ...)
    -- Create new instance:
@@ -270,7 +273,10 @@ function Wand:toTensor(dataType, colorspace, dims, nocopy)
    -- common colorspaces are: RGB, RGBA, CYMK, and I
 
    -- Other colorspaces?
-   if colorspace == 'HSL' or colorspace == 'HWB' or colorspace == 'LAB' or colorspace == 'YUV' then
+   if colorspace == 'HSL' or 
+      colorspace == 'HWB' or 
+      colorspace == 'LAB' or 
+      colorspace == 'YUV' then
       -- Switch to colorspace:
       self:colorspace(colorspace)
       colorspace = 'RGB'
@@ -279,13 +285,18 @@ function Wand:toTensor(dataType, colorspace, dims, nocopy)
    -- Type:
    dataType = dataType or 'byte'
    local tensorType, pixelType
-   if dataType == 'byte' or dataType == 'torch.ByteTensor' or dataType == 'torch.CharTensor' then
-      tensorType = 'ByteTensor'
-      pixelType = 'CharPixel'
-   elseif dataType == 'float' or dataType == 'torch.FloatTensor' then
+   if dataType == 'byte' or 
+      dataType == 'torch.ByteTensor' or 
+      dataType == 'torch.CharTensor' then
+         -- torch CharTensor is -127,127 
+         tensorType = 'ByteTensor'
+         pixelType = 'CharPixel'
+   elseif dataType == 'float' or 
+          dataType == 'torch.FloatTensor' then
       tensorType = 'FloatTensor'
       pixelType = 'FloatPixel'
-   elseif dataType == 'double' or dataType == 'torch.DoubleTensor' then
+   elseif dataType == 'double' or 
+          dataType == 'torch.DoubleTensor' then
       tensorType = 'DoubleTensor'
       pixelType = 'DoublePixel'
    else

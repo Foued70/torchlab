@@ -461,6 +461,7 @@ next(slide)
 print [[ We can do all the operations above in one line. ]]
 eval [[
 log:tic()
+output:resize(input:size())
 torch.mm(output,
          input,
          mat:t()):add(
