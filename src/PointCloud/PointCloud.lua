@@ -254,27 +254,26 @@ function PointCloud:downsample(leafsize)
 	--leafsize is edge length of voxel
 	scale = leafsize + 0.000000001
 	local ranges = self.maxval[1] - self.minval[1]
-	local pix = ranges/scale
-	local bin = {}
+	local pix = (ranges/scale+1):floor()
+	--local bin = {}
 	local pts = {}
 	local rgb = {}
-	for i=1,self.count do
-		local coord = (self.points[i]-self.minval[1])/scale + 1
-		coord:floor()
-		if not bin[coord[1]] then
-			bin[coord[1]]={}
-		end
-		if not bin[coord[1]][coord[2]] then
-			bin[coord[1]][coord[2]]={}
-		end
-		if not bin[coord[1]][coord[2]][coord[3]] then
-			bin[coord[1]][coord[2]][coord[3]]=1
-			local pt = (coord-1)*scale + self.minval[1]
-			table.insert(pts, {pt[1],pt[2],pt[3]})
-			table.insert(rgb, {self.rgb[i][1],self.rgb[i][2],self.rgb[i][3]})
-		end
-	end
-	bin=nil
+	
+	local tmp = torch.Tensor(self.count)
+	local bin = torch.zeros(pix[1], pix[2], pix[3])
+	local coord = ((self.points-self.minval[1]:repeatTensor(self.count,1))/scale):floor() + 1
+	local ptss = (coord-1)*scale + self.minval[1]:repeatTensor(self.count,1)
+	
+	local i = 0
+	tmp:apply(function()
+			  i = i+1
+			  if bin[{coord[i][1],coord[i][2],coord[i][3]}] < 1 then
+			  	bin[{coord[i][1],coord[i][2],coord[i][3]}] = bin[{coord[i][1],coord[i][2],coord[i][3]}] + 1
+				table.insert(pts, {ptss[i][1],ptss[i][2],ptss[i][3]})
+				table.insert(rgb, {self.rgb[i][1],self.rgb[i][2],self.rgb[i][3]})
+			  end
+			  end)
+	
 	local downsampled = PointCloud.new()
 	downsampled.height = 0;
   	downsampled.width = 0;
@@ -315,7 +314,6 @@ function PointCloud:make_flattened_images(scale)
 	imagez=(imagez*256/(imagez:max()+0.000001)):floor()
 	self.imagez = imagez:resize(height,width):repeatTensor(3,1,1)
 	collectgarbage()
-	
 end
 
 function PointCloud:make_3dtree()
@@ -323,6 +321,7 @@ function PointCloud:make_3dtree()
 	collectgarbage()
 end
 
+--[[
 function PointCloud:make_sub_pointcloud(index_tensor)
 	local sub_ptcld = PointCloud.new()
 	if index_tensor then
@@ -332,14 +331,15 @@ function PointCloud:make_sub_pointcloud(index_tensor)
 		sub_ptcld.centroid = torch.zeros(1,3)
 		
 		for i=1,index_tensor:size(1) do
-			sub_ptcld.points[i] = self.points[index_tensor[i]]
-			sub_ptcld.rgb[i] = self.rgb[index_tensor[i]]
+			sub_ptcld.points[i] = self.points[index_tensor[i] ]
+			sub_ptcld.rgb[i] = self.rgb[index_tensor[i] ]
 		end
 		sub_ptcld:reset_point_stats()
     end
     collectgarbage()
     return sub_ptcld
 end
+
 
 function PointCloud:compute_normals_at_all_points_nn(num)
 	if self.points then
@@ -412,3 +412,4 @@ function PointCloud:compute_covariance_matrix()
 	collectgarbage()
 	return cov
 end
+]]

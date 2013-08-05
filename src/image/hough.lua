@@ -73,9 +73,12 @@ local function isBestInWindow(hT, r, a, winR, winA)
 end
 
 function hough.find_best_lines(hT, numBest)
+  
   local numRadius = hT:size(1);
   local numAngles = hT:size(2);
   local ret = torch.zeros(numBest,3);
+  
+
   for ir = 1,numRadius do
     for ja = 1,numAngles do
       local val = hT[ir][ja]
@@ -93,6 +96,7 @@ function hough.find_best_lines(hT, numBest)
       end
     end
   end
+
   return ret
 end
 
