@@ -1,9 +1,18 @@
 include ../Makefile.common
 
-ver=6407b23d13e21e3376ea5558921e6d9df325d328
-url=https://github.com/luvit/luvit.git
+# local_source=/Users/dustin/src/luvit
 
-git_clone=$(build_dir)/deps/luvit
+ver=master
+
+git_source=https://github.com/floored/luvit
+
+ifdef local_source
+	git_clone=$(local_source)
+else
+	git_clone=$(build_dir)/deps/luvit
+	clean_clone=$(git_clone)
+endif	
+
 
 install=$(install_root)/bin/luvit
 
@@ -20,5 +29,7 @@ $(install): $(git_clone)
 
 
 $(git_clone):
-	git clone --recursive $(url) $(git_clone)
+	git clone --recursive $(git_source) $(git_clone)
 
+clean:
+	rm -rf $(clean_clone)
