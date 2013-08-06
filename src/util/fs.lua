@@ -72,5 +72,8 @@ end
 
 
 function mkdir_p(dir_path, mode)
+  mode = mode or '0777'
+  local parent_path = path.dirname(dir_path)
+  if not fs.existsSync(parent_path) then mkdir_p(parent_path, mode) end
   if not fs.existsSync(dir_path) then fs.mkdirSync(dir_path, mode) end
 end
