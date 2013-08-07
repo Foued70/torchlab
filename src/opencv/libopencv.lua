@@ -136,10 +136,8 @@ libopencv.detector_type = {
 -- <input> Mat img, String detectorType , Mat mask
 -- <output> KeyPoint*, npts
 function libopencv.detect(mat,detectorType,npts,mask)
-   -- TODO check mat
    detectorType = detectorType or "FAST"
-   -- to do
-   mask = mask or ffi.new("Mat")
+   mask = mask or libopencv.C.Mat_create(0,0,0)
    npts = npts or 1000
    keypoints = ffi.new("KeyPoint[?]", npts)
    npts = libopencv.C.detect(mat,detectorType,mask,keypoints[0],npts)

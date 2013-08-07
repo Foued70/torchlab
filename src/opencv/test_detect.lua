@@ -1,16 +1,16 @@
-opencv    = opencv.opencv
+opencv    = opencv.init
 libopencv = require './libopencv.lua'
 
 img = image.load("DSC_0130.png","byte",nil,"LAB","DHW")
 
-imat = opencv.MatfromTensor(img[1])
+mat = opencv.MatfromTensor(img[1])
 
 kptbl = {}
 nptbl = {}
 
 for _,dtype in pairs(libopencv.detector_type) do 
 
-   kpts, npts  = opencv.detect(mat,dtype,25)
+   kpts, npts  = libopencv.detect(mat,dtype,25)
 
    -- save the kpts
    table.insert(kptbl,kpts)
@@ -28,8 +28,9 @@ for ti,kpts in pairs(kptbl) do
    -- debug draw in opencv
    draw_img = opencv.MatfromTensor(img[1]:clone())
    libopencv.debug_keypoints(draw_img,kpts,npts)
-   drawn_t = opencv.MattoTensor(draw_img)
-   image.display(drawn_t)
+   libopencv.C.Mat_showImage(draw_img, dtype)
+   -- drawn_t = opencv.MattoTensor(draw_img)
+   -- image.display(drawn_t)
    for i = 0,npts-1 do 
       cvp = kpts[i]
       print(i,cvp.pt.x, cvp.pt.y, cvp.response)

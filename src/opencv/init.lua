@@ -1,5 +1,6 @@
 ffi = require 'ffi'
 libopencv = require './libopencv'
+ctorch = util.ctorch
 Class()
 
 function MatfromTensor(tensor,dimensions)
@@ -11,22 +12,22 @@ function MatfromTensor(tensor,dimensions)
 
    tensor_type = tensor:type()
    if tensor_type == "torch.DoubleTensor" then
-      mat = ffi.gc(libopencv.C.THDoubleTensor_toMat(tensor),
+      mat = ffi.gc(libopencv.C.THDoubleTensor_toMat(torch.cdata(tensor)),
                    function (mat)
                       libopencv.C.Mat_destroy(mat)
                    end)
    elseif tensor_type == "torch.FloatTensor" then
-      mat = ffi.gc(libopencv.C.THFloatTensor_toMat(tensor),
+      mat = ffi.gc(libopencv.C.THFloatTensor_toMat(torch.cdata(tensor)),
                    function (mat)
                       libopencv.C.Mat_destroy(mat)
                    end)
    elseif tensor_type == "torch.ByteTensor" then
-      mat = ffi.gc(libopencv.C.THByteTensor_toMat(tensor),
+      mat = ffi.gc(libopencv.C.THByteTensor_toMat(torch.cdata(tensor)),
                    function (mat)
                       libopencv.C.Mat_destroy(mat)
                    end)
    elseif tensor_type == "torch.IntTensor" then
-      mat = ffi.gc(libopencv.C.THIntTensor_toMat(tensor),
+      mat = ffi.gc(libopencv.C.THIntTensor_toMat(torch.cdata(tensor)),
                    function (mat)
                       libopencv.C.Mat_destroy(mat)
                    end)
@@ -37,12 +38,12 @@ function MatfromTensor(tensor,dimensions)
                       libopencv.C.Mat_destroy(mat)
                    end) 
    elseif tensor_type == "torch.CharTensor" then
-      mat = ffi.gc(libopencv.C.THCharTensor_toMat(tensor),
+      mat = ffi.gc(libopencv.C.THCharTensor_toMat(torch.cdata(tensor)),
                    function (mat)
                       libopencv.C.Mat_destroy(mat)
                    end)
    elseif tensor_type == "torch.ShortTensor" then
-      mat = ffi.gc(libopencv.C.THShortTensor_toMat(tensor),
+      mat = ffi.gc(libopencv.C.THShortTensor_toMat(torch.cdata(tensor)),
                    function (mat)
                       libopencv.C.Mat_destroy(mat)
                    end)
