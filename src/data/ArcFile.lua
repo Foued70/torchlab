@@ -46,11 +46,14 @@ function ArcFile:upload()
 end
 
 -- download the file if we don't have a local copy
-function ArcFile:download()
-  if not self:needs_download() then return end
-  local result = net.Depot.get_arc_file(self.path, self.filename)
-  fs.utimeSync(self.filename, self.server_mod_time/1000, self.server_mod_time/1000)
-  return result
+function ArcFile:download(callback)
+  if not self:needs_download() then callback(nil, self.filename) return end
+  net.Depot.get_arc_file(self.path, self.filename, function(err)
+    if not err then
+      fs.utimeSync(self.filename, self.server_mod_time/1000, self.server_mod_time/1000)
+    end
+    callback(err, self.filename)
+  end)
 end
 
 -- upload the file if it has changed
@@ -60,9 +63,10 @@ end
 
 
 -- download the if it's stale and return the file handle
-function ArcFile:open(mode)
-  self:download()
-  return io.open(self.filename, mode)
+function ArcFile:open(mode, callback)
+  self:download(function (err)
+    p(err)
+  end)
 end
 
 function ArcFile.parsed()

@@ -4,12 +4,13 @@ local fs = require'fs'
 local path = require'path'
 
 
-CACHE_ROOT = path.join(util.Properties.cloudlab.tmp_dir or process.env.TMPDIR, 'arcs') 
+CACHE_ROOT = path.join(CLOUDLAB_ROOT, 'tmp', 'arcs')
 
-function get(id)
+function get(id, callback)
   local arc = Arc.new(id)
-  arc:refresh()
-  return arc
+  arc:refresh(function (err) callback(err, arc) end)
+
+  return arc -- useful for the repl
 end
 
 function Arc:__init(arc_path)
@@ -18,12 +19,21 @@ function Arc:__init(arc_path)
   util.fs.mkdir_p(dir)
 end
 
+function Arc:dirname()
+  return path.join(CACHE_ROOT, self.path)
+end
+
 
 -- Get the latest tree from the server.
 -- This won't change any files, but will mark them as stale if a new version exists on the server.
-function Arc:refresh()
+function Arc:refresh(callback)
   net.Depot.get_arc(self.path, function(err, tree)
-    self:populate(tree)
+    if not err then
+      self:populate(tree)
+    else
+      log.error(err)
+    end
+    callback(err)
   end)
 end
 
@@ -84,7 +94,7 @@ end
 
 
 function Arc:import_all()
-  local dir = path.join(CACHE_ROOT, self.path)
+  local dir = self:dirname()
   local files = fs.readdirSync(dir)
   for i, filename in ipairs(files) do
     if filename:sub(1, 1) ~= '.' then -- no dot files
@@ -109,6 +119,7 @@ end
 
 
 function Arc:save()
+  self:import_all()
   for name, value in pairs(self) do
     if (value.__class__ == data.Arc or value.__class__ == data.ArcFile) then
       value:save()
