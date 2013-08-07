@@ -28,13 +28,13 @@ typedef struct THTensor
  ]]
 
 local type_map = {}
-type_map['torch.DoubleTensor'] = {'THDouble', 'THDoubleTensor*', 'double'}
-type_map['torch.FloatTensor']  = {'THFloat', 'THFloatTensor*', 'float'}
-type_map['torch.ByteTensor']   = {'THByte', 'THByteTensor*', 'unsigned char'}
-type_map['torch.CharTensor']   = {'THChar', 'THCharTensor*', 'char'}
-type_map['torch.ShortTensor']  = {'THShort', 'THShortTensor*', 'short'}
-type_map['torch.IntTensor']    = {'THInt', 'THIntTensor*', 'int'}
-type_map['torch.LongTensor']   = {'THLong', 'THLongTensor*', 'long'}
+type_map['torch.DoubleTensor'] = {'THDouble', 'THDoubleTensor', 'double'}
+type_map['torch.FloatTensor']  = {'THFloat',  'THFloatTensor',  'float'}
+type_map['torch.ByteTensor']   = {'THByte',   'THByteTensor',   'unsigned char'}
+type_map['torch.CharTensor']   = {'THChar',   'THCharTensor',   'char'}
+type_map['torch.ShortTensor']  = {'THShort',  'THShortTensor',  'short'}
+type_map['torch.IntTensor']    = {'THInt',    'THIntTensor',    'int'}
+type_map['torch.LongTensor']   = {'THLong',   'THLongTensor',   'long'}
 
 
 -- save memory by building table
@@ -44,18 +44,18 @@ for T,t in pairs(type_map) do
    ffi.cdef(s)
 end
 
--- Method to return pointer to raw data
-function torch.data(tensor)
-  local type_info = type_map[torch.typename(tensor)]
-  local t = ffi.cast(type_info[2], torch.pointer(tensor))
-  return t.storage.data
-end 
-
 -- Method to return c pointer to tensor or storage struct to pass to C
 function torch.cdata(tensor)
   local type_info = type_map[torch.typename(tensor)]
-  return ffi.cast(type_info[2], torch.pointer(tensor))
+  return ffi.cast(type_info[2].."*", torch.pointer(tensor))
 end 
+
+-- Method to return pointer to raw data
+function torch.data(tensor)
+  local t = torch.cdata(tensor)
+  return t.storage.data
+end 
+
 
 function storage_info(tensor)
   -- log.trace(torch.typename(tensor))
