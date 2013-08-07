@@ -1,6 +1,8 @@
 local fs = require'fs'
 local path = require 'path'
 local debug = require 'debug'
+local Watcher = require('uv').Watcher
+
 
 local loaded_classes = {}
 
@@ -19,16 +21,36 @@ local function create_class_for_name(name, class)
   local last_package, last_part
   for part in name:gmatch('[^/]+') do
     local next_package = rawget(package, part)
-    if not next_package then rawset(package, part, {}) end
-    last_package = package
-    last_part = part
+    if not next_package then
+      -- we had to create this part.  keep track tso we can us class
+      rawset(package, part, {})
+      last_package = package
+      last_part = part
+    else
+      -- this part already existed
+      last_package = nil
+      last_part = nil
+    end
+
     package = package[part]
   end
 
-  last_package[last_part] = class
-  if not class.__instance_mt__ then
+  if last_part then
+    -- this is a ne class, use the existing fenv that luvit created
+    last_package[last_part] = class
     class.__instance_mt__ = {__index = class}
     loaded_classes[name] = class
+
+    local watcher = Watcher:new(class.__filename)
+    log.info('watch', class.__filename)
+    watcher:on("change", function (event, path)
+      log.info('reload', name)
+      require(class.__filename)
+    end);
+
+  else
+    -- this is a reload, use the old class from the original load
+    class = package
   end
 
   return class
@@ -50,7 +72,6 @@ function _G.Class(parent)
 
   class.__class__ = class
   class.__classname__ = name
-  class.__filename__ = filename
   class.__mod_time__ = fs.statSync(filename).mtime
   class.__super__ = parent
 
@@ -103,10 +124,14 @@ function torch.custom_serializer.after_read(object)
   end
 end
 
+local function reload_class(class)
+
+end
 
 local function reload() 
   for name, class in pairs(loaded_classes) do
-    new_time = fs.statSync(class.__filename__).mtime
+    -- luvit sets __filename
+    new_time = fs.statSync(class.__filename).mtime
     if new_time > class.__mod_time__ then
       -- file has changed
       name='../'..name
@@ -115,6 +140,7 @@ local function reload()
     end
   end
 end
+
 
 local repl = require 'repl'
 local luvit_repl_evaluateLine = repl.evaluateLine

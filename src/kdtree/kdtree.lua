@@ -4,7 +4,10 @@ local ctorch = util.ctorch
 
 local kdtree = Class()
 
-local default_flann_params = libflann.new_flann_params_pointer({algorithm=libflann.clib.FLANN_INDEX_KDTREE,trees=10})
+local default_flann_params = 
+	libflann.new_flann_params_pointer({algorithm=libflann.clib.FLANN_INDEX_AUTOTUNED,
+									   target_precision=0.99,
+									   log_level=libflann.clib.FLANN_LOG_INFO})
 
 function kdtree:__init(data, flann_params_table)
 	
@@ -61,6 +64,7 @@ function kdtree:radius_search(reference_point, radius, max_num_neighbors, flann_
 	if self.index then
 		indices, dists = libflann.radius_search(self.index, reference_point, mnn, radius, flann_params)
 		local size = 0
+		print (indices)
 		while (size < mnn) and (indices[size+1] > -1) do
 			size = size + 1
 		end
