@@ -13,7 +13,7 @@
 
 -- FFI bindings to Opencv:
 local ffi = require "ffi"
-local bit = require 'bit'
+-- local bit = require 'bit'
 local ctorch = util.ctorch
 
 -- data types CV_<bit_depth>{U|S|F}C{num_channels}
@@ -21,34 +21,35 @@ local ctorch = util.ctorch
 -- copy needed structs from opencv2/core/types_c.h
 -- these will create the interface between torch and opencv
 
+-- {
+--     /*! includes several bit-fields:
+--          - the magic signature
+--          - continuity flag
+--          - depth
+--          - number of channels
+--      */
+--     int flags;
+--     //! the array dimensionality, >= 2
+--     int dims;
+
+--     //! the number of rows and columns or
+--     //! (-1, -1) when the array has more than 2 dimensions
+--     int rows, cols;
+--     //! pointer to the data
+--     uchar* data;
+
+--     //! pointer to the reference counter;
+--     // when array points to user-allocated data, the pointer is NULL
+--     int* refcount;
+
+-- } Mat;
+
 ffi.cdef
 [[
 
 typedef unsigned char uchar;
 
-typedef struct Mat
-{
-    /*! includes several bit-fields:
-         - the magic signature
-         - continuity flag
-         - depth
-         - number of channels
-     */
-    int flags;
-    //! the array dimensionality, >= 2
-    int dims;
-
-    //! the number of rows and columns or
-    //! (-1, -1) when the array has more than 2 dimensions
-    int rows, cols;
-    //! pointer to the data
-    uchar* data;
-
-    //! pointer to the reference counter;
-    // when array points to user-allocated data, the pointer is NULL
-    int* refcount;
-
-} Mat;
+typedef struct Mat Mat;
 
 typedef struct CvPoint
 {

@@ -58,11 +58,9 @@ function torch.data(tensor)
   return t.storage.data
 end 
 
-
 function storage_info(tensor)
-  -- log.trace(torch.typename(tensor))
   local type_info = type_map[torch.typename(tensor)]
-  local t = ffi.cast(type_info[2], torch.pointer(tensor))
-  return t.storage.data, t.storage.size * ffi.sizeof(type_info[3])
+   local t = torch.cdata(tensor) 
+   return t.storage.data, t.storage.size * ffi.sizeof(type_info[3])
 end
 

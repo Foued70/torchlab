@@ -24,7 +24,24 @@ using namespace std;
 // a hack to get this to work.  So I have resigned myself to passing a
 // THTensor* of a THTensor created in lua.
 
-// TODO: can't figure out why the Mat_(to)_THTensor expansion doesn't work...
+// **  TODO handle non-continous Mats ** 
+// from http://stackoverflow.com/questions/11572156/stride-on-image-using-opencv-c
+
+// The stride is that each new row of pixels in the cv::Mat doesn't
+// start after the end of the last row. This is because the memory is
+// faster if it starts on a multiple of 4bytes - so it only matters if
+// the number of bytes in a row (number of pixels * number of colours)
+// isn't a multiple of 4.
+
+// You can check .isContinuous() will return true if there is no stride
+
+// The safest way of accessing an image is to loop over all the rows
+// and use .ptr(row) to get a pointer to the start of the row, then do
+// any processing on that row.
+
+// If you need to mix opencv with other libs you can create a cv::mat
+// that will use your own memory for the data and you can tell opencv
+// that there is no stride on this
 
 extern "C" {
   
@@ -32,19 +49,19 @@ extern "C" {
   {
 
 #if defined(TH_REAL_IS_BYTE)
-    THArgCheck(mat->depth() == CV_8U      ,1, "C don't do type conversions ");
+    THArgCheck(mat->depth() == CV_8U  ,1, "C don't do type conversions ");
 #elif defined(TH_REAL_IS_CHAR)
-    THArgCheck(mat->depth() == CV_8S      ,1, "C don't do type conversions ");
+    THArgCheck(mat->depth() == CV_8S  ,1, "C don't do type conversions ");
 #elif defined(TH_REAL_IS_SHORT)
-    THArgCheck(mat->depth() == CV_16S      ,1, "C don't do type conversions ");
+    THArgCheck(mat->depth() == CV_16S ,1, "C don't do type conversions ");
 #elif defined(TH_REAL_IS_INT)
-    THArgCheck(mat->depth() == CV_32S      ,1, "C don't do type conversions ");
+    THArgCheck(mat->depth() == CV_32S ,1, "C don't do type conversions ");
 #elif defined(TH_REAL_IS_LONG)
-    THArgCheck(mat->depth() == -1          ,1, "OpenCV has no analog for Long");
+    THArgCheck(mat->depth() == -1     ,1, "OpenCV has no analog for Long");
 #elif defined(TH_REAL_IS_FLOAT)
-    THArgCheck(mat->depth() == CV_32F      ,1, "C don't do type conversions ");
+    THArgCheck(mat->depth() == CV_32F ,1, "C don't do type conversions ");
 #elif defined(TH_REAL_IS_DOUBLE)
-    THArgCheck(mat->depth() == CV_64F      ,1, "C don't do type conversions ");
+    THArgCheck(mat->depth() == CV_64F ,1, "C don't do type conversions ");
 #else
 #error "Unknown type"
 #endif
@@ -54,9 +71,13 @@ extern "C" {
     int dims     = mat->dims;
     int channels = mat->channels();
 
+    long nelem   = mat->total() * channels;
+
+    real* mat_ptr = mat->ptr<real>(0);
+
     // make a storage for the 1D data
     THStorage* sdata =
-      THStorage_(newWithData)((real*)mat->data,(long)(mat->total()));
+      THStorage_(newWithData)(mat_ptr,nelem);
 
     THLongStorage* size   = THLongStorage_new();
     Mat_size(mat, size);
@@ -68,6 +89,7 @@ extern "C" {
 
     THLongStorage_free(size);
     THLongStorage_free(stride);
+
   }
 
   Mat* THTensor_(toMat) (THTensor* tensor)
@@ -85,7 +107,7 @@ extern "C" {
     int type = CV_32S;
 #elif defined(TH_REAL_IS_LONG)
     int type = CV_32S;
-    THError("No analong for long in opencv please convert");
+    THError("No analog for long in opencv please convert");
 #elif defined(TH_REAL_IS_FLOAT)
     int type = CV_32F;
 #elif defined(TH_REAL_IS_DOUBLE)
@@ -96,7 +118,7 @@ extern "C" {
 
     tensor = THTensor_(newContiguous)(tensor);
     real* data = THTensor_(data)(tensor);
-    int ndims = tensor->nDimension;
+    int ndims  = tensor->nDimension;
     if (ndims == 2) {
       int rows = tensor->size[0];
       int cols = tensor->size[1];
@@ -113,8 +135,11 @@ extern "C" {
       }
       mat = new Mat (ndims, sizes, type , data);
     }
-    // free the contiguous tensor wrapper (not data)
+
+    // TODO: check these two mem leak.
+    //free the contiguous tensor wrapper (not the data)
     THTensor_(free)(tensor);
+    mat->addref(); // make sure the matrix sticks around
 
     return mat;
   }

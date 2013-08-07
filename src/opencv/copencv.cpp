@@ -23,25 +23,16 @@ extern "C"
     int i;
     int dims     = mat->dims;
     int channels = mat->channels();
-    if (dims == 2) {
-      if (channels == 1) {
-        THLongStorage_resize(size,2);
-      } else {
-        THLongStorage_resize(size,3);
-        THLongStorage_set(size,2,channels);
-      }
-      THLongStorage_set(size,0,mat->rows);
-      THLongStorage_set(size,1,mat->cols);
+    if (channels == 1) {
+      THLongStorage_resize(size,dims);
     } else {
-      if (channels == 1) {
-        THLongStorage_resize(size,dims);
-      } else {
-        THLongStorage_resize(size,dims+1);
-        THLongStorage_set(size,dims,channels);
-      }
-      for (i=0;i<dims;i++){
-        THLongStorage_set(size,i,mat->size[i]);
-      }
+      THLongStorage_resize(size,dims+1);
+      THLongStorage_set(size,dims,channels);
+      cout << "size " << dims << " = " << channels << endl;
+    }
+    for (i=0;i<dims;i++){
+      THLongStorage_set(size,i,mat->size[i]);
+      cout << "size " << i << " = " << mat->size[i] << endl;
     }
   }
 
@@ -55,12 +46,14 @@ extern "C"
 
     if (channels > 1) {
       THLongStorage_resize(stride,dims+1);
-      THLongStorage_set(stride,dims,channels);
+      cout << "stride " << dims << " = " << 1 << endl;
+      THLongStorage_set(stride,dims,1);
     } else {
       THLongStorage_resize(stride,dims);
     }
     for(i=0;i<mat->dims;i++){
       THLongStorage_set(stride,i,mat->step[i]/elemsize);
+      cout << "stride " << i << " = " << mat->step[i]/elemsize << endl;
     }
   }
 }
