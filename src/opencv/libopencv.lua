@@ -113,18 +113,21 @@ Mat* Mat_create (int width, int height, int type);
 void Mat_size(Mat* mat, THLongStorage* size);
 void Mat_stride(Mat* mat, THLongStorage* stride);
 
-Mat* Mat_fromTensor(THDoubleTensor* tensor);
-void Mat_toTensor(Mat* mat,THDoubleTensor* tensor);
-
 Mat* Mat_loadImage(const char* fname);
 void Mat_showImage(Mat* mat, const char* wname);
 void Mat_convert(Mat* input, Mat* output, int cvttype);
 void Mat_info(Mat* mat);
 void Mat_destroy(Mat* mat);
+]]
 
+ctorch.generateTypes [[
+Mat* THTensor_toMat(THTensor* tensor);
+void THTensor_fromMat(Mat* mat,THTensor* tensor);
+]]
+
+ffi.cdef [[
 int detect(const Mat* img, const char* detector_type, const Mat* mask, KeyPoint* kpC, int npts);
 void debug_keypoints(Mat* img, const KeyPoint* kptr, int npts);
-
 ]]
 
 -- below starts our lua wrappers

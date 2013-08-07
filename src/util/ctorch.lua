@@ -37,12 +37,14 @@ type_map['torch.IntTensor']    = {'THInt',    'THIntTensor',    'int'}
 type_map['torch.LongTensor']   = {'THLong',   'THLongTensor',   'long'}
 
 
--- save memory by building table
-header = {}
-for T,t in pairs(type_map) do 
-   local s = header_template:gsub("TH",t[1]):gsub("real",t[3])
-   ffi.cdef(s)
+function generateTypes(template)
+   for T,t in pairs(type_map) do 
+      s = template:gsub("TH",t[1]):gsub("real",t[3])
+      ffi.cdef(s)
+   end
 end
+
+generateTypes(header_template)
 
 -- Method to return c pointer to tensor or storage struct to pass to C
 function torch.cdata(tensor)
