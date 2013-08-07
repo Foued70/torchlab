@@ -1,9 +1,11 @@
-local json = require'json'
+local json = require 'json'
+local core = require 'core'
+local fs = require 'fs'
+local table = require 'table'
+
 local qs = net.qs
 local request = require'./request'
-local core = require'core'
 
-local table = require'table'
 
 local Depot = Class()
 
@@ -41,7 +43,6 @@ end
 
 function get_arc(id, callback)
   request.get(host..'/arcs/'..id, {Cookie=cookie}, function(err, res, body)
-    print(err or res.status_code)
     if res and res.status_code == 200 then
       local arc = json.parse(body)
       callback(nil, arc)
@@ -61,9 +62,7 @@ put_arc_file_emitter:on('process', function()
   put_arc_file_count = put_arc_file_count + 1
 
   local path, filename, callback = unpack(put_arc_file_queue:remove(1))
-  log.trace(path)
   request.put(host..'/arcs/'..path, nil, {file = filename}, {Cookie=cookie}, function(err, res, body)
-    print(err or res.status_code)
     if res and res.status_code == 200 then
       callback(nil, tonumber(res.headers.last_modified))
     else
@@ -80,14 +79,13 @@ function put_arc_file(path, filename, callback)
   put_arc_file_emitter:emit('process')
 end
 
-function get_arc_file(path, filename)
-  local resp, code, headers = request.get(host.."/arcs/"..path, {sink = filename, redirect = false})
-  if code ~= 200 then
-    log.error(code, resp[1])
-    return false
-  end
-
-  return true
+function get_arc_file(path, filename, callback)
+  local sink = fs.openSync(filename, 'w')
+  p(sink)
+  request.get(host.."/arcs/"..path, {sink = sink, Cookie=cookie}, function(err, res, body)
+    fs.close(sink)
+    callback(err)
+  end)
 end
 
 

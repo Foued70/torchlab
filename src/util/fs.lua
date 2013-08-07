@@ -77,3 +77,21 @@ function mkdir_p(dir_path, mode)
   if not fs.existsSync(parent_path) then mkdir_p(parent_path, mode) end
   if not fs.existsSync(dir_path) then fs.mkdirSync(dir_path, mode) end
 end
+
+
+
+function writeAll(fd, offset, buffer, callback)
+  fs.write(fd, offset, buffer, function(err, written)
+    if err then
+      if callback then callback(err) end
+    end
+    if written ~= (#buffer - offset + 1) then
+      offset = offset + written
+      writeAll(fd, offset, buffer, callback)
+    else
+      if callback then callback(nil) end
+    end
+  end)
+end
+
+

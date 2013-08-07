@@ -46,6 +46,9 @@ function request.request(method, url, data, files, headers, callback)
   headers = headers or {}
   headers['Content-Type'] = content_type
   headers['Content-Length'] = content_length
+
+  local sink = headers.sink
+  headers.sink = nil
  
   local req_options = {
     host = url_parts.hostname,
@@ -61,7 +64,11 @@ function request.request(method, url, data, files, headers, callback)
   req:on('response', function(res)
     local body = ''
     res:on('data', function (chunk)
-      body = body..chunk
+      if sink then
+        util.fs.writeAll(sink, 1, chunk)
+      else
+        body = body..chunk
+      end
     end)
 
     res:on('end', function()
@@ -69,11 +76,13 @@ function request.request(method, url, data, files, headers, callback)
     end)
 
     res:on('error', function(err)
+      log.error(err)
       callback(err)
     end)
   end)
 
   req:on('error', function(err)
+    log.error(err)
     callback(err)
   end)
 
