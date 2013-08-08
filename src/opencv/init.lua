@@ -57,24 +57,25 @@ function MattoTensor(mat) -- , datatype, colorspace, dims, nocopy)
    depth = libopencv.C.Mat_depth(mat)
    if depth == 0 then  -- CV_8U
       tensor = torch.ByteTensor()
-      libopencv.C.THByteTensor_fromMat(mat,tensor)
+      libopencv.C.THByteTensor_fromMat(mat,torch.cdata(tensor))
+      print(tensor:size())
    elseif depth == 1 then -- CV_8S
       tensor = torch.CharTensor()
-      libopencv.C.THCharTensor_fromMat(mat,tensor)
+      libopencv.C.THCharTensor_fromMat(mat,torch.cdata(tensor))
    elseif depth == 2 then -- CV_16U
       error("no analog in torch for CV_16U")
    elseif depth == 3 then -- CV_16S
       tensor = torch.ShortTensor()
-      libopencv.C.THShortTensor_fromMat(mat,tensor)
+      libopencv.C.THShortTensor_fromMat(mat,torch.cdata(tensor))
    elseif depth == 4 then -- CV_32S
       tensor = torch.IntTensor()
-      libopencv.C.THIntTensor_fromMat(mat,tensor)
+      libopencv.C.THIntTensor_fromMat(mat,torch.cdata(tensor))
    elseif depth == 5 then -- CV_32F
       tensor = torch.FloatTensor()
-      libopencv.C.THFloatTensor_fromMat(mat,tensor)
+      libopencv.C.THFloatTensor_fromMat(mat,torch.cdata(tensor))
    elseif depth == 6 then -- CV_64F
       tensor = torch.DoubleTensor()
-      libopencv.C.THDoubleTensor_fromMat(mat,tensor)
+      libopencv.C.THDoubleTensor_fromMat(mat,torch.cdata(tensor))
    else
       error("something is wrong")
    end
