@@ -211,10 +211,10 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
     	end
     	collectgarbage()
     	
-    	self.rgb = torch.ShortTensor(rgb_table)
+    	self.rgb = torch.ByteTensor(rgb_table)
 	    if self.format == 1 then
 		    self.index = torch.zeros(self.height, self.width);
-		    self.index = self.index:type('torch.IntTensor')
+		    self.index = self.index:type('torch.ShortTensor')
 		    for i=1,#hw_table do
 		    	local h = hw_table[i][1]
 		    	local w = hw_table[i][2]
@@ -519,10 +519,10 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 		
 	end
 	
-	self.rgb = torch.ShortTensor(rgb_table)
+	self.rgb = torch.ByteTensor(rgb_table)
 	if self.format == 1 then
 	    self.index = torch.zeros(self.height, self.width);
-	    self.index = self.index:type('torch.IntTensor')
+	    self.index = self.index:type('torch.ShortTensor')
 	    for i=1,#hw_table do
 	    	local h = hw_table[i][1]
 	    	local w = hw_table[i][2]
@@ -595,7 +595,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 	local points = torch.Tensor(count,3)
 	local rgb = torch.ShortTensor(count,3)
 	if self.format == 1 then
-		self.index = torch.IntTensor(self.height,self.width)
+		self.index = torch.ShortTensor(self.height,self.width)
 	end
 	local count_hw_index = torch.IntTensor(count,2)
 	
