@@ -152,7 +152,7 @@ int start_readline_loop(lua_State* L) {
   fclose(fp);
 
   rl_readline_name = "cloudlab";
-  rl_basic_word_break_characters = " \t\n\"\\'><=;:+-*/%^~#{}()[].,";
+  rl_basic_word_break_characters = " \t\n\"'><=;:+-*%^~#{}()[].,";
   rl_attempted_completion_function = completion;
   using_history();
   stifle_history(1000);
