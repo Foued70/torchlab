@@ -15,6 +15,11 @@ function ImgWidget:__init()
   self.renderer:activate_camera('viewport_camera')
 
   self:setup_geom()
+
+  -- this tell gl the the row data for images can fall on any (byte) boundry
+  -- the default is 4, which means if the width of an image is not divisible by 4,
+  -- all the rows will be skewed and the whole image slanted
+  gl.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
 end
 
 function ImgWidget:setup_geom()
