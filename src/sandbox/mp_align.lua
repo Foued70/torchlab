@@ -23,7 +23,7 @@ cmd:text()
 arg = ''
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 
 sweepnum = '/sweep_4'

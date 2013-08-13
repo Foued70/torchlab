@@ -1,7 +1,5 @@
 Class()
 
-require 'image'
-
 log.tic()
 
 d2r = math.pi / 180
@@ -19,7 +17,7 @@ cmd:option('-size', '512', 'size in pixels of side of stereographic')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 scandir  = params.scandir
 out_size = tonumber(params.size) or 512
@@ -32,12 +30,12 @@ images = util.fs.glob(scandir,"PNG",images)
 
 pose_file = util.fs.glob(scandir,"_texture_info.txt")
 pose_file = pose_file[1]
-poses = model.mp.load_poses(pose_file)
+poses     = model.mp.load_poses(pose_file)
 
-img = image.load(images[1])
+img       = image.load(images[1])
 
-width      = img:size(3)
-height     = img:size(2)
+width     = img:size(3)
+height    = img:size(2)
 
 hfov = poses[1].degrees_per_px_x * width * d2r
 vfov = poses[1].degrees_per_px_y * height * d2r

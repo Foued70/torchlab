@@ -1,5 +1,4 @@
-local saliency = require 'saliency.init'
-require 'image' 
+local saliency = require '../image/saliency'
 
 op = xlua.OptionParser('%prog [options]')
 op:option{'-f', '--full', action='store_true', dest='testFull', 

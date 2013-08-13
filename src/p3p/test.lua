@@ -1,7 +1,5 @@
-require 'image'
-
 local LensSensor = projection.LensSensor
-local p3p        = require 'p3p'
+local p3p        = require '../p3p'
 
 
 -- top level filenames
@@ -20,7 +18,7 @@ cmd:option("-lens_type", "nikon_10p5mm_r2t_full","data for image dewarping")
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 -- temp load data from ui
 data = dofile(params.data_file)

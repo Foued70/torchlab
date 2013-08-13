@@ -1,7 +1,5 @@
 -- Class()
 
-require 'image'
-
 dofile 'util.lua'
 
 pi = math.pi
@@ -29,7 +27,7 @@ cmd:option('-sweep_prefix',
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 scan_dir = params.scan_dir
 
