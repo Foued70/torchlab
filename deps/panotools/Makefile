@@ -10,6 +10,8 @@ unpack=$(build_dir)/deps/libpano13-$(ver)
 install=$(install_root)/bin/libpano
 
 args = 	$(default_args) \
+	CFLAGS=-I$(install_root)/include \
+	LDFLAGS=-L$(install_root)/lib \
 	--prefix=$(install_root) \
 	--without-java
 

@@ -147,7 +147,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
   
     self.points = torch.Tensor(xyz_table)
 	self.count = count;
-	self.centroid = torch.Tensor({{meanx, meany, meanz}})/(count+0.000001)
+	self.centroid = torch.Tensor({{meanx, meany, meanz}}):div(count+0.000001)
 	local stdrd = math.sqrt((self.points-self.centroid:repeatTensor(self.count,1)):pow(2):sum(2):mean())
 	local perc = 0.75
 	
@@ -199,7 +199,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 			
 		self.points = torch.Tensor(xyz_table)
 		self.count = count;
-		self.centroid = torch.Tensor({{meanx, meany, meanz}})/(count+0.000001)
+		self.centroid = torch.Tensor({{meanx, meany, meanz}}):div(count+0.000001)
    	end
    	collectgarbage()
     	
@@ -222,15 +222,16 @@ function PointCloud:write(filename)
 		torch.save(filename, {self.format, self.hwindices, pts, self.rgb})
 	elseif util.fs.extname(filename)==PC_ASCII_EXTENSION then
 		local file = io.open(filename, 'w');
-		for i=1,self.count do
-			if self.format == 1 then
-				local ind = self.hwindices[i]:clone():add(-1)
-				file:write(''..(ind[1])..' '..(ind[2])..' ')
-			end
-			local pt = self.points[i]
-			local rgbx = self.rgb[i]
-			file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
-		end
+		local tmpt = torch.range(1,self.count)
+		tmpt:apply(function(i)
+					if self.format == 1 then
+						local ind = self.hwindices[i]:clone():add(-1)
+						file:write(''..(ind[1])..' '..(ind[2])..' ')
+					end
+					local pt = self.points[i]
+					local rgbx = self.rgb[i]
+					file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+					end)
 		file:close()
 	end
 end
@@ -292,29 +293,47 @@ function PointCloud:downsample(leafsize)
 	local downsampled = PointCloud.new()
 	downsampled.height = 0;
   	downsampled.width = 0;
-  	
-	downsampled.points = torch.Tensor(self.points:size())
-	downsampled.rgb = torch.Tensor(self.points:size())
 	
 	local tmp = torch.range(1,self.count)
 	local bin = torch.zeros(pix[1], pix[2], pix[3])
 	local coord = self.points:clone():add(self.minval:clone():squeeze():mul(-1):repeatTensor(self.count,1)):div(scale):floor():add(1)
+	local coord2 = torch.zeros(coord:size())
+	coord2:sub(2,self.count):copy(coord:sub(1,self.count-1))
+	coord2:mul(-1):add(coord)
+	local neq = coord2:ne(torch.zeros(coord2:size())):sum(2):squeeze()
+	local uniquecount = neq:sum()
+	if uniquecount <= 0 then
+		downsampled.count = 0
+		return downsampled
+	end
+	
 	local ptss = coord:clone():add(-1):mul(scale):add(self.minval:squeeze():repeatTensor(self.count,1))
 	
-	downsampled.count = 0;
+	local points = torch.zeros(uniquecount,3)
+	local rgb = torch.zeros(uniquecount,3):type('torch.ByteTensor')
+	
+	local tmp = torch.range(1,self.count)
+	local count = 0
 	tmp:apply(function(i)
-			  local tmpbin = bin[{coord[i][1],coord[i][2],coord[i][3]}]
-			  if tmpbin < 1 then
-			  	downsampled.count = downsampled.count + 1
-			  	bin[{coord[i][1],coord[i][2],coord[i][3]}] = tmpbin + 1
-				downsampled.points[downsampled.count] = ptss[i]
-				downsampled.rgb[downsampled.count] = self.rgb[i]
-			  end
+			  if neq[i] == 1 then
+			  	  local c = coord[i]
+			  	  local c1 = c[1]
+			  	  local c2 = c[2]
+			  	  local c3 = c[3]
+				  local tmpbin = bin[{c1,c2,c3}]
+				  if tmpbin < 1 then
+				  	count = count + 1
+				  	
+				  	bin[{c1,c2,c3}] = tmpbin + 1
+					points[count] = ptss[i]
+					rgb[count] = self.rgb[i]
+				  end
+				end
 			  end)
 	
-	
-	downsampled.points = downsampled.points:sub(1,downsampled.count)
-	downsampled.rgb = downsampled.rgb:sub(1,downsampled.count)
+	downsampled.points = points:sub(1,count)
+	downsampled.rgb = rgb:sub(1,count)
+	downsampled.count = count
 	
 	downsampled:reset_point_stats()
 	collectgarbage()
@@ -351,7 +370,7 @@ function PointCloud:make_flattened_images(scale)
 					i=i+1
 					return x
 				end)
-	
+		
 	imagez=imagez:pow(2)
 	imagez=(imagez:div(imagez:max()+0.000001):mul(256)):floor()
 	self.imagez = imagez:resize(height,width):repeatTensor(3,1,1)
