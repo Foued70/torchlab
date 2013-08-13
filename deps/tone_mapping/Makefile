@@ -3,7 +3,7 @@ include ../Makefile.common
 url=http://people.csail.mit.edu/sparis/code/src/tone_mapping.tar.gz
 
 tar_file=$(build_dir)/deps/tone_mapping.tar.gz
-unpack=$(build_dir)/deps/TONE_MAPPING
+unpack=$(build_dir)/deps/tone_mapping
 install=$(install_root)/bin/tone_mapping
 
 # OpenEXR section. You may need to change EXR_INCDIR and EXR_LIBDIR.
@@ -23,23 +23,16 @@ LIBS      = $(LIBDIR) $(EXR_LIBS) $(FFTW_LIBS) -lm
 OBJECTS   = $(unpack)/tone_mapping.o $(unpack)/fft_3D/fft_3D.o
 TARGET    = $(install_root)/bin/tone_mapping
 
-
-# Command section
-CC      = $(install_root)/bin/g++
-LINK    = $(install_root)/bin/g++
-MAKE    = make
-RM      = rm -f
-
 all:$(install)
 
 $(install): $(unpack)
-	cd $(unpack)/fft_3D; $(CC) support_3D.cpp -c -o fft_3D.o -I../include $(FFTW_INCDIR)
-	cd $(unpack); $(CC) tone_mapping.cpp -c -o tone_mapping.o $(INCDIR)
+	cd $(unpack)/fft_3D; $(CXX) support_3D.cpp -c -o fft_3D.o -I../include $(FFTW_INCDIR)
+	cd $(unpack); $(CXX) tone_mapping.cpp -c -o tone_mapping.o $(INCDIR)
 	cd $(unpack); $(LINK) $(OBJECTS) $(INCDIR) $(LIBS) -o $(TARGET)
 
 $(unpack): $(tar_file)
-	cd $(build_dir)/deps; tar -xzf $(tar_file)
-	patch -p1 -d $(unpack) < tone_mapping.patch
+	cd $(build_dir)/deps; tar -s '/TONE_MAPPING/tone_mapping/' -xzf $(tar_file)
+	-- patch -p1 -d $(unpack) < tone_mapping.patch
 
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
