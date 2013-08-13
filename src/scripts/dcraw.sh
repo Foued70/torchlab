@@ -21,5 +21,13 @@ Cloudy="2.336605 1.000000 1.334642 1"
 
 for f in $*
 do 
-dcraw -v -q ${q} -m ${m} -C ${chromaR} 1 -4 -T -r ${manual} -o 2 ${f}
+# when creating HDR image we want linear curve
+# dcraw -v -q ${q} -m ${m} -C ${chromaR} 1 -4 -T -r ${manual} -o 2 ${f}
+# when using enfuse we want to keep camera white and gamma
+# -v verbose
+# -T tiff output (rather than ppm)
+# -6 16 bit output or we are losing dynamic range (advantage of raw)
+# -W don't automatically brighten (or we lose all sense of radiance)
+# -w use camera white balance (this is for Louvre, should look at using set parameters above)
+dcraw -v -T -6 -W -w ${f} 
 done
