@@ -1,3 +1,5 @@
+-- This script requires qt and thus native torch, not cloudlab's luvit+torch
+
 require 'image'
 require 'nn'
 
@@ -17,7 +19,7 @@ cmd:option('-scale', '1/4', 'scale at which to process the image')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 imgfile = params.imageFile
 scale   = tonumber(params.scale) or 1/4
 rStyle  = params.repeatStyle

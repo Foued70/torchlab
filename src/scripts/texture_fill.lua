@@ -19,7 +19,7 @@ cmd:option('-lw',128,'lookup_w - width of window in which to look up')
 cmd:text()
 profile:start("init")
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 image_file  = params.imagefile
 mask_file   = params.maskfile

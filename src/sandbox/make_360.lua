@@ -1,7 +1,5 @@
 -- Class()
 
-require 'image'
-
 dofile 'util.lua'
 
 pi = math.pi
@@ -18,7 +16,7 @@ cmd:option('-imageext', 'JPG', 'filename extention of images to load')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 images_dir  = params.imagesdir
 if not util.fs.is_dir(images_dir) then 

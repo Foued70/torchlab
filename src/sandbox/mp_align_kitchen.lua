@@ -8,8 +8,6 @@ bstdlt4 = torch.Tensor({0.4870, 0.4845, 0.4670, 0.4670, 0.4720, 0.4820, 0.4620, 
 
 precalc = torch.Tensor({0.4811, 0.5103, 0.4748, 0.4692, 0.4767, 0.5064, 0.5348, 0.4686, 0.4599, 0.4968, 0.4655, 0.2238, 0.7154})
 
-require 'image'
-
 pi = math.pi
 pi2 = pi * 0.5
 
@@ -29,7 +27,7 @@ cmd:text()
 -- arg = ''
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 imagesdir  = params.topdir..'/'..params.imagesdir..'/'..params.sweepnum
 if not util.fs.is_dir(imagesdir) then

@@ -1,8 +1,6 @@
 -- Class()
 local path = require 'path'
 
-require 'image'
-
 log.tic()
 
 d2r = math.pi / 180
@@ -21,10 +19,10 @@ cmd:option('-size', '512', 'size in pixels of side of stereographic')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 scandir  = params.scandir
-out_size   = params.size
+out_size = params.size
 
 -- load images
 if not util.fs.is_dir(scandir) then

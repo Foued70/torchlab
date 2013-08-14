@@ -1,7 +1,5 @@
 Class()
 
-require 'image'
-
 lens_data = require '../lens_sensor_types'
 
 cmd = torch.CmdLine()
@@ -15,7 +13,7 @@ cmd:option('-scale', '0.25', 'downsample')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 imagesdir  = params.imagesdir
 

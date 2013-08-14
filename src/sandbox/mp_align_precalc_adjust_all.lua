@@ -69,7 +69,7 @@ cmd:text()
 arg = ''
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 imagesdir  = params.topdir..'/'..params.sweepnum..'/'..params.imagesdir
 outdir = params.topdir..'/'..params.outdir

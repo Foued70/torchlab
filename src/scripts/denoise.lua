@@ -5,7 +5,6 @@
 -- A. Wandell
 
 Class()
-require 'image'
 
 img = image.load('../data/test/96_spring_kitchen/sweep_1/DSC_0180.jpg')
 

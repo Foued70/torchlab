@@ -1,5 +1,5 @@
-hough = require 'hough'
-saliency = require 'saliency'
+hough    = require '../image/hough'
+saliency = require '../image/saliency'
 local fs = require 'fs'
 
 pi = math.pi

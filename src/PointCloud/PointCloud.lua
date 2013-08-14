@@ -65,7 +65,12 @@ function PointCloud:reset_point_stats()
     d[1] = self.maxval:clone():add(self.centroid:clone():mul(-1)):squeeze()
     d[2] = self.centroid:clone():add(self.minval:clone():mul(-1)):squeeze()
     self.radius = d:max(1):squeeze()
+<<<<<<< HEAD
+    d = nil
+    collectgarbage()
+=======
     self.count = self.points:size(1)
+>>>>>>> b1074fb0431bf40a152d5b929294f7706af5eec4
 end
 
 function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
@@ -203,10 +208,16 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 		self.centroid = torch.Tensor({{meanx, meany, meanz}}):div(count+0.000001)
    	end
    	collectgarbage()
+   	
+   	xyz_table = nil
     	
    	self.rgb = torch.ByteTensor(rgb_table)
+   	
+   	rgb_table = nil
+   	
     if self.format == 1 then
     	self.hwindices = torch.ShortTensor(hw_table)
+    	hw_table = nil
 	end
 	collectgarbage()
 
