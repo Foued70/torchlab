@@ -1,9 +1,8 @@
-libopencv = require './libopencv'
 
-opencv    = require './init'
+opencv    = require '../init'
 
 -- use graphics magick to load the image
-img = image.load("DSC_0130.png","byte",nil,"LAB","DHW")
+img = image.load(CLOUDLAB_SRC.."/image/test/lena.jpg","byte",nil,"LAB","DHW")
 
 -- convert 1st (L = luminosity) channel of torch tensor to opencv matrix
 mat = opencv.Mat.fromTensor(img[1])
@@ -34,8 +33,8 @@ for ti,kpts in pairs(kptbl) do
 
    -- debug draw in opencv
    draw_img = opencv.Mat.fromTensor(img[1]:clone())
-   libopencv.debug_keypoints(draw_img,kpts,npts)
-   -- libopencv.C.Mat_showImage(draw_img, dtype)
+   opencv.C.debug_keypoints(draw_img,kpts,npts)
+   -- opencv.C.Mat_showImage(draw_img, dtype)
    drawn_t = opencv.Mat.toTensor(draw_img)
    drawn_t = drawn_t:transpose(3,1):transpose(2,3)
    image.display(drawn_t)

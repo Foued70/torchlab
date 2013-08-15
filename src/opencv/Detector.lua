@@ -1,5 +1,5 @@
 ffi = require 'ffi'
-libopencv = require './libopencv'
+libopencv = util.ffi.load("libopencv")
 ctorch = util.ctorch
 
 ffi.cdef [[
@@ -55,19 +55,7 @@ void FeatureDetector_destroy(FeatureDetector* detector);
 
 Detector = {}
 
-Detector.types = {
-   "FAST",      -- FastFeatureDetector
-   "STAR",      -- StarFeatureDetector
-   "SIFT",      -- SIFT (nonfree module)
-   "SURF",      -- SURF (nonfree module)
-   "ORB",       -- ORB
-   "BRISK",     -- BRISK
-   "MSER",      -- MSER
-   "GFTT",      -- GoodFeaturesToTrackDetector
-   "HARRIS",    -- GoodFeaturesToTrackDetector with Harris detector enabled
-   "Dense",     -- DenseFeatureDetector
-   "SimpleBlob" -- SimpleBlobDetector
-}
+Detector.types = require './types/Detector'
 
 -- <input> Mat img, String detectorType , Mat mask
 -- <output> KeyPoint*, npts

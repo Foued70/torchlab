@@ -1,5 +1,5 @@
 ffi = require 'ffi'
-libopencv = require './libopencv'
+libopencv = util.ffi.load("libopencv")
 ctorch = util.ctorch
 
 -- This is a list of wrapper functions encapsulating the opencv

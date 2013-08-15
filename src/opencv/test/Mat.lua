@@ -20,7 +20,7 @@ print(t2)
 print(t)
 
 -- from Mat to Tensor and back
-img = opencv.C.Mat_loadImage("../image/test/lena.jpg")
+img = opencv.C.Mat_loadImage(CLOUDLAB_SRC.."/image/test/lena.jpg")
 timg = torch.ByteTensor()
 opencv.C.THByteTensor_fromMat(img,torch.cdata(timg))
 img2 = opencv.C.THByteTensor_toMat(torch.cdata(timg))
