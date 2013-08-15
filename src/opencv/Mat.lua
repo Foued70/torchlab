@@ -96,8 +96,7 @@ function Mat.toTensor(mat) -- , datatype, colorspace, dims, nocopy)
    depth = libopencv.Mat_depth(mat)
    if depth == 0 then  -- CV_8U
       tensor = torch.ByteTensor()
-      libopencv.THByteTensor_fromMat(mat,torch.cdata(tensor))
-      print(tensor:size())
+      libopencv.THByteTensor_fromMat(mat,torch.cdata(tensor)) 
    elseif depth == 1 then -- CV_8S
       tensor = torch.CharTensor()
       libopencv.THCharTensor_fromMat(mat,torch.cdata(tensor))
