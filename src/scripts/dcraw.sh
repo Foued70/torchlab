@@ -28,7 +28,6 @@ do
 # -T tiff output (rather than ppm)
 # -6 16 bit output or we are losing dynamic range (advantage of raw)
 # -W don't automatically brighten (or we lose all sense of radiance)
-# -w use camera white balance (this is for Louvre, should look at using set parameters above)
-    dcraw -v -T -6 -W -r ${camera_fixed} ${f}
-    
+# -r use fixed white balance 
+    dcraw -v -T -6 -W -r ${camera_fixed} ${f}    
 done
