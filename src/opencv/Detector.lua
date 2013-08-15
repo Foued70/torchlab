@@ -57,8 +57,7 @@ Detector = {}
 
 Detector.types = require './types/Detector'
 
--- <input> Mat img, String detectorType , Mat mask
--- <output> KeyPoint*, npts
+-- <input> String detectorType
 function Detector.create(detectorType)
    detectorType = detectorType or "ORB"
    return ffi.gc(libopencv.FeatureDetector_create(ffi.string(detectorType)),
@@ -67,21 +66,17 @@ function Detector.create(detectorType)
                  end)
 end
 
--- <input> Mat img, String detectorType , Mat mask
+-- <input> detector, img, npts, Mat mask
 -- <output> KeyPoint*, npts
 function Detector.detect(detector,mat,npts,mask)
    if type(detector) ~= "cdata" then
       error("need to pass opencv detector object")
    end
-   print('ok detector')
    mask = mask or libopencv.Mat_create(0,0,0)
-   print('ok mask')
    npts = npts or 1000
    keypoints = ffi.new("KeyPoint[?]", npts)
-   print('ok keypoints')
    npts = libopencv.FeatureDetector_detect(detector,mat,mask,keypoints[0],npts)
-   print('npts found')
-   return keypoints, npts, detector
+   return keypoints, npts
 end
 
 

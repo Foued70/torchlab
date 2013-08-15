@@ -194,7 +194,32 @@ extern "C" {
                    DrawMatchesFlags::DEFAULT );
     //Debug
     imshow("Keypoints", *img);
+  }
 
+  DescriptorExtractor* DescriptorExtractor_create(const char* feature_type)
+  {
+    Ptr<DescriptorExtractor> extractor = DescriptorExtractor::create(feature_type);
+    extractor.addref(); // make sure the Ptr stays around TODO: check memleak
+    return extractor;
+  }
+
+  void DescriptorExtractor_compute(DescriptorExtractor* extractor,
+                             const Mat*  img,
+                             Mat*  descriptor,
+                             KeyPoint*   keypointsC, 
+                             int npts)
+  {
+
+    vector <KeyPoint> keypoints(npts);
+    memcpy(keypoints.data(),keypointsC,npts * sizeof(KeyPoint));
+
+    extractor->compute(*img, keypoints, *descriptor);
+
+  }
+
+  void DescriptorExtractor_destroy(DescriptorExtractor* extractor)
+  {
+    delete(extractor);
   }
 
 } // extern "C"
