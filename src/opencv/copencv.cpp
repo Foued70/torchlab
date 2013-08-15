@@ -5,6 +5,7 @@ extern "C"
 }
 
 #include <iostream>
+#include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/features2d/features2d.hpp"
@@ -66,6 +67,14 @@ extern "C" {
     return new Mat (width, height, type);
   }
 
+  Mat* Mat_clone (Mat* mat)
+  {
+    // need to make a copy like mat->clone() but dynamic memory allocation.
+    Mat * clone = new Mat(mat->dims,mat->size[0],mat->type());
+    mat->copyTo(*clone);
+    return clone;
+  }
+  // TODO move to image processing
   void Mat_convert(Mat* input, Mat* output, int cvt_type)
   {
     cvtColor(*input, *output, cvt_type);
@@ -125,30 +134,29 @@ extern "C" {
     delete(mat);
   }
 
+  // -----------------------------
+  // FeatureDetector
+  // -----------------------------
+
   // function to sort the KeyPoints returned in DetectorExtractor
   struct KeyPointCompare {
     bool operator ()(const KeyPoint& a, const KeyPoint& b)
       const {return a.response>b.response;}
   };
 
-  // -----------------------------
-  // FeatureDetector
-  // -----------------------------
-
   FeatureDetector* FeatureDetector_create(const char* detector_type)
   {
     Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
-
+    detector.addref(); // make sure the Ptr stays around TODO: check memleak
     return detector;
   }
 
-  int detect(const Mat*  img,
-             const char* detector_type,
-             const Mat*  mask,
-             KeyPoint*   keypointsC, int npts)
+  int FeatureDetector_detect(FeatureDetector* detector,
+                             const Mat*  img,
+                             const Mat*  mask,
+                             KeyPoint*   keypointsC, 
+                             int npts)
   {
-    
-    Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
 
     vector <KeyPoint> keypoints ;
     detector->detect( *img, keypoints, *mask);
@@ -164,6 +172,11 @@ extern "C" {
     memcpy(keypointsC,keypoints.data(),npts * sizeof(KeyPoint));
 
     return npts;
+  }
+
+  void FeatureDetector_destroy(FeatureDetector* detector)
+  {
+    delete(detector);
   }
 
   void debug_keypoints(Mat* img, const KeyPoint* keyptr, int npts)

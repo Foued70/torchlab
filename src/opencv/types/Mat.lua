@@ -1,4 +1,6 @@
+-- TODO: not sure that we need types anymore.  As we have functions for depth and channels.
 types = {}
+
 types[0] = "CV_8U"
 types[1] = "CV_8S"
 types[2] = "CV_16U"
