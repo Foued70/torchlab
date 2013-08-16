@@ -49,8 +49,8 @@ typedef struct KeyPoint
 FeatureDetector* FeatureDetector_create(const char* detector_type);
 int FeatureDetector_detect(FeatureDetector* detector, const Mat* img, const Mat* mask, KeyPoint* kptr, int npts);
 void FeatureDetector_destroy(FeatureDetector* detector);
-  void debug_keypoints(Mat* img, const KeyPoint* keyptr, int npts);
-
+void dump_keypoints(const KeyPoint* keyptr, int npts);
+void draw_keypoints(Mat* img, const KeyPoint* keyptr, int npts);
 ]]
 
 Detector = {}

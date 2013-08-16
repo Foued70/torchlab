@@ -1,12 +1,18 @@
 
 opencv    = require '../init'
 
+img_path = CLOUDLAB_SRC.."/image/test/lena.jpg"
 -- use graphics magick to load the image
-img = image.load(CLOUDLAB_SRC.."/image/test/lena.jpg","byte",nil,"LAB","DHW")
-
+_G.wand = image.Wand.new(img_path)
+_G.gray = wand:toTensor("byte","G","HWD"):squeeze()
+print(gray:min(), gray:max())
+-- unlike opencv uses BGR and HWD
+_G.bgr  = wand:toTensor("byte","BGR","HWD")
 -- convert 1st (L = luminosity) channel of torch tensor to opencv matrix
-mat = opencv.Mat.fromTensor(img[1])
+mat_gray = opencv.Mat.new(gray)
 
+mat_rgb = opencv.Mat.new(img_path)
+-- mat_graycv = opencv.C.Mat_convert(mat_rgb)
 kptbl = {}
 nptbl = {}
 
@@ -16,7 +22,7 @@ for _,dtype in pairs(opencv.Detector.types) do
    print("--- " .. dtype)
    detector    = opencv.Detector.create(dtype)
    print("made detector")
-   kpts, npts  = opencv.Detector.detect(detector,mat,25)
+   kpts, npts  = opencv.Detector.detect(detector,mat_gray.mat,25)
    print("detected " .. npts .. " pts")
    -- save the kpts
    table.insert(kptbl,kpts)
@@ -29,16 +35,23 @@ for ti,kpts in pairs(kptbl) do
    dtype = opencv.Detector.types[ti]
    npts = nptbl[ti]
 
-   print("------------ "..dtype.." ------------------")
+   print("------------ "..dtype.." ("..npts..") ------------------")
 
    -- debug draw in opencv
-   draw_img = opencv.Mat.fromTensor(img[1]:clone())
-   opencv.C.debug_keypoints(draw_img,kpts,npts)
-   -- opencv.C.Mat_showImage(draw_img, dtype)
-   drawn_t = opencv.Mat.toTensor(draw_img)
-   drawn_t = drawn_t:transpose(3,1):transpose(2,3)
-   image.display(drawn_t)
-   print(drawn_t:size())
+   draw_img = opencv.Mat.new(bgr:clone())
+   opencv.C.dump_keypoints(kpts,npts)
+   
+   opencv.C.draw_keypoints(draw_img.mat,kpts,npts)
+
+   opencv.C.Mat_showImage(draw_img.mat,dtype)
+   -- back to torch image display
+   -- drawn_t = opencv.Mat.toTensor(draw_img)
+   -- drawn_t = drawn_t:transpose(3,1):transpose(2,3)
+
+   -- image.display(drawn_t)
+
+   -- print(drawn_t:size())
+
    for i = 0,npts-1 do 
       cvp = kpts[i]
       print(i,cvp.pt.x, cvp.pt.y, cvp.response)

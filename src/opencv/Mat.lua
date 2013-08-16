@@ -40,21 +40,54 @@ Mat* THTensor_toMat(THTensor* tensor);
 void THTensor_fromMat(Mat* mat,THTensor* tensor);
 ]]
 
-Mat = {}
+types      = require './types/Mat'
+conversion = require './types/Mat_conversion'
 
-function Mat.fromTensor(tensor,dimensions)
+Mat = Class()
 
-   -- TODO: to convert automatically or not
-   if dimensions and dimensions == "DHW" then
-         tensor = tensor:transpose(1,3):transpose(1,2)
+function Mat:__init(pathOrTensorOrMat, ...)
+   self.name = "opencv.Mat"
+      -- Arg?
+   if type(pathOrTensorOrMat) == 'string' then
+      -- Is a path:
+      self:load(pathOrTensorOrMat, ...)
+   
+   elseif type(pathOrTensorOrMat) == 'userdata' then
+      -- Is a tensor:
+      self:fromTensor(pathOrTensorOrMat, ...)
+   elseif type(pathOrTensorOrMat) == 'cdata' then
+      -- Is an opencv Mat*
+      self.mat = pathOrTensorOrMat
    end
+end
+
+function Mat:info()
+   if self.mat then 
+      libopencv.Mat_info(self.mat)
+   end
+end
+
+local function destructor ()
+   return function (mat)
+      libopencv.Mat_destroy(mat)
+   end
+end
+
+function Mat:load(path)
+   self.mat = ffi.gc(libopencv.Mat_loadImage(path), destructor())
+end
+
+function Mat:clone(path)
+   return Mat.new(ffi.gc(libopencv.Mat_clone(self.mat), destructor()))
+end
+
+function Mat:fromTensor(tensor,dimensions)
 
    tensor_type = tensor:type()
+
    if tensor_type == "torch.DoubleTensor" then
       mat = ffi.gc(libopencv.THDoubleTensor_toMat(torch.cdata(tensor)),
-                   function (mat)
-                      libopencv.Mat_destroy(mat)
-                   end)
+                   destructor())
    elseif tensor_type == "torch.FloatTensor" then
       mat = ffi.gc(libopencv.THFloatTensor_toMat(torch.cdata(tensor)),
                    function (mat)
@@ -88,11 +121,12 @@ function Mat.fromTensor(tensor,dimensions)
                    end)
    end
 
-   return mat
+   self.mat = mat
+
 end
 
 -- datatype,colorspace, and dims determine the type of tensor we want.
-function Mat.toTensor(mat) -- , datatype, colorspace, dims, nocopy)
+function Mat:toTensor() -- , datatype, colorspace, dims, nocopy)
    depth = libopencv.Mat_depth(mat)
    if depth == 0 then  -- CV_8U
       tensor = torch.ByteTensor()
@@ -120,7 +154,5 @@ function Mat.toTensor(mat) -- , datatype, colorspace, dims, nocopy)
    return tensor
 end
 
-Mat.types      = require './types/Mat'
-Mat.conversion = require './types/Mat_conversion'
 
 return Mat

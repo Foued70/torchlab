@@ -7,10 +7,10 @@ ctorch = util.ctorch
 
 t = torch.randn(3,5,5)
 print(t)
-m = opencv.C.THDoubleTensor_toMat(torch.cdata(t))
-opencv.C.Mat_info(m)
-t2 = torch.Tensor()
-opencv.C.THDoubleTensor_fromMat(m, torch.cdata(t2))
+m = opencv.Mat.new(t)
+m:info()
+
+t2 = m:toTensor()
 
 t2[1][1][1] = 100
 t2[2][2][2] = 100
@@ -20,35 +20,35 @@ print(t2)
 print(t)
 
 -- from Mat to Tensor and back
-img = opencv.C.Mat_loadImage(CLOUDLAB_SRC.."/image/test/lena.jpg")
-timg = torch.ByteTensor()
-opencv.C.THByteTensor_fromMat(img,torch.cdata(timg))
-img2 = opencv.C.THByteTensor_toMat(torch.cdata(timg))
+img = opencv.Mat.new(CLOUDLAB_SRC.."/image/test/lena.jpg")
+timg = img:toTensor()
 
--- clone the data
-cvtMat = opencv.C.Mat_clone(img2)
+img2 = opencv.Mat.new(timg)
 
--- convert BGR (opencv) to RGB (torch)
-opencv.C.Mat_convert(img2,cvtMat,opencv.Mat.conversion.BGR2RGB)
-tcvt = torch.ByteTensor()
-opencv.C.THByteTensor_fromMat(cvtMat,torch.cdata(tcvt))
+-- -- clone the data
+-- cvtMat = :clone(img2)
 
-print(" +++ orig")
-opencv.C.Mat_info(img)
+-- -- convert BGR (opencv) to RGB (torch)
+-- opencv.C.Mat_convert(img2,cvtMat,opencv.Mat.conversion.BGR2RGB)
+-- tcvt = torch.ByteTensor()
+-- opencv.C.THByteTensor_fromMat(cvtMat,torch.cdata(tcvt))
 
-print(" +++ fromT")
-opencv.C.Mat_info(img2)
+-- print(" +++ orig")
+-- opencv.C.Mat_info(img)
 
-print(" +++ clone")
-opencv.C.Mat_info(cvtMat)
+-- print(" +++ fromT")
+-- opencv.C.Mat_info(img2)
 
-timg = timg:transpose(1,3):transpose(2,3)
-image.display(timg)
+-- print(" +++ clone")
+-- opencv.C.Mat_info(cvtMat)
 
-tcvt = tcvt:transpose(1,3):transpose(2,3)
-image.display(tcvt)
+-- timg = timg:transpose(1,3):transpose(2,3)
+-- image.display(timg)
 
-opencv.C.Mat_showImage(img2,"mat2torch2mat")
-opencv.C.Mat_showImage(cvtMat,"cvtMat")
+-- tcvt = tcvt:transpose(1,3):transpose(2,3)
+-- image.display(tcvt)
 
--- opencv conversions
+-- opencv.C.Mat_showImage(img2,"mat2torch2mat")
+-- opencv.C.Mat_showImage(cvtMat,"cvtMat")
+
+-- -- opencv conversions

@@ -175,17 +175,20 @@ extern "C" {
     delete(detector);
   }
 
-  void debug_keypoints(Mat* img, const KeyPoint* keyptr, int npts)
+  void dump_keypoints(const KeyPoint* keyptr, int npts)
   {
     vector<KeyPoint> keypoints (keyptr, keyptr + npts);
 
-    cout << "type: " << img->type() << endl;
     for(int i=0; i < keypoints.size(); i++){
       printf("[%d] (%d, %d) %f\n",i,
              (int)keypoints[i].pt.x, (int)keypoints[i].pt.y,
              keypoints[i].response);
     }
+  }
 
+  void draw_keypoints(Mat* img, const KeyPoint* keyptr, int npts)
+  {
+    vector<KeyPoint> keypoints (keyptr, keyptr + npts);
     drawKeypoints( *img, keypoints, *img, Scalar::all(-1),
                    DrawMatchesFlags::DEFAULT );
     //Debug
