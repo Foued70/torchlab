@@ -25,30 +25,22 @@ timg = img:toTensor()
 
 img2 = opencv.Mat.new(timg)
 
--- -- clone the data
--- cvtMat = :clone(img2)
+-- convert (clone) BGR (opencv) to RGB (torch)
+cvtMat = img2:convert("BGR2RGB")
 
--- -- convert BGR (opencv) to RGB (torch)
--- opencv.C.Mat_convert(img2,cvtMat,opencv.Mat.conversion.BGR2RGB)
--- tcvt = torch.ByteTensor()
--- opencv.C.THByteTensor_fromMat(cvtMat,torch.cdata(tcvt))
+-- copy to torch tensor Transposed to Depth x Height x Width
+cvtTh  = cvtMat:toTensor("DHW")
 
--- print(" +++ orig")
--- opencv.C.Mat_info(img)
 
--- print(" +++ fromT")
--- opencv.C.Mat_info(img2)
+print(" +++ orig")
+img:info()
 
--- print(" +++ clone")
--- opencv.C.Mat_info(cvtMat)
+print(" +++ fromT")
+img2:info()
+img2:display()
 
--- timg = timg:transpose(1,3):transpose(2,3)
--- image.display(timg)
+print(" +++ convert BGR")
+cvtMat:info()
 
--- tcvt = tcvt:transpose(1,3):transpose(2,3)
--- image.display(tcvt)
+image.display(cvtTh)
 
--- opencv.C.Mat_showImage(img2,"mat2torch2mat")
--- opencv.C.Mat_showImage(cvtMat,"cvtMat")
-
--- -- opencv conversions
