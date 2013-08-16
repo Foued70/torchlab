@@ -50,8 +50,7 @@ function Mat:__init(pathOrTensorOrMat, ...)
       -- Arg?
    if type(pathOrTensorOrMat) == 'string' then
       -- Is a path:
-      self:load(pathOrTensorOrMat, ...)
-   
+      self:load(pathOrTensorOrMat, ...)   
    elseif type(pathOrTensorOrMat) == 'userdata' then
       -- Is a tensor:
       self:fromTensor(pathOrTensorOrMat, ...)
@@ -64,6 +63,17 @@ end
 function Mat:info()
    if self.mat then 
       libopencv.Mat_info(self.mat)
+   else
+      error("No mat to display info")
+   end
+end
+
+function Mat:display(title)
+   if self.mat then 
+      title = title or self.name
+      libopencv.Mat_showImage(self.mat,title)
+   else
+      error("No mat to display")
    end
 end
 
@@ -77,8 +87,20 @@ function Mat:load(path)
    self.mat = ffi.gc(libopencv.Mat_loadImage(path), destructor())
 end
 
-function Mat:clone(path)
+function Mat:clone()
    return Mat.new(ffi.gc(libopencv.Mat_clone(self.mat), destructor()))
+end
+
+function Mat:convert(type)
+   ctype = conversion[type]
+   if ctype then 
+      conv_mat = Mat:clone()
+      print("converting to ".. type .. " " .. ctype)
+      libopencv.Mat_convert(self.mat,conv_mat.mat,ctype)
+      return conv_mat
+   else
+      error("Don't understand convesion type "..type)
+   end 
 end
 
 function Mat:fromTensor(tensor,dimensions)
@@ -86,39 +108,21 @@ function Mat:fromTensor(tensor,dimensions)
    tensor_type = tensor:type()
 
    if tensor_type == "torch.DoubleTensor" then
-      mat = ffi.gc(libopencv.THDoubleTensor_toMat(torch.cdata(tensor)),
-                   destructor())
+      mat = ffi.gc( libopencv.THDoubleTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.FloatTensor" then
-      mat = ffi.gc(libopencv.THFloatTensor_toMat(torch.cdata(tensor)),
-                   function (mat)
-                      libopencv.Mat_destroy(mat)
-                   end)
+      mat = ffi.gc(  libopencv.THFloatTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.ByteTensor" then
-      mat = ffi.gc(libopencv.THByteTensor_toMat(torch.cdata(tensor)),
-                   function (mat)
-                      libopencv.Mat_destroy(mat)
-                   end)
+      mat = ffi.gc(   libopencv.THByteTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.IntTensor" then
-      mat = ffi.gc(libopencv.THIntTensor_toMat(torch.cdata(tensor)),
-                   function (mat)
-                      libopencv.Mat_destroy(mat)
-                   end)
+      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.LongTensor" then
       print("Warning no analog for LongTensor in opencv. casting to int")
-      mat = ffi.gc(libopencv.THIntTensor_toMat(tensor:int()),
-                   function (mat)
-                      libopencv.Mat_destroy(mat)
-                   end) 
+      tensor = tensor:int()
+      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(tensor)),destructor())
    elseif tensor_type == "torch.CharTensor" then
-      mat = ffi.gc(libopencv.THCharTensor_toMat(torch.cdata(tensor)),
-                   function (mat)
-                      libopencv.Mat_destroy(mat)
-                   end)
+      mat = ffi.gc(   libopencv.THCharTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.ShortTensor" then
-      mat = ffi.gc(libopencv.THShortTensor_toMat(torch.cdata(tensor)),
-                   function (mat)
-                      libopencv.Mat_destroy(mat)
-                   end)
+      mat = ffi.gc(  libopencv.THShortTensor_toMat( torch.cdata(tensor)), destructor())
    end
 
    self.mat = mat
@@ -126,7 +130,8 @@ function Mat:fromTensor(tensor,dimensions)
 end
 
 -- datatype,colorspace, and dims determine the type of tensor we want.
-function Mat:toTensor() -- , datatype, colorspace, dims, nocopy)
+function Mat:toTensor(dimension)
+   mat = self.mat
    depth = libopencv.Mat_depth(mat)
    if depth == 0 then  -- CV_8U
       tensor = torch.ByteTensor()
@@ -150,6 +155,9 @@ function Mat:toTensor() -- , datatype, colorspace, dims, nocopy)
       libopencv.THDoubleTensor_fromMat(mat,torch.cdata(tensor))
    else
       error("something is wrong")
+   end
+   if dimension == "DHW" then 
+         tensor = tensor:transpose(3,1):transpose(2,3)
    end
    return tensor
 end
