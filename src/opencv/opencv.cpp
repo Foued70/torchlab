@@ -10,6 +10,7 @@ extern "C"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/features2d/features2d.hpp"
 #include "opencv2/nonfree/nonfree.hpp"
+#include "opencv2/calib3d/calib3d.hpp"
 
 using namespace cv;
 using namespace std;
@@ -33,6 +34,17 @@ extern "C"
     }
   }
 
+  int  Mat_size0(Mat *mat) {
+    return mat->size[0];
+  }
+
+  int  Mat_size1(Mat *mat) {
+    return mat->size[1];
+  }
+
+  int  Mat_size2(Mat *mat) {
+    return mat->size[2];
+  }
   // return a torch style THLongStorage for stride of mat
   void Mat_stride(Mat* mat, THLongStorage* stride)
   {
@@ -170,6 +182,28 @@ extern "C" {
     return npts;
   }
 
+  //return matrix representing the harris response at each point in src
+  //note that FeatureDetector_detect with harris only returns the points, not the response!
+  Mat* FeatureDetector_detectCornerHarris(Mat* src, int blockSize, int ksize, int k)
+  {
+    Mat returnMat = Mat::zeros( src->size(), CV_64FC1 );
+    cornerHarris(*src, returnMat, blockSize, ksize, k);
+    return new Mat(returnMat);
+  }
+
+  //return a matrix instead of a keypoint list, representing x,y,response
+  Mat* FeatureDetector_getMatFromKeypoints(const KeyPoint* keyptr, int npts)
+  {
+    vector<KeyPoint> keypoints (keyptr, keyptr + npts);
+
+    vector<Point3d> points;
+
+    for(int i=0; i < keypoints.size(); i++){
+      points.push_back(Point3d(keypoints[i].pt.x, keypoints[i].pt.y, keypoints[i].response));
+    }
+    return new Mat(points);
+  }
+
   void FeatureDetector_destroy(FeatureDetector* detector)
   {
     delete(detector);
@@ -219,6 +253,145 @@ extern "C" {
   void DescriptorExtractor_destroy(DescriptorExtractor* extractor)
   {
     delete(extractor);
+  }
+
+  // -----------------------------
+  // Erosion and dilation
+  // -----------------------------
+
+    Mat* getStructuringElement(int type, int size_x, int size_y, int center_x, int center_y)
+    {
+      return new Mat(cv::getStructuringElement(type,
+        cv::Size(size_x, size_y),
+        cv::Point(center_x, center_y) ));
+    }
+    void dilate(Mat*  src,
+     Mat* dst, Mat* structuringElement)
+    {
+      dilate(*src, *dst, *structuringElement);
+    }
+
+    void erode(Mat*  src,
+     Mat* dst, Mat* structuringElement)
+    {
+      erode(*src, *dst, *structuringElement);
+    }
+
+
+  // -----------------------------
+  // Matcher
+  // -----------------------------
+  DescriptorMatcher* DescriptorMatcher_create(const char* feature_type)
+  {
+    Ptr<DescriptorMatcher> extractor = DescriptorMatcher::create(feature_type);
+    extractor.addref(); // make sure the Ptr stays around TODO: check memleak
+    return extractor;
+  }
+
+  int DescriptorMatcher_match(DescriptorMatcher* matcher,
+                             const Mat*  descriptors_src,
+                             const Mat*  descriptors_dest,
+                             DMatch*   matchesC,
+                             int npts)
+  {
+    vector<DMatch> matches;
+    matcher->match(*descriptors_src, *descriptors_dest, matches);
+    int nmatches = matches.size();
+    memcpy(matchesC, matches.data(),nmatches * sizeof(DMatch));
+
+    return nmatches;
+  }
+
+  void DescriptorMatcher_destroy(DescriptorMatcher* matcher)
+  {
+    delete(matcher);
+  }
+
+  int DescriptorMatcher_reduceMatches(DMatch*   matchesptr, int nmatches, DMatch*   matchesReducedC) 
+  {
+    vector<DMatch> matches (matchesptr, matchesptr + nmatches);
+    double max_dist = 0, min_dist = 100000000;
+    for( int i = 0; i < nmatches; i++ )
+    { 
+      double dist = matches[i].distance;
+      if( dist < min_dist ) min_dist = dist;
+      if( dist > max_dist ) max_dist = dist;
+    }
+
+    //select only good matches
+    std::vector< DMatch > good_matches;
+
+    for( int i = 0; i < nmatches; i++ )
+    { 
+      if( matches[i].distance < 3*min_dist )
+      { 
+        good_matches.push_back( matches[i]); 
+      }
+    }
+
+    memcpy(matchesReducedC,good_matches.data(),good_matches.size() * sizeof(DMatch));
+
+    return good_matches.size();
+
+  }
+
+  // -----------------------------
+  // ImageProcessing
+  // -----------------------------
+  Mat* ImageProcessing_getHomography(const KeyPoint* keyptr_src, int npts_src, 
+    const KeyPoint* keyptr_dest, int npts_dest,
+    const DMatch* matchptr, int npts_match)
+  {
+    vector<KeyPoint> keypoints_src (keyptr_src, keyptr_src + npts_src);
+    vector<KeyPoint> keypoints_dest (keyptr_dest, keyptr_dest + npts_dest);
+
+    vector<DMatch> matches (matchptr, matchptr + npts_match);
+
+       //-- Localize the object
+    std::vector<Point2f> src;
+    std::vector<Point2f> dest;
+
+    for( int i = 0; i < npts_match; i++ )
+    {
+      //-- Get the keypoints from the good matches
+      src.push_back( keypoints_src[ matches[i].queryIdx ].pt );
+      dest.push_back( keypoints_dest[ matches[i].trainIdx ].pt );
+    }
+
+    return new Mat(findHomography( src, dest, CV_RANSAC ));
+  }
+
+  Mat* ImageProcessing_warpImage(const Mat* src, const Mat* transform)
+  {
+    Mat warpedSrc;
+    warpPerspective(*src, warpedSrc, *transform, Size(src->cols*2, src->rows*2));
+    return new Mat(warpedSrc);
+  }
+
+  Mat* ImageProcessing_combineImages(const Mat* src, 
+                                        const Mat* dest, 
+                                        const Mat* transform, 
+                                        int result_size_x, 
+                                        int result_size_y, 
+                                        int result_center_x, 
+                                        int result_center_y)
+  {        
+    //x-form accumulator;
+    Mat Acc = (Mat_<double>(3, 3) << 1, 0, result_center_x, 0, 1, result_center_y, 0, 0, 1);
+    Mat result;    
+    result = Mat::zeros(result_size_x, result_size_y, dest->type());     
+    warpPerspective( *dest, result, Acc, result.size() );
+
+    //accumulate transformation
+    Acc = Acc * *transform; 
+    
+    //save target
+    Mat tempresult = result.clone();
+
+    warpPerspective( *src, result, Acc, result.size() );   
+    result = result + tempresult;
+
+    return new Mat(result);  
   }
 
 } // extern "C"
