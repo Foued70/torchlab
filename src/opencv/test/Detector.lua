@@ -48,7 +48,7 @@ for ti,kpts in pairs(kptbl) do
    
    -- back to torch. display image in torch
    -- make the color channels in torch order
-   img_cvt = draw_img:convert("BGR2RGB")
+   img_cvt = opencv.ImgProc.convert(draw_img,"BGR2RGB")
    cvt_th  = img_cvt:toTensor("DHW")
    image.display(cvt_th)
 

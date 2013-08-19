@@ -26,7 +26,7 @@ timg = img:toTensor()
 img2 = opencv.Mat.new(timg)
 
 -- convert (clone) BGR (opencv) to RGB (torch)
-cvtMat = img2:convert("BGR2RGB")
+cvtMat = opencv.ImgProc.convert(img2, "BGR2RGB")
 
 -- copy to torch tensor Transposed to Depth x Height x Width
 cvtTh  = cvtMat:toTensor("DHW")

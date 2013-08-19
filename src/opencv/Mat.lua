@@ -26,7 +26,7 @@ void Mat_stride (Mat* mat, THLongStorage* stride);
 
 Mat* Mat_loadImage (const char* fname);
 void Mat_showImage (Mat* mat, const char* wname);
-void Mat_convert   (Mat* input, Mat* output, int cvttype);
+
 void Mat_info      (Mat* mat);
 void Mat_destroy   (Mat* mat);
 ]]
@@ -41,7 +41,6 @@ void THTensor_fromMat(Mat* mat,THTensor* tensor);
 ]]
 
 types      = require './types/Mat'
-conversion = require './types/Mat_conversion'
 
 Mat = Class()
 
@@ -69,19 +68,29 @@ function Mat:info()
 end
 
 function Mat:size()
-   size = torch.LongStorage()
-   if self.mat then 
-      libopencv.Mat_size(self.mat,torch.cdata(size))
+   if self._size then 
+      return self._size
+   else
+      if self.mat then 
+         self._size = torch.LongStorage()
+         libopencv.Mat_size(self.mat,torch.cdata(self._size))
+         return self._size
+      end
    end
-   return size
+   return
 end
 
 function Mat:stride()
-   stride = torch.LongStorage()
-   if self.mat then 
-      libopencv.Mat_stride(self.mat,torch.cdata(stride))
+   if self._stride then 
+      return self._stride
+   else
+      if self.mat then 
+         self._stride = torch.LongStorage()
+         libopencv.Mat_stride(self.mat,torch.cdata(self._stride))
+         return self._stride
+      end
    end
-   return stride
+   return
 end
 
 function Mat:display(title)
@@ -105,19 +114,6 @@ end
 
 function Mat:clone()
    return Mat.new(ffi.gc(libopencv.Mat_clone(self.mat), destructor()))
-end
-
--- TODO: move this to an img_proc.lua with other 2D image ops such as warp_affine
-function Mat:convert(type)
-   ctype = conversion[type]
-   if ctype then 
-      conv_mat = Mat:clone()
-      print("converting to ".. type .. " " .. ctype)
-      libopencv.Mat_convert(self.mat,conv_mat.mat,ctype)
-      return conv_mat
-   else
-      error("Don't understand convesion type "..type)
-   end 
 end
 
 function Mat:fromTensor(tensor,dimensions)
