@@ -68,6 +68,22 @@ function Mat:info()
    end
 end
 
+function Mat:size()
+   size = torch.LongStorage()
+   if self.mat then 
+      libopencv.Mat_size(self.mat,torch.cdata(size))
+   end
+   return size
+end
+
+function Mat:stride()
+   stride = torch.LongStorage()
+   if self.mat then 
+      libopencv.Mat_stride(self.mat,torch.cdata(stride))
+   end
+   return stride
+end
+
 function Mat:display(title)
    if self.mat then 
       title = title or self.name
@@ -91,6 +107,7 @@ function Mat:clone()
    return Mat.new(ffi.gc(libopencv.Mat_clone(self.mat), destructor()))
 end
 
+-- TODO: move this to an img_proc.lua with other 2D image ops such as warp_affine
 function Mat:convert(type)
    ctype = conversion[type]
    if ctype then 
