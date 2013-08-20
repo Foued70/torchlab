@@ -332,9 +332,9 @@ extern "C" {
   // -----------------------------
   Mat* CannyDetectEdges(Mat* src, double threshold1, double threshold2)
   {
-    Mat dest;
-    Canny(*src, dest, threshold1, threshold2);
-    return new Mat(dest);
+    Mat* dest = new Mat(0,0,src->type());
+    Canny(*src, *dest, threshold1, threshold2);
+    return dest;
   }
 
   // -----------------------------
@@ -343,16 +343,16 @@ extern "C" {
 
   Mat* HoughLinesRegular(Mat* image, double rho, double theta, int threshold, double srn, double stn)
   {
-    Mat lines;
-    HoughLines(*image, lines, rho, theta, threshold, srn, stn);
-    return new Mat(lines);
+    Mat* lines = new Mat(0,0,image->type());;
+    HoughLines(*image, *lines, rho, theta, threshold, srn, stn);
+    return lines;
   }
 
-  Mat* HoughLinesProbabilistic(Mat* image,double rho, double theta, int threshold, double minLineLength, double maxLineGap)
+  Mat* HoughLinesProbabilistic(Mat* image,double rho, double theta, int threshold, double minLineLength, double maxLineGap) 
   {
-    Mat lines;
-    HoughLinesP(*image, lines, rho, theta, threshold, minLineLength, maxLineGap);
-    return new Mat(lines);
+    Mat* lines = new Mat(0,0,image->type());
+    HoughLinesP(*image, *lines, rho, theta, threshold, minLineLength, maxLineGap);
+    return lines;
   }
 
   // -----------------------------
@@ -466,9 +466,9 @@ extern "C" {
 
   Mat* warpImage(const Mat* src, const Mat* transform)
   {
-    Mat warpedSrc;
-    warpPerspective(*src, warpedSrc, *transform, Size(src->cols*2, src->rows*2));
-    return new Mat(warpedSrc);
+    Mat* warpedSrc= new Mat(0,0,src->type());
+    warpPerspective(*src, *warpedSrc, *transform, Size(src->cols*2, src->rows*2));
+    return warpedSrc;
   }
 
   Mat* combineImages(const Mat* src,

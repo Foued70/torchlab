@@ -5,7 +5,6 @@ Mat    = require './Mat'
 ctorch = util.ctorch
 
 ffi.cdef [[
-Mat* getHomography(const KeyPoint* keyptr_src, int npts_src, const KeyPoint* keyptr_dest, int npts_dest, const DMatch* matchptr, int npts_match);
 Mat* warpImage(const Mat* src, const Mat* transform);
 Mat* combineImages(const Mat* src, 
                                      const Mat* dest, 
