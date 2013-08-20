@@ -21,27 +21,25 @@ opencv.C.draw_keypoints(matMat_dest.mat,kpts_dest,npts_dest)
 extractor_type = "SIFT"
 extractor   = opencv.Extractor.create(extractor_type)
 
-
-descriptors_src = opencv.Extractor.compute(extractor,matMat_src.mat,kpts_src,npts_src)
+descriptors_src  = opencv.Extractor.compute(extractor,matMat_src.mat,kpts_src,npts_src)
 descriptors_dest = opencv.Extractor.compute(extractor,matMat_dest.mat,kpts_dest,npts_dest)
 
-descriptors_src_Mat =opencv.Mat.new(descriptors_src)
-descriptors_dest_Mat =opencv.Mat.new(descriptors_dest)
+descriptors_src_Mat  = opencv.Mat.new(descriptors_src)
+descriptors_dest_Mat = opencv.Mat.new(descriptors_dest)
 
 matcher_type = "FlannBased"
-matcher   = opencv.Matcher.create(matcher_type)
-sizeSrc = descriptors_src_Mat:size()[1]
-sizeDest = descriptors_dest_Mat:size()[1]
+matcher      = opencv.Matcher.create(matcher_type)
+sizeSrc      = descriptors_src_Mat:size()[1]
+sizeDest     = descriptors_dest_Mat:size()[1]
 
 matches,nmatches = opencv.Matcher.match(matcher, descriptors_src_Mat.mat, descriptors_dest_Mat.mat, sizeSrc*sizeDest)
 
 matches_good,nmatches_good = opencv.Matcher.reduce(matches, nmatches)
 
-
 H = opencv.ImgProc.getHomography(kpts_src, npts_src, kpts_dest, npts_dest, matches_good, nmatches_good)
 
 warped = opencv.ImgProc.warpImage(matMat_src.mat, H.mat)
 
-opencv.ImgProc.displayGrayMatInLua(warped.mat)
-opencv.ImgProc.displayGrayMatInLua(matMat_src.mat)
-opencv.ImgProc.displayGrayMatInLua(matMat_dest.mat)
+image.display(matMat_src:toTensor("DHW"))
+image.display(matMat_dest:toTensor("DHW"))
+image.display(warped:toTensor("DHW"))

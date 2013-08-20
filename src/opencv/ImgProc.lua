@@ -270,13 +270,21 @@ function ImgProc.displayHarris(cv_mat, score_mat_torch, disp_color, radius)
 end
 
 function ImgProc.get3DTensorfrom1DMat(cv_mat)
-   if type(cv_mat) ~= "cdata" then
-      error("need to pass opencv mat object for argument")
+   mat_1D = cv_mat
+   if type(mat_1D) == "cdata" then
+      tensor_th = Mat.new(mat_1D):toTensor()
+   else
+      mat_1D = cv_mat.mat
+      if type(mat_1D) ~= "cdata" then 
+         error("need to pass Matat object for argument")
+      end
+      tensor_th = cv_mat:toTensor()
    end
-   cv_mat_3d = ImgProc.convert(Mat.new(cv_mat), "GRAY2RGB")
-   drawn_t = cv_mat_3d:toTensor()
-   drawn_t = drawn_t:transpose(3,1):transpose(2,3)
-   return drawn_t
+   h = tensor_th:size(1)
+   w = tensor_th:size(2)
+   -- no copying, or duplicating data just tricks with strides
+   tensor_th = tensor_th:resize(1,h,w):expand(3,h,w)
+   return tensor_th
 end
 
 --helper function, changes the color of the squares of raidus centered at point_x,point_y to color_tensor
