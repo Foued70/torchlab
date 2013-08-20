@@ -24,6 +24,8 @@ int  Mat_depth  (Mat* mat);
 void Mat_size   (Mat* mat, THLongStorage* size);
 void Mat_stride (Mat* mat, THLongStorage* stride);
 
+void Mat_convert (Mat* input, Mat* output, int cvttype);
+
 Mat* Mat_loadImage (const char* fname);
 void Mat_showImage (Mat* mat, const char* wname);
 
@@ -41,6 +43,13 @@ void THTensor_fromMat(Mat* mat,THTensor* tensor);
 ]]
 
 types      = require './types/Mat'
+conversion = require './types/Mat_conversion'
+
+local function destructor ()
+   return function (mat)
+      libopencv.Mat_destroy(mat)
+   end
+end
 
 Mat = Class()
 
@@ -55,7 +64,7 @@ function Mat:__init(pathOrTensorOrMat, ...)
       self:fromTensor(pathOrTensorOrMat, ...)
    elseif type(pathOrTensorOrMat) == 'cdata' then
       -- Is an opencv Mat*
-      self.mat = pathOrTensorOrMat
+      self.mat = ffi.gc(pathOrTensorOrMat, destructor())
    end
 end
 
@@ -102,11 +111,6 @@ function Mat:display(title)
    end
 end
 
-local function destructor ()
-   return function (mat)
-      libopencv.Mat_destroy(mat)
-   end
-end
 
 function Mat:load(path)
    self.mat = ffi.gc(libopencv.Mat_loadImage(path), destructor())
@@ -175,5 +179,37 @@ function Mat:toTensor(dimension)
    return tensor
 end
 
+--type_str should be a string, not a number!
+function Mat:convert(...) 
+   local output, type_str
+   args = {...}
+   nargs = #args
+   if nargs == 1 then 
+      type_str  = args[1]
+   elseif nargs == 2 then 
+      output    = args[1]
+      type_str  = args[2]
+   else
+      error("wrong number of args" ..#args)
+   end
+   if not self.mat then 
+      error("Mat not initialized no opencv data")
+   end
+   if type(type_str) ~= "string" then
+      error("need to pass string as type of conversion")
+   end
+   type_enum  = conversion[type_str]
+   if type_enum then 
+      if output then 
+         output_mat = output.mat
+      else 
+         output_mat = self.mat
+      end
+      libopencv.Mat_convert(self.mat,output_mat,type_enum)
+   else
+      error("Don't understand conversion type "..type_str)
+   end 
+   return output
+end
 
 return Mat
