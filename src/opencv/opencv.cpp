@@ -95,75 +95,75 @@ extern "C" {
     "CV_8UC3", "CV_8SC3", "CV_16UC3", "CV_16SC3", "CV_32SC3", "CV_32FC3", "CV_64FC3", "CV_USRTYPE3",
     "CV_8UC4", "CV_8SC4", "CV_16UC4", "CV_16SC4", "CV_32SC4", "CV_32FC4", "CV_64FC4", "CV_USRTYPE4"};
 
-  int Mat_depth(Mat* mat)
-  {
-    return mat->depth();
-  }
-
-  void Mat_info(Mat* mat)
-  {
-    int i;
-    cout << "dims:        " << mat->dims       << endl;
-    cout << "channels:    " << mat->channels() << endl;
-    cout << "depth:       " << enum_strings[mat->depth()] << endl;
-    cout << "type:        " << enum_strings[mat->type()]  << endl;
-    cout << "elemsize:    " << mat->elemSize()  << endl;
-    cout << "elemsize1:   " << mat->elemSize1() << endl;
-    cout << "total:       " << mat->total()     << endl;
-    cout << "contiguous?: " << mat->isContinuous() << endl;
-    if (mat->dims == 2) {
-      cout << "rows:      " << mat->rows       << endl;
-      cout << "cols:      " << mat->cols       << endl;
+    int Mat_depth(Mat* mat)
+    {
+      return mat->depth();
     }
-    for (i=0;i<mat->dims;i++){
-      cout << "size["<<i<<"]:   " << mat->size[i]   << endl;
+
+    void Mat_info(Mat* mat)
+    {
+      int i;
+      cout << "dims:        " << mat->dims       << endl;
+      cout << "channels:    " << mat->channels() << endl;
+      cout << "depth:       " << enum_strings[mat->depth()] << endl;
+      cout << "type:        " << enum_strings[mat->type()]  << endl;
+      cout << "elemsize:    " << mat->elemSize()  << endl;
+      cout << "elemsize1:   " << mat->elemSize1() << endl;
+      cout << "total:       " << mat->total()     << endl;
+      cout << "contiguous?: " << mat->isContinuous() << endl;
+      if (mat->dims == 2) {
+        cout << "rows:      " << mat->rows       << endl;
+        cout << "cols:      " << mat->cols       << endl;
+      }
+      for (i=0;i<mat->dims;i++){
+        cout << "size["<<i<<"]:   " << mat->size[i]   << endl;
+      }
+      for (i=0;i<mat->dims;i++){
+        cout << "step["<<i<<"]:   " << mat->step[i]   << endl;
+      }
+
     }
-    for (i=0;i<mat->dims;i++){
-      cout << "step["<<i<<"]:   " << mat->step[i]   << endl;
-    }
-    
-  }
 
 
-  Mat* Mat_loadImage(const char* fname)
-  {
+    Mat* Mat_loadImage(const char* fname)
+    {
     // make sure that the pointer is dynamically allocated
-    return new Mat(imread(fname));
-  }
+      return new Mat(imread(fname));
+    }
   // this is primarily for debugging as it interferes w/ luvit
-  void Mat_showImage(Mat* mat, const char* wname)
-  {
+    void Mat_showImage(Mat* mat, const char* wname)
+    {
     // Create a window for display.
-    namedWindow(wname, CV_WINDOW_AUTOSIZE );
-    imshow(wname, *mat);
-  }
-  void Mat_destroy(Mat* mat)
-  {
-    delete(mat);
-  }
+      namedWindow(wname, CV_WINDOW_AUTOSIZE );
+      imshow(wname, *mat);
+    }
+    void Mat_destroy(Mat* mat)
+    {
+      delete(mat);
+    }
 
   // -----------------------------
   // FeatureDetector
   // -----------------------------
 
   // function to sort the KeyPoints returned in DetectorExtractor
-  struct KeyPointCompare {
-    bool operator ()(const KeyPoint& a, const KeyPoint& b)
+    struct KeyPointCompare {
+      bool operator ()(const KeyPoint& a, const KeyPoint& b)
       const {return a.response>b.response;}
-  };
+    };
 
-  FeatureDetector* FeatureDetector_create(const char* detector_type)
-  {
-    Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
+    FeatureDetector* FeatureDetector_create(const char* detector_type)
+    {
+      Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
     detector.addref(); // make sure the Ptr stays around TODO: check memleak
     return detector;
   }
 
   int FeatureDetector_detect(FeatureDetector* detector,
-                             const Mat*  img,
-                             const Mat*  mask,
-                             KeyPoint*   keypointsC, 
-                             int npts)
+   const Mat*  img,
+   const Mat*  mask,
+   KeyPoint*   keypointsC, 
+   int npts)
   {
 
     vector <KeyPoint> keypoints ;
@@ -184,7 +184,7 @@ extern "C" {
 
   //return matrix representing the harris response at each point in src
   //note that FeatureDetector_detect with harris only returns the points, not the response!
-  Mat* FeatureDetector_detectCornerHarris(Mat* src, int blockSize, int ksize, int k)
+  Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k)
   {
     Mat returnMat = Mat::zeros( src->size(), CV_64FC1 );
     cornerHarris(*src, returnMat, blockSize, ksize, k);
@@ -192,7 +192,7 @@ extern "C" {
   }
 
   //return a matrix instead of a keypoint list, representing x,y,response
-  Mat* FeatureDetector_getMatFromKeypoints(const KeyPoint* keyptr, int npts)
+  Mat* getMatFromKeypoints(const KeyPoint* keyptr, int npts)
   {
     vector<KeyPoint> keypoints (keyptr, keyptr + npts);
 
@@ -215,8 +215,8 @@ extern "C" {
 
     for(int i=0; i < keypoints.size(); i++){
       printf("[%d] (%d, %d) %f\n",i,
-             (int)keypoints[i].pt.x, (int)keypoints[i].pt.y,
-             keypoints[i].response);
+       (int)keypoints[i].pt.x, (int)keypoints[i].pt.y,
+       keypoints[i].response);
     }
   }
 
@@ -224,7 +224,7 @@ extern "C" {
   {
     vector<KeyPoint> keypoints (keyptr, keyptr + npts);
     drawKeypoints( *img, keypoints, *img, Scalar::all(-1),
-                   DrawMatchesFlags::DEFAULT );
+     DrawMatchesFlags::DEFAULT );
     //Debug
     imshow("Keypoints", *img);
   }
@@ -237,10 +237,10 @@ extern "C" {
   }
 
   void DescriptorExtractor_compute(DescriptorExtractor* extractor,
-                             const Mat*  img,
-                             Mat*  descriptor,
-                             KeyPoint*   keypointsC, 
-                             int npts)
+   const Mat*  img,
+   Mat*  descriptor,
+   KeyPoint*   keypointsC, 
+   int npts)
   {
 
     vector <KeyPoint> keypoints(npts);
@@ -256,26 +256,52 @@ extern "C" {
   }
 
   // -----------------------------
+  // Edge detection
+  // -----------------------------
+  Mat* CannyDetectEdges(Mat* src, double threshold1, double threshold2)
+  {
+    Mat dest;
+    Canny(*src, dest, threshold1, threshold2);
+    return new Mat(dest);
+  }
+
+  // -----------------------------
+  // Hough transform
+  // -----------------------------
+
+  Mat* HoughLinesRegular(Mat* image, double rho, double theta, int threshold, double srn, double stn)
+  {
+    Mat lines;
+    HoughLines(*image, lines, rho, theta, threshold, srn, stn);
+    return new Mat(lines);
+  }
+
+  Mat* HoughLinesProbabilistic(Mat* image,double rho, double theta, int threshold, double minLineLength, double maxLineGap) 
+  {
+    Mat lines;
+    HoughLinesP(*image, lines, rho, theta, threshold, minLineLength, maxLineGap);
+    return new Mat(lines);
+  }
+
+  // -----------------------------
   // Erosion and dilation
   // -----------------------------
 
-    Mat* getStructuringElement(int type, int size_x, int size_y, int center_x, int center_y)
-    {
-      return new Mat(cv::getStructuringElement(type,
-        cv::Size(size_x, size_y),
-        cv::Point(center_x, center_y) ));
-    }
-    void dilate(Mat*  src,
-     Mat* dst, Mat* structuringElement)
-    {
-      dilate(*src, *dst, *structuringElement);
-    }
+  Mat* getStructuringElement(int type, int size_x, int size_y, int center_x, int center_y)
+  {
+    return new Mat(cv::getStructuringElement(type,
+      cv::Size(size_x, size_y),
+      cv::Point(center_x, center_y) ));
+  }
+  void dilate(Mat*  src, Mat* structuringElement)
+  {
+    dilate(*src, *src, *structuringElement);
+  }
 
-    void erode(Mat*  src,
-     Mat* dst, Mat* structuringElement)
-    {
-      erode(*src, *dst, *structuringElement);
-    }
+  void erode(Mat*  src, Mat* structuringElement)
+  {
+    erode(*src, *src, *structuringElement);
+  }
 
 
   // -----------------------------
@@ -289,14 +315,17 @@ extern "C" {
   }
 
   int DescriptorMatcher_match(DescriptorMatcher* matcher,
-                             const Mat*  descriptors_src,
-                             const Mat*  descriptors_dest,
-                             DMatch*   matchesC,
-                             int npts)
+   const Mat*  descriptors_src,
+   const Mat*  descriptors_dest,
+   DMatch*   matchesC,
+   int npts)
   {
     vector<DMatch> matches;
+
     matcher->match(*descriptors_src, *descriptors_dest, matches);
+
     int nmatches = matches.size();
+
     memcpy(matchesC, matches.data(),nmatches * sizeof(DMatch));
 
     return nmatches;
@@ -338,7 +367,7 @@ extern "C" {
   // -----------------------------
   // ImageProcessing
   // -----------------------------
-  Mat* ImageProcessing_getHomography(const KeyPoint* keyptr_src, int npts_src, 
+  Mat* getHomography(const KeyPoint* keyptr_src, int npts_src, 
     const KeyPoint* keyptr_dest, int npts_dest,
     const DMatch* matchptr, int npts_match)
   {
@@ -348,8 +377,8 @@ extern "C" {
     vector<DMatch> matches (matchptr, matchptr + npts_match);
 
        //-- Localize the object
-    std::vector<Point2f> src;
-    std::vector<Point2f> dest;
+    std::vector<Point2d> src;
+    std::vector<Point2d> dest;
 
     for( int i = 0; i < npts_match; i++ )
     {
@@ -357,24 +386,26 @@ extern "C" {
       src.push_back( keypoints_src[ matches[i].queryIdx ].pt );
       dest.push_back( keypoints_dest[ matches[i].trainIdx ].pt );
     }
+    Mat H = findHomography( src, dest, CV_RANSAC );
+    H.convertTo(H,CV_32FC1,1,0);
 
-    return new Mat(findHomography( src, dest, CV_RANSAC ));
+    return new Mat(H);
   }
 
-  Mat* ImageProcessing_warpImage(const Mat* src, const Mat* transform)
+  Mat* warpImage(const Mat* src, const Mat* transform)
   {
     Mat warpedSrc;
     warpPerspective(*src, warpedSrc, *transform, Size(src->cols*2, src->rows*2));
     return new Mat(warpedSrc);
   }
 
-  Mat* ImageProcessing_combineImages(const Mat* src, 
-                                        const Mat* dest, 
-                                        const Mat* transform, 
-                                        int result_size_x, 
-                                        int result_size_y, 
-                                        int result_center_x, 
-                                        int result_center_y)
+  Mat* combineImages(const Mat* src, 
+    const Mat* dest, 
+    const Mat* transform, 
+    int result_size_x, 
+    int result_size_y, 
+    int result_center_x, 
+    int result_center_y)
   {        
     //x-form accumulator;
     Mat Acc = (Mat_<double>(3, 3) << 1, 0, result_center_x, 0, 1, result_center_y, 0, 0, 1);

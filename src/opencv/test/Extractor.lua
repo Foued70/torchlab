@@ -5,17 +5,18 @@ opencv    = require '../init'
 img = image.load(CLOUDLAB_SRC.."/image/test/lena.jpg","byte",nil,"LAB","DHW")
 
 -- convert 1st (L = luminosity) channel of torch tensor to opencv matrix
-mat = opencv.Mat.fromTensor(img[1])
+matMat = opencv.Mat.new(img[1])
 
 detector    = opencv.Detector.create("ORB")
 
-kpts, npts  = opencv.Detector.detect(detector,mat,250)
+kpts, npts  = opencv.Detector.detect(detector,matMat.mat,250)
 
-extractor   = opencv.Extractor.create("SIFT")
+extractor_type = opencv.Extractor.types[1] --sift
+extractor   = opencv.Extractor.create(extractor_type)
 
-descriptors = opencv.Extractor.compute(extractor,mat,kpts,npts)
+descriptors = opencv.Extractor.compute(extractor,matMat.mat,kpts,npts)
 
-_G.desc = opencv.Mat.toTensor(descriptors)
+_G.desc = opencv.Mat.new(descriptors):toTensor()
 
 print(desc:size())
 
