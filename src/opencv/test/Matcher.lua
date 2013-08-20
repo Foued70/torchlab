@@ -10,38 +10,41 @@ matMat_src  = opencv.Mat.new(img_src[1])
 matMat_dest = opencv.Mat.new(img_dest[1])
 
 detectorType = "FAST"
-detector     = opencv.Detector.create(detectorType)
+detector     = opencv.Detector.new(detectorType)
 
-kpts_src, npts_src    = opencv.Detector.detect(detector,matMat_src.mat,250)
-kpts_dest, npts_dest  = opencv.Detector.detect(detector,matMat_dest.mat,250)
+kpts_src, npts_src    = detector:detect(matMat_src,250)
+kpts_dest, npts_dest  = detector:detect(matMat_dest,250)
 
 opencv.C.dump_keypoints(kpts_src,npts_src)
-opencv.C.draw_keypoints(matMat_src.mat,kpts_src,npts_src)
-opencv.C.draw_keypoints(matMat_dest.mat,kpts_dest,npts_dest)
+--opencv.C.draw_keypoints(matMat_src.mat,kpts_src,npts_src)
+--opencv.C.draw_keypoints(matMat_dest.mat,kpts_dest,npts_dest)
 
 extractor_type = "SIFT"
-extractor      = opencv.Extractor.create(extractor_type)
+extractor      = opencv.Extractor.new(extractor_type)
 
-descriptors_src  = opencv.Extractor.compute(extractor,matMat_src.mat,kpts_src,npts_src)
-descriptors_dest = opencv.Extractor.compute(extractor,matMat_dest.mat,kpts_dest,npts_dest)
+descriptors_src  = extractor:compute(matMat_src,kpts_src,npts_src)
+descriptors_dest = extractor:compute(matMat_dest,kpts_dest,npts_dest)
 
 descriptors_src_Mat  = opencv.Mat.new(descriptors_src)
 descriptors_dest_Mat = opencv.Mat.new(descriptors_dest)
 
 matcher_type = "FlannBased"
-matcher      = opencv.Matcher.create(matcher_type)
+matcher      = opencv.Matcher.new(matcher_type)
 sizeSrc      = descriptors_src_Mat:size()[1]
 sizeDest     = descriptors_dest_Mat:size()[1]
 
-matches,nmatches = 
-   opencv.Matcher.match(matcher, descriptors_src_Mat.mat, descriptors_dest_Mat.mat, sizeSrc*sizeDest)
+matches,nmatches = matcher:match(descriptors_src_Mat, descriptors_dest_Mat, sizeSrc*sizeDest)
 
-matches_good,nmatches_good = opencv.Matcher.reduce(matches, nmatches)
+matches_good,nmatches_good = matcher:reduce(matches, nmatches)
 
 H = opencv.calib3d.getHomography(kpts_src, npts_src, kpts_dest, npts_dest, matches_good, nmatches_good)
 
 warped = opencv.imgproc.warpImage(matMat_src.mat, H.mat)
 
-image.display(matMat_src:toTensor("DHW"))
-image.display(matMat_dest:toTensor("DHW"))
-image.display(warped:toTensor("DHW"))
+--image.display(matMat_src:toTensor("DHW"))
+--image.display(matMat_dest:toTensor("DHW"))
+--image.display(warped:toTensor("DHW"))
+image.display(opencv.imgproc.get3DTensorfrom1DMat(matMat_src))
+image.display(opencv.imgproc.get3DTensorfrom1DMat(matMat_dest))
+image.display(opencv.imgproc.get3DTensorfrom1DMat(warped))
+

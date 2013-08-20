@@ -2,8 +2,6 @@ ffi = require 'ffi'
 libopencv = util.ffi.load("libopencv")
 ctorch = util.ctorch
 
-Extractor = {}
-
 ffi.cdef [[
 // ------------
 //   opaque pointer (not visible from Lua interface)
@@ -20,15 +18,17 @@ void DescriptorExtractor_destroy(DescriptorExtractor* extractor);
 
 ]]
 
+Extractor = Class()
+
 Extractor.types = require './types/Extractor'
 
 -- <input> String extractorType
-function Extractor.create(extractorType)
+function Extractor:__init(extractorType)
    extractorType = extractorType or "ORB"
-  if not(util.util.search_in_table(Extractor.types, extractorType)) then
-    error("need to pass appropriate extractor type")
+  if not Extractor.types[extractorType] then
+      error("Don't understand extractorType: "..extractorType) 
   end
-   return ffi.gc(libopencv.DescriptorExtractor_create(ffi.string(extractorType)),
+   self.extractor = ffi.gc(libopencv.DescriptorExtractor_create(ffi.string(extractorType)),
                  function (extractor)
                     libopencv.DescriptorExtractor_destroy(extractor)
                  end)
@@ -36,21 +36,16 @@ end
 
 -- <input> extractor, image, keypoints, nkeypoints, (optional) descriptor
 -- <output> descriptor
-function Extractor.compute(extractor,image,keypoints,npts,descriptor)
-   if type(extractor) ~= "cdata" then
-      error("need to pass opencv extractor object as first arg")
-   end
-   if type(image) ~= "cdata" then
-      error("need to pass opencv Mat object as second arg")
+function Extractor:compute(img,keypoints,npts,descriptor)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input image")
    end
    if type(keypoints) ~= "cdata" then
-      error("need to pass opencv keypoints object as third arg")
+      error("need to pass opencv keypoints object as second arg")
    end
    descriptor = descriptor or libopencv.Mat_create(0,0,0)
-   libopencv.DescriptorExtractor_compute(extractor,image,descriptor,keypoints[0],npts)
+   libopencv.DescriptorExtractor_compute(self.extractor,img.mat,descriptor,keypoints[0],npts)
    return descriptor
 end
-
-
 
 return Extractor
