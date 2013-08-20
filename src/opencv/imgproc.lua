@@ -22,6 +22,8 @@ Mat* getStructuringElement(int type, int size_x, int size_y, int center_x, int c
 void dilate(Mat*  src, Mat* structuringElement);
 void erode(Mat*  src, Mat* structuringElement);
 
+Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k);
+
 ]]
 
 local function destructor ()
@@ -76,6 +78,25 @@ function imgproc.combineImages(img1, img2, homography, result_size_x, result_siz
 
    return Mat.new(libopencv.combineImages(img1, img2, homography, result_size_x, result_size_y, result_center_x, result_center_y))
 end
+
+-- <input> img, blockSize, ksize, k
+-- <output> Mat of responses at every location
+function imgproc.detectCornerHarris(mat,blockSize,ksize, k)
+   if type(mat) ~= "cdata" then
+      error("need to pass opencv mat as first arg")
+   end
+    if type(blockSize) ~= "number" then
+      error("need to pass number as second arg")
+   end
+  if type(ksize) ~= "number" then
+      error("need to pass number as third arg")
+   end
+    if type(k) ~= "number" then
+      error("need to pass number as fourth arg")
+   end
+    return Mat.new(libopencv.detectCornerHarris(mat, blockSize, ksize, k))
+end
+
 -- <input> image, threshold1, threshold2 -- see opencv function
 -- <output> line mat
 function imgproc.CannyDetectEdges(img, threshold1, threshold2)

@@ -19,39 +19,38 @@ kptbl = {}
 nptbl = {}
 
 -- test all Detector types
-for _,dtype in pairs(opencv.Detector.types) do 
+for dtype,val in pairs(opencv.Detector.types) do 
    print("--- " .. dtype)
-   detector    = opencv.Detector.create(dtype)
+   detector    = opencv.Detector.new(dtype)
    print("made detector")
 
-   opencv.Detector.parameters(detector)
+   detector:parameters()
 
-   kpts, npts  = opencv.Detector.detect(detector,mat_gray.mat,max_points)
+   kpts, npts  = detector:detect(mat_gray,max_points)
    print("detected " .. npts .. " pts")
    -- save the kpts
-   table.insert(kptbl,kpts)
-   table.insert(nptbl,npts)
+   kptbl[val] = kpts
+   nptbl[val] = npts
 end
 
 -- now show that the memory is still around
-for ti,kpts in pairs(kptbl) do 
-   dtype = opencv.Detector.types[ti]
-   npts = nptbl[ti]
+for dtype,val in pairs(opencv.Detector.types) do 
+   npts = nptbl[val]
+   kpts = kptbl[val]
 
    print("------------ "..dtype.." ("..npts..") ------------------")
 
    -- debug draw in opencv
    draw_img = opencv.Mat.new(bgr:clone())
 
-   -- opencv.C.dump_keypoints(kpts,npts)
-   
-   -- opencv.C.draw_keypoints(draw_img.mat,kpts,npts)
+   opencv.utils.draw_keypoints(draw_img,kpts,npts)
 
    draw_img:display(dtype..'_BGR')
    
    -- back to torch. display image in torch
    -- make the color channels in torch order
-   img_cvt = opencv.ImgProc.convert(draw_img,"BGR2RGB")
+   img_cvt = opencv.Mat.new()
+   draw_img:convert(img_cvt,"BGR2RGB")
    cvt_th  = img_cvt:toTensor("DHW")
    image.display(cvt_th)
 

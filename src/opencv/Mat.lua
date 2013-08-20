@@ -13,12 +13,45 @@ ffi.cdef [[
 // ------------
 typedef struct Mat Mat;
 
+// ------------
+//   transparent pointers (internals accessible from Lua)
+// ------------
+typedef struct CvPoint2D32f
+{
+    float x;
+    float y;
+}
+CvPoint2D32f;
+
+// from opencv2/features2d/features2d.hpp
+typedef struct KeyPoint
+{
+    CvPoint2D32f pt; //!< coordinates of the keypoints
+    float size;      //!< diameter of the meaningful keypoint neighborhood
+
+    float angle;     //!< computed orientation of the keypoint (-1 if not
+                     //   applicable); it's in [0,360) degrees and
+                     //   measured relative to image coordinate system,
+                     //   ie in clockwise.
+
+    float response;  //!< the response by which the most strong
+                     //   keypoints have been selected. Can be used for the
+                     //   further sorting or subsampling
+
+    int octave;      //!< octave (pyramid layer) from which the keypoint
+                     //   has been extracted
+
+    int class_id;    //!< object class (if the keypoints need to be
+                     //   clustered by an object they belong to)
+
+} KeyPoint ;
 
 // ------------
 //   functions implemented in opencv.cpp
 // ------------
 Mat* Mat_create (int width, int height, int type);
 Mat* Mat_clone (Mat* mat);
+Mat* getMatFromKeypoints(const KeyPoint* keyptr, int npts);
 
 int  Mat_depth  (Mat* mat);
 void Mat_size   (Mat* mat, THLongStorage* size);
@@ -55,16 +88,29 @@ Mat = Class()
 
 function Mat:__init(pathOrTensorOrMat, ...)
    self.name = "opencv.Mat"
-      -- Arg?
-   if type(pathOrTensorOrMat) == 'string' then
-      -- Is a path:
-      self:load(pathOrTensorOrMat, ...)   
-   elseif type(pathOrTensorOrMat) == 'userdata' then
-      -- Is a tensor:
-      self:fromTensor(pathOrTensorOrMat, ...)
-   elseif type(pathOrTensorOrMat) == 'cdata' then
-      -- Is an opencv Mat*
-      self.mat = ffi.gc(pathOrTensorOrMat, destructor())
+   -- Arg?
+   args  = {...} 
+   nargs = #args
+   if not pathOrTensorOrMat then
+      -- initialize an empty Mat*
+      self.mat = ffi.gc(libopencv.Mat_create(0,0,0), destructor())
+   else
+      if type(pathOrTensorOrMat) == 'string' then
+         -- Is a path: use opencv.load_image
+         self:load(pathOrTensorOrMat, ...)   
+      elseif type(pathOrTensorOrMat) == 'userdata' then
+         -- Is a tensor: 
+         self:fromTensor(pathOrTensorOrMat, ...) 
+      elseif type(pathOrTensorOrMat) == 'cdata' then
+         if nargs == 1 and type(args[1]) == "number" then
+            -- this is a Keypoint vector
+            npts = args[1]
+            self.mat = ffi.gc(libopencv.getMatFromKeypoints(pathOrTensorOrMat, npts), destructor())
+         else
+            -- Is an opencv Mat* : wrap with the destructor
+            self.mat = ffi.gc(pathOrTensorOrMat, destructor())
+         end
+      end
    end
 end
 
