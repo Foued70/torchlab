@@ -175,7 +175,7 @@ end
 
 -- <input> -- see opencv function
 -- <output> line mat
-function ImgProc.HoughLinesRegular(img, rho, theta, threshold, mineLineLength, maxLineGap)
+function ImgProc.HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLength, maxLineGap)
    if type(img) ~= "cdata" then
       error("need to pass opencv mat object for first argument")
    end
