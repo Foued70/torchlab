@@ -31,7 +31,8 @@ Matcher.types = require './types/Matcher'
 -- <input> String matcherType
 function Matcher.create(matcherType)
   matcherType = matcherType or Matcher.types[1]
-  if not(util.util.search_in_table(Matcher.types, matcherType)) then
+  mtype = Matcher.types[matcherType] 
+  if not mtype then
     error("need to pass appropriate matcher type")
   end
   return ffi.gc(libopencv.DescriptorMatcher_create(ffi.string(matcherType)),

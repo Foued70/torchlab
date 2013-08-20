@@ -15,6 +15,70 @@ extern "C"
 using namespace cv;
 using namespace std;
 
+void printParams( Algorithm* algorithm ) {
+  vector<string> parameters;
+  string param, helpText, typeText;
+  int type;
+
+  algorithm->getParams(parameters);
+  cout << "Found " << parameters.size() << " parameters" << endl;
+  for (int i = 0; i < (int) parameters.size(); i++) {
+    param    = parameters[i];
+    type     = algorithm->paramType(param);
+
+    cout << " + '" << param << "' ";
+    switch (type) {
+    case Param::BOOLEAN:
+      typeText = "bool";
+      cout << "(" << typeText << ") " << algorithm->get<bool>(param);
+      break;
+    case Param::INT:
+      typeText = "int";
+      cout << "(" << typeText << ") " << algorithm->get<int>(param);
+      break;
+    case Param::REAL:
+      typeText = "double";
+      cout << "(" << typeText << ") " << algorithm->get<double>(param);
+      break;
+    case Param::STRING:
+      typeText = "string";
+      cout << "(" << typeText << ") " << algorithm->get<string>(param);
+      break;
+    case Param::MAT:
+      typeText = "Mat";
+      cout << "(" << typeText << ") " << algorithm->get<Mat>(param);
+      break;
+    case Param::ALGORITHM:
+      typeText = "Algorithm";
+      cout << "(" << typeText << ") " << algorithm->get<Algorithm>(param);
+      break;
+    case Param::MAT_VECTOR:
+      typeText = "Mat vector";
+      cout << "(" << typeText << ") " ; // << algorithm->get<vector<Mat> >(param);
+      break;
+    case Param::FLOAT:
+      typeText = "float";
+      cout << "(" << typeText << ") " << algorithm->getDouble(param);
+      break;
+    case Param::UNSIGNED_INT:
+      typeText = "unsigned int";
+      cout << "(" << typeText << ") " << algorithm->getInt(param);
+      break;
+    case Param::UINT64:
+      typeText = "uint64";
+      cout << "(" << typeText << ") " << algorithm->getInt(param);
+      break;
+    case Param::UCHAR:
+      typeText = "uchar";
+      cout << "(" << typeText << ") " << algorithm->getInt(param);
+      break;
+    }
+    // string paramHelp = algorithm->paramHelp(param);
+    // cout << paramHelp;
+    cout << endl;
+  }
+}
+
 extern "C"
 {
   // return a torch style THLongStorage for size of mat
@@ -95,75 +159,82 @@ extern "C" {
     "CV_8UC3", "CV_8SC3", "CV_16UC3", "CV_16SC3", "CV_32SC3", "CV_32FC3", "CV_64FC3", "CV_USRTYPE3",
     "CV_8UC4", "CV_8SC4", "CV_16UC4", "CV_16SC4", "CV_32SC4", "CV_32FC4", "CV_64FC4", "CV_USRTYPE4"};
 
-    int Mat_depth(Mat* mat)
-    {
-      return mat->depth();
+  int Mat_depth(Mat* mat)
+  {
+    return mat->depth();
+  }
+
+  void Mat_info(Mat* mat)
+  {
+    int i;
+    cout << "dims:        " << mat->dims       << endl;
+    cout << "channels:    " << mat->channels() << endl;
+    cout << "depth:       " << enum_strings[mat->depth()] << endl;
+    cout << "type:        " << enum_strings[mat->type()]  << endl;
+    cout << "elemsize:    " << mat->elemSize()  << endl;
+    cout << "elemsize1:   " << mat->elemSize1() << endl;
+    cout << "total:       " << mat->total()     << endl;
+    cout << "contiguous?: " << mat->isContinuous() << endl;
+    if (mat->dims == 2) {
+      cout << "rows:      " << mat->rows       << endl;
+      cout << "cols:      " << mat->cols       << endl;
+    }
+    for (i=0;i<mat->dims;i++){
+      cout << "size["<<i<<"]:   " << mat->size[i]   << endl;
+    }
+    for (i=0;i<mat->dims;i++){
+      cout << "step["<<i<<"]:   " << mat->step[i]   << endl;
     }
 
-    void Mat_info(Mat* mat)
-    {
-      int i;
-      cout << "dims:        " << mat->dims       << endl;
-      cout << "channels:    " << mat->channels() << endl;
-      cout << "depth:       " << enum_strings[mat->depth()] << endl;
-      cout << "type:        " << enum_strings[mat->type()]  << endl;
-      cout << "elemsize:    " << mat->elemSize()  << endl;
-      cout << "elemsize1:   " << mat->elemSize1() << endl;
-      cout << "total:       " << mat->total()     << endl;
-      cout << "contiguous?: " << mat->isContinuous() << endl;
-      if (mat->dims == 2) {
-        cout << "rows:      " << mat->rows       << endl;
-        cout << "cols:      " << mat->cols       << endl;
-      }
-      for (i=0;i<mat->dims;i++){
-        cout << "size["<<i<<"]:   " << mat->size[i]   << endl;
-      }
-      for (i=0;i<mat->dims;i++){
-        cout << "step["<<i<<"]:   " << mat->step[i]   << endl;
-      }
+  }
 
-    }
-
-
-    Mat* Mat_loadImage(const char* fname)
-    {
+  Mat* Mat_loadImage(const char* fname)
+  {
     // make sure that the pointer is dynamically allocated
-      return new Mat(imread(fname));
-    }
+    return new Mat(imread(fname));
+  }
+
   // this is primarily for debugging as it interferes w/ luvit
-    void Mat_showImage(Mat* mat, const char* wname)
-    {
+  void Mat_showImage(Mat* mat, const char* wname)
+  {
     // Create a window for display.
-      namedWindow(wname, CV_WINDOW_AUTOSIZE );
-      imshow(wname, *mat);
-    }
-    void Mat_destroy(Mat* mat)
-    {
-      delete(mat);
-    }
+    namedWindow(wname, CV_WINDOW_AUTOSIZE );
+    imshow(wname, *mat);
+  }
+
+  void Mat_destroy(Mat* mat)
+  {
+    delete(mat);
+  }
+
 
   // -----------------------------
   // FeatureDetector
   // -----------------------------
 
   // function to sort the KeyPoints returned in DetectorExtractor
-    struct KeyPointCompare {
-      bool operator ()(const KeyPoint& a, const KeyPoint& b)
+  struct KeyPointCompare {
+    bool operator ()(const KeyPoint& a, const KeyPoint& b)
       const {return a.response>b.response;}
-    };
+  };
 
-    FeatureDetector* FeatureDetector_create(const char* detector_type)
-    {
-      Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
+  FeatureDetector* FeatureDetector_create(const char* detector_type)
+  {
+    Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
     detector.addref(); // make sure the Ptr stays around TODO: check memleak
     return detector;
   }
 
+  void FeatureDetector_parameters(FeatureDetector* detector)
+  {
+    printParams((Algorithm*)detector);
+  }
+
   int FeatureDetector_detect(FeatureDetector* detector,
-   const Mat*  img,
-   const Mat*  mask,
-   KeyPoint*   keypointsC, 
-   int npts)
+                             const Mat*  img,
+                             const Mat*  mask,
+                             KeyPoint*   keypointsC,
+                             int npts)
   {
 
     vector <KeyPoint> keypoints ;
@@ -206,7 +277,8 @@ extern "C" {
 
   void FeatureDetector_destroy(FeatureDetector* detector)
   {
-    delete(detector);
+    // calling release() on the Ptr (rather than deleting it) calls the correct destructor for the object.
+    ((Ptr<FeatureDetector>)detector).release();
   }
 
   void dump_keypoints(const KeyPoint* keyptr, int npts)
@@ -215,8 +287,8 @@ extern "C" {
 
     for(int i=0; i < keypoints.size(); i++){
       printf("[%d] (%d, %d) %f\n",i,
-       (int)keypoints[i].pt.x, (int)keypoints[i].pt.y,
-       keypoints[i].response);
+             (int)keypoints[i].pt.x, (int)keypoints[i].pt.y,
+             keypoints[i].response);
     }
   }
 
@@ -224,7 +296,7 @@ extern "C" {
   {
     vector<KeyPoint> keypoints (keyptr, keyptr + npts);
     drawKeypoints( *img, keypoints, *img, Scalar::all(-1),
-     DrawMatchesFlags::DEFAULT );
+                   DrawMatchesFlags::DEFAULT );
     //Debug
     imshow("Keypoints", *img);
   }
@@ -237,10 +309,10 @@ extern "C" {
   }
 
   void DescriptorExtractor_compute(DescriptorExtractor* extractor,
-   const Mat*  img,
-   Mat*  descriptor,
-   KeyPoint*   keypointsC, 
-   int npts)
+                                   const Mat*  img,
+                                   Mat*  descriptor,
+                                   KeyPoint*   keypointsC,
+                                   int npts)
   {
 
     vector <KeyPoint> keypoints(npts);
@@ -276,7 +348,7 @@ extern "C" {
     return new Mat(lines);
   }
 
-  Mat* HoughLinesProbabilistic(Mat* image,double rho, double theta, int threshold, double minLineLength, double maxLineGap) 
+  Mat* HoughLinesProbabilistic(Mat* image,double rho, double theta, int threshold, double minLineLength, double maxLineGap)
   {
     Mat lines;
     HoughLinesP(*image, lines, rho, theta, threshold, minLineLength, maxLineGap);
@@ -289,9 +361,9 @@ extern "C" {
 
   Mat* getStructuringElement(int type, int size_x, int size_y, int center_x, int center_y)
   {
-    return new Mat(cv::getStructuringElement(type,
-      cv::Size(size_x, size_y),
-      cv::Point(center_x, center_y) ));
+    return new Mat(getStructuringElement(type,
+                                         Size(size_x, size_y),
+                                         Point(center_x, center_y) ));
   }
   void dilate(Mat*  src, Mat* structuringElement)
   {
@@ -309,16 +381,16 @@ extern "C" {
   // -----------------------------
   DescriptorMatcher* DescriptorMatcher_create(const char* feature_type)
   {
-    Ptr<DescriptorMatcher> extractor = DescriptorMatcher::create(feature_type);
-    extractor.addref(); // make sure the Ptr stays around TODO: check memleak
-    return extractor;
+    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(feature_type);
+    matcher.addref(); // make sure the Ptr stays around TODO: check memleak
+    return matcher;
   }
 
   int DescriptorMatcher_match(DescriptorMatcher* matcher,
-   const Mat*  descriptors_src,
-   const Mat*  descriptors_dest,
-   DMatch*   matchesC,
-   int npts)
+                              const Mat*  descriptors_src,
+                              const Mat*  descriptors_dest,
+                              DMatch*   matchesC,
+                              int npts)
   {
     vector<DMatch> matches;
 
@@ -336,27 +408,27 @@ extern "C" {
     delete(matcher);
   }
 
-  int DescriptorMatcher_reduceMatches(DMatch*   matchesptr, int nmatches, DMatch*   matchesReducedC) 
+  int DescriptorMatcher_reduceMatches(DMatch*   matchesptr, int nmatches, DMatch*   matchesReducedC)
   {
     vector<DMatch> matches (matchesptr, matchesptr + nmatches);
     double max_dist = 0, min_dist = 100000000;
     for( int i = 0; i < nmatches; i++ )
-    { 
-      double dist = matches[i].distance;
-      if( dist < min_dist ) min_dist = dist;
-      if( dist > max_dist ) max_dist = dist;
-    }
+      {
+        double dist = matches[i].distance;
+        if( dist < min_dist ) min_dist = dist;
+        if( dist > max_dist ) max_dist = dist;
+      }
 
     //select only good matches
-    std::vector< DMatch > good_matches;
+    vector< DMatch > good_matches;
 
     for( int i = 0; i < nmatches; i++ )
-    { 
-      if( matches[i].distance < 3*min_dist )
-      { 
-        good_matches.push_back( matches[i]); 
+      {
+        if( matches[i].distance < 3*min_dist )
+          {
+            good_matches.push_back( matches[i]);
+          }
       }
-    }
 
     memcpy(matchesReducedC,good_matches.data(),good_matches.size() * sizeof(DMatch));
 
@@ -367,25 +439,25 @@ extern "C" {
   // -----------------------------
   // ImageProcessing
   // -----------------------------
-  Mat* getHomography(const KeyPoint* keyptr_src, int npts_src, 
-    const KeyPoint* keyptr_dest, int npts_dest,
-    const DMatch* matchptr, int npts_match)
+  Mat* getHomography(const KeyPoint* keyptr_src, int npts_src,
+                     const KeyPoint* keyptr_dest, int npts_dest,
+                     const DMatch* matchptr, int npts_match)
   {
     vector<KeyPoint> keypoints_src (keyptr_src, keyptr_src + npts_src);
     vector<KeyPoint> keypoints_dest (keyptr_dest, keyptr_dest + npts_dest);
 
     vector<DMatch> matches (matchptr, matchptr + npts_match);
 
-       //-- Localize the object
-    std::vector<Point2d> src;
-    std::vector<Point2d> dest;
+    //-- Localize the object
+    vector<Point2d> src;
+    vector<Point2d> dest;
 
     for( int i = 0; i < npts_match; i++ )
-    {
-      //-- Get the keypoints from the good matches
-      src.push_back( keypoints_src[ matches[i].queryIdx ].pt );
-      dest.push_back( keypoints_dest[ matches[i].trainIdx ].pt );
-    }
+      {
+        //-- Get the keypoints from the good matches
+        src.push_back( keypoints_src[ matches[i].queryIdx ].pt );
+        dest.push_back( keypoints_dest[ matches[i].trainIdx ].pt );
+      }
     Mat H = findHomography( src, dest, CV_RANSAC );
     H.convertTo(H,CV_32FC1,1,0);
 
@@ -399,30 +471,30 @@ extern "C" {
     return new Mat(warpedSrc);
   }
 
-  Mat* combineImages(const Mat* src, 
-    const Mat* dest, 
-    const Mat* transform, 
-    int result_size_x, 
-    int result_size_y, 
-    int result_center_x, 
-    int result_center_y)
-  {        
+  Mat* combineImages(const Mat* src,
+                     const Mat* dest,
+                     const Mat* transform,
+                     int result_size_x,
+                     int result_size_y,
+                     int result_center_x,
+                     int result_center_y)
+  {
     //x-form accumulator;
     Mat Acc = (Mat_<double>(3, 3) << 1, 0, result_center_x, 0, 1, result_center_y, 0, 0, 1);
-    Mat result;    
-    result = Mat::zeros(result_size_x, result_size_y, dest->type());     
+    Mat result;
+    result = Mat::zeros(result_size_x, result_size_y, dest->type());
     warpPerspective( *dest, result, Acc, result.size() );
 
     //accumulate transformation
-    Acc = Acc * *transform; 
-    
+    Acc = Acc * *transform;
+
     //save target
     Mat tempresult = result.clone();
 
-    warpPerspective( *src, result, Acc, result.size() );   
+    warpPerspective( *src, result, Acc, result.size() );
     result = result + tempresult;
 
-    return new Mat(result);  
+    return new Mat(result);
   }
 
 } // extern "C"

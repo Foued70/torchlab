@@ -1,9 +1,9 @@
-types = {
-   "BruteForce",      -- SIFT (nonfree module)
-   "BruteForce-L1",      -- SURF (nonfree module)
-   "BruteForceHamming",       -- ORB
-   "BruteForceHamming(2)",     -- BRISK
-   "FlannBased"      -- BriefDescriptorExtractor
-}
 
+-- make a hash table for the string O(1) lookup
+types = {}
+types["BruteForce"]           = 1
+types["BruteForce-L1"]        = 2
+types["BruteForceHamming"]    = 3
+types["BruteForceHamming(2)"] = 4
+types["FlannBased"]           = 5 
 return types

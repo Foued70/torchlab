@@ -23,6 +23,9 @@ for _,dtype in pairs(opencv.Detector.types) do
    print("--- " .. dtype)
    detector    = opencv.Detector.create(dtype)
    print("made detector")
+
+   opencv.Detector.parameters(detector)
+
    kpts, npts  = opencv.Detector.detect(detector,mat_gray.mat,max_points)
    print("detected " .. npts .. " pts")
    -- save the kpts
@@ -40,9 +43,9 @@ for ti,kpts in pairs(kptbl) do
    -- debug draw in opencv
    draw_img = opencv.Mat.new(bgr:clone())
 
-   opencv.C.dump_keypoints(kpts,npts)
+   -- opencv.C.dump_keypoints(kpts,npts)
    
-   opencv.C.draw_keypoints(draw_img.mat,kpts,npts)
+   -- opencv.C.draw_keypoints(draw_img.mat,kpts,npts)
 
    draw_img:display(dtype..'_BGR')
    
@@ -53,9 +56,11 @@ for ti,kpts in pairs(kptbl) do
    image.display(cvt_th)
 
    -- print keypoints in torch
-   for i = 0,npts-1 do 
-      cvp = kpts[i]
-      print(i,cvp.pt.x, cvp.pt.y, cvp.response)
+   if false then 
+      for i = 0,npts-1 do 
+         cvp = kpts[i]
+         print(i,cvp.pt.x, cvp.pt.y, cvp.response)
+      end
    end
 end
 

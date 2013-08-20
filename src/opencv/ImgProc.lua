@@ -63,7 +63,7 @@ function ImgProc.convert(...)
    input_mat  = input.mat
    output_mat = output.mat
    if type_enum and input_mat and output_mat then 
-      print("converting ".. type_str .. " " .. type_enum)
+      -- print("converting ".. type_str .. " " .. type_enum)
       libopencv.Mat_convert(input_mat,output_mat,type_enum)
       return output
    else
