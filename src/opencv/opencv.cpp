@@ -257,7 +257,7 @@ extern "C" {
   //note that FeatureDetector_detect with harris only returns the points, not the response!
   Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k)
   {
-    Mat returnMat = Mat::zeros( src->size(), CV_64FC1 );
+    Mat returnMat; // = new Mat(src->size[0], src->size[1], src->type() );
     cornerHarris(*src, returnMat, blockSize, ksize, k);
     return new Mat(returnMat);
   }
@@ -481,6 +481,8 @@ extern "C" {
   {
     //x-form accumulator;
     Mat Acc = (Mat_<double>(3, 3) << 1, 0, result_center_x, 0, 1, result_center_y, 0, 0, 1);
+    Acc.convertTo(Acc,CV_32FC1,1,0);
+
     Mat result;
     result = Mat::zeros(result_size_x, result_size_y, dest->type());
     warpPerspective( *dest, result, Acc, result.size() );

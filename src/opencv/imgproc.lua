@@ -182,7 +182,7 @@ function imgproc.getDefaultStructuringMat(erosion_size)
    if type(erosion_size) ~= "number" then
       error("need to pass number for first argument")
    end
-   return imgproc.getStructuringElement(morph_types.MORPH_RECT, 2*erosion_size+1, 2*erosion_size+1, erosion_size, erosion_size);
+   return Mat.new(imgproc.getStructuringElement(morph_types.MORPH_RECT, 2*erosion_size+1, 2*erosion_size+1, erosion_size, erosion_size));
 end
 
 --dilate the img 
@@ -218,14 +218,21 @@ function imgproc.displayHarrisPoint(cv_mat, disp_color, point_x, point_y, radius
    image.display(color_tensor)
 end
 
---cv_mat is grayscale image, cv_score_mat is tuples of
+--cv_mat is grayscale image, points_mat is x,y location of points
 --disp_color is defined as in types/Colors.lua
 --displays square points for laziness
-function imgproc.displayHarris(cv_mat, score_mat_torch, disp_color, radius)
-   color_tensor = imgproc.get3DTensorfrom1DMat(cv_mat) 
-   drawn_t = imgproc.opencv.MattoTensor(cv_mat)
-   for i=1, score_mat_torch:size(1) do
-      imgproc.addPointToTensor(color_tensor, disp_color, score_mat_torch[i][1], score_mat_torch[i][2], radius)
+function imgproc.displayPoints(img, points_mat, disp_color, radius)
+   if type(img) == "cdata" then
+      imgMat = Mat.new(img):toTensor()
+   else
+      if type(img) ~= "table" then 
+         error("need to pass Matat object for argument")
+      end
+      imgMat = img
+   end
+   color_tensor = imgMat:clone():toTensor("DHW")
+   for i=1, points_mat:size(1) do
+      ImgProc.addPointToTensor(color_tensor, disp_color, points_mat[i][1], points_mat[i][2], radius)
    end
    image.display(color_tensor)
 end

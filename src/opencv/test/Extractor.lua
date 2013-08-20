@@ -16,7 +16,7 @@ extractor   = opencv.Extractor.new(extractor_type)
 
 descriptors = extractor:compute(matMat,kpts,npts)
 
-_G.desc = opencv.Mat.new(descriptors):toTensor()
+_G.desc = descriptors:toTensor()
 
 print(desc:size())
 

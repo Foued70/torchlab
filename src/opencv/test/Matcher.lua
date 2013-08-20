@@ -9,7 +9,7 @@ img_dest = image.load(CLOUDLAB_SRC.."/image/test/baboon200_rotated.jpg","byte",n
 matMat_src  = opencv.Mat.new(img_src[1])
 matMat_dest = opencv.Mat.new(img_dest[1])
 
-detectorType = "FAST"
+detectorType = "SIFT"
 detector     = opencv.Detector.new(detectorType)
 
 kpts_src, npts_src    = detector:detect(matMat_src,250)
@@ -25,19 +25,16 @@ extractor      = opencv.Extractor.new(extractor_type)
 descriptors_src  = extractor:compute(matMat_src,kpts_src,npts_src)
 descriptors_dest = extractor:compute(matMat_dest,kpts_dest,npts_dest)
 
-descriptors_src_Mat  = opencv.Mat.new(descriptors_src)
-descriptors_dest_Mat = opencv.Mat.new(descriptors_dest)
-
 matcher_type = "FlannBased"
 matcher      = opencv.Matcher.new(matcher_type)
-sizeSrc      = descriptors_src_Mat:size()[1]
-sizeDest     = descriptors_dest_Mat:size()[1]
+sizeSrc      = descriptors_src:size()[1]
+sizeDest     = descriptors_dest:size()[1]
 
-matches,nmatches = matcher:match(descriptors_src_Mat, descriptors_dest_Mat, sizeSrc*sizeDest)
+matches,nmatches = matcher:match(descriptors_src, descriptors_dest, sizeSrc*sizeDest)
 
 matches_good,nmatches_good = matcher:reduce(matches, nmatches)
 
-H = opencv.calib3d.getHomography(kpts_src, npts_src, kpts_dest, npts_dest, matches_good, nmatches_good)
+H = opencv.calib3d.getHomography(kpts_src, npts_src, kpts_dest, npts_dest, matches, nmatches)
 
 warped = opencv.imgproc.warpImage(matMat_src.mat, H.mat)
 

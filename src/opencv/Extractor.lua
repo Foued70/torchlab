@@ -1,6 +1,7 @@
 ffi = require 'ffi'
 libopencv = util.ffi.load("libopencv")
 ctorch = util.ctorch
+Mat    = require './Mat'
 
 ffi.cdef [[
 // ------------
@@ -43,8 +44,11 @@ function Extractor:compute(img,keypoints,npts,descriptor)
    if type(keypoints) ~= "cdata" then
       error("need to pass opencv keypoints object as second arg")
    end
-   descriptor = descriptor or libopencv.Mat_create(0,0,0)
-   libopencv.DescriptorExtractor_compute(self.extractor,img.mat,descriptor,keypoints[0],npts)
+   descriptor = descriptor or Mat.new()
+   if ((not descriptor.mat) or (type(descriptor.mat) ~= "cdata")) then 
+      error("problem with descriptor mat")
+   end
+   libopencv.DescriptorExtractor_compute(self.extractor,img.mat,descriptor.mat,keypoints[0],npts)
    return descriptor
 end
 
