@@ -188,6 +188,10 @@ extern "C" {
 
   }
 
+  int Mat_type(Mat* mat)
+  {
+    return mat->type();
+  }
   Mat* Mat_loadImage(const char* fname)
   {
     // make sure that the pointer is dynamically allocated
@@ -464,39 +468,11 @@ extern "C" {
     return new Mat(H);
   }
 
-  Mat* warpImage(const Mat* src, const Mat* transform)
+  Mat* warpImage(const Mat* src, const Mat* transform, int size_x, int size_y)
   {
     Mat* warpedSrc= new Mat(0,0,src->type());
-    warpPerspective(*src, *warpedSrc, *transform, Size(src->cols*2, src->rows*2));
+    warpPerspective(*src, *warpedSrc, *transform, Size(size_x, size_y));
     return warpedSrc;
-  }
-
-  Mat* combineImages(const Mat* src,
-                     const Mat* dest,
-                     const Mat* transform,
-                     int result_size_x,
-                     int result_size_y,
-                     int result_center_x,
-                     int result_center_y)
-  {
-    //x-form accumulator;
-    Mat Acc = (Mat_<double>(3, 3) << 1, 0, result_center_x, 0, 1, result_center_y, 0, 0, 1);
-    Acc.convertTo(Acc,CV_32FC1,1,0);
-
-    Mat result;
-    result = Mat::zeros(result_size_x, result_size_y, dest->type());
-    warpPerspective( *dest, result, Acc, result.size() );
-
-    //accumulate transformation
-    Acc = Acc * *transform;
-
-    //save target
-    Mat tempresult = result.clone();
-
-    warpPerspective( *src, result, Acc, result.size() );
-    result = result + tempresult;
-
-    return new Mat(result);
   }
 
 } // extern "C"

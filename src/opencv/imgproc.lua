@@ -5,15 +5,7 @@ Mat    = require './Mat'
 ctorch = util.ctorch
 
 ffi.cdef [[
-Mat* warpImage(const Mat* src, const Mat* transform);
-Mat* combineImages(const Mat* src, 
-                                     const Mat* dest, 
-                                     const Mat* transform, 
-                                     int result_size_x, 
-                                     int result_size_y, 
-                                     int result_center_x, 
-                                     int result_center_y);
-
+Mat* warpImage(const Mat* src, const Mat* transform, int size_x, int size_y);
 Mat* CannyDetectEdges(Mat* src, double threshold1, double threshold2);
 Mat* HoughLinesRegular(Mat* image, double rho, double theta, int threshold, double srn, double stn);
 Mat* HoughLinesProbabilistic(Mat* image, double rho, double theta, int threshold, double minLineLength, double maxLineGap);
@@ -40,50 +32,38 @@ imgproc.colors = require './types/Colors.lua'
 
 -- <input> image, homography
 -- <output> image warped by homography
-function imgproc.warpImage(img, homography)
-   if type(img) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+function imgproc.warpImage(img, homography, size_x, size_y)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
    end
-   if type(homography) ~= "cdata" then
-      error("need to pass opencv mat object for second argument")
+   if ((not homography.mat) or (type(homography.mat) ~= "cdata")) then 
+      error("problem with homography matrix")
    end
 
-   return Mat.new(libopencv.warpImage(img, homography))
+   return Mat.new(libopencv.warpImage(img.mat, homography.mat, size_x, size_y))
 end
 
--- <input> image1, image2, homography, 
--- <output> image warped by homography
-function imgproc.combineImages(img1, img2, homography, result_size_x, result_size_y, result_center_x, result_center_y)
-   if type(img1) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+-- <input> image1, image2, homography
+-- <output> combined images -1st channel is warped and translated image
+function imgproc.combineImages(img1, img2, homography)
+   if ((not img1.mat) or (type(img1.mat) ~= "cdata")) then 
+      error("problem with src image")
    end
-   if type(img2) ~= "cdata" then
-      error("need to pass opencv mat object for sec argument")
+   if ((not img2.mat) or (type(img2.mat) ~= "cdata")) then 
+      error("problem with dest image")
    end
-   if type(homography) ~= "cdata" then
-      error("need to pass opencv mat object for third argument")
+   if ((not homography.mat) or (type(homography.mat) ~= "cdata")) then 
+      error("problem with homography matrix")
    end
-   if type(result_size_x) ~= "number" then
-      error("need to pass opencv mat object for fourth argument")
-   end
-   if type(result_size_y) ~= "number" then
-      error("need to pass opencv mat object for fifth argument")
-   end
-   if type(result_center_x) ~= "number" then
-      error("need to pass opencv mat object for sixth argument")
-   end
-   if type(result_center_y) ~= "number" then
-      error("need to pass opencv mat object for seventh argument")
-   end
-
-   return Mat.new(libopencv.combineImages(img1, img2, homography, result_size_x, result_size_y, result_center_x, result_center_y))
+   error("not implemented")
+   --return Mat.new(libopencv.combineImages(img1.mat, img2.mat, homography.mat, result_size_x, result_size_y, result_center_x, result_center_y))
 end
 
 -- <input> img, blockSize, ksize, k
 -- <output> Mat of responses at every location
-function imgproc.detectCornerHarris(mat,blockSize,ksize, k)
-   if type(mat) ~= "cdata" then
-      error("need to pass opencv mat as first arg")
+function imgproc.detectCornerHarris(img,blockSize,ksize, k)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input image")
    end
     if type(blockSize) ~= "number" then
       error("need to pass number as second arg")
@@ -94,14 +74,14 @@ function imgproc.detectCornerHarris(mat,blockSize,ksize, k)
     if type(k) ~= "number" then
       error("need to pass number as fourth arg")
    end
-    return Mat.new(libopencv.detectCornerHarris(mat, blockSize, ksize, k))
+    return Mat.new(libopencv.detectCornerHarris(img.mat, blockSize, ksize, k))
 end
 
 -- <input> image, threshold1, threshold2 -- see opencv function
 -- <output> line mat
 function imgproc.CannyDetectEdges(img, threshold1, threshold2)
-   if type(img) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input image")
    end
    if type(threshold1) ~= "number" then
       error("need to pass number for second argument")
@@ -110,14 +90,14 @@ function imgproc.CannyDetectEdges(img, threshold1, threshold2)
       error("need to pass number for third argument")
    end
 
-   return Mat.new(libopencv.CannyDetectEdges(img, threshold1, threshold2))
+   return Mat.new(libopencv.CannyDetectEdges(img.mat, threshold1, threshold2))
 end
 
 -- <input> -- see opencv function
 -- <output> line mat
 function imgproc.HoughLinesRegular(img, rho, theta, threshold, srn, stn)
-   if type(img) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input image")
    end
    if type(rho) ~= "number" then
       error("need to pass number for second argument")
@@ -131,14 +111,14 @@ function imgproc.HoughLinesRegular(img, rho, theta, threshold, srn, stn)
    if type(stn) ~= "number" then
       error("need to pass number for fifth argument")
    end
-   return Mat.new(libopencv.HoughLinesRegular(img, rho, theta, threshold, srn, stn))
+   return Mat.new(libopencv.HoughLinesRegular(img.mat, rho, theta, threshold, srn, stn))
 end
 
 -- <input> -- see opencv function
 -- <output> line mat
 function imgproc.HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLength, maxLineGap)
-   if type(img) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input image")
    end
    if type(rho) ~= "number" then
       error("need to pass number for second argument")
@@ -152,7 +132,7 @@ function imgproc.HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLen
    if type(maxLineGap) ~= "number" then
       error("need to pass number for fifth argument")
    end
-   return Mat.new(libopencv.HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLength, maxLineGap))
+   return Mat.new(libopencv.HoughLinesProbabilistic(img.mat, rho, theta, threshold, mineLineLength, maxLineGap))
 end
 
 
@@ -182,29 +162,29 @@ function imgproc.getDefaultStructuringMat(erosion_size)
    if type(erosion_size) ~= "number" then
       error("need to pass number for first argument")
    end
-   return Mat.new(imgproc.getStructuringElement(morph_types.MORPH_RECT, 2*erosion_size+1, 2*erosion_size+1, erosion_size, erosion_size));
+   return imgproc.getStructuringElement(morph_types.MORPH_RECT, 2*erosion_size+1, 2*erosion_size+1, erosion_size, erosion_size);
 end
 
 --dilate the img 
 function imgproc.dilate(img, structuringElement)
-   if type(img) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
    end
-   if type(structuringElement) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+   if ((not structuringElement.mat) or (type(structuringElement.mat) ~= "cdata")) then 
+      error("problem with structuring element images")
    end
-   libopencv.dilate(img, structuringElement);
+   libopencv.dilate(img.mat, structuringElement.mat);
 end
 
 --erode the img 
 function imgproc.erode(img, structuringElement)
-   if type(img) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
    end
-   if type(structuringElement) ~= "cdata" then
-      error("need to pass opencv mat object for first argument")
+   if ((not structuringElement.mat) or (type(structuringElement.mat) ~= "cdata")) then 
+      error("problem with structuring element images")
    end
-   libopencv.erode(img, structuringElement);
+   libopencv.erode(img.mat, structuringElement.mat);
 end
 
 ----- DISPLAY FUNCTIONS -------
@@ -222,36 +202,46 @@ end
 --disp_color is defined as in types/Colors.lua
 --displays square points for laziness
 function imgproc.displayPoints(img, points_mat, disp_color, radius)
-   if type(img) == "cdata" then
-      imgMat = Mat.new(img):toTensor()
-   else
-      if type(img) ~= "table" then 
-         error("need to pass Matat object for argument")
-      end
-      imgMat = img
-   end
-   color_tensor = imgMat:clone():toTensor("DHW")
+   color_tensor = imgproc.get3DTensorfrom1DMatCopyChannels(img)
    for i=1, points_mat:size(1) do
-      ImgProc.addPointToTensor(color_tensor, disp_color, points_mat[i][1], points_mat[i][2], radius)
+      imgproc.addPointToTensor(color_tensor, disp_color, points_mat[i][1], points_mat[i][2], radius)
    end
    image.display(color_tensor)
 end
 
-function imgproc.get3DTensorfrom1DMat(cv_mat)
-   mat_1D = cv_mat
+function imgproc.get3DTensorfrom1DMat(cvMat)
+   mat_1D = cvMat
    if type(mat_1D) == "cdata" then
       tensor_th = Mat.new(mat_1D):toTensor()
    else
-      mat_1D = cv_mat.mat
+      mat_1D = cvMat.mat
       if type(mat_1D) ~= "cdata" then 
          error("need to pass Matat object for argument")
       end
-      tensor_th = cv_mat:toTensor()
+      tensor_th = cvMat:toTensor()
    end
    h = tensor_th:size(1)
    w = tensor_th:size(2)
    -- no copying, or duplicating data just tricks with strides
    tensor_th = tensor_th:resize(1,h,w):expand(3,h,w)
+   return tensor_th
+end
+
+function imgproc.get3DTensorfrom1DMatCopyChannels(cvMat)
+   mat_1D = cvMat
+   if type(mat_1D) == "cdata" then
+      tensor_th = Mat.new(mat_1D):toTensor()
+   else
+      mat_1D = cvMat.mat
+      if type(mat_1D) ~= "cdata" then 
+         error("need to pass Matat object for argument")
+      end
+      tensor_th = cvMat:toTensor()
+   end
+   h = tensor_th:size(1)
+   w = tensor_th:size(2)
+   -- no copying, or duplicating data just tricks with strides
+   tensor_th = tensor_th:repeatTensor(3,1,1)
    return tensor_th
 end
 
