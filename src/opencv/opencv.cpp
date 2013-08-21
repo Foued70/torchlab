@@ -301,8 +301,6 @@ extern "C" {
     vector<KeyPoint> keypoints (keyptr, keyptr + npts);
     drawKeypoints( *img, keypoints, *img, Scalar::all(-1),
                    DrawMatchesFlags::DEFAULT );
-    //Debug
-    imshow("Keypoints", *img);
   }
 
   DescriptorExtractor* DescriptorExtractor_create(const char* feature_type)
