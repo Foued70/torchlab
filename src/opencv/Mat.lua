@@ -63,6 +63,7 @@ Mat* Mat_loadImage (const char* fname);
 void Mat_showImage (Mat* mat, const char* wname);
 
 void Mat_info      (Mat* mat);
+int Mat_type(Mat* mat);
 void Mat_destroy   (Mat* mat);
 ]]
 
@@ -113,7 +114,6 @@ function Mat:__init(pathOrTensorOrMat, ...)
       end
    end
 end
-
 function Mat:info()
    if self.mat then 
       libopencv.Mat_info(self.mat)
@@ -121,7 +121,13 @@ function Mat:info()
       error("No mat to display info")
    end
 end
-
+function Mat:matType()
+   if self.mat then 
+      return libopencv.Mat_type(self.mat)
+   else
+      error("No mat to get type")
+   end
+end
 function Mat:size()
    if self._size then 
       return self._size
