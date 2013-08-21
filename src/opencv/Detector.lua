@@ -1,25 +1,5 @@
 ffi = require 'ffi'
-libopencv = util.ffi.load("libopencv")
-ctorch = util.ctorch
-Mat = require './Mat'
-
-ffi.cdef [[
-
-// ------------
-//   opaque pointer (not visible from Lua interface)
-// ------------
-typedef struct FeatureDetector  FeatureDetector;
-
-// ------------
-//   functions implemented in opencv.cpp
-// ------------
-FeatureDetector* FeatureDetector_create(const char* detector_type);
-
-int FeatureDetector_detect(FeatureDetector* detector, const Mat* img, const Mat* mask, KeyPoint* kptr, int npts);
-void FeatureDetector_parameters(FeatureDetector* detector);
-
-void FeatureDetector_destroy(FeatureDetector* detector);
-]]
+libopencv = require './libopencv'
 
 Detector = Class()
 
@@ -51,7 +31,7 @@ function Detector:detect(img,npts,mask)
    if type(self.detector) ~= "cdata" then
       error("poorly initialized detector object")
    end
-   mask = mask or Mat.new()
+   mask = mask or opencv.Mat.new()
    npts = npts or 1000
    keypoints = ffi.new("KeyPoint[?]", npts)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
@@ -63,5 +43,3 @@ function Detector:detect(img,npts,mask)
    npts = libopencv.FeatureDetector_detect(self.detector,img.mat,mask.mat,keypoints[0],npts)
    return keypoints, npts
 end
-
-return Detector

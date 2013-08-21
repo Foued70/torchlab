@@ -1,6 +1,5 @@
 FloorTransformation = {}
 
-opencv    = require '../init'
 colors = require '../types/Colors.lua'
 require '../../geom/Homography'
 require '../../geom/util'

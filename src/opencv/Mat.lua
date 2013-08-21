@@ -1,80 +1,5 @@
-ffi = require 'ffi'
-libopencv = util.ffi.load("libopencv")
-ctorch = util.ctorch
-
--- This is a list of wrapper functions encapsulating the opencv
--- functions we want.  The wrapper functions are defined in Mat.cpp
--- in an extern "C" block to make the C++ callable from lua C.) These
--- functions call the needed C++ operators. They accept and return the
--- opencv C structs defined above.
-ffi.cdef [[
-// ------------
-//   opaque pointer (not visible from Lua interface)
-// ------------
-typedef struct Mat Mat;
-
-// ------------
-//   transparent pointers (internals accessible from Lua)
-// ------------
-typedef struct CvPoint2D32f
-{
-    float x;
-    float y;
-}
-CvPoint2D32f;
-
-// from opencv2/features2d/features2d.hpp
-typedef struct KeyPoint
-{
-    CvPoint2D32f pt; //!< coordinates of the keypoints
-    float size;      //!< diameter of the meaningful keypoint neighborhood
-
-    float angle;     //!< computed orientation of the keypoint (-1 if not
-                     //   applicable); it's in [0,360) degrees and
-                     //   measured relative to image coordinate system,
-                     //   ie in clockwise.
-
-    float response;  //!< the response by which the most strong
-                     //   keypoints have been selected. Can be used for the
-                     //   further sorting or subsampling
-
-    int octave;      //!< octave (pyramid layer) from which the keypoint
-                     //   has been extracted
-
-    int class_id;    //!< object class (if the keypoints need to be
-                     //   clustered by an object they belong to)
-
-} KeyPoint ;
-
-// ------------
-//   functions implemented in opencv.cpp
-// ------------
-Mat* Mat_create (int width, int height, int type);
-Mat* Mat_clone (Mat* mat);
-Mat* getMatFromKeypoints(const KeyPoint* keyptr, int npts);
-
-int  Mat_depth  (Mat* mat);
-void Mat_size   (Mat* mat, THLongStorage* size);
-void Mat_stride (Mat* mat, THLongStorage* stride);
-
-void Mat_convert (Mat* input, Mat* output, int cvttype);
-
-Mat* Mat_loadImage (const char* fname);
-void Mat_showImage (Mat* mat, const char* wname);
-
-void Mat_info      (Mat* mat);
-int Mat_type(Mat* mat);
-void Mat_destroy   (Mat* mat);
-]]
-
--- ------------
---   generic functions implemented in generic/opencv.cpp
--- ------------
-
-ctorch.generateTypes [[
-Mat* THTensor_toMat(THTensor* tensor);
-void THTensor_fromMat(Mat* mat,THTensor* tensor);
-]]
+ffi        = require 'ffi'
+libopencv  = require './libopencv'
 
 types      = require './types/Mat'
 conversion = require './types/Mat_conversion'
@@ -114,6 +39,7 @@ function Mat:__init(pathOrTensorOrMat, ...)
       end
    end
 end
+
 function Mat:info()
    if self.mat then 
       libopencv.Mat_info(self.mat)
@@ -121,6 +47,7 @@ function Mat:info()
       error("No mat to display info")
    end
 end
+
 function Mat:matType()
    if self.mat then 
       return libopencv.Mat_type(self.mat)
@@ -128,30 +55,37 @@ function Mat:matType()
       error("No mat to get type")
    end
 end
-function Mat:size()
-   if self._size then 
-      return self._size
-   else
+
+function Mat:size(dim)
+   if not self._size then 
       if self.mat then 
          self._size = torch.LongStorage()
          libopencv.Mat_size(self.mat,torch.cdata(self._size))
-         return self._size
+      else
+         error("No mat to get size") 
       end
    end
-   return
+   if dim and type(dim) == "number" then 
+      return self._size[dim]
+   else
+      return self._size
+   end
 end
 
-function Mat:stride()
-   if self._stride then 
-      return self._stride
-   else
+function Mat:stride(dim)
+   if not self._stride then 
       if self.mat then 
          self._stride = torch.LongStorage()
          libopencv.Mat_stride(self.mat,torch.cdata(self._stride))
-         return self._stride
+      else
+         error("No mat to get stride") 
       end
    end
-   return
+   if dim and type(dim) == "number" then 
+      return self._stride[dim]
+   else
+      return self._stride
+   end
 end
 
 function Mat:display(title)
@@ -162,7 +96,6 @@ function Mat:display(title)
       error("No mat to display")
    end
 end
-
 
 function Mat:load(path)
    self.mat = ffi.gc(libopencv.Mat_loadImage(path), destructor())
@@ -263,5 +196,3 @@ function Mat:convert(...)
    end 
    return output
 end
-
-return Mat

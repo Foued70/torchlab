@@ -1,38 +1,13 @@
-ffi = require 'ffi'
-libopencv = util.ffi.load("libopencv")
-Mat    = require './Mat'
+libopencv = require './libopencv'
 
-ctorch = util.ctorch
-
-ffi.cdef [[
-Mat* warpImage(const Mat* src, const Mat* transform, int size_x, int size_y);
-Mat* CannyDetectEdges(Mat* src, double threshold1, double threshold2);
-Mat* HoughLinesRegular(Mat* image, double rho, double theta, int threshold, double srn, double stn);
-Mat* HoughLinesProbabilistic(Mat* image, double rho, double theta, int threshold, double minLineLength, double maxLineGap);
-
-Mat* getStructuringElement(int type, int size_x, int size_y, int center_x, int center_y);
-void dilate(Mat*  src, Mat* structuringElement);
-void erode(Mat*  src, Mat* structuringElement);
-
-Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k);
-
-]]
-
-local function destructor ()
-   return function (mat)
-      libopencv.Mat_destroy(mat)
-   end
-end
+Class()
 
 morph_types = require './types/Morph'
-
--- not a "Class()" no self, just a bunch of functions in a namespace.
-imgproc = {}
-imgproc.colors = require './types/Colors.lua'
+colors      = require './types/Colors.lua'
 
 -- <input> image, homography
 -- <output> image warped by homography
-function imgproc.warpImage(img, homography, size_x, size_y)
+function warpImage(img, homography, size_x, size_y)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input images")
    end
@@ -40,12 +15,12 @@ function imgproc.warpImage(img, homography, size_x, size_y)
       error("problem with homography matrix")
    end
 
-   return Mat.new(libopencv.warpImage(img.mat, homography.mat, size_x, size_y))
+   return opencv.Mat.new(libopencv.warpImage(img.mat, homography.mat, size_x, size_y))
 end
 
 -- <input> image1, image2, homography
 -- <output> combined images -1st channel is warped and translated image
-function imgproc.combineImages(img1, img2, homography)
+function combineImages(img1, img2, homography)
    if ((not img1.mat) or (type(img1.mat) ~= "cdata")) then 
       error("problem with src image")
    end
@@ -56,12 +31,12 @@ function imgproc.combineImages(img1, img2, homography)
       error("problem with homography matrix")
    end
    error("not implemented")
-   --return Mat.new(libopencv.combineImages(img1.mat, img2.mat, homography.mat, result_size_x, result_size_y, result_center_x, result_center_y))
+   --return opencv.Mat.new(libopencv.combineImages(img1.mat, img2.mat, homography.mat, result_size_x, result_size_y, result_center_x, result_center_y))
 end
 
 -- <input> img, blockSize, ksize, k
 -- <output> Mat of responses at every location
-function imgproc.detectCornerHarris(img,blockSize,ksize, k)
+function detectCornerHarris(img,blockSize,ksize, k)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input image")
    end
@@ -74,12 +49,12 @@ function imgproc.detectCornerHarris(img,blockSize,ksize, k)
     if type(k) ~= "number" then
       error("need to pass number as fourth arg")
    end
-    return Mat.new(libopencv.detectCornerHarris(img.mat, blockSize, ksize, k))
+    return opencv.Mat.new(libopencv.detectCornerHarris(img.mat, blockSize, ksize, k))
 end
 
 -- <input> image, threshold1, threshold2 -- see opencv function
 -- <output> line mat
-function imgproc.CannyDetectEdges(img, threshold1, threshold2)
+function CannyDetectEdges(img, threshold1, threshold2)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input image")
    end
@@ -90,12 +65,12 @@ function imgproc.CannyDetectEdges(img, threshold1, threshold2)
       error("need to pass number for third argument")
    end
 
-   return Mat.new(libopencv.CannyDetectEdges(img.mat, threshold1, threshold2))
+   return opencv.Mat.new(libopencv.CannyDetectEdges(img.mat, threshold1, threshold2))
 end
 
 -- <input> -- see opencv function
 -- <output> line mat
-function imgproc.HoughLinesRegular(img, rho, theta, threshold, srn, stn)
+function HoughLinesRegular(img, rho, theta, threshold, srn, stn)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input image")
    end
@@ -111,12 +86,12 @@ function imgproc.HoughLinesRegular(img, rho, theta, threshold, srn, stn)
    if type(stn) ~= "number" then
       error("need to pass number for fifth argument")
    end
-   return Mat.new(libopencv.HoughLinesRegular(img.mat, rho, theta, threshold, srn, stn))
+   return opencv.Mat.new(libopencv.HoughLinesRegular(img.mat, rho, theta, threshold, srn, stn))
 end
 
 -- <input> -- see opencv function
 -- <output> line mat
-function imgproc.HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLength, maxLineGap)
+function HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLength, maxLineGap)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input image")
    end
@@ -132,14 +107,14 @@ function imgproc.HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLen
    if type(maxLineGap) ~= "number" then
       error("need to pass number for fifth argument")
    end
-   return Mat.new(libopencv.HoughLinesProbabilistic(img.mat, rho, theta, threshold, mineLineLength, maxLineGap))
+   return opencv.Mat.new(libopencv.HoughLinesProbabilistic(img.mat, rho, theta, threshold, mineLineLength, maxLineGap))
 end
 
 
 --DILATION AND EROSION ---
 -- <input> -- see opencv function
 -- <output> line mat
-function imgproc.getStructuringElement(structType, size_x, size_y, center_x, center_y)
+function getStructuringElement(structType, size_x, size_y, center_x, center_y)
    if type(structType) ~= "number" then
       error("need to pass opencv mat object for first argument")
    end
@@ -155,18 +130,18 @@ function imgproc.getStructuringElement(structType, size_x, size_y, center_x, cen
    if type(center_y) ~= "number" then
       error("need to pass number for fifth argument")
    end
-   return Mat.new(libopencv.getStructuringElement(structType, size_x, size_y, center_x, center_y))
+   return opencv.Mat.new(libopencv.getStructuringElement(structType, size_x, size_y, center_x, center_y))
 end
 
-function imgproc.getDefaultStructuringMat(erosion_size)
+function getDefaultStructuringMat(erosion_size)
    if type(erosion_size) ~= "number" then
       error("need to pass number for first argument")
    end
-   return imgproc.getStructuringElement(morph_types.MORPH_RECT, 2*erosion_size+1, 2*erosion_size+1, erosion_size, erosion_size);
+   return getStructuringElement(morph_types.MORPH_RECT, 2*erosion_size+1, 2*erosion_size+1, erosion_size, erosion_size);
 end
 
 --dilate the img 
-function imgproc.dilate(img, structuringElement)
+function dilate(img, structuringElement)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input images")
    end
@@ -177,7 +152,7 @@ function imgproc.dilate(img, structuringElement)
 end
 
 --erode the img 
-function imgproc.erode(img, structuringElement)
+function erode(img, structuringElement)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input images")
    end
@@ -186,5 +161,3 @@ function imgproc.erode(img, structuringElement)
    end
    libopencv.erode(img.mat, structuringElement.mat);
 end
-
-return imgproc

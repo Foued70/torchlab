@@ -1,7 +1,3 @@
-opencv = require '../init'
-
--- adds some funcs to move between torch.Tensor userdata and cdata
-ctorch = util.ctorch
 
 -- low level from Tensor to Mat and back
 

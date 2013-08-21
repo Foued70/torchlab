@@ -1,6 +1,4 @@
 
-opencv    = require '../init'
-
 img_path = CLOUDLAB_SRC.."/image/test/lena.jpg"
 max_points = 150
 -- use graphics magick to load the image

@@ -1,32 +1,9 @@
 ffi = require 'ffi'
-libopencv = util.ffi.load("libopencv")
-ctorch = util.ctorch
-
-ffi.cdef [[
-// ------------
-//   opaque pointer (not visible from Lua interface)
-// ------------
-typedef struct DescriptorMatcher DescriptorMatcher;
-
-// from opencv2/features2d/features2d.hpp
-typedef struct DMatch
-{
-  int queryIdx; // query descriptor index
-  int trainIdx; // train descriptor index
-  int imgIdx;   // train image index
-
-  float distance;
-} DMatch ;
-
-DescriptorMatcher* DescriptorMatcher_create(const char* feature_type);
-int DescriptorMatcher_match(DescriptorMatcher* matcher, const Mat*  descriptors_src, const Mat*  descriptors_dest, DMatch* matchesC, int npts);
-void DescriptorMatcher_destroy(DescriptorMatcher* matcher);
-int DescriptorMatcher_reduceMatches(DMatch* matchesptr, int nmatches, DMatch* matchesReducedC);
-]]
+libopencv = require './libopencv'
 
 Matcher = Class()
 
-Matcher.types = require './types/Matcher'
+types = require './types/Matcher'
 
 -- <input> String matcherType
 function Matcher:__init(matcherType)
@@ -70,5 +47,3 @@ function Matcher:reduce(matches,nmatches)
   nmatches_new = libopencv.DescriptorMatcher_reduceMatches(matches, nmatches, matches_good)
   return matches_good, nmatches_new
 end
-
-return Matcher

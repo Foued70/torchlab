@@ -1,6 +1,3 @@
-
-opencv    = require '../init'
-
 -- use graphics magick to load the image
 img = image.load(CLOUDLAB_SRC.."/image/test/lena.jpg","byte",nil,"LAB","DHW")
 

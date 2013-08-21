@@ -251,7 +251,10 @@ function image.display(...)
                          scaleeach=scaleeach, min=min, max=max, symmetric=symm}
    -- if image is a table, then we treat if as a list of images
    -- if 2 dims or 3 dims and 1/3 channels, then we treat it as a single image
-   if input:nDimension() == 2  or (input:nDimension() == 3 and (input:size(1) == 1 or input:size(1) == 3)) then
+   if input:nDimension() == 2 then
+      input = image.get3Dfrom1D(input)
+   end
+   if (input:nDimension() == 3 and (input:size(1) == 1 or input:size(1) == 3)) then
       ui.ImgWidget.new():display(input)
    else
       xerror('image must be a HxW or KxHxW or Kx3xHxW tensor, or a list of tensors', 'display')

@@ -1,23 +1,5 @@
 ffi = require 'ffi'
-libopencv = util.ffi.load("libopencv")
-ctorch = util.ctorch
-Mat    = require './Mat'
-
-ffi.cdef [[
-// ------------
-//   opaque pointer (not visible from Lua interface)
-// ------------
-typedef struct DescriptorExtractor DescriptorExtractor;
-
-DescriptorExtractor* DescriptorExtractor_create(const char* feature_type);
-void DescriptorExtractor_compute(DescriptorExtractor* extractor,
-                                           const Mat* img,
-                                                 Mat* descriptor,
-                                            KeyPoint* keypointsC, 
-                                                  int npts);
-void DescriptorExtractor_destroy(DescriptorExtractor* extractor);
-
-]]
+libopencv = require './libopencv'
 
 Extractor = Class()
 
@@ -44,12 +26,10 @@ function Extractor:compute(img,keypoints,npts,descriptor)
    if type(keypoints) ~= "cdata" then
       error("need to pass opencv keypoints object as second arg")
    end
-   descriptor = descriptor or Mat.new()
+   descriptor = descriptor or opencv.Mat.new()
    if ((not descriptor.mat) or (type(descriptor.mat) ~= "cdata")) then 
       error("problem with descriptor mat")
    end
    libopencv.DescriptorExtractor_compute(self.extractor,img.mat,descriptor.mat,keypoints[0],npts)
    return descriptor
 end
-
-return Extractor
