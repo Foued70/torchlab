@@ -544,4 +544,120 @@ function image.lcn(im,ker)
 
 end
 
+----- DISPLAY FUNCTIONS -------
+function image.displayGrayInLua(tensor)
+   image.display(image.get3Dfrom1D(tensor))
+end
+
+--cv_mat is grayscale image, points_mat is x,y location of points
+--disp_color is defined as in types/Colors.lua
+--displays square points for laziness
+function image.displayPoints(img, points_mat, disp_color, radius)
+   color_tensor = image.get3Dfrom1DCopyChannels(img)
+   for i=1, points_mat:size(1) do
+      image.addPointTo3dImage(color_tensor, disp_color, points_mat[i][1], points_mat[i][2], radius)
+   end
+   image.display(color_tensor)
+end
+
+--takes in HW returns DHW
+function image.get3Dfrom1D(tensor_th)
+   h = tensor_th:size(1)
+   w = tensor_th:size(2)
+   -- no copying, or duplicating data just tricks with strides
+   tensor_th = tensor_th:resize(1,h,w):expand(3,h,w)
+   return tensor_th
+end
+
+--takes in HW returns DHW, but with channels copied (so if you want to change something in one channel, it doesnt get copied to all 3)
+function image.get3Dfrom1DCopyChannels(tensor_th)
+   h = tensor_th:size(1)
+   w = tensor_th:size(2)
+   -- no copying, or duplicating data just tricks with strides
+   tensor_th = tensor_th:repeatTensor(3,1,1)
+   return tensor_th
+end
+
+--helper function, changes the color of the squares of raidus centered at point_x,point_y to color_tensor
+function image.addPointTo3dImage(color_tensor, disp_color, point_x, point_y, radius)
+   for j=1,3 do
+      color_tensor[{j,
+      {math.max(point_x-radius,1), math.min(point_x+radius, color_tensor:size(2))},
+      {math.max(point_y-radius,1), math.min(point_y+radius, color_tensor:size(3))}}]
+      =disp_color[j]
+   end
+end
+
+
+function image.warpAndCombineWithBorders(bestT, img_src, img_dest)
+   img_dest_copy = img_dest:clone()
+   img_dest_copy:toTensor()[{{1,img_dest:size()[1]},{1}}]:fill(255)
+   img_dest_copy:toTensor()[{{1,img_dest:size()[1]},{img_dest:size()[2]}}]:fill(255)
+   img_dest_copy:toTensor()[{{1},{1,img_dest:size()[2]}}]:fill(255)
+   img_dest_copy:toTensor()[{{img_dest:size()[1]}, {1,img_dest:size()[2]}}]:fill(255)
+
+   img_src_copy = img_src:clone()
+   img_src_copy:toTensor()[{{1,img_src:size()[1]},{1}}]:fill(255)
+   img_src_copy:toTensor()[{{1,img_src:size()[1]},{img_src:size()[2]}}]:fill(255)
+   img_src_copy:toTensor()[{{1},{1,img_src:size()[2]}}]:fill(255)
+   img_src_copy:toTensor()[{{img_src:size()[1]}, {1,img_src:size()[2]}}]:fill(255)
+
+   return image.warpAndCombine(bestT, img_src_copy, img_dest_copy)
+end
+
+--transform img_src with bestT and combine with img_dest
+--result is transformation should apply to img_src, translation should apply to img_dest, and combined image with
+--transformed img_src on one channel and translated img_sest on another
+function image.warpAndCombine(bestT, img_src, img_dest)
+   require "../geom/Homography"
+   Homography = geom.Homography
+   corners_src = image.getCorners(img_src)
+   corners_dest = image.getCorners(img_dest)
+   corners_src_warped = bestT:applyToPointsReturn2d(corners_src)
+
+   min_corner = torch.cat(corners_src_warped, corners_dest):min(2)
+   max_corner = torch.cat(corners_src_warped, corners_dest):max(2)
+
+   --this is in lua coordinate system, swap x and y for opencv
+   size_x = (max_corner-min_corner)[1][1]
+   size_y = (max_corner-min_corner)[2][1]
+
+   translate =  Homography.new(0,torch.Tensor({-min_corner[1][1],-min_corner[2][1]}))
+   src_transformation_lua = translate:combineWith(bestT) --first apply bestT, then translate
+
+   --switch to opencv coordinates!
+   src_transform = opencv.Mat.new(src_transformation_lua:getEquivalentCV())
+   dest_transform = opencv.Mat.new(translate:getEquivalentCV())   
+
+   imgproc = require "../opencv/imgproc"
+   warpedSrc  =  imgproc.warpImage(img_src, src_transform, size_y, size_x)
+   warpedDest =  imgproc.warpImage(img_dest_copy, dest_transform, size_y, size_x)
+
+   tensor3d = torch.zeros(3,warpedSrc:size()[1], warpedSrc:size()[2])
+   tensor3d[1] = warpedSrc:toTensor()
+   tensor3d[2] = warpedDest:toTensor()
+   return src_transform, dest_transform, tensor3d
+end
+
+--returns the coordinates of the 4 corners
+function image.getCorners(img_src)
+   return torch.Tensor({{0,0}, {0, img_src:size()[2]}, {img_src:size()[1],0}, {img_src:size()[1],img_src:size()[2]}}):t()
+end
+
+--only keep value greater than threshold
+function image.thresholdReturnCoordinates(squareMatrix,threshold)
+   h=squareMatrix:size(1)
+   w=squareMatrix:size(2)
+   
+   x = torch.Tensor(h*w)
+   i = 0
+   x:apply(function() i = i + 1; return i end)
+   goodLocations = x[torch.ge(squareMatrix,threshold)]
+   goodLocationsX = torch.ceil(goodLocations/w)
+   goodLocationsY = goodLocations:clone()
+   goodLocationsY:apply(function(val) return (val -1)%w+1 end) 
+
+   return goodLocationsX, goodLocationsY
+end
+
 return image
