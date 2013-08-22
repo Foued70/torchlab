@@ -2,8 +2,6 @@ local path = require 'path'
 
 Class()
 
-require 'image'
-
 pi = math.pi
 pi2 = pi * 0.5
 
@@ -18,7 +16,7 @@ cmd:option('-scale','0.25', 'downsample')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 image_file  = params.imagefile
 

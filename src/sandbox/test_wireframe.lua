@@ -1,7 +1,5 @@
 -- Class()
 
-require 'image'
-
 dofile 'util.lua'
 
 pi = math.pi

@@ -41,3 +41,5 @@ end
 function Ray:__call(t)
    return self:endpoint(t)
 end
+
+return Ray

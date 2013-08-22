@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-ver=1.53.0
+ver=1.54.0
 ver_ubar=$(subst .,_,$(ver))
 
 #url=http://voxel.dl.sourceforge.net/project/boost/boost/$(ver)/boost_$(ver_ubar).tar.bz2

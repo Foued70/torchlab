@@ -7,9 +7,9 @@ FIND_PACKAGE( OpenCV REQUIRED )
 
 LINK_DIRECTORIES(${install_lib})
 
-SET(package copencv)
+SET(package opencv)
 
-SET(src copencv.cpp)
+SET(src opencv.cpp)
 
 ADD_FFI_LIB(${package} ${src})
 

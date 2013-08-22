@@ -1,40 +1,22 @@
--- This file contains two parts.  First the ffi interface to opencv
--- and our C wrappers for opencv. Then the lua wrappers.
+ctorch = util.ctorch
 
--- The lua wrappers to C functions which call the opencv C++
--- functions. The ffi interface is in libopencv.lua and the c wrapper
--- functions are written in luaopencv.cpp.
+ffi  = require 'ffi'
+-- This is a list of wrapper functions encapsulating the opencv
+-- functions we want.  The wrapper functions are defined in Mat.cpp
+-- in an extern "C" block to make the C++ callable from lua C.) These
+-- functions call the needed C++ operators. They accept and return the
+-- opencv C structs defined above.
 
--- All functions in the opencv package take pointers to opencv objects
--- as input.  There are functions to convert to and from torch.Tensors
--- which don't copy data when then can.
-
--- TODO figure out how to put this in another file. To make code more readable.
-
--- FFI bindings to Opencv:
-local ffi = require "ffi"
--- local bit = require 'bit'
-local ctorch = util.ctorch
-
--- data types CV_<bit_depth>{U|S|F}C{num_channels}
-
--- copy needed structs from opencv2/core/types_c.h
--- these will create the interface between torch and opencv
-
-ffi.cdef
-[[
-
-typedef unsigned char uchar;
-
+-- Mat.lua
+ffi.cdef [[
+// ------------
+//   opaque pointer (not visible from Lua interface)
+// ------------
 typedef struct Mat Mat;
 
-typedef struct CvPoint
-{
-    int x;
-    int y;
-}
-CvPoint;
-
+// ------------
+//   transparent pointers (internals accessible from Lua)
+// ------------
 typedef struct CvPoint2D32f
 {
     float x;
@@ -42,110 +24,143 @@ typedef struct CvPoint2D32f
 }
 CvPoint2D32f;
 
-typedef struct CvPoint3D32f
-{
-    float x;
-    float y;
-    float z;
-}
-CvPoint3D32f;
-
-typedef struct CvRect
-{
-    int x;
-    int y;
-    int width;
-    int height;
-} CvRect;
-
-typedef struct CvSize
-{
-  int width;
-  int height;
-} CvSize;
-
 // from opencv2/features2d/features2d.hpp
 typedef struct KeyPoint
 {
     CvPoint2D32f pt; //!< coordinates of the keypoints
     float size;      //!< diameter of the meaningful keypoint neighborhood
-    float angle;     //!< computed orientation of the keypoint (-1 if not applicable);
-                     //!< it's in [0,360) degrees and measured relative to
-                     //!< image coordinate system, ie in clockwise.
-    float response;  //!< the response by which the most strong keypoints have been selected. Can be used for the further sorting or subsampling
-    int   octave;    //!< octave (pyramid layer) from which the keypoint has been extracted
-    int   class_id;  //!< object class (if the keypoints need to be clustered by an object they belong to)
+
+    float angle;     //!< computed orientation of the keypoint (-1 if not
+                     //   applicable); it's in [0,360) degrees and
+                     //   measured relative to image coordinate system,
+                     //   ie in clockwise.
+
+    float response;  //!< the response by which the most strong
+                     //   keypoints have been selected. Can be used for the
+                     //   further sorting or subsampling
+
+    int octave;      //!< octave (pyramid layer) from which the keypoint
+                     //   has been extracted
+
+    int class_id;    //!< object class (if the keypoints need to be
+                     //   clustered by an object they belong to)
+
 } KeyPoint ;
 
-
-]]
-
--- This is a list of wrapper functions encapsulating the opencv
--- functions we want.  The wrapper functions are defined in opencv.cpp
--- in an extern "C" block to make the C++ callable from lua C.) These
--- functions call the needed C++ operators. They accept and return the
--- opencv C structs defined above.
-ffi.cdef [[
+// ------------
+//   functions implemented in opencv.cpp
+// ------------
 Mat* Mat_create (int width, int height, int type);
+Mat* Mat_clone (Mat* mat);
+Mat* getMatFromKeypoints(const KeyPoint* keyptr, int npts);
 
-int  Mat_depth(Mat* mat);
+int  Mat_depth  (Mat* mat);
+void Mat_size   (Mat* mat, THLongStorage* size);
+void Mat_stride (Mat* mat, THLongStorage* stride);
 
-void Mat_size(Mat* mat, THLongStorage* size);
-void Mat_stride(Mat* mat, THLongStorage* stride);
+void Mat_convert (Mat* input, Mat* output, int cvttype);
 
-Mat* Mat_loadImage(const char* fname);
-void Mat_showImage(Mat* mat, const char* wname);
-void Mat_convert(Mat* input, Mat* output, int cvttype);
-void Mat_info(Mat* mat);
-void Mat_destroy(Mat* mat);
+Mat* Mat_loadImage (const char* fname);
+void Mat_showImage (Mat* mat, const char* wname);
+
+void Mat_info      (Mat* mat);
+int Mat_type(Mat* mat);
+void Mat_destroy   (Mat* mat);
 ]]
+
+-- ------------
+--   generic functions implemented in generic/opencv.cpp
+-- ------------
 
 ctorch.generateTypes [[
 Mat* THTensor_toMat(THTensor* tensor);
 void THTensor_fromMat(Mat* mat,THTensor* tensor);
 ]]
 
+-- Detector.lua
 ffi.cdef [[
-int detect(const Mat* img, const char* detector_type, const Mat* mask, KeyPoint* kpC, int npts);
-void debug_keypoints(Mat* img, const KeyPoint* kptr, int npts);
+// ------------
+//   opaque pointer (not visible from Lua interface)
+// ------------
+typedef struct FeatureDetector  FeatureDetector;
+
+// ------------
+//   functions implemented in opencv.cpp
+// ------------
+FeatureDetector* FeatureDetector_create(const char* detector_type);
+
+int FeatureDetector_detect(FeatureDetector* detector, const Mat* img, const Mat* mask, KeyPoint* kptr, int npts);
+void FeatureDetector_parameters(FeatureDetector* detector);
+
+void FeatureDetector_destroy(FeatureDetector* detector);
 ]]
 
--- below starts our lua wrappers
-libopencv = {}
--- load our C wrappers. TODO expose C or not...
-libopencv.C = util.ffi.load('libcopencv')
+-- Extractor.lua
+ffi.cdef [[
+// ------------
+//   opaque pointer (not visible from Lua interface)
+// ------------
+typedef struct DescriptorExtractor DescriptorExtractor;
 
--- copy large enums for opencv
-libopencv.Mat_types      = require './mat_types'
-libopencv.cvtColor_types = require './cvt_types'
+DescriptorExtractor* DescriptorExtractor_create(const char* feature_type);
+void DescriptorExtractor_compute(DescriptorExtractor* extractor,
+                                           const Mat* img,
+                                                 Mat* descriptor,
+                                            KeyPoint* keypointsC, 
+                                                  int npts);
+void DescriptorExtractor_destroy(DescriptorExtractor* extractor);
 
-libopencv.detector_type = {
-   "FAST",      -- FastFeatureDetector
-   "STAR",      -- StarFeatureDetector
-   "SIFT",      -- SIFT (nonfree module)
-   "SURF",      -- SURF (nonfree module)
-   "ORB",       -- ORB
-   "BRISK",     -- BRISK
-   "MSER",      -- MSER
-   "GFTT",      -- GoodFeaturesToTrackDetector
-   "HARRIS",    -- GoodFeaturesToTrackDetector with Harris detector enabled
-   "Dense",     -- DenseFeatureDetector
-   "SimpleBlob" -- SimpleBlobDetector
-}
+]]
 
--- <input> Mat img, String detectorType , Mat mask
--- <output> KeyPoint*, npts
-function libopencv.detect(mat,detectorType,npts,mask)
-   detectorType = detectorType or "FAST"
-   mask = mask or libopencv.C.Mat_create(0,0,0)
-   npts = npts or 1000
-   keypoints = ffi.new("KeyPoint[?]", npts)
-   npts = libopencv.C.detect(mat,detectorType,mask,keypoints[0],npts)
-   return keypoints, npts
-end
+-- Matcher.lua
+ffi.cdef [[
+// ------------
+//   opaque pointer (not visible from Lua interface)
+// ------------
+typedef struct DescriptorMatcher DescriptorMatcher;
 
-function libopencv.debug_keypoints(mat,kpts,npts)
-   libopencv.C.debug_keypoints(mat,kpts,npts)
-end
+// from opencv2/features2d/features2d.hpp
+typedef struct DMatch
+{
+  int queryIdx; // query descriptor index
+  int trainIdx; // train descriptor index
+  int imgIdx;   // train image index
 
-return libopencv
+  float distance;
+} DMatch ;
+
+DescriptorMatcher* DescriptorMatcher_create(const char* feature_type);
+int DescriptorMatcher_match(DescriptorMatcher* matcher, const Mat*  descriptors_src, const Mat*  descriptors_dest, DMatch* matchesC, int npts);
+void DescriptorMatcher_destroy(DescriptorMatcher* matcher);
+int DescriptorMatcher_reduceMatches(DMatch* matchesptr, int nmatches, DMatch* matchesReducedC);
+]]
+
+-- calib3d.lua
+ffi.cdef [[
+Mat* getHomography(const KeyPoint* keyptr_src,  int npts_src, 
+                   const KeyPoint* keyptr_dest, int npts_dest, 
+                     const DMatch* matchptr,    int npts_match);
+]] 
+
+-- imgproc.lua
+ffi.cdef [[
+Mat* warpImage(const Mat* src, const Mat* transform, int size_x, int size_y);
+Mat* CannyDetectEdges(Mat* src, double threshold1, double threshold2);
+Mat* HoughLinesRegular(Mat* image, double rho, double theta, int threshold, double srn, double stn);
+Mat* HoughLinesProbabilistic(Mat* image, double rho, double theta, int threshold, double minLineLength, double maxLineGap);
+
+Mat* getStructuringElement(int type, int size_x, int size_y, int center_x, int center_y);
+void dilate(Mat*  src, Mat* structuringElement);
+void erode(Mat*  src, Mat* structuringElement);
+
+Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k);
+
+]]
+
+-- utils.lua
+ffi.cdef [[
+void dump_keypoints(const KeyPoint* keyptr, int npts);
+void draw_keypoints(Mat* img, const KeyPoint* keyptr, int npts);
+]]
+
+return util.ffi.load("libopencv")

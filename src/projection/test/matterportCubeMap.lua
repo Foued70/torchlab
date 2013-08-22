@@ -1,7 +1,5 @@
 Class()
 
-require 'image'
-
 log.tic()
 
 d2r = math.pi / 180
@@ -18,15 +16,14 @@ cmd:option('-size', '512', 'size in pixels of side of skybox cube')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
+params = cmd:parse(process.argv)
 
 scandir  = params.scandir
-out_size   = params.size
-out_file   = params.outfile
+out_size = params.size
+out_file = params.outfile
 
 -- load images
--- load images
-images = util.fs.glob(scandir,"jpg")
+images    = util.fs.glob(scandir,"jpg")
 pose_file = util.fs.glob(scandir,"_texture_info.txt")
 pose_file = pose_file[1]
 

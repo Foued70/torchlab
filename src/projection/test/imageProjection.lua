@@ -1,7 +1,3 @@
--- Class()
-
-require 'image'
-
 pi = math.pi
 pi2 = pi * 0.5
 
@@ -16,9 +12,8 @@ cmd:option('-scale', '0.1', 'downsample ratio')
 cmd:text()
 
 -- parse input params
-params = cmd:parse(arg)
-
-imagesdir  = params.imagesdir
+params    = cmd:parse(process.argv)
+imagesdir = params.imagesdir
 
 -- load images
 images = util.fs.glob(imagesdir,{"JPG","PNG","jpg","png"})

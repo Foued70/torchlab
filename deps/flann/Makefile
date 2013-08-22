@@ -2,7 +2,7 @@ include ../Makefile.common
 
 ver=1.8.4
 
-url=http://people.cs.ubc.ca/~mariusm/uploads/FLANN/flann-$(ver)-src.zip
+url=http://www.cs.ubc.ca/research/flann/uploads/FLANN/flann-$(ver)-src.zip
 
 tar_file=$(build_dir)/deps/flann-$(ver)-src.zip
 unpack=$(build_dir)/deps/flann-$(ver)-src
@@ -20,7 +20,7 @@ all:$(install)
 $(install): $(unpack)
 	cd $(unpack); mkdir -p build
 	cd $(unpack)/build; cmake $(args) ..
-	cd $(unpack)/build; make install
+	cd $(unpack)/build; make -j4 install
 
 $(unpack): $(tar_file)
 	cd $(build_dir)/deps; unzip -o $(tar_file)

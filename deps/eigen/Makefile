@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-ver=3.1.2
+ver=3.2.0
 
 url=http://bitbucket.org/eigen/eigen/get/$(ver).tar.bz2
 

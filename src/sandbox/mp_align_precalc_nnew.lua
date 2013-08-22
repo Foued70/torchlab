@@ -1,7 +1,7 @@
 --Class()
 
 local fs = require 'fs'
-saliency = require 'saliency.init'
+saliency = require '../image/saliency'
 
 cmd = torch.CmdLine()
 cmd:text()

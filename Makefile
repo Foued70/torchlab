@@ -36,3 +36,9 @@ ceres:
 
 opencv: 
 	cd deps/opencv; make
+
+pcl:
+	cd deps/boost; make
+	cd deps/eigen3; make
+	cd deps/flann; make
+	cd deps/pcl; make

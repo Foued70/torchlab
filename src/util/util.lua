@@ -17,6 +17,14 @@ function unfold_contiguous (m,s1,s2)
    return out
 end
 
+function search_in_table(t, search_phrase)
+  for _,v in pairs(t) do
+    if v == search_phrase then
+      return true
+    end
+  end
+  return false
+end
 
 -- <vals> sorted list of values
 --
