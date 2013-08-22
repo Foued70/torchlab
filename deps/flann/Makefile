@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-ver=1.7.1
+ver=1.8.4
 
 url=http://people.cs.ubc.ca/~mariusm/uploads/FLANN/flann-$(ver)-src.zip
 
