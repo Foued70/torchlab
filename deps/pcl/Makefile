@@ -1,10 +1,11 @@
 include ../Makefile.common
 
-ver=1.6.0
+tag=1.7.0
 
-url=http://downloads.sourceforge.net/project/pointclouds/$(ver)/PCL-$(ver)-Source.tar.bz2
-tar_file=$(build_dir)/deps/PCL-$(ver)-Source.tar.bz2
-unpack=$(build_dir)/deps/PCL-$(ver)-Source
+git_src=git@github.com:PointCloudLibrary/pcl.git
+
+# url=http://downloads.sourceforge.net/project/pointclouds/$(ver)/PCL-$(ver)-Source.tar.bz2
+git_clone=$(build_dir)/deps/pcl
 
 install=$(install_root)/lib/libpcl_common.dylib
 
@@ -15,14 +16,16 @@ args = $(default_cmake_args) \
 all: $(install)
 
 
-$(install): $(unpack)
-	cd $(unpack)/cmake; sed -i .bak 's/PROPERTIES LINK_FLAGS -Wl)/PROPERTIES LINK_FLAGS "")/g' pcl_targets.cmake 
-	cd $(unpack); mkdir -p build
-	cd $(unpack)/build; cmake $(args) ..
-	cd $(unpack)/build; make -j4 install
+$(install): $(git_clone)
+	cd $(git_clone)/cmake; sed -i .bak 's/PROPERTIES LINK_FLAGS -Wl)/PROPERTIES LINK_FLAGS "")/g' pcl_targets.cmake 
+	cd $(git_clone); mkdir -p build
+	cd $(git_clone)/build; cmake $(args) ..
+	cd $(git_clone)/build; make -j4 install
 
-$(unpack): $(tar_file)
-	cd $(build_dir)/deps; tar -xjf $(tar_file)
+$(git_clone):
+	git clone $(git_source) $(git_clone)
+	cd $(git_clone); git checkout tags/$(tag)
 
-$(tar_file):
-	curl -L -o $(tar_file) $(url)
+update:
+	cd $(git_clone); git pull; git checkout tags/$(tag)
+	rm $(install)
