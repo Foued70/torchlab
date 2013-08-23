@@ -9,16 +9,14 @@ git_clone=$(build_dir)/deps/pcl
 
 install=$(install_root)/lib/libpcl_common.dylib
 
+
 args = $(default_cmake_args) \
-	-D CMAKE_SHARED_LINKER_FLAGS="-undefined dynamic_lookup"\
-	-D CMAKE_CXX_FLAGS:STRING=-Wno-invalid-offsetof \
-	-D BUILD_python:BOOL=OFF	
+	-D CMAKE_INSTALL_NAME_DIR:FILEPATH=$(install_root)/lib
 
 all: $(install)
 
 
 $(install): $(git_clone)
-	cd $(git_clone)/cmake; sed -i .bak 's/PROPERTIES LINK_FLAGS -Wl)/PROPERTIES LINK_FLAGS "")/g' pcl_targets.cmake 
 	cd $(git_clone); mkdir -p build
 	cd $(git_clone)/build; cmake $(args) ..
 	cd $(git_clone)/build; make -j4 install
@@ -30,3 +28,12 @@ $(git_clone):
 update:
 	cd $(git_clone); git pull; git checkout tags/pcl-$(tag)
 	rm $(install)
+
+uninstall: 
+	rm -rf $(install_root)/include/pcl-1.7/
+	rm -rf $(install_root)/lib/libpcl*
+	rm -rf $(install_root)/lib/pkgconfig/pcl*
+	rm -rf $(install_root)/bin/pcl_*
+
+clean: uninstall
+	rm -rf $(git_clone)/build
