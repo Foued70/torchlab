@@ -4,7 +4,7 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
-#include <boost/geometry/io/wkt/wkt.hpp>
+#include <boost/foreach.hpp>
 
 #include <iostream>
 
@@ -77,6 +77,11 @@ cv::Point findIntersection(cv::Point p1, cv::Point p2, cv::Point q1, cv::Point q
     //
     
     return i;
+}
+
+cv::Point cvPointFromBoostPoint(boost_point b)
+{
+	return cv::Point(b.x(), b.y());
 }
 
 int lineDistance(cv::Point p1, cv::Point p2)
@@ -254,7 +259,7 @@ int main(int argc, char** argv)
     vector<cv::Point> p1v, p2v, p3v, p4v;
     const int search_window = 5;
     
-    std::vector<polygon> room_poly;
+    polygon room_poly;
 
     for(int i =0; i< intersections.size(); i++)
     {
@@ -318,14 +323,59 @@ int main(int argc, char** argv)
 									line( m_lines, p4v[s], p1v[p], cv::Scalar(255,0,255), 2, CV_AA);
 									
 									polygon quad;
-									std::vector<Point> quad_points;
-									quad_points.push_back(boost_point(p1v[p].x, p1v[p].y);
-									quad_points.push_back(boost_point(p2v[q].x, p2v[q].y);
-									quad_points.push_back(boost_point(p3v[r].x, p3v[r].y);
-									quad_points.push_back(boost_point(p4v[s].x, p4v[s].y);
-									quad.set(quad_points.begin(), quad_points.end());
 									
-									room_poly
+									boost::geometry::append(  quad, boost_point(p1v[p].x, p1v[p].y));
+									boost::geometry::append(  quad, boost_point(p2v[q].x, p2v[q].y));
+									boost::geometry::append(  quad, boost_point(p3v[r].x, p3v[r].y));
+									boost::geometry::append(  quad, boost_point(p4v[s].x, p4v[s].y));
+									
+									// std::vector<Point> quad_points;
+// 									quad_points.push_back(boost_point(p1v[p].x, p1v[p].y));
+// 									quad_points.push_back(boost_point(p2v[q].x, p2v[q].y));
+// 									quad_points.push_back(boost_point(p3v[r].x, p3v[r].y));
+// 									quad_points.push_back(boost_point(p4v[s].x, p4v[s].y));
+// 									quad.set(quad_points.begin(), quad_points.end());
+									
+									std::vector<polygon> poly_union_results;
+									poly_union_results.clear();
+									
+									cout<<room_poly.outer().size()<<" -- " << quad.outer().size() <<endl;
+									
+									if (! boost::geometry::intersects(room_poly) &&  ! boost::geometry::intersects(quad)) 
+									{ 
+										boost::geometry::union_(room_poly, quad, poly_union_results);
+									} 
+									
+									float max_poly_score = -1;
+									int max_poly_count = -1;
+									
+									int poly_count = 0;
+									
+									BOOST_FOREACH(polygon const& p, poly_union_results)
+									{
+										std::cout <<  boost::geometry::area(p) << std::endl;
+										
+										float poly_score = 0;
+										std::vector<boost_point> const& points = p.outer(); 
+										for (int i = 0; i < points.size() -1; ++i) 
+										{ 
+											poly_score += scoreLine(cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]));
+											cout<<points[i].x()<<", "<<points[i].y()<<"  "; 
+										} 
+										
+										poly_score += scoreLine(cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]));
+										
+										if(poly_score > max_poly_score)
+										{
+											max_poly_score = poly_score;
+											max_poly_count = poly_count;
+											room_poly = poly_union_results[max_poly_count];
+										}
+										
+										cout<<endl;
+										poly_count++;
+									}
+
 								}
 						
 							}
@@ -335,19 +385,27 @@ int main(int argc, char** argv)
 			}
 		}
     }
-
     
+	std::vector<boost_point> const& points = room_poly.outer(); 
+
+    for (int i = 0; i < points.size() -1; ++i) 
+	{ 
+		line( m_lines, cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]), cv::Scalar(0,255,255), 2, CV_AA);
+	} 
+			
+	line( m_lines, cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]), cv::Scalar(0,255,255), 2, CV_AA);
+
     
     cout<<selectedQuad[0]<<" "<<selectedQuad[1]<<" "<<selectedQuad[2]<<" "<<selectedQuad[3]<<endl;
     
-//     if(max_score > 0 )
-//     {
-//         line( m, selectedQuad[0], selectedQuad[1], cv::Scalar(255,0,255), 2, CV_AA);
-//         line( m, selectedQuad[1], selectedQuad[2], cv::Scalar(255,0,255), 2, CV_AA);
-//         line( m, selectedQuad[2], selectedQuad[3], cv::Scalar(255,0,255), 2, CV_AA);
-//         line( m, selectedQuad[3], selectedQuad[0], cv::Scalar(255,0,255), 2, CV_AA);
-//     }
-//     
+    if(max_score > 0 )
+    {
+        line( m_lines, selectedQuad[0], selectedQuad[1], cv::Scalar(255,255,255), 2, CV_AA);
+        line( m_lines, selectedQuad[1], selectedQuad[2], cv::Scalar(255,255,255), 2, CV_AA);
+        line( m_lines, selectedQuad[2], selectedQuad[3], cv::Scalar(255,255,255), 2, CV_AA);
+        line( m_lines, selectedQuad[3], selectedQuad[0], cv::Scalar(255,255,255), 2, CV_AA);
+    }
+    
     printf("%lu\n", intersections.size());
         
     imshow("detected lines", m);
