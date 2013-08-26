@@ -27,13 +27,19 @@ $(git_clone):
 
 update:
 	cd $(git_clone); git pull; git checkout tags/pcl-$(tag)
-	rm $(install)
 
 uninstall: 
-	rm -rf $(install_root)/include/pcl-1.7/
-	rm -rf $(install_root)/lib/libpcl*
-	rm -rf $(install_root)/lib/pkgconfig/pcl*
-	rm -rf $(install_root)/bin/pcl_*
+	-rm -rf $(install_root)/include/pcl-1.7/
+	-rm -rf $(install_root)/lib/libpcl*
+	-rm -rf $(install_root)/lib/pkgconfig/pcl*
+	-rm -rf $(install_root)/bin/pcl_*
 
-clean: uninstall
-	rm -rf $(git_clone)/build
+clean: 
+	-rm -rf $(git_clone)/build
+
+purge: 
+	-rm -rf $(git_clone)
+
+rebuild: uninstall update $(install)
+
+.PHONY: all update uninstall clean purge

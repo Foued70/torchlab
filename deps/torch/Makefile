@@ -33,7 +33,6 @@ $(install): $(cmake)
 	cd $(git_clone)/build; make install VERBOSE=1
 	cp -rf $(install_root)/share/torch/lua/* $(luvit_dir)
 	mkdir -p $(luvit_dir)/torch/modules/
-
 	$(CURDIR)/mv_lib_luvit "$(install_root)" torch
 	$(CURDIR)/mv_lib_luvit "$(install_root)" nn
 	$(CURDIR)/mv_lib_luvit "$(install_root)" cutorch
@@ -42,7 +41,7 @@ $(install): $(cmake)
 
 $(cmake): $(git_clone)
 	cd $(git_clone); mkdir -p build
-	rm -f $(git_clone)/build/CMakeCache.txt
+	-rm -f $(git_clone)/build/CMakeCache.txt
 	cd $(git_clone)/build; cmake $(args) ..
 
 
@@ -52,32 +51,36 @@ $(git_clone):
 
 update:
 	cd $(git_clone); git pull; git checkout $(ver)
-	rm $(install)
+
+uninstall:
+	-rm -f $(install)*
+	-rm -rf $(install_root)/lib/torch
+	-rm -rf $(install_root)/lib/libTH.*
+	-rm -rf $(install_root)/lib/libluaT.*
+	-rm -rf $(install_root)/lib/libtorch-lua.*
+	-rm -rf $(install_root)/include/torch
+	-rm -rf $(install_root)/share/torch
+	-rm -rf $(install_root)/share/cmake/torch
+
+	-rm -rf $(install_root)/lib/luvit/compat
+	-rm -rf $(install_root)/lib/luvit/dok
+	-rm -rf $(install_root)/lib/luvit/gnuplot
+	-rm -rf $(install_root)/lib/luvit/nn
+	-rm -rf $(install_root)/lib/luvit/paths
+	-rm -rf $(install_root)/lib/luvit/sys
+	-rm -rf $(install_root)/lib/luvit/torch
+	-rm -rf $(install_root)/lib/luvit/torch-env.lua
+	-rm -rf $(install_root)/lib/luvit/wrap
+	-rm -rf $(install_root)/lib/luvit/xlua
+
+	-rm -rf $(install_root)/lib/luvit/libnn.luvit
+	-rm -rf $(install_root)/lib/luvit/libpaths.luvit
+	-rm -rf $(install_root)/lib/luvit/libsys.luvit
+	-rm -rf $(install_root)/lib/luvit/libtorch.luvit
 
 clean:
-	rm -f $(install)*
-	rm -rf $(git_clone)/build
-	rm -rf $(install_root)/lib/torch
-	rm -rf $(install_root)/lib/libTH.*
-	rm -rf $(install_root)/lib/libluaT.*
-	rm -rf $(install_root)/lib/libtorch-lua.*
-	rm -rf $(install_root)/include/torch
-	rm -rf $(install_root)/share/torch
-	rm -rf $(install_root)/share/cmake/torch
+	-rm -rf $(git_clone)/build
 
-	rm -rf $(install_root)/lib/luvit/compat
-	rm -rf $(install_root)/lib/luvit/dok
-	rm -rf $(install_root)/lib/luvit/gnuplot
-	rm -rf $(install_root)/lib/luvit/nn
-	rm -rf $(install_root)/lib/luvit/paths
-	rm -rf $(install_root)/lib/luvit/sys
-	rm -rf $(install_root)/lib/luvit/torch
-	rm -rf $(install_root)/lib/luvit/torch-env.lua
-	rm -rf $(install_root)/lib/luvit/wrap
-	rm -rf $(install_root)/lib/luvit/xlua
+rebuild: uninstall update $(install)
 
-	rm -rf $(install_root)/lib/luvit/libnn.luvit
-	rm -rf $(install_root)/lib/luvit/libpaths.luvit
-	rm -rf $(install_root)/lib/luvit/libsys.luvit
-	rm -rf $(install_root)/lib/luvit/libtorch.luvit
-
+.PHONY: clean uninstall rebuild update

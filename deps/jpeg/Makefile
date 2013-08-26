@@ -27,4 +27,16 @@ $(unpack): $(tar_file)
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
 
+uninstall:
+	-rm $(install)
+	-rm $(install_root)/bin/jpegtran
+	-rm $(install_root)/bin/djpeg
+	-rm $(install_root)/bin/cjpeg
+	-rm $(install_root)/bin/wrjpgcom
+	-rm $(install_root)/bin/rdjpgcom
 
+clean: uninstall
+	-rm -rf $(unpack)
+	-rm $(tar_file)
+
+.PHONY: uninstall clean

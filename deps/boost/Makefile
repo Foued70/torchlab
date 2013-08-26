@@ -3,7 +3,6 @@ include ../Makefile.common
 ver=1.54.0
 ver_ubar=$(subst .,_,$(ver))
 
-#url=http://voxel.dl.sourceforge.net/project/boost/boost/$(ver)/boost_$(ver_ubar).tar.bz2
 url=http://downloads.sourceforge.net/project/boost/boost/$(ver)/boost_$(ver_ubar).tar.bz2
 
 tar_file=$(build_dir)/deps/boost_$(ver_ubar).tar.bz2
@@ -19,7 +18,7 @@ all: $(install)
 
 $(install): $(unpack)
 	cd $(unpack); ./bootstrap.sh --prefix=$(install_root) --without-libraries=python
-	sed -i .bak 's^using darwin ;^using darwin : : $(CXX) ;^g' $(unpack)/project-config.jam
+	sed -i .bak 's^using darwin ;^using darwin : : $(GXX) ;^g' $(unpack)/project-config.jam
 	cd $(unpack); ./b2 install
 	./fix_dylib_paths.sh $(install_root)
 
@@ -30,9 +29,13 @@ $(tar_file):
 	curl -L -o $(tar_file) $(url)
 
 uninstall:
-	rm ${install}
-	rm -rf $(install_root)/lib/libboost_*
+	-rm ${install}
+	-rm -rf $(install_root)/lib/libboost_*
 
-clean: uninstall
-	rm -rf $(unpack)
-	rm -rf $(tar_file)
+clean:
+	-rm -rf $(unpack)
+	-rm -rf $(tar_file)
+
+rebuild: uninstall $(install)
+
+.PHONY: all uninstall clean rebuild

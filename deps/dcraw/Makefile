@@ -26,8 +26,8 @@ $(unpack): $(tar_file)
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
 
-clean:
-	rm -r $(install)
+uninstall:
+	-rm -r $(install)
 
-deepclean: clean
-	rm -rf $(unpack) $(tar_file) 
+clean: uninstall
+	-rm -rf $(unpack) $(tar_file) 
