@@ -39,6 +39,6 @@ opencv:
 
 pcl:
 	cd deps/boost; make
-	cd deps/eigen3; make
+	cd deps/eigen; make
 	cd deps/flann; make
 	cd deps/pcl; make
