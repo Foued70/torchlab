@@ -80,12 +80,12 @@ function put_arc_file(path, filename, callback)
 end
 
 function get_arc_file(path, filename, callback)
-  local sink = fs.openSync(filename, 'w')
-  p(sink)
-  request.get(host.."/arcs/"..path, {sink = sink, Cookie=cookie}, function(err, res, body)
-    fs.close(sink)
-    callback(err)
-  end)
+  local sink = fs.createWriteStream(filename) --fs.openSync(filename, 'w')
+  --p(sink)
+  request.get(host.."/arcs/"..path, {sink=sink, Cookie=cookie}, function(err, res, body)
+        sink:close(nil,function(err) if(err) then print(err) end end)
+        callback(err)
+      end)
 end
 
 

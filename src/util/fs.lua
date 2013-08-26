@@ -78,20 +78,13 @@ function mkdir_p(dir_path, mode)
   if not fs.existsSync(dir_path) then fs.mkdirSync(dir_path, mode) end
 end
 
-
-
-function writeAll(fd, offset, buffer, callback)
-  fs.write(fd, offset, buffer, function(err, written)
-    if err then
-      if callback then callback(err) end
-    end
-    if written ~= (#buffer - offset + 1) then
-      offset = offset + written
-      writeAll(fd, offset, buffer, callback)
-    else
-      if callback then callback(nil) end
-    end
-  end)
+--note that this spawns off a child process and performs op in that, so things like cd will not work
+function exec(cmd) 
+  local io = require 'io'
+  h = io.popen(cmd) 
+  line = h:read("*a") 
+  h:close() 
+  print(line) 
+  return line 
 end
-
 

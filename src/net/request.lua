@@ -65,7 +65,7 @@ function request.request(method, url, data, files, headers, callback)
     local body = ''
     res:on('data', function (chunk)
       if sink then
-        util.fs.writeAll(sink, 1, chunk)
+        sink:write(chunk, function(err) if(err) then print(err) end end) --util.fs.writeAll(sink, 1, chunk)
       else
         body = body..chunk
       end
