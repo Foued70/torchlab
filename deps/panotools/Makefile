@@ -28,8 +28,16 @@ $(unpack): $(tar_file)
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
 
-clean:
+uninstall:
 	-rm -rf $(install)
+	-rm $(install_root)/bin/panoinfo
+	-rm $(install_root)/bin/PT*
+	-rm $(install_root)/lib/libpano*
+	-rm -rf $(install_root)/include/pano13
 
-deepclean: clean
+clean:
 	-rm -rf $(unpack) $(tar_file) 
+
+rebuild: uninstall $(install)
+
+.PHONY: all uninstall clean rebuild
