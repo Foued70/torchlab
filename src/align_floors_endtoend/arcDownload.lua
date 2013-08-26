@@ -91,9 +91,9 @@ function arcDownload:flattenedToTransformation()
 			local bname1 = string.sub(bname1,#bname1-2,#bname1)
 			local bname2 = string.sub(bname2,#bname2-2,#bname2)
 			
-			bestT,trans1, trans2, combined = geom.FloorTransformation.findTransformationOurs(fname1,fname2)
+			bestT,trans1, trans2, combined, inliers = geom.FloorTransformation.findTransformationOurs(fname1,fname2)
 			for i=1,table.getn(combined) do
-				local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..i..'.png')
+				local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..i..'_'..inliers[i]..'.png')
 				image.save(cname, combined[i])
 			end
 		end
@@ -161,7 +161,7 @@ function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension
 						for i=1,#filetb do
 							local fname1 = filetb[i]
 							if util.fs.extname(fname1) == extension then
-								for j=i+1, math.min(#filetb, i+3) do
+								for j=i+1, math.min(#filetb, i+1) do
 									local fname2 = filetb[j]	
 									if util.fs.extname(fname2) == extension then
 										doForPair(fname1, fname2, params)
@@ -171,7 +171,7 @@ function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension
 							end
 						end
 						print('saving arc')
-						arc:save()			
+						--arc:save()			
 					end
 					recursiveDownloadAsync(newArray, 1, i, postDownload)
 					
