@@ -632,9 +632,8 @@ function image.warpAndCombine(bestT, img_src, img_dest)
    src_transform = opencv.Mat.new(src_transformation_lua:getEquivalentCV())
    dest_transform = opencv.Mat.new(translate:getEquivalentCV())   
 
-   imgproc = require "../opencv/imgproc"
-   warpedSrc  =  imgproc.warpImage(img_src, src_transform, size_y, size_x)
-   warpedDest =  imgproc.warpImage(img_dest_copy, dest_transform, size_y, size_x)
+   warpedSrc  =  opencv.imgproc.warpImage(img_src, src_transform, size_y, size_x)
+   warpedDest =  opencv.imgproc.warpImage(img_dest_copy, dest_transform, size_y, size_x)
 
    tensor3d = torch.zeros(3,warpedSrc:size()[1], warpedSrc:size()[2])
    tensor3d[1] = warpedSrc:toTensor()
