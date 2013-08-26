@@ -5,13 +5,13 @@ local pcl = PointCloud.PointCloud
 local log = require '../util/log'
 require '../data/Arc.lua'
 
-local arcUpload = Class()
+local arcDownload = Class()
 
-function arcUpload:__init(scanid, version)
+function arcDownload:__init(scanid, version)
 	if scanid then
 		self.scanid = scanid
 	else
-		error('arcUpload needs scanid')
+		error('arcDownload needs scanid')
 	end
 	if version then
 		self.version = version
@@ -20,33 +20,33 @@ function arcUpload:__init(scanid, version)
 	end
 end
 
-function arcUpload:makeSourceDir(arc)
+function arcDownload:makeSourceDir(arc)
 	sourcedir = self:getSourceDir(arc)
 	util.fs.mkdir_p(sourcedir)
 	return sourcedir
 end
 
-function arcUpload:getSourceDir(arc)
+function arcDownload:getSourceDir(arc)
 	return path.join(arc:dirname(),'source', 'faro')
 end
 
-function arcUpload:getImgDir(arc)
+function arcDownload:getImgDir(arc)
 	return path.join(arc:dirname(), 'work', self.version, 'flattened')
 end
 
-function arcUpload:getImgArc(arc)
+function arcDownload:getImgArc(arc)
 	return arc.work[self.version].flattened;
 end
 
-function arcUpload:getCombinedDir(arc)
+function arcDownload:getCombinedDir(arc)
 	return path.join(arc:dirname(), 'work', self.version, 'combined')
 end
 
-function arcUpload:getPCLDir(arc)
+function arcDownload:getPCLDir(arc)
 	return path.join(arc:dirname(), 'work', self.version, 'pointcloud')
 end
 
-function arcUpload:makeWorkDirs(arc)
+function arcDownload:makeWorkDirs(arc)
 	local dirname = arc:dirname()
 	local pcldir, imgdir
 	local pcldir = self:getPCLDir(arc)
@@ -56,7 +56,7 @@ function arcUpload:makeWorkDirs(arc)
 	return pcldir,imgdir	
 end
 
-function arcUpload:copy_file(from, to)
+function arcDownload:copy_file(from, to)
 	local file_i = io.open(from, 'r')
 	local file_o = io.open(to, 'w')
 	local strg = file_i:read()
@@ -68,7 +68,7 @@ function arcUpload:copy_file(from, to)
 	file_o:close()
 end	
 
-function arcUpload:flattenedToTransformation()
+function arcDownload:flattenedToTransformation()
 	if self.scanid then		
 		local function mkDestDir(arc)
 			local params = {}
@@ -103,7 +103,7 @@ function arcUpload:flattenedToTransformation()
 end		
 
 
-function arcUpload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension, download)
+function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension, download)
 	local arc = data.Arc.get(self.scanid, 
 		function(err,arc) 
 			if err then
@@ -169,7 +169,9 @@ function arcUpload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension, 
 									end
 								end
 							end
-						end			
+						end
+						print('saving arc')
+						arc:save()			
 					end
 					recursiveDownloadAsync(newArray, 1, i, postDownload)
 					
@@ -178,8 +180,7 @@ function arcUpload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension, 
 				
 				collectgarbage()
 			end
-			print('saving arc')
-			--arc:save()
+			
 
 			end)
 collectgarbage()
