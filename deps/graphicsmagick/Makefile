@@ -13,7 +13,7 @@ install=$(install_root)/bin/gm
 # sure that the correct libstdc++ is in the linking path fixes
 # errors. hopefully libstdc++.a is not OSX or unix specific
 libstdcpp=libstdc++.a
-libstdcppdir:=$(shell $(CC) -print-file-name=$(libstdcpp) | sed 's!\(.*\)'$(libstdcpp)'!\1!')
+libstdcppdir:=$(shell $(GCC) -print-file-name=$(libstdcpp) | sed 's!\(.*\)'$(libstdcpp)'!\1!')
 
 args = 	$(default_args) \
 	CFLAGS=-I$(install_root)/include \
@@ -39,7 +39,18 @@ $(unpack): $(tar_file)
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
 
+uninstall:
+	-rm $(install)
+	-rm -rf $(install_root)/bin/GraphicsMagick*
+	-rm -rf $(install_root)/include/GraphicsMagick
+	-rm -rf $(install_root)/lib/libGraphicsMagick*
+	-rm -rf $(install_root)/lib/libGraphicsMagick*
+	-rm -rf $(install_root)/lib/pkgconfig/GraphicsMagick*pc
 
+clean:
+	-rm -rf $(unpack)
+	-rm $(tar_file)
 
+rebuild: uninstall $(install)
 
-
+.PHONY: clean uninstall rebuild

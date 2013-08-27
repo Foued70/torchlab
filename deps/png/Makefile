@@ -28,3 +28,18 @@ $(tar_file):
 	curl -L -o $(tar_file) $(url)
 
 
+uninstall:
+	-rm $(install)
+	-rm $(install_root)/lib/libpng*
+	-rm $(install_root)/bin/pngfix
+	-rm $(install_root)/bin/png-fix-itxt
+	-rm $(install_root)/bin/libpng-config
+	-rm $(install_root)/bin/libpng16-config
+
+rebuild: uninstall $(install)
+
+clean:
+	-rm -rf $(unpack)
+	-rm $(tar_file)
+
+.PHONY: clean rebuild uninstall

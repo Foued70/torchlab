@@ -130,7 +130,7 @@ extern "C"
 }
 
 // toTensor and fromTensor code
-#include "generic/copencv.cpp"
+#include "generic/opencv.cpp"
 #include "THGenerateAllTypes.h"
 
 extern "C" {

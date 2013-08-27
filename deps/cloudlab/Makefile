@@ -7,5 +7,7 @@ all:
 
 
 clean:
-	rm $(install_root)/bin/cloudlab
-	rm $(install_root)/bin/cook
+	-rm $(install_root)/bin/cloudlab
+	-rm $(install_root)/bin/cook
+
+.PHONY: all clean

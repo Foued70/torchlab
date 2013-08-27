@@ -28,9 +28,14 @@ $(tar_file):
 	curl -L -o $(tar_file) $(url)
 
 uninstall:
-	rm -rf $(install)
-	rm -f $(install_root)/lib/pkgconfig/eigen3.pc
+	-rm -rf $(install)
+	-rm -rf $(install_root)/include/eigen3
+	-rm -f $(install_root)/lib/pkgconfig/eigen3.pc
 
-clean: uninstall
-	rm -rf $(tar_file)
-	rm -rf $(unpack)
+clean: 
+	-rm -rf $(tar_file)
+	-rm -rf $(unpack)
+
+rebuild: uninstall $(install)
+
+.PHONY: all uninstall clean rebuild

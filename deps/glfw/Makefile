@@ -1,34 +1,41 @@
 include ../Makefile.common
 
-ver=3.0.1
+tag=3.0.2
 
-url=http://downloads.sourceforge.net/project/glfw/glfw/$(ver)/glfw-$(ver).tar.gz
-
-tar_file=$(build_dir)/deps/glfw-$(ver).tar.gz
-unpack=$(build_dir)/deps/glfw-$(ver)
+git_src=git@github.com:glfw/glfw.git
+git_clone=$(build_dir)/deps/glfw
 
 install=$(install_root)/lib/libglfw.dylib
 
-args = -D CMAKE_INSTALL_PREFIX:PATH=$(install_root) \
+args =  -D CMAKE_INSTALL_PREFIX:PATH=$(install_root) \
+	-D CMAKE_INSTALL_NAME_DIR:FILEPATH=$(install_root)/lib \
 	-D GLFW_BUILD_EXAMPLES=0 \
 	-D BUILD_SHARED_LIBS=1
 
-
-
 all:$(install)
 
+$(install): $(git_clone)
+	cd $(git_clone); mkdir -p build
+	cd $(git_clone)/build; cmake $(args) ..
+	cd $(git_clone)/build; make -j4 install
 
-$(install): $(unpack)
-	cd $(unpack); mkdir -p build
-	cd $(unpack)/build; cmake $(args) ..
-	cd $(unpack)/build; make install
+$(git_clone):
+	git clone $(git_src) $(git_clone)
+	cd $(git_clone); git checkout tags/$(tag)
 
-$(unpack): $(tar_file)
-	cd $(build_dir)/deps; tar -xzf $(tar_file)
+uninstall: 
+	-rm $(install)
+	-rm $(install_root)/lib/libglfw*
+	-rm -rf $(install_root)/lib/cmake/glfw/
+	-rm $(install_root)/lib/pkgconfig/glfw*
+	-rm -rf $(install_root)/include/GLFW
 
-$(tar_file):
-	curl -L -o $(tar_file) $(url)
+clean: uninstall
+	-rm -rf $(git_clone)/build
 
+rebuild: uninstall $(install)
+
+.PHONY: uninstall clean rebuild
 
 # replace strings to greate glfw.lua from glfw3.headers
 # "/\*((?!\*/).|\n)+\*/" >>>  ""

@@ -31,5 +31,12 @@ $(install): $(git_clone)
 $(git_clone):
 	git clone --recursive $(git_source) $(git_clone)
 
-clean:
-	rm -rf $(clean_clone)
+uninstall:
+	-rm $(install)
+	-rm -rf $(install_root)/include/luvit
+	-rm -rf $(install_root)/lib/luvit
+
+clean: uninstall
+	-rm -rf $(clean_clone)
+
+.PHONY: clean uninstall

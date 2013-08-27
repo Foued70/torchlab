@@ -116,7 +116,9 @@ extern "C" {
 #error "Unknown type"
 #endif
 
-    tensor = THTensor_(newContiguous)(tensor);
+    if (!THTensor_(isContiguous)(tensor))
+      THError("must pass contiguous tensor to opencv");
+
     real* data = THTensor_(data)(tensor);
     int ndims  = tensor->nDimension;
     if (ndims == 2) {
@@ -136,9 +138,6 @@ extern "C" {
       mat = new Mat (ndims, sizes, type , data);
     }
 
-    // TODO: check these two mem leak.
-    //free the contiguous tensor wrapper (not the data)
-    THTensor_(free)(tensor);
     mat->addref(); // make sure the matrix sticks around
 
     return mat;

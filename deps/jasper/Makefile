@@ -30,3 +30,20 @@ $(unpack): $(tar_file)
 
 $(tar_file):
 	curl -L -o $(tar_file) $(url)
+
+uninstall:
+	-rm $(install)
+	-rm $(install_root)/bin/imginfo
+	-rm $(install_root)/bin/imgcmp
+	-rm $(install_root)/bin/jasper
+	-rm $(install_root)/bin/tmrdemo
+	-rm -rf $(install_root)/include/jasper
+	-rm $(install_root)/lib/libjasper*
+
+clean:
+	-rm -rf $(unpack)
+	-rm $(tar_file)
+
+rebuild: uninstall $(install)
+
+.PHONY: clean uninstall rebuild

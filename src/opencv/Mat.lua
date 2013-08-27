@@ -109,6 +109,8 @@ function Mat:fromTensor(tensor,dimensions)
 
    tensor_type = tensor:type()
 
+   tensor = tensor:contiguous()
+
    if tensor_type == "torch.DoubleTensor" then
       mat = ffi.gc( libopencv.THDoubleTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.FloatTensor" then
