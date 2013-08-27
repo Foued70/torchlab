@@ -91,9 +91,16 @@ function arcDownload:flattenedToTransformation()
 			local bname1 = string.sub(bname1,#bname1-2,#bname1)
 			local bname2 = string.sub(bname2,#bname2-2,#bname2)
 			
-			bestT,trans1, trans2, combined, inliers = geom.FloorTransformation.findTransformationOurs(fname1,fname2)
+			bestT,trans1, trans2, combined, inliers, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w = geom.FloorTransformation.findTransformationOurs(fname1,fname2)
 			for i=1,table.getn(combined) do
-				local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..i..'_'..inliers[i]..'.png')
+				local comb = combined[i]
+				local sch = src_cnt_h[i]
+				local scw = src_cnt_w[i]
+				local tch = tgt_cnt_h[i]
+				local tcw = tgt_cnt_w[i]
+				local validation_scores = align_floors_endtoend.validation.compute_score(comb,sch,scw,tch,tcw) 
+				local total_score = math.ceil(validation_scores[1]*1000)
+				local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..total_score..'_'..i..'_'..inliers[i]..'.png')
 				image.save(cname, combined[i])
 			end
 		end
