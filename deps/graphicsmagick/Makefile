@@ -49,7 +49,7 @@ uninstall:
 
 clean:
 	-rm -rf $(unpack)
-	rm- $(tar_file)
+	-rm $(tar_file)
 
 rebuild: uninstall $(install)
 
