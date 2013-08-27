@@ -112,7 +112,9 @@ function arcDownload:flattenedToTransformation()
 			
 			local order = order_scores:transpose(1,2)[1]
 			
-			for i=1,5 do
+			local i = 1
+			local k = 1
+			while k < 6 and i <= table.getn(combined) do
 				
 				local total_score = math.ceil(all_scores[order[i]][1] * 100)
 				local vrs_no_cap  = math.ceil(all_scores[order[i]][2] * 100)
@@ -122,12 +124,16 @@ function arcDownload:flattenedToTransformation()
 				
 				collectgarbage()
 				
-				if total_score <= 50 then
+				if total_score <= 50 and vid_fine_t <= 85 and vid_rugh_t <= 65 and vrs_capped <= 25 then
 				
 					local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..i..'_'..inliers[i]..'.png')
 					image.save(cname, combined[i])
 					
+					k = k + 1
+					
 				end
+				
+				i = i + 1
 			end
 		end
 		extension = '.png'

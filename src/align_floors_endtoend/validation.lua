@@ -9,18 +9,15 @@ local validation = Class()
 validation.default_parameters = {
 	scale = 0.015,
 	radius_max = 5.0,
-	center_dist_max = 3.0,
+	center_dist_max = 4.0,
+	center_dist_min = 0.1,
 
 	pixelate_max = 0.20,
 	wiggle_max = 0.25,
 	vrs_cap = 0.5,
 	numangles_vrs = 360,
 	numangles_bold = 720,
-
-	perc_of_best_score = 1.15,
-	perc_of_best_vrs = 1.25,
-	perc_of_best_vid = 1.1,
-	
+		
 	}
 
 local function validation_center(ctgt,csrc)
@@ -219,7 +216,8 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 	end
 	
 	local radius_to_scale 		= params.radius_max			/	params.scale
-	local center_dist_to_scale 	= params.center_dist_max	/	params.scale
+	local cntr_dist_mx_to_scale = params.center_dist_max	/	params.scale
+	local cntr_dist_mn_to_scale = params.center_dist_min	/	params.scale
 	local pixelate_to_scale 	= params.pixelate_max		/	params.scale
 	local wiggle_to_scale 		= params.wiggle_max			/	params.scale
 	local vrs_cap_to_scale 		= params.vrs_cap			/	params.scale
@@ -230,6 +228,11 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 	
 	local numangles_vrs = params.numangles_vrs
 	local numangles_bold = params.numangles_bold
+	
+	if (torch.Tensor({src_cnt_h,src_cnt_w}):dist(torch.Tensor({tgt_cnt_h,tgt_cnt_w})) > cntr_dist_mx_to_scale) or
+	   (torch.Tensor({src_cnt_h,src_cnt_w}):dist(torch.Tensor({tgt_cnt_h,tgt_cnt_w})) < cntr_dist_mn_to_scale) then
+		return torch.zeros(9):add(math.huge)
+	end
 	
 	local hght = combined_img:size(2)
 	local wdth = combined_img:size(3)
@@ -252,7 +255,6 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 	local vid_rough_tgt = math.huge
 	local vid_rough_src = math.huge
 					
-			
 	local pixtgt = pixelate_image(imgtgt,pixelate_to_scale)
 	local pixsrc = pixelate_image(imgsrc,pixelate_to_scale)
 	local pix_hght = pixtgt:size(1)
