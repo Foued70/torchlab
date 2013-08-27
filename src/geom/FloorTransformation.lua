@@ -81,7 +81,7 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    local goodLocationsX_src, goodLocationsY_src = image.thresholdReturnCoordinates(pairwise_dis_src,2 *FloorTransformation.corr_thresh)
    local goodLocationsX_dest, goodLocationsY_dest = image.thresholdReturnCoordinates(pairwise_dis_dest,2 *FloorTransformation.corr_thresh)
 
-   local best_pts = torch.zeros(15)
+   local best_pts = torch.zeros(25)
    local best_transformations = {}
    if(display) then
       print(goodLocationsX_src:size(1))

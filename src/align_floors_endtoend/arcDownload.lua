@@ -92,16 +92,42 @@ function arcDownload:flattenedToTransformation()
 			local bname2 = string.sub(bname2,#bname2-2,#bname2)
 			
 			bestT,trans1, trans2, combined, inliers, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w = geom.FloorTransformation.findTransformationOurs(fname1,fname2)
-			for i=1,table.getn(combined) do
+			
+			collectgarbage()
+			
+			local all_scores = torch.Tensor(table.getn(combined),9)
+			
+			for i = 1,table.getn(combined) do
+			
 				local comb = combined[i]
 				local sch = src_cnt_h[i]
 				local scw = src_cnt_w[i]
 				local tch = tgt_cnt_h[i]
 				local tcw = tgt_cnt_w[i]
-				local validation_scores = align_floors_endtoend.validation.compute_score(comb,sch,scw,tch,tcw) 
-				local total_score = math.ceil(validation_scores[1]*1000)
-				local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..total_score..'_'..i..'_'..inliers[i]..'.png')
-				image.save(cname, combined[i])
+				local validation_scores = align_floors_endtoend.validation.compute_score(comb,sch,scw,tch,tcw)
+				all_scores[i] = validation_scores
+			end
+			
+			local sorted_scores, order_scores = all_scores:sort(1)
+			
+			local order = order_scores:transpose(1,2)[1]
+			
+			for i=1,5 do
+				
+				local total_score = math.ceil(all_scores[order[i]][1] * 100)
+				local vrs_no_cap  = math.ceil(all_scores[order[i]][2] * 100)
+				local vrs_capped  = math.ceil(all_scores[order[i]][3] * 100)
+				local vid_fine_t  = math.ceil(all_scores[order[i]][4] * 100)
+				local vid_rugh_t  = math.ceil(all_scores[order[i]][7] * 100)
+				
+				collectgarbage()
+				
+				if total_score <= 50 then
+				
+					local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..i..'_'..inliers[i]..'.png')
+					image.save(cname, combined[i])
+					
+				end
 			end
 		end
 		extension = '.png'

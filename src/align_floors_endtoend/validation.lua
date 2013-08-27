@@ -21,23 +21,6 @@ validation.default_parameters = {
 	perc_of_best_vrs = 1.25,
 	perc_of_best_vid = 1.1,
 	
-	am_thresh_score = 0.3,			
-	am_thresh_vrs_no_cap = 0.05,
-	am_thresh_vrs_cap = 0.1,
-	am_thresh_vid_rough = 0.40,
-	am_thresh_vid_fine = 0.60,
-
-	gd_thresh_score = 0.5,
-	gd_thresh_vrs_no_cap = 0.15,
-	gd_thresh_vrs_cap = 0.35,
-	gd_thresh_vid_rough = 0.725,
-	gd_thresh_vid_fine = 0.91,
-
-	mb_thresh_score = 0.6,
-	mb_thresh_vrs_no_cap = 0.25,
-	mb_thresh_vrs_cap = 0.6,
-	mb_thresh_vid_rough = 0.8,
-	mb_thresh_vid_fine = 0.97
 	}
 
 local function validation_center(ctgt,csrc)
@@ -245,12 +228,6 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 	local pix_radius 			= radius_to_scale			/	pixelate_to_scale
 	local pix_vrs_cap 			= vrs_cap_to_scale			/	pixelate_to_scale
 	
-	local thresh_score 		= params.mb_thresh_score
-	local thresh_vrs_no_cap = params.mb_thresh_vrs_no_cap
-	local thresh_vrs_cap 	= params.mb_thresh_vrs_cap
-	local thresh_vid_rough 	= params.mb_thresh_vid_rough
-	local thresh_vid_fine 	= params.mb_thresh_vid_fine
-	
 	local numangles_vrs = params.numangles_vrs
 	local numangles_bold = params.numangles_bold
 	
@@ -316,6 +293,7 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 									vid_fine_tot, 	vid_fine_tgt, 	vid_fine_src,
 									vid_rough_tot, 	vid_rough_tgt,	vid_rough_src})
 				
+	collectgarbage()
 	return all_scores
 end
 
