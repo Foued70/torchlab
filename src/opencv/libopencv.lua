@@ -154,7 +154,7 @@ void dilate(Mat*  src, Mat* structuringElement);
 void erode(Mat*  src, Mat* structuringElement);
 
 Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k);
-
+Mat* getPairwiseDistances(const Mat* A, const Mat* B);
 ]]
 
 -- utils.lua
