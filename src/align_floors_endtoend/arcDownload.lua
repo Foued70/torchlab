@@ -104,7 +104,17 @@ function arcDownload:flattenedToTransformation()
 				local scw = src_cnt_w[i]
 				local tch = tgt_cnt_h[i]
 				local tcw = tgt_cnt_w[i]
-				local validation_scores = align_floors_endtoend.validation.compute_score(comb,sch,scw,tch,tcw)
+				local combcpy = comb:clone()
+				
+				combcpy:apply(function(x)
+						if x < (0.25 * 255) then
+							return 0
+						else
+							return x
+						end
+					end)
+				
+				local validation_scores = align_floors_endtoend.validation.compute_score(combcpy,sch,scw,tch,tcw,bname1..'_'..bname2..'_'..i)
 				all_scores[i] = validation_scores
 			end
 			
@@ -112,22 +122,27 @@ function arcDownload:flattenedToTransformation()
 			
 			local order = order_scores:transpose(1,2)[1]
 			
+			print(sorted_scores)
+			
 			local i = 1
 			local k = 1
 			while k < 6 and i <= table.getn(combined) do
+			
+				local j = order[i]
 				
-				local total_score = math.ceil(all_scores[order[i]][1] * 100)
-				local vrs_no_cap  = math.ceil(all_scores[order[i]][2] * 100)
-				local vrs_capped  = math.ceil(all_scores[order[i]][3] * 100)
-				local vid_fine_t  = math.ceil(all_scores[order[i]][4] * 100)
-				local vid_rugh_t  = math.ceil(all_scores[order[i]][7] * 100)
+				local total_score = math.ceil(all_scores[j][1] * 10000)
+				local vrs_no_cap  = math.ceil(all_scores[j][2] * 10000)
+				local vrs_capped  = math.ceil(all_scores[j][3] * 10000)
+				local vid_fine_t  = math.ceil(all_scores[j][4] * 10000)
+				local vid_rugh_t  = math.ceil(all_scores[j][7] * 10000)
 				
 				collectgarbage()
 				
-				if total_score <= 50 and vid_fine_t <= 85 and vid_rugh_t <= 65 and vrs_capped <= 25 then
+				if total_score <= 6000 and vid_rugh_t <= 7000 and vrs_capped <= 2500 then
 				
 					local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..i..'_'..inliers[i]..'.png')
-					image.save(cname, combined[i])
+					--local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..j..'_'..total_score..'.png')
+					image.save(cname, combined[j])
 					
 					k = k + 1
 					

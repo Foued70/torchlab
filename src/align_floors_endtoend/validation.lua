@@ -12,12 +12,12 @@ validation.default_parameters = {
 	center_dist_max = 4.0,
 	center_dist_min = 0.1,
 
-	pixelate_max = 0.20,
+	pixelate_max = 0.15,
 	wiggle_max = 0.25,
 	vrs_cap = 0.5,
 	numangles_vrs = 360,
-	numangles_bold = 720,
-		
+	numangles_bold = 1080,
+	
 	}
 
 local function validation_center(ctgt,csrc)
@@ -31,11 +31,13 @@ local function validation_imgdiff(tns1, tns2, minh, maxh, minw, maxw)
 	local tns2cpy = tns2:sub(math.max(1,minh),math.min(tns1:size(1),maxh),math.max(1,minw),math.min(tns1:size(2),maxw)):clone()
 						:cdiv(tns2:sub(math.max(1,minh),math.min(tns1:size(1),maxh),math.max(1,minw),math.min(tns1:size(2),maxw))
 						+ 0.00000000000000000000000000001)
+	
 	local ovlp = tns1cpy:clone():cmul(tns2cpy):sum()
 	--local diff = (tns1cpy-tns2cpy):abs():sum()
 	local tnssum = (tns1cpy+tns2cpy):clone()
 	local numSum = tnssum:cdiv(tnssum+0.00000000000000000000000000000001):sum()
 	--return diff/numSum, diff/(tns1cpy:sum()), diff/(tns2cpy:sum())
+	--print('totalPixels: '..tns1cpy:nElement()..'; numberOfColoredPixels: '..numSum..'; overlapPixels: '..ovlp)
 	return (1-ovlp/numSum), (1-ovlp/(tns1cpy:sum())), (1-ovlp/(tns2cpy:sum()))
 end
 
@@ -209,7 +211,7 @@ local function pixelate_image(img, window)
 	return imgcpy/(imgcpy:max() + 0.0000000000000001)
 end
 
-function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w, params)
+function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w, bname, params)
 
 	if not params then
 		params = validation.default_parameters
@@ -240,6 +242,9 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 	local imgtgt = combined_img[2]:clone()
 	local imgsrc = combined_img[1]:clone()
 	
+	--[[image.save('/Users/lihui815/tmp/'..bname..'_'..'img_tgt.png',imgtgt)
+	image.save('/Users/lihui815/tmp/'..bname..'_'..'img_src.png',imgsrc)]]
+	
 	local img_min_h = math.min(tgt_cnt_h,src_cnt_h)-radius_to_scale
 	local img_max_h = math.max(tgt_cnt_h,src_cnt_h)+radius_to_scale
 	local img_min_w = math.min(tgt_cnt_w,src_cnt_w)-radius_to_scale
@@ -259,13 +264,16 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 	local pixsrc = pixelate_image(imgsrc,pixelate_to_scale)
 	local pix_hght = pixtgt:size(1)
 	local pix_wdtht = pixtgt:size(2)
+	
+	--[[image.save('/Users/lihui815/tmp/'..bname..'_'..'pixelated_tgt.png',pixtgt)
+	image.save('/Users/lihui815/tmp/'..bname..'_'..'pixelated_src.png',pixsrc)]]
 				
 	local vid_fine_tot, vid_fine_tgt, vid_fine_src = validation_imgdiff(imgtgt,imgsrc,img_min_h, img_max_h, img_min_w, img_max_w)
 				
-	local pix_thcnt = math.floor(tgt_cnt_h/pixelate_to_scale) + 1
-	local pix_twcnt = math.floor(tgt_cnt_w/pixelate_to_scale) + 1
-	local pix_shcnt = math.floor(src_cnt_h/pixelate_to_scale) + 1
-	local pix_swcnt = math.floor(src_cnt_w/pixelate_to_scale) + 1
+	local pix_thcnt = math.floor((tgt_cnt_h-1)/pixelate_to_scale) + 1
+	local pix_twcnt = math.floor((tgt_cnt_w-1)/pixelate_to_scale) + 1
+	local pix_shcnt = math.floor((src_cnt_h-1)/pixelate_to_scale) + 1
+	local pix_swcnt = math.floor((src_cnt_w-1)/pixelate_to_scale) + 1
 				
 	local pix_min_h = math.min(pix_thcnt,pix_shcnt)-pix_radius
 	local pix_max_h = math.max(pix_thcnt,pix_shcnt)+pix_radius
@@ -276,6 +284,9 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 					
 	local pixtgt_bold = create_bold_image(pixtgt, numangles_bold, pix_thcnt, pix_twcnt, pix_shcnt, pix_swcnt, pix_radius)
 	local pixsrc_bold = create_bold_image(pixsrc, numangles_bold, pix_shcnt, pix_swcnt, pix_thcnt, pix_twcnt, pix_radius)
+	
+	--[[image.save('/Users/lihui815/tmp/'..bname..'_'..'pixbold_tgt.png',pixtgt_bold)
+	image.save('/Users/lihui815/tmp/'..bname..'_'..'pixbold_src.png',pixsrc_bold)]]
 							
 	local vrs1_no_cap = validation_ray(pixtgt,      pixsrc_bold, numangles_vrs, pix_thcnt, pix_twcnt, pix_wiggle)
 	local vrs2_no_cap = validation_ray(pixsrc,      pixtgt_bold, numangles_vrs, pix_shcnt, pix_swcnt, pix_wiggle)
