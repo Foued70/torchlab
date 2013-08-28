@@ -263,6 +263,8 @@ extern "C" {
   {
     Mat returnMat; // = new Mat(src->size[0], src->size[1], src->type() );
     cornerHarris(*src, returnMat, blockSize, ksize, k);
+    normalize( returnMat, returnMat, 0, 255, NORM_MINMAX, CV_32FC1, Mat() );
+
     return new Mat(returnMat);
   }
 
@@ -473,4 +475,25 @@ extern "C" {
     return warpedSrc;
   }
 
+  /*
+  get the pairwise distance between all pairs of points in A and B
+  if A is mxp and B is nxp then the result will be mxn 
+  */
+  Mat* getPairwiseDistances(const Mat* A, const Mat* B)
+  {
+     Mat AdA;
+     reduce((*A).mul(*A), AdA, 1, CV_REDUCE_SUM, -1); //nx1
+
+     Mat A_new = AdA * Mat::ones(1,B->rows, A->type()); //mxn
+     Mat BdB;
+     reduce((*B).mul(*B), BdB, 1, CV_REDUCE_SUM, -1); //mx1
+    
+     Mat B_new = Mat::ones(A->rows,1, A->type()) * BdB.t(); //mxn
+
+     Mat dis_square = A_new + B_new - 2*(*A)*((*B).t()); //mxn
+     Mat sqrtMat;
+     sqrt(dis_square, sqrtMat);
+     return new Mat(sqrtMat);
+     
+  }
 } // extern "C"

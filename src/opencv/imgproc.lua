@@ -110,6 +110,15 @@ function HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLength, max
    return opencv.Mat.new(libopencv.HoughLinesProbabilistic(img.mat, rho, theta, threshold, mineLineLength, maxLineGap))
 end
 
+function getPairwiseDistances(A, B)
+   if ((not A.mat) or (type(A.mat) ~= "cdata")) then 
+      error("problem with A Mat - first argument")
+   end
+   if ((not B.mat) or (type(B.mat) ~= "cdata")) then 
+      error("problem with B Mat -- second argument")
+   end
+   return opencv.Mat.new(libopencv.getPairwiseDistances(A.mat,B.mat))
+end
 
 --DILATION AND EROSION ---
 -- <input> -- see opencv function

@@ -76,10 +76,6 @@ function arcDownload:flattenedToTransformation()
 			params["from"] = self:getImgDir(arc)
 			params["fromArc"] = self:getImgArc(arc)
 			params["combined"] = self:getCombinedDir(arc)
-			print(params["from"])
-			print(params["fromArc"])
-			print(params["combined"])
-
 			return params
 		end
 
@@ -91,7 +87,7 @@ function arcDownload:flattenedToTransformation()
 			local bname1 = string.sub(bname1,#bname1-2,#bname1)
 			local bname2 = string.sub(bname2,#bname2-2,#bname2)
 			
-			bestT,trans1, trans2, combined, inliers, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w = geom.FloorTransformation.findTransformationOurs(fname1,fname2)
+			bestT,trans1, trans2, combined, inliers, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w = align_floors_endtoend.FloorTransformation.findTransformationOurs(fname1,fname2)
 			
 			collectgarbage()
 			
@@ -171,7 +167,6 @@ function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension
 					newArray = {}
 					for key,value in pairs(sourceArc) do 
 						if util.fs.extname(key) == extension then
-							print(i)
 							newArray[i]=sourceArc[key]
 							i = i +1
 						end

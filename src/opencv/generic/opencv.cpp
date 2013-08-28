@@ -1,5 +1,4 @@
 #ifndef TH_GENERIC_FILE
-//#define TH_GENERIC_FILE "generic/copencv.cpp"
 #define TH_GENERIC_FILE "generic/opencv.cpp"
 #else
 
