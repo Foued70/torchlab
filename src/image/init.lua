@@ -648,14 +648,18 @@ function image.getCorners(img_src)
 end
 
 --only keep value greater than threshold
-function image.thresholdReturnCoordinates(squareMatrix,threshold)
+function image.thresholdReturnCoordinates(squareMatrix,threshold, le)
    h=squareMatrix:size(1)
    w=squareMatrix:size(2)
-   
+   if(le) then
+      thresholded = torch.le(squareMatrix,threshold)
+   else
+      thresholded = torch.ge(squareMatrix,threshold)
+   end
    x = torch.Tensor(h*w)
    i = 0
    x:apply(function() i = i + 1; return i end)
-   goodLocations = x[torch.ge(squareMatrix,threshold)]
+   goodLocations = x[thresholded]
    goodLocationsX = torch.ceil(goodLocations/w)
    goodLocationsY = goodLocations:clone()
    goodLocationsY:apply(function(val) return (val -1)%w+1 end) 
