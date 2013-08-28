@@ -10,3 +10,5 @@ add_definitions(${PCL_DEFINITIONS})
 
 add_executable (greedy_projection greedy_projection.cpp)
 target_link_libraries (greedy_projection ${PCL_LIBRARIES})
+
+install(TARGETS greedy_projection RUNTIME DESTINATION bin)
