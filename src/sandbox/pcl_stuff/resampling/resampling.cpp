@@ -30,9 +30,18 @@ main (int argc, char** argv)
 
   // Set parameters
   mls.setInputCloud (cloud);
-  mls.setPolynomialFit (true);
+  mls.setPolynomialFit (false); // tangent fit
+  
   mls.setSearchMethod (tree);
-  mls.setSearchRadius (0.03);
+  mls.setSearchRadius (0.3);
+
+  //mls.setUpsamplingMethod(mls.VOXEL_GRID_DILATION);
+  //mls.setDilationIterations(20); // 20 * voxelgrid=> 1m fill
+  //mls.setDilationVoxelSize(0.03); // cm 
+
+  mls.setUpsamplingMethod(mls.SAMPLE_LOCAL_PLANE);
+  mls.setUpsamplingRadius (0.12);
+  mls.setUpsamplingStepSize(0.03);
 
   std::cout << " + setup MLS" << std::endl;
 

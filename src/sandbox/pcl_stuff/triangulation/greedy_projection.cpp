@@ -44,12 +44,12 @@ main (int argc, char** argv)
   pcl::PolygonMesh triangles;
 
   // Set the maximum distance between connected points (maximum edge length)
-  gp3.setSearchRadius (0.2);
+  gp3.setSearchRadius (0.3);
 
   // Set typical values for the parameters
   gp3.setMu (3);
-  gp3.setMaximumNearestNeighbors (16);
-  gp3.setMaximumSurfaceAngle(M_PI/4); // 45 degrees
+  gp3.setMaximumNearestNeighbors (32);
+  gp3.setMaximumSurfaceAngle(M_PI/5); // 45 degrees
   gp3.setMinimumAngle(M_PI/18); // 10 degrees
   gp3.setMaximumAngle(2*M_PI/3); // 120 degrees
   gp3.setNormalConsistency(false);
