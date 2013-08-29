@@ -2,7 +2,6 @@ FloorTransformation = Class()
 
 colors = require '../opencv/types/Colors.lua'
 Homography = geom.Homography
-geom_util = geom.util
 homography_funs = geom.rotation_translation_homography
 
 FloorTransformation.erosion_size =1
@@ -15,9 +14,17 @@ FloorTransformation.blockSize =2
 FloorTransformation.kSize =3
 FloorTransformation.k = .04
 FloorTransformation.maxNumReturn = 25
-FloorTransformation.warpWithBorders = true
+FloorTransformation.warpWithBorders = false
 FloorTransformation.cornerDistanceLimit = 25
 FloorTransformation.minInliersForMatch = 3
+
+--HOUGH PARAMETERS
+FloorTransformation.houghRo = 1
+FloorTransformation.houghTheta = math.pi/360
+FloorTransformation.houghNumLines = 10 -- you will get roughly half this number squared of corner points
+FloorTransformation.houghMinLineLength = 25
+FloorTransformation.houghMaxLineGap = 80
+FloorTransformation.useHough = false
 
 function FloorTransformation.findTransformationStandard(image1Path, image2Path)
    img_src = FloorTransformation.imagePreProcessing(image1Path)
@@ -72,7 +79,7 @@ function FloorTransformation.findTransformationStandard(image1Path, image2Path)
    image.displayGrayInLua(warped)
 end
 function FloorTransformation.findTransformationOurs(image1Path, image2Path, display)
-   useFastMethod = true
+   log.tic()
    local img_src = FloorTransformation.imagePreProcessing(image1Path)
    local img_dest = FloorTransformation.imagePreProcessing(image2Path)
    local scores_src_torch = FloorTransformation.cornerHarris(img_src)
@@ -80,175 +87,40 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
 
    scores_src_torch = scores_src_torch[{{}, {1,2}}]
    scores_dest_torch = scores_dest_torch[{{}, {1,2}}]
-   --local locations_hough_source = FloorTransformation.getHoughLineIntersects(img_src)
-   --local locations_hough_dest = FloorTransformation.getHoughLineIntersects(img_dest)
+   
+   if(FloorTransformation.useHough) then
+      local locations_hough_source = FloorTransformation.getHoughLineIntersects(img_src)
+      local locations_hough_dest = FloorTransformation.getHoughLineIntersects(img_dest)
 
-   --scores_src_torch = locations_hough_source
-   --scores_dest_torch = locations_hough_dest
-  -- scores_src_torch = torch.cat(scores_src_torch, locations_hough_source,1)
-  -- scores_dest_torch = torch.cat(scores_dest_torch, locations_hough_dest,1)
+      scores_src_torch = torch.cat(scores_src_torch, locations_hough_source,1)
+      scores_dest_torch = torch.cat(scores_dest_torch, locations_hough_dest,1)
+      end
    scores_src = opencv.Mat.new(scores_src_torch:clone())
    scores_dest = opencv.Mat.new(scores_dest_torch:clone())
-   
-   if(display) then
-      --image.displayPoints(img_src:toTensor(), locations_hough_source, colors.MAGENTA, 2)
-      --image.displayPoints(img_dest:toTensor(), locations_hough_dest, colors.CYAN, 2)
-   end
 
    if(display) then
-      --image.displayPoints(img_src:toTensor(), scores_src_torch, colors.MAGENTA, 2)
+      image.displayPoints(img_src:toTensor(), scores_src_torch, colors.MAGENTA, 2)
       image.displayPoints(img_dest:toTensor(), scores_dest_torch, colors.CYAN, 2)
    end
    --pairwise distance between corner points
    --we can then threshold this, to make sure we only look at pairs which are not too close together
-   local pairwise_dis_src = opencv.imgproc.getPairwiseDistances(scores_src, scores_src):toTensor():clone()
-   local pairwise_dis_dest = opencv.imgproc.getPairwiseDistances(scores_dest, scores_dest):toTensor():clone()
-   local best_pts = torch.zeros(FloorTransformation.maxNumReturn)
-   local best_transformations = {}
-   --
-if(useFastMethod) then
-   log.tic()
-   --if distance between points is small, e.g. same point, don't want to use it, so set dis to really large value, so diff is large and we threshold
+   local pairwise_dis_src = geom.util.pairwise_distance(scores_src_torch, scores_src_torch)
+   local pairwise_dis_dest = geom.util.pairwise_distance(scores_dest_torch, scores_dest_torch)
 
-   pairwise_dis_src[torch.le(pairwise_dis_src, 2*FloorTransformation.corr_thresh)] = 5*10^9
-   pairwise_dis_dest[torch.le(pairwise_dis_dest, 2*FloorTransformation.corr_thresh)] = 4*10^9
+   goodLocationsX_src, goodLocationsY_src = image.thresholdReturnCoordinates(pairwise_dis_src,2 *FloorTransformation.corr_thresh)
+   goodLocationsX_dest, goodLocationsY_dest = image.thresholdReturnCoordinates(pairwise_dis_dest,2 *FloorTransformation.corr_thresh)
 
-   local srcFlat = pairwise_dis_src:reshape(pairwise_dis_src:size(1)*pairwise_dis_src:size(2),1)
-   srcFlat = torch.cat(srcFlat, torch.ones(srcFlat:size(1),1)*-1)
+   goodLocationsX_src = goodLocationsX_src:reshape(goodLocationsX_src:size()[1],1)
+   goodLocationsY_src = goodLocationsY_src:reshape(goodLocationsY_src:size()[1],1)
+   goodLocationsX_dest = goodLocationsX_dest:reshape(goodLocationsX_dest:size()[1],1)
+   goodLocationsY_dest = goodLocationsY_dest:reshape(goodLocationsY_dest:size()[1],1)
 
-   local destFlat =  pairwise_dis_dest:reshape(1, pairwise_dis_dest:size(1)*pairwise_dis_dest:size(2))
-
-   destFlat = torch.cat(torch.ones(1,destFlat:size(2)),destFlat,1)
-
-   local goodLocationsSrc, goodLocationsDest = image.thresholdReturnCoordinates(torch.abs(srcFlat*destFlat),FloorTransformation.corr_thresh, true)
-
-   local wSource = pairwise_dis_src:size()[2]
-   local wDest = pairwise_dis_dest:size()[2]
-   local pt1_src_tensor = torch.ceil(goodLocationsSrc/wSource)
-   local pt2_src_tensor = goodLocationsSrc:apply(function(val) return (val -1)%wSource+1 end)
-   local pt1_dest_tensor = torch.ceil(goodLocationsDest/wDest)
-   local pt2_dest_tensor = goodLocationsDest:apply(function(val) return (val -1)%wDest+1 end)
-
-
-   for i  = 1, goodLocationsSrc:size(1) do
-      if(display) then
-         if(i%10000 == 0) then
-            print(i/goodLocationsSrc:size(1))
-         end
-      end
-      local src_pt1= scores_src_torch[pt1_src_tensor[i]]
-      local src_pt2= scores_src_torch[pt2_src_tensor[i]]
-      local dest_pt1= scores_dest_torch[pt1_dest_tensor[i]]
-      local dest_pt2= scores_dest_torch[pt2_dest_tensor[i]]
-
-      local A_inv = homography_funs.getInverseMatrixFromSource(src_pt1, src_pt2)
-      local b = homography_funs.getMatrixFromDestination(dest_pt1, dest_pt2)
-      --check source+target condition abs(dist(p_src, p1_src) -  dist(p_target, p1_target)) < corr_thresh)
-      --find transformation
-      --transform all the source points, find distance from each transformed source point to it's equivalent destination point
-      --take this matrix do a <corr_thresh and take it's sum, this is number of inliers
-      local H = homography_funs.getHomography(A_inv, b)
-      local transformed_src = H:applyToPointsReturn2d(scores_src_torch:t())
-
-      local num_inliers = torch.sum(
-         torch.le(
-            geom_util.pairwise_distance(transformed_src:t(), scores_dest_torch),
-            FloorTransformation.corr_thresh))
-      minV,minLoc = torch.min(best_pts,1)
-      if(num_inliers > minV[1] and num_inliers>=FloorTransformation.minInliersForMatch) then
-         --do validation here
-         shouldUse = true
-         for tn = 1, table.getn(best_transformations) do
-            --if same rotation
-
-               if FloorTransformation.isSameTransformation(best_transformations[tn], H, img_src:size()[1], img_src:size()[2])
-                  then         
-                  if(num_inliers > best_pts[{tn}]) then
-                     best_transformations[tn]=H
-                     best_pts[{tn}]=num_inliers
-                  end
-               shouldUse = false
-               break
-            end
-         end
-         if(shouldUse) then
-            best_transformations[minLoc[1]]=H
-            best_pts[{minLoc[1]}]=num_inliers
-         end
-      end
-   end
-else
-   --local pairwise_dis_src = geom_util.pairwise_distance(scores_src_torch, scores_src_torch)
-   --local pairwise_dis_dest = geom_util.pairwise_distance(scores_dest_torch, scores_dest_torch)
-   log.tic()
-
-   local goodLocationsX_src, goodLocationsY_src = image.thresholdReturnCoordinates(pairwise_dis_src,2 *FloorTransformation.corr_thresh)
-   local goodLocationsX_dest, goodLocationsY_dest = image.thresholdReturnCoordinates(pairwise_dis_dest,2 *FloorTransformation.corr_thresh)
-
-   for i_src = 1, goodLocationsX_src:size(1) do
-      if(i_src%1000 == 0) then
-         print(i_src/goodLocationsX_src:size(1))
-      end
-      local pt1_src = goodLocationsX_src[i_src]
-      local pt2_src = goodLocationsY_src[i_src]
-      local src_pt1= scores_src_torch[{pt1_src}]
-      local src_pt2= scores_src_torch[{pt2_src}]
-      local d_src = pairwise_dis_src[pt1_src][pt2_src]
-
-      --calculate transformation matrix and it's inverse
-      local A_inv = homography_funs.getInverseMatrixFromSource(src_pt1, src_pt2)
-      for i_dest =1,goodLocationsX_dest:size(1) do
-
-         local pt1_dest = goodLocationsX_dest[i_dest]
-         local pt2_dest = goodLocationsY_dest[i_dest]
-         local dest_pt1= scores_dest_torch[{pt1_dest, {}}]
-         local dest_pt2= scores_dest_torch[{pt2_dest, {}}]
-         local d_dest = pairwise_dis_dest[pt1_dest][pt2_dest]  
-         if (math.abs(d_dest-d_src)<FloorTransformation.corr_thresh) then
-            local b = homography_funs.getMatrixFromDestination(dest_pt1, dest_pt2)
-            --check source+target condition abs(dist(p_src, p1_src) -  dist(p_target, p1_target)) < corr_thresh)
-            --find transformation
-            --transform all the source points, find distance from each transformed source point to it's equivalent destination point
-            --take this matrix do a <corr_thresh and take it's sum, this is number of inliers
-            local H = homography_funs.getHomography(A_inv, b)
-            local transformed_src = H:applyToPointsReturn2d(scores_src_torch:t())
-
-            local num_inliers = torch.sum(
-               torch.le(
-                  geom_util.pairwise_distance(transformed_src:t(), scores_dest_torch[{{}, {1,2}}]),
-                  FloorTransformation.corr_thresh))
-            --[[
-                        local num_inliers = torch.sum(
-                           torch.le(
-                              opencv.imgproc.getPairwiseDistances(opencv.Mat.new((transformed_src:t()):clone()), scores_dest):toTensor(),
-                              FloorTransformation.corr_thresh))
-            ]]--
-            minV,minLoc = torch.min(best_pts,1)
-            if(num_inliers > minV[1] and num_inliers>=FloorTransformation.minInliersForMatch) then
-               --do validation here
-               shouldUse = true
-               for tn = 1, table.getn(best_transformations) do
-                  --if same rotation
-
-                  if FloorTransformation.isSameTransformation(best_transformations[tn], H, img_src:size()[1], img_src:size()[2])
-                     then
-                     if(num_inliers > best_pts[{tn}]) then
-                        best_transformations[tn]=H
-                        best_pts[{tn}]=num_inliers
-                     end
-                     shouldUse = false
-                     break
-                  end
-               end
-               if(shouldUse) then
-                  best_transformations[minLoc[1]]=H
-                  best_pts[{minLoc[1]}]=num_inliers
-               end
-            end
-         end
-      end
-   end
-end
+   print(scores_src_torch:size()[1])
+   best_pts, best_transformations = opencv.imgproc.findBestTransformation(
+      opencv.Mat.new(goodLocationsX_src:clone()),  opencv.Mat.new(goodLocationsY_src:clone()), opencv.Mat.new(scores_src_torch:clone()), opencv.Mat.new(pairwise_dis_src:clone()),
+      opencv.Mat.new(goodLocationsX_dest:clone()), opencv.Mat.new(goodLocationsY_dest:clone()), opencv.Mat.new(scores_dest_torch:clone()), opencv.Mat.new(pairwise_dis_dest:clone()),
+      FloorTransformation.corr_thresh, FloorTransformation.minInliersForMatch, FloorTransformation.maxNumReturn, 
+      FloorTransformation.cornerDistanceLimit, img_src:size()[1], img_src:size()[2])
 
    local trans1 = {}
    local trans2 = {}
@@ -260,7 +132,6 @@ end
    local tgt_centers_h = {}
    local tgt_centers_w = {}
   
-   best_pts = best_pts[torch.gt(best_pts, 0)]
    sorted,ordering = torch.sort(best_pts)
    for k=1,table.getn(best_transformations) do
       i=table.getn(best_transformations)-k+1
@@ -462,11 +333,9 @@ function FloorTransformation.getHoughLineIntersects(img)
    -- use graphics magick to load the image
 
    dst = opencv.imgproc.CannyDetectEdges(img, 100, 200)
-   linesP = opencv.imgproc.HoughLinesProbabilistic(dst, 1, math.pi/360, 35, 25, 80 );
+   linesP = FloorTransformation.binarySearchForClosestNumberLines(dst, 20, 120)
    linesT = linesP:toTensor()+1;
    linesT = linesT:reshape(linesT:size()[2], linesT:size()[3])
-
-   color = torch.Tensor({0, 255, 0})
 
    slopes = torch.atan(torch.cdiv((linesT[{{},1}]-linesT[{{},3}]):double(),(linesT[{{},2}]-linesT[{{},4}]):double()))
    slopes:apply(function(val) if val<0 then return math.pi + val end end)
@@ -492,4 +361,20 @@ function FloorTransformation.getHoughLineIntersects(img)
       end
    end
    return points[{{1,counter-1},{}}]
+end
+
+
+function FloorTransformation.binarySearchForClosestNumberLines(dst, minH, maxH)
+   houghThreshold = torch.floor((maxH+minH)/2)
+   linesP = opencv.imgproc.HoughLinesProbabilistic(dst, FloorTransformation.houghRo, FloorTransformation.houghTheta, 
+               houghThreshold, FloorTransformation.houghMinLineLength, FloorTransformation.houghMaxLineGap  );
+   numLines = linesP:size()[2]
+   if(houghThreshold == minH) or (houghThreshold == maxH) or (numLines == FloorTransformation.houghNumLines) then
+      return linesP
+   end
+   if(numLines > FloorTransformation.houghNumLines) then
+         return FloorTransformation.binarySearchForClosestNumberLines(dst, houghThreshold, maxH)
+   else
+         return FloorTransformation.binarySearchForClosestNumberLines(dst, minH, houghThreshold)
+   end
 end
