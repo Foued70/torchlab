@@ -1,0 +1,37 @@
+# set a default path for the common system stuff
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
+
+# Make sure a user's CC or CCX variable don't mess up config scripts.
+# Also we need to be able to override the $(CC) for code which uses
+# obj-c as gcc implementation is buggy, and we have to use Apple's
+# compiler in that case.
+CC=
+CXX=
+GCC=$(shell which gcc-4.8)
+GXX=$(shell which g++-4.8)
+
+project_dir = $(abspath ../..)
+
+CLOUDLAB_INSTALL_ROOT ?= $(project_dir)/build/usr/local
+install_root = $(CLOUDLAB_INSTALL_ROOT)
+
+PATH := $(install_root)/bin:$(PATH)
+
+default_args = \
+  CC=$(GCC) \
+  CXX=$(GXX) \
+  PREFIX=$(install_root)
+
+local_dir = $(abspath ../)
+install_dir = $(local_dir)/bin
+
+default_cmake_args = \
+	-D CMAKE_INSTALL_PREFIX:PATH=$(local_dir) \
+        -D CMAKE_INSTALL_NAME_DIR:FILEPATH=$(install_dir) \
+	-D CMAKE_C_COMPILER:PATH=$(GCC) \
+	-D CMAKE_CXX_COMPILER:PATH=$(GXX)
+
+# set this environment variable so that pkg-config knows where to find
+# our cloudlab installed .pc scripts
+
+pkg_config_path = PKG_CONFIG_PATH=$(install_root)/lib/pkgconfig

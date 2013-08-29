@@ -1,6 +1,7 @@
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
-#include <pcl/io/vtk_io.h>
+#include <pcl/io/obj_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/surface/gp3.h>
@@ -8,16 +9,13 @@
 int
 main (int argc, char** argv)
 {
-
-  char* fname_in = argv[1];
-  char* fname_out = argv[2];
-  
   // Load input file into a PointCloud<T> with an appropriate type
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PCLPointCloud2 cloud_blob;
-  pcl::io::loadPCDFile (fname_in, cloud_blob);
+  pcl::io::loadPCDFile ("bun0.pcd", cloud_blob);
   pcl::fromPCLPointCloud2 (cloud_blob, *cloud);
   //* the data should be available in cloud
+  std::cout << " + data loaded" << std::endl;
 
   // Normal estimation*
   pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> n;
@@ -29,6 +27,8 @@ main (int argc, char** argv)
   n.setKSearch (20);
   n.compute (*normals);
   //* normals should not contain the point normals + surface curvatures
+
+  std::cout << " + computed normals" << std::endl;
 
   // Concatenate the XYZ and normal fields*
   pcl::PointCloud<pcl::PointNormal>::Ptr cloud_with_normals (new pcl::PointCloud<pcl::PointNormal>);
@@ -44,15 +44,16 @@ main (int argc, char** argv)
   pcl::PolygonMesh triangles;
 
   // Set the maximum distance between connected points (maximum edge length)
-  gp3.setSearchRadius (0.075);
+  gp3.setSearchRadius (0.3);
 
   // Set typical values for the parameters
-  gp3.setMu (2.5);
-  gp3.setMaximumNearestNeighbors (100);
-  gp3.setMaximumSurfaceAngle(M_PI/4); // 45 degrees
+  gp3.setMu (3);
+  gp3.setMaximumNearestNeighbors (32);
+  gp3.setMaximumSurfaceAngle(M_PI/5); // 45 degrees
   gp3.setMinimumAngle(M_PI/18); // 10 degrees
   gp3.setMaximumAngle(2*M_PI/3); // 120 degrees
   gp3.setNormalConsistency(false);
+  std::cout << " + setup triangulation" << std::endl;
 
   // Get result
   gp3.setInputCloud (cloud_with_normals);
@@ -62,8 +63,16 @@ main (int argc, char** argv)
   // Additional vertex information
   std::vector<int> parts = gp3.getPartIDs();
   std::vector<int> states = gp3.getPointStates();
-  
-  pcl::io::saveVTKFile(fname_out, triangles);
+
+  std::cout << " + triangulated" << std::endl;
+
+  pcl::io::saveOBJFile("greedy_proj_mesh.obj",triangles);
+
+  std::cout << " + saved obj file" << std::endl;
+
+  pcl::io::savePLYFile("greedy_proj_mesh.ply",triangles);
+
+  std::cout << " + saved ply file" << std::endl;
 
   // Finish
   return (0);
