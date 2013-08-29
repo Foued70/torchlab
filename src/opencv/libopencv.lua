@@ -154,6 +154,10 @@ void dilate(Mat*  src, Mat* structuringElement);
 void erode(Mat*  src, Mat* structuringElement);
 
 Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k);
+Mat* getPairwiseDistances(const Mat* A, const Mat* B);
+Mat* findBestTransformation(const Mat* goodLocationsX_src, const Mat* goodLocationsY_src, const Mat* scores_src,  const Mat* pairwise_dis_src,
+  const Mat* goodLocationsX_dest, const Mat* goodLocationsY_dest, const Mat* scores_dest, const Mat* pairwise_dis_dest, 
+  double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, int size_x, int size_y);
 
 ]]
 

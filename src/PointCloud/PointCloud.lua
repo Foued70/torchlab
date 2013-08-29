@@ -65,12 +65,9 @@ function PointCloud:reset_point_stats()
     d[1] = self.maxval:clone():add(self.centroid:clone():mul(-1)):squeeze()
     d[2] = self.centroid:clone():add(self.minval:clone():mul(-1)):squeeze()
     self.radius = d:max(1):squeeze()
-<<<<<<< HEAD
     d = nil
     collectgarbage()
-=======
     self.count = self.points:size(1)
->>>>>>> b1074fb0431bf40a152d5b929294f7706af5eec4
 end
 
 function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)

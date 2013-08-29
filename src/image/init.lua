@@ -633,7 +633,8 @@ function image.warpAndCombine(bestT, img_src, img_dest)
    dest_transform = opencv.Mat.new(translate:getEquivalentCV())   
 
    warpedSrc  =  opencv.imgproc.warpImage(img_src, src_transform, size_y, size_x)
-   warpedDest =  opencv.imgproc.warpImage(img_dest_copy, dest_transform, size_y, size_x)
+   --warpedDest =  opencv.imgproc.warpImage(img_dest_copy, dest_transform, size_y, size_x)
+   warpedDest =  opencv.imgproc.warpImage(img_dest, dest_transform, size_y, size_x)
 
    tensor3d = torch.zeros(3,warpedSrc:size()[1], warpedSrc:size()[2])
    tensor3d[1] = warpedSrc:toTensor()
@@ -647,14 +648,18 @@ function image.getCorners(img_src)
 end
 
 --only keep value greater than threshold
-function image.thresholdReturnCoordinates(squareMatrix,threshold)
+function image.thresholdReturnCoordinates(squareMatrix,threshold, le)
    h=squareMatrix:size(1)
    w=squareMatrix:size(2)
-   
+   if(le) then
+      thresholded = torch.le(squareMatrix,threshold)
+   else
+      thresholded = torch.ge(squareMatrix,threshold)
+   end
    x = torch.Tensor(h*w)
    i = 0
    x:apply(function() i = i + 1; return i end)
-   goodLocations = x[torch.ge(squareMatrix,threshold)]
+   goodLocations = x[thresholded]
    goodLocationsX = torch.ceil(goodLocations/w)
    goodLocationsY = goodLocations:clone()
    goodLocationsY:apply(function(val) return (val -1)%w+1 end) 

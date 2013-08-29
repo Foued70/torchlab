@@ -28,47 +28,47 @@ void printParams( Algorithm* algorithm ) {
 
     cout << " + '" << param << "' ";
     switch (type) {
-    case Param::BOOLEAN:
+      case Param::BOOLEAN:
       typeText = "bool";
       cout << "(" << typeText << ") " << algorithm->get<bool>(param);
       break;
-    case Param::INT:
+      case Param::INT:
       typeText = "int";
       cout << "(" << typeText << ") " << algorithm->get<int>(param);
       break;
-    case Param::REAL:
+      case Param::REAL:
       typeText = "double";
       cout << "(" << typeText << ") " << algorithm->get<double>(param);
       break;
-    case Param::STRING:
+      case Param::STRING:
       typeText = "string";
       cout << "(" << typeText << ") " << algorithm->get<string>(param);
       break;
-    case Param::MAT:
+      case Param::MAT:
       typeText = "Mat";
       cout << "(" << typeText << ") " << algorithm->get<Mat>(param);
       break;
-    case Param::ALGORITHM:
+      case Param::ALGORITHM:
       typeText = "Algorithm";
       cout << "(" << typeText << ") " << algorithm->get<Algorithm>(param);
       break;
-    case Param::MAT_VECTOR:
+      case Param::MAT_VECTOR:
       typeText = "Mat vector";
       cout << "(" << typeText << ") " ; // << algorithm->get<vector<Mat> >(param);
       break;
-    case Param::FLOAT:
+      case Param::FLOAT:
       typeText = "float";
       cout << "(" << typeText << ") " << algorithm->getDouble(param);
       break;
-    case Param::UNSIGNED_INT:
+      case Param::UNSIGNED_INT:
       typeText = "unsigned int";
       cout << "(" << typeText << ") " << algorithm->getInt(param);
       break;
-    case Param::UINT64:
+      case Param::UINT64:
       typeText = "uint64";
       cout << "(" << typeText << ") " << algorithm->getInt(param);
       break;
-    case Param::UCHAR:
+      case Param::UCHAR:
       typeText = "uchar";
       cout << "(" << typeText << ") " << algorithm->getInt(param);
       break;
@@ -159,57 +159,57 @@ extern "C" {
     "CV_8UC3", "CV_8SC3", "CV_16UC3", "CV_16SC3", "CV_32SC3", "CV_32FC3", "CV_64FC3", "CV_USRTYPE3",
     "CV_8UC4", "CV_8SC4", "CV_16UC4", "CV_16SC4", "CV_32SC4", "CV_32FC4", "CV_64FC4", "CV_USRTYPE4"};
 
-  int Mat_depth(Mat* mat)
-  {
-    return mat->depth();
-  }
-
-  void Mat_info(Mat* mat)
-  {
-    int i;
-    cout << "dims:        " << mat->dims       << endl;
-    cout << "channels:    " << mat->channels() << endl;
-    cout << "depth:       " << enum_strings[mat->depth()] << endl;
-    cout << "type:        " << enum_strings[mat->type()]  << endl;
-    cout << "elemsize:    " << mat->elemSize()  << endl;
-    cout << "elemsize1:   " << mat->elemSize1() << endl;
-    cout << "total:       " << mat->total()     << endl;
-    cout << "contiguous?: " << mat->isContinuous() << endl;
-    if (mat->dims == 2) {
-      cout << "rows:      " << mat->rows       << endl;
-      cout << "cols:      " << mat->cols       << endl;
-    }
-    for (i=0;i<mat->dims;i++){
-      cout << "size["<<i<<"]:   " << mat->size[i]   << endl;
-    }
-    for (i=0;i<mat->dims;i++){
-      cout << "step["<<i<<"]:   " << mat->step[i]   << endl;
+    int Mat_depth(Mat* mat)
+    {
+      return mat->depth();
     }
 
-  }
+    void Mat_info(Mat* mat)
+    {
+      int i;
+      cout << "dims:        " << mat->dims       << endl;
+      cout << "channels:    " << mat->channels() << endl;
+      cout << "depth:       " << enum_strings[mat->depth()] << endl;
+      cout << "type:        " << enum_strings[mat->type()]  << endl;
+      cout << "elemsize:    " << mat->elemSize()  << endl;
+      cout << "elemsize1:   " << mat->elemSize1() << endl;
+      cout << "total:       " << mat->total()     << endl;
+      cout << "contiguous?: " << mat->isContinuous() << endl;
+      if (mat->dims == 2) {
+        cout << "rows:      " << mat->rows       << endl;
+        cout << "cols:      " << mat->cols       << endl;
+      }
+      for (i=0;i<mat->dims;i++){
+        cout << "size["<<i<<"]:   " << mat->size[i]   << endl;
+      }
+      for (i=0;i<mat->dims;i++){
+        cout << "step["<<i<<"]:   " << mat->step[i]   << endl;
+      }
 
-  int Mat_type(Mat* mat)
-  {
-    return mat->type();
-  }
-  Mat* Mat_loadImage(const char* fname)
-  {
+    }
+
+    int Mat_type(Mat* mat)
+    {
+      return mat->type();
+    }
+    Mat* Mat_loadImage(const char* fname)
+    {
     // make sure that the pointer is dynamically allocated
-    return new Mat(imread(fname));
-  }
+      return new Mat(imread(fname));
+    }
 
   // this is primarily for debugging as it interferes w/ luvit
-  void Mat_showImage(Mat* mat, const char* wname)
-  {
+    void Mat_showImage(Mat* mat, const char* wname)
+    {
     // Create a window for display.
-    namedWindow(wname, CV_WINDOW_AUTOSIZE );
-    imshow(wname, *mat);
-  }
+      namedWindow(wname, CV_WINDOW_AUTOSIZE );
+      imshow(wname, *mat);
+    }
 
-  void Mat_destroy(Mat* mat)
-  {
-    delete(mat);
-  }
+    void Mat_destroy(Mat* mat)
+    {
+      delete(mat);
+    }
 
 
   // -----------------------------
@@ -217,14 +217,14 @@ extern "C" {
   // -----------------------------
 
   // function to sort the KeyPoints returned in DetectorExtractor
-  struct KeyPointCompare {
-    bool operator ()(const KeyPoint& a, const KeyPoint& b)
+    struct KeyPointCompare {
+      bool operator ()(const KeyPoint& a, const KeyPoint& b)
       const {return a.response>b.response;}
-  };
+    };
 
-  FeatureDetector* FeatureDetector_create(const char* detector_type)
-  {
-    Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
+    FeatureDetector* FeatureDetector_create(const char* detector_type)
+    {
+      Ptr<FeatureDetector> detector = FeatureDetector::create(detector_type);
     detector.addref(); // make sure the Ptr stays around TODO: check memleak
     return detector;
   }
@@ -235,10 +235,10 @@ extern "C" {
   }
 
   int FeatureDetector_detect(FeatureDetector* detector,
-                             const Mat*  img,
-                             const Mat*  mask,
-                             KeyPoint*   keypointsC,
-                             int npts)
+   const Mat*  img,
+   const Mat*  mask,
+   KeyPoint*   keypointsC,
+   int npts)
   {
 
     vector <KeyPoint> keypoints ;
@@ -263,6 +263,8 @@ extern "C" {
   {
     Mat returnMat; // = new Mat(src->size[0], src->size[1], src->type() );
     cornerHarris(*src, returnMat, blockSize, ksize, k);
+    normalize( returnMat, returnMat, 0, 255, NORM_MINMAX, CV_32FC1, Mat() );
+
     return new Mat(returnMat);
   }
 
@@ -291,8 +293,8 @@ extern "C" {
 
     for(int i=0; i < keypoints.size(); i++){
       printf("[%d] (%d, %d) %f\n",i,
-             (int)keypoints[i].pt.x, (int)keypoints[i].pt.y,
-             keypoints[i].response);
+       (int)keypoints[i].pt.x, (int)keypoints[i].pt.y,
+       keypoints[i].response);
     }
   }
 
@@ -300,7 +302,7 @@ extern "C" {
   {
     vector<KeyPoint> keypoints (keyptr, keyptr + npts);
     drawKeypoints( *img, keypoints, *img, Scalar::all(-1),
-                   DrawMatchesFlags::DEFAULT );
+     DrawMatchesFlags::DEFAULT );
   }
 
   DescriptorExtractor* DescriptorExtractor_create(const char* feature_type)
@@ -311,10 +313,10 @@ extern "C" {
   }
 
   void DescriptorExtractor_compute(DescriptorExtractor* extractor,
-                                   const Mat*  img,
-                                   Mat*  descriptor,
-                                   KeyPoint*   keypointsC,
-                                   int npts)
+   const Mat*  img,
+   Mat*  descriptor,
+   KeyPoint*   keypointsC,
+   int npts)
   {
 
     vector <KeyPoint> keypoints(npts);
@@ -364,8 +366,8 @@ extern "C" {
   Mat* getStructuringElement(int type, int size_x, int size_y, int center_x, int center_y)
   {
     return new Mat(getStructuringElement(type,
-                                         Size(size_x, size_y),
-                                         Point(center_x, center_y) ));
+     Size(size_x, size_y),
+     Point(center_x, center_y) ));
   }
   void dilate(Mat*  src, Mat* structuringElement)
   {
@@ -389,10 +391,10 @@ extern "C" {
   }
 
   int DescriptorMatcher_match(DescriptorMatcher* matcher,
-                              const Mat*  descriptors_src,
-                              const Mat*  descriptors_dest,
-                              DMatch*   matchesC,
-                              int npts)
+    const Mat*  descriptors_src,
+    const Mat*  descriptors_dest,
+    DMatch*   matchesC,
+    int npts)
   {
     vector<DMatch> matches;
 
@@ -415,22 +417,22 @@ extern "C" {
     vector<DMatch> matches (matchesptr, matchesptr + nmatches);
     double max_dist = 0, min_dist = 100000000;
     for( int i = 0; i < nmatches; i++ )
-      {
-        double dist = matches[i].distance;
-        if( dist < min_dist ) min_dist = dist;
-        if( dist > max_dist ) max_dist = dist;
-      }
+    {
+      double dist = matches[i].distance;
+      if( dist < min_dist ) min_dist = dist;
+      if( dist > max_dist ) max_dist = dist;
+    }
 
     //select only good matches
     vector< DMatch > good_matches;
 
     for( int i = 0; i < nmatches; i++ )
+    {
+      if( matches[i].distance < 3*min_dist )
       {
-        if( matches[i].distance < 3*min_dist )
-          {
-            good_matches.push_back( matches[i]);
-          }
+        good_matches.push_back( matches[i]);
       }
+    }
 
     memcpy(matchesReducedC,good_matches.data(),good_matches.size() * sizeof(DMatch));
 
@@ -442,8 +444,8 @@ extern "C" {
   // ImageProcessing
   // -----------------------------
   Mat* getHomography(const KeyPoint* keyptr_src, int npts_src,
-                     const KeyPoint* keyptr_dest, int npts_dest,
-                     const DMatch* matchptr, int npts_match)
+   const KeyPoint* keyptr_dest, int npts_dest,
+   const DMatch* matchptr, int npts_match)
   {
     vector<KeyPoint> keypoints_src (keyptr_src, keyptr_src + npts_src);
     vector<KeyPoint> keypoints_dest (keyptr_dest, keyptr_dest + npts_dest);
@@ -455,11 +457,11 @@ extern "C" {
     vector<Point2d> dest;
 
     for( int i = 0; i < npts_match; i++ )
-      {
+    {
         //-- Get the keypoints from the good matches
-        src.push_back( keypoints_src[ matches[i].queryIdx ].pt );
-        dest.push_back( keypoints_dest[ matches[i].trainIdx ].pt );
-      }
+      src.push_back( keypoints_src[ matches[i].queryIdx ].pt );
+      dest.push_back( keypoints_dest[ matches[i].trainIdx ].pt );
+    }
     Mat H = findHomography( src, dest, CV_RANSAC );
     H.convertTo(H,CV_32FC1,1,0);
 
@@ -472,5 +474,142 @@ extern "C" {
     warpPerspective(*src, *warpedSrc, *transform, Size(size_x, size_y));
     return warpedSrc;
   }
+
+  /*
+  get the pairwise distance between all pairs of points in A and B
+  if A is mxp and B is nxp then the result will be mxn 
+  */
+    Mat* getPairwiseDistances(const Mat* A, const Mat* B)
+  {
+   Mat AdA;
+     reduce((*A).mul(*A), AdA, 1, CV_REDUCE_SUM, -1); //nx1
+
+     Mat A_new = AdA * Mat::ones(1,B->rows, A->type()); //mxn
+     Mat BdB;
+     reduce((*B).mul(*B), BdB, 1, CV_REDUCE_SUM, -1); //mx1
+
+     Mat B_new = Mat::ones(A->rows,1, A->type()) * BdB.t(); //mxn
+
+     Mat dis_square = A_new + B_new - 2*(*A)*((*B).t()); //mxn
+     Mat sqrtMat;
+     sqrt(dis_square, sqrtMat);
+     return new Mat(sqrtMat);
+     
+   }
+
+
+   Mat* getInverseMatrixFromSource(const Point2d* p1, const Point2d* p2) {
+    Mat A = (Mat_<double>(4, 4) << p1->x, -p1->y, 1, 0,p1->y, p1->x, 0, 1,p2->x,-p2->y, 1,0, p2->y, p2->x, 0, 1);
+    return new Mat(A.inv());
+  }
+
+  Mat* getMatrixFromDestination(const Point2d* p1, const Point2d* p2) {
+    Mat b = (Mat_<double>(4, 1) << p1->x, p1->y, p2->x, p2->y);
+    return new Mat(b);
+  }
+
+  Mat* getHomographyFromAb(const Mat* A_inv, const Mat* b)
+  {
+    Mat result = (*A_inv)*(*b);
+    double b1 = result.at<double>(0,0);
+    double b2 = result.at<double>(1,0);
+    double b3 = result.at<double>(2,0);
+    double b4 = result.at<double>(3,0);
+    
+    Mat returnVal= (Mat_<double>(3,3) << b1, -b2, b3, b2, b1, b4, 0, 0, 1);
+    return new Mat(returnVal);
+  }
+  bool isSameTransformation(Mat H1, Mat H2, int size_x, int size_y, double threshold) {
+    Mat corners = (Mat_<double>(3,4) << size_x, 1, 1, size_x, 1, 1, size_y, size_y, 1, 1, 1, 1);
+
+    Mat transformedCorners1 = (H1)*corners;
+    Mat transformedCorners2 = (H2)*corners;
+    Mat C = (transformedCorners2-transformedCorners1);
+    Mat mult = C.mul(C);
+    Mat dis;
+    sqrt(mult.rowRange(0,1)+mult.rowRange(1,2), dis);
+    int totalCloseCorners = sum(dis<=threshold)[0]/255;
+return totalCloseCorners==4;
+ }
+
+ Mat* findBestTransformation(const Mat* goodLocationsX_src, const Mat* goodLocationsY_src, const Mat* scores_src,  const Mat* pairwise_dis_src,
+  const Mat* goodLocationsX_dest, const Mat* goodLocationsY_dest, const Mat* scores_dest, const Mat* pairwise_dis_dest, 
+  double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, int size_x, int size_y)
+ {
+  Mat* bestH;
+  Mat* bestHMatrix = new Mat(Mat::zeros(numInliersMax,10,CV_64F));
+  int numTransfSoFar = 0;
+  for (int i_src = 0; i_src < goodLocationsX_src->rows; i_src++)
+  {
+    int pt1_src = (*goodLocationsX_src).at<double>(i_src,0)-1;
+    int pt2_src = (*goodLocationsY_src).at<double>(i_src,0)-1;
+    Point2d src_pt1= Point((*scores_src).at<double>(pt1_src,0), (*scores_src).at<double>(pt1_src,1));
+    Point2d src_pt2= Point((*scores_src).at<double>(pt2_src,0), (*scores_src).at<double>(pt2_src,1));
+
+    double d_src = (*pairwise_dis_src).at<double>(pt1_src, pt2_src);
+      //calculate transformation matrix and it's inverse
+    Mat* A_inv = getInverseMatrixFromSource(&src_pt1, &src_pt2);
+
+    for (int i_dest = 0; i_dest < goodLocationsX_dest->rows; i_dest++) 
+    {
+      int pt1_dest = (*goodLocationsX_dest).at<double>(i_dest,0)-1;
+      int pt2_dest = (*goodLocationsY_dest).at<double>(i_dest,0)-1;
+      Point2d dest_pt1= Point((*scores_dest).at<double>(pt1_dest,0), (*scores_dest).at<double>(pt1_dest,1));
+      Point2d dest_pt2= Point((*scores_dest).at<double>(pt2_dest,0), (*scores_dest).at<double>(pt2_dest,1));
+
+      double d_dest = (*pairwise_dis_dest).at<double>(pt1_dest, pt2_dest);
+      if (abs(d_dest-d_src)<corr_thresh) 
+      {
+
+        Mat* b = getMatrixFromDestination(&dest_pt1, &dest_pt2);
+        Mat* H = getHomographyFromAb(A_inv, b);
+        Mat concatWithOnes;
+        vconcat((*scores_src).t(),Mat::ones(1,scores_src->rows, scores_src->type()), concatWithOnes);
+
+        Mat transformed_src = (*H)*concatWithOnes;
+
+        Mat roi = (transformed_src.rowRange(0,2)).t();
+
+          //When the comparison result is true, the corresponding element of output array is set to 255.
+        Mat compareResult = (*getPairwiseDistances(&roi, scores_dest)) <= corr_thresh;
+        long num_inliers = sum(compareResult)[0]/255;
+        double minVal; double maxVal; Point minLoc; Point maxLoc;
+        minMaxLoc( bestHMatrix->colRange(0,1), &minVal, &maxVal, &minLoc, &maxLoc);
+        if(num_inliers > minVal && num_inliers >= minInliers) {
+          bool shouldUse = true;
+          for (int tn = 0; tn < numTransfSoFar; tn++) 
+          {
+            Mat reshapedTransformation = (*bestHMatrix)(Range(tn,tn+1), Range(1,10)).reshape(1,3);
+            if (isSameTransformation(reshapedTransformation, *H, size_x, size_y, cornerComparisonThreshold))
+            {
+              if(num_inliers > bestHMatrix->at<double>(tn,0)) 
+              {
+                Mat reshaped = (*H).reshape(1,1);
+                (*bestHMatrix)(Range(tn,tn+1), Range(1,10)) = reshaped;
+                bestHMatrix->at<double>(tn,0) = num_inliers;
+              }
+              shouldUse = false;
+              break;
+            }
+          }
+          if(shouldUse) {
+                Mat reshaped = (*H).reshape(1,1);
+
+           Mat subSelected = (*bestHMatrix)(Range(minLoc.y,minLoc.y+1), Range(1,10));
+
+           reshaped.copyTo(subSelected);
+           bestHMatrix->at<double>(minLoc.y,0) = num_inliers;
+           numTransfSoFar++;
+           numTransfSoFar = std::min(numTransfSoFar,bestHMatrix->rows);
+         }
+       }
+      }
+    }
+ }
+
+ return new Mat(bestHMatrix->rowRange(0,numTransfSoFar));
+}
+
+
 
 } // extern "C"
