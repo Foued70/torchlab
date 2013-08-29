@@ -1,5 +1,7 @@
 local io = require 'io'
 local kdtree = kdtree.kdtree
+local ffi = require 'ffi'
+local ctorch = util.ctorch -- ctorch needs to be loaded before we reference THTensor stuff in a cdef
 
 -- angular to radians and back
 local pi = math.pi
@@ -47,6 +49,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
 		    self.points = pts:type('torch.DoubleTensor'):div(10000.0)
 		    self.rgb = loaded[4]
 		    self.count = self.points:size(1)
+		    self.normal_map = loaded[5]
 		    self:reset_point_stats()
 	    else
 	    	error('arg #1 must either be empty or a valid file: '..pcfilename)
@@ -228,7 +231,7 @@ function PointCloud:write(filename)
 	
 	if util.fs.extname(filename)==PC_OD_EXTENSION then
 		local pts = self.points:clone():mul(10000):type('torch.IntTensor')
-		torch.save(filename, {self.format, self.hwindices, pts, self.rgb})
+		torch.save(filename, {self.format, self.hwindices, pts, self.rgb, self.normal_map})
 	elseif util.fs.extname(filename)==PC_ASCII_EXTENSION then
 		local file = io.open(filename, 'w');
 		local tmpt = torch.range(1,self.count)
@@ -255,6 +258,196 @@ function PointCloud:flatten()
 	self.flatteny = self.flatteny:transpose(1,2)
 	
 	collectgarbage()
+end
+
+function PointCloud:make_flattened_images(scale)
+
+	scale = scale+0.000000001
+	local ranges = self.radius:clone():mul(2)
+	local minv = self.radius:clone():mul(-1)
+	local maxv = self.radius:clone()
+	local pix = ranges:clone():div(scale):floor()
+	local height = pix[1]+1
+	local width = pix[2]+1
+	local imagez = torch.zeros(height,width)
+	
+	if self.format == 0 then
+		
+		imagez = imagez:resize(height*width)
+		--sort points
+		local points = self.points:clone()[{{},{1,2}}]
+	
+		local coords = torch.Tensor(points:size()):copy(points)
+		coords:add(minv:sub(1,2):repeatTensor(self.count,1):mul(-1)):div(scale):floor():add(1)
+	
+		local ys = torch.LongTensor(self.count):copy(coords[{{},1}])
+		local xs = torch.LongTensor(self.count):copy(coords[{{},2}])
+		local index = ys:add(-1):mul(width):add(xs)
+		local dists = torch.Tensor(points:size()):copy(points)
+		dists:add(self.centroid:squeeze():sub(1,2):repeatTensor(self.count,1):mul(-1)):pow(2)
+		dists = dists:sum(2):squeeze()
+	
+		local i=1
+		index:apply(function(x)
+						imagez[x]=imagez[x]+dists[i]
+						i=i+1
+						return x
+					end)
+		
+		imagez=imagez:pow(2)
+		
+		imagez=(imagez:div(imagez:max()+0.000001):mul(256)):floor()
+		self.imagez = imagez:clone():resize(height,width):repeatTensor(3,1,1)
+	else
+		local imgpts, minus_lr, minus_ud = self:make_normal_map()
+		local nmp = self.normal_map
+		local hght = self.height
+		local wdth = self.width
+		local points = imgpts:sub(1,hght,1,wdth,1,2)
+		local coords = torch.Tensor(points:size()):copy(points)
+		coords:add(minv:sub(1,2):repeatTensor(hght,wdth,1):mul(-1)):div(scale):floor():add(1)
+		
+		centerpt = self.centroid:squeeze():sub(1,2)
+		
+		--[[
+		local dists = torch.Tensor(points:size()):copy(points)
+		dists:add(self.centroid:squeeze():sub(1,2):repeatTensor(hght,wdth,1):mul(-1)):pow(2)
+		dists = dists:sum(3):sqrt():squeeze()
+		]]
+		
+		local udind = torch.range(1,hght)
+		local lrind = torch.range(1,wdth)
+		
+		local norm_z_tolerance = 0.025
+		local norm_dist_tolerance = 0.25
+		local linear_slope_tolerance = 0.1
+		local in_line_of_scanner_tolerance = 0.25
+		
+		udind:apply(function(h)
+						local nmph = nmp[h]
+						local crdh = coords[h]
+						local ptsh = points[h]
+						--local dsth = dists[h]
+						lrind:apply(function(w)
+							-- add points[h][w]
+							local crd = crdh[w]
+							local y = crd[1]
+							local x = crd[2]
+							
+							norm = nmph[w]
+							
+							if y < math.huge and x < math.huge and math.abs(norm[3]) < norm_z_tolerance then
+								--imagez[y][x] = imagez[y][x]+dst
+								
+								local prevw = w-1
+								local nextw = w+1
+								if prevw == 0 then
+									prevw = wdth
+								end
+								if nextw == wdth + 1 then
+									nextw = 1
+								end
+								
+								normp = nmph[prevw]
+								normn = nmph[nextw]
+								
+								if norm:dist(normp) < norm_dist_tolerance then
+									local double_flag = false
+									if norm:dist(normn) > norm_dist_tolerance then
+										double_flag = true
+									end
+										
+									-- check colinearity of 3 pts in xy and to origin
+									-- connect points[h][w+1] to points[h][w-1]
+									local prevcrd = crdh[prevw]
+									local prevy = prevcrd[1]
+									local prevx = prevcrd[2]
+									
+									local nextcrd = crdh[nextw]
+									local nexty = nextcrd[1]
+									local nextx = nextcrd[2]
+									
+									local ptw = ptsh[w]
+									local ptp = ptsh[prevw]
+									local ptn = ptsh[nextw]
+									
+									local w_to_p = geom.util.normalize(ptw-ptp)
+									local n_to_w = geom.util.normalize(ptn-ptw)
+									local n_to_p = geom.util.normalize(ptn-ptp)
+									local c_to_w = geom.util.normalize(centerpt-ptw):abs()
+									
+									if w_to_p:dist(n_to_w) < linear_slope_tolerance and 
+									   n_to_p:dist(n_to_w) < linear_slope_tolerance and
+									   n_to_p:dist(w_to_p) < linear_slope_tolerance and
+									   c_to_w:dist(n_to_w:clone():abs()) > in_line_of_scanner_tolerance then
+									
+										--local dst = dsth[w]
+										local dst = 1
+										local minx = math.min(x,prevx)
+										local maxx = math.max(x,prevx)
+										local miny = math.min(y,prevy)
+										local maxy = math.max(y,prevy)
+										local dffx = x-prevx
+										local dffy = y-prevy
+											
+										if double_flag then
+											minx = math.min(nextx,prevx)
+											maxx = math.max(nextx,prevx)
+											miny = math.min(nexty,prevy)
+											maxy = math.max(nexty,prevy)
+											dffx = nextx-prevx
+											dffy = nexty-prevy
+										end
+									
+										if math.abs(dffx) >= math.abs(dffy) then
+											local slp = dffy / dffx
+											if minx < maxx then
+												torch.range(minx, maxx):apply(
+													function(xx)
+														if not (xx == x) then
+															local yy = prevy + (xx-prevx)*slp
+															if xx <= width and yy <=height and xx >=1 and yy >=1 then
+																imagez[yy][xx] = imagez[yy][xx] + dst
+															end
+														end
+													end)
+											end
+										else
+											local slp = dffx / dffy
+											if miny < maxy then
+												torch.range(miny, maxy):apply(
+													function(yy)
+														if not (yy == y) then
+															local xx = prevx + (yy-prevy)*slp
+															if xx <= width and yy <=height and xx >=1 and yy >=1 then
+																imagez[yy][xx] = imagez[yy][xx] + dst
+															end
+														end
+													end)
+											end
+										end
+									end
+								end
+							end
+						end)
+					end)
+		
+		
+		--imagez:pow(2)
+		show_threshold = 0.02
+		imagez:div(imagez:max()+0.000001):add(-show_threshold)
+		imagez:add(imagez:clone():abs()):div(2)
+		imagez:div(imagez:max()+0.000001)
+						
+		--imagez=imagez:mul(256):floor()
+			
+		self.imagez = imagez:clone():repeatTensor(3,1,1)	
+
+	end
+
+	collectgarbage()
+	return self.imagez
+	
 end
 
 function PointCloud:make_panoramic_image()
@@ -288,6 +481,109 @@ function PointCloud:make_panoramic_depth_map()
 		depth_map:div(depth_map:max()):add(-1):abs():div(depth_map:max())
 		depth_map = depth_map:transpose(1,3):transpose(2,3)
 		return depth_map
+	else
+		print("can't make panoramic image, no w/h info given")
+	end
+end
+
+function PointCloud:make_normal_map()
+	if self.format == 1 then
+		local height = self.height
+		local width = self.width
+		local img = torch.zeros(height, width, 3):add(math.huge)
+		local tmp = torch.range(1,self.count)
+		tmp:apply(function(i)
+					local ind = self.hwindices[i]
+	   				img[ind[1] ][ind[2] ] = self.points[i]
+			    end)
+	    
+		local minus_lr = torch.zeros(height,width,3)
+		local minus_ud = torch.zeros(height,width,3)
+		
+	    --[[
+		minus_lr:sub(1,height,2,width-1):add(
+	    			 img:sub(1,height,1,width-2):clone():mul(-1):add(
+    				 img:sub(1,height,3,width)))
+		minus_lr:sub(1,height,1,1):add(
+					 img:sub(1,height,width,width):clone():mul(-1):add(
+	    			 img:sub(1,height,2,2)))
+		minus_lr:sub(1,height,width,width):add(
+		   			 img:sub(1,height,width-1,width-1):clone():mul(-1):add(
+	    			 img:sub(1,height,1,1)))
+	    
+		minus_ud:sub(2,height-1,1,width):add(
+	    			 img:sub(1,height-2,1,width):clone():mul(-1):add(
+					 img:sub(3,height,1,width)))
+		minus_ud:sub(1,1,1,width):add(
+	    			 img:sub(1,1,1,width):clone():mul(-1):add(
+		   			 img:sub(2,2,1,width)))
+		minus_ud:sub(height,height,1,width):add(
+	    			 img:sub(height-1,height-1,1,width):clone():mul(-1):add(
+					 img:sub(height,height,1,width)))
+		]]
+		
+		minus_lr:sub(1,height,1,width-1):add(
+	    			 img:sub(1,height,1,width-1):clone():mul(-1):add(
+    				 img:sub(1,height,2,width)))
+		minus_lr:sub(1,height,width,width):add(
+		   			 img:sub(1,height,width,width):clone():mul(-1):add(
+	    			 img:sub(1,height,1,1)))
+	    
+		minus_ud:sub(2,height-1,1,width):add(
+	    			 img:sub(1,height-2,1,width):clone():mul(-1):add(
+					 img:sub(3,height,1,width)))
+		minus_ud:sub(1,1,1,width):add(
+	    			 img:sub(1,1,1,width):clone():mul(-1):add(
+		   			 img:sub(2,2,1,width)))
+		minus_ud:sub(height,height,1,width):add(
+	    			 img:sub(height-1,height-1,1,width):clone():mul(-1):add(
+					 img:sub(height,height,1,width)))
+		
+	    
+	    local minus_lr_t = minus_lr:transpose(1,3)
+	    local minus_ud_t = minus_ud:transpose(1,3)
+	    
+	    local minus_lr_tx = minus_lr_t[1]
+	    local minus_lr_ty = minus_lr_t[2]
+	    local minus_lr_tz = minus_lr_t[3]
+	    
+	    local minus_ud_tx = minus_ud_t[1]
+	    local minus_ud_ty = minus_ud_t[2]
+	    local minus_ud_tz = minus_ud_t[3]
+	  	
+		crossprod = torch.Tensor(3,width,height)
+	  	
+		crossprod[1] = minus_lr_ty:clone():cmul(minus_ud_tz):add(
+	  					   minus_lr_tz:clone():cmul(minus_ud_ty):mul(-1))
+	    crossprod[2] = minus_lr_tz:clone():cmul(minus_ud_tx):add(
+		  				   minus_lr_tx:clone():cmul(minus_ud_tz):mul(-1))
+		crossprod[3] = minus_lr_tx:clone():cmul(minus_ud_ty):add(
+	  					   minus_lr_ty:clone():cmul(minus_ud_tx):mul(-1))
+	  				   
+	    crossprodnorm = crossprod:clone():pow(2):sum(1):sqrt():squeeze():repeatTensor(3,1,1)
+
+	    
+	    crossprod = crossprod:cdiv(crossprodnorm):transpose(1,3)
+		
+		self.normal_map=crossprod:clone()
+		return img, minus_lr, minus_ud
+	end
+	return nil,nil,nil
+end
+
+function PointCloud:make_panoramic_normal_map()
+	if self.format == 1 then
+		if not self.normal_map then
+			self:make_normal_map()
+		end
+		
+		local pmap = self.normal_map:clone()
+	    
+	    local pmap = pmap:add(1):div(2)
+		
+		pmap = pmap:transpose(1,3):transpose(2,3)
+		
+		return pmap
 	else
 		print("can't make panoramic image, no w/h info given")
 	end
@@ -349,6 +645,7 @@ function PointCloud:downsample(leafsize)
 	return downsampled
 end
 
+--[[
 function PointCloud:make_flattened_images(scale)
 	scale = scale+0.000000001
 	local ranges = self.radius:clone():mul(2)
@@ -385,6 +682,7 @@ function PointCloud:make_flattened_images(scale)
 	self.imagez = imagez:resize(height,width):repeatTensor(3,1,1)
 	collectgarbage()
 end
+]]
 
 function PointCloud:make_3dtree()
 	self.k3dtree = kdtree.new(self.points)

@@ -9,14 +9,14 @@ local validation = Class()
 validation.default_parameters = {
 	scale = 0.015,
 	radius_max = 5.0,
-	center_dist_max = 4.0,
+	center_dist_max = 5.0,
 	center_dist_min = 0.1,
 
-	pixelate_max = 0.15,
+	pixelate_max = 0.30,
 	wiggle_max = 0.25,
 	vrs_cap = 0.5,
 	numangles_vrs = 360,
-	numangles_bold = 1080,
+	numangles_bold = 720,
 	
 	}
 
@@ -233,7 +233,7 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 	
 	if (torch.Tensor({src_cnt_h,src_cnt_w}):dist(torch.Tensor({tgt_cnt_h,tgt_cnt_w})) > cntr_dist_mx_to_scale) or
 	   (torch.Tensor({src_cnt_h,src_cnt_w}):dist(torch.Tensor({tgt_cnt_h,tgt_cnt_w})) < cntr_dist_mn_to_scale) then
-		return torch.zeros(9):add(math.huge)
+		return torch.ones(9)
 	end
 	
 	local hght = combined_img:size(2)

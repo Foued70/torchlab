@@ -93,6 +93,10 @@ function arcDownload:flattenedToTransformation()
 			
 			local all_scores = torch.Tensor(table.getn(combined),9)
 			
+			local inl = torch.Tensor(inliers)
+			print(fname1..' - '..fname2..': '..inl:max()..' '..inl:min())
+			
+			--for i = 1,table.getn(combined) do
 			for i = 1,table.getn(combined) do
 			
 				local comb = combined[i]
@@ -111,37 +115,40 @@ function arcDownload:flattenedToTransformation()
 					end)
 				
 				local validation_scores = align_floors_endtoend.validation.compute_score(combcpy,sch,scw,tch,tcw,bname1..'_'..bname2..'_'..i)
-				all_scores[i] = validation_scores
+				all_scores[i] = (validation_scores * 10000):ceil()
 			end
 			
 			local sorted_scores, order_scores = all_scores:sort(1)
 			
 			local order = order_scores:transpose(1,2)[1]
 			
+			sorted_scores = all_scores:index(1,order)
 			print(sorted_scores)
 			
 			local i = 1
 			local k = 1
-			while k < 6 and i <= table.getn(combined) do
+			 while k < 6 and i <= table.getn(combined) do
 			
 				local j = order[i]
 				
-				local total_score = math.ceil(all_scores[j][1] * 10000)
-				local vrs_no_cap  = math.ceil(all_scores[j][2] * 10000)
-				local vrs_capped  = math.ceil(all_scores[j][3] * 10000)
-				local vid_fine_t  = math.ceil(all_scores[j][4] * 10000)
-				local vid_rugh_t  = math.ceil(all_scores[j][7] * 10000)
+				local total_score = all_scores[j][1]
+				local vrs_no_cap  = all_scores[j][2]
+				local vrs_capped  = all_scores[j][3]
+				local vid_fine_t  = all_scores[j][4]
+				local vid_rugh_t  = all_scores[j][7]
 				
 				collectgarbage()
 				
-				if total_score <= 6000 and vid_rugh_t <= 7000 and vrs_capped <= 2500 then
+				if total_score <= 9000 and vid_fine_t <= 9900 and vid_rugh_t <= 9500 then
 				
-					local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..i..'_'..inliers[i]..'.png')
+					local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..i..'_'..j..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..inliers[i]..'.png')
 					--local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..j..'_'..total_score..'.png')
 					image.save(cname, combined[j])
 					
 					k = k + 1
 					
+				else
+					print('rejected: '..i..'_'..j..': total: '..total_score..', vid_fine: '..vid_fine_t..', vid_rugh: '..vid_rugh_t)
 				end
 				
 				i = i + 1
@@ -151,7 +158,6 @@ function arcDownload:flattenedToTransformation()
 		self:doForEveryPairInArc(mkDestDir, doForPair, extension, true)
 	end
 end		
-
 
 function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension, download)
 	local arc = data.Arc.get(self.scanid, 
@@ -209,6 +215,7 @@ function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension
 						local filetb = util.fs.files_only(params["from"])
 						for i=1,#filetb do
 							local fname1 = filetb[i]
+							--if path.basename(fname1) == 'sweep_004.png' or path.basename(fname1) == 'sweep_009.png' then
 							if util.fs.extname(fname1) == extension then
 								for j=i+1, math.min(#filetb, i+1) do
 									local fname2 = filetb[j]	
@@ -218,6 +225,7 @@ function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension
 									end
 								end
 							end
+							--end
 						end
 						print('saving arc')
 						--arc:save()			

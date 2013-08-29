@@ -14,10 +14,10 @@ FloorTransformation.radius_local_max = 12;
 FloorTransformation.blockSize =2
 FloorTransformation.kSize =3
 FloorTransformation.k = .04
-FloorTransformation.maxNumReturn = 25
-FloorTransformation.warpWithBorders = true
+FloorTransformation.maxNumReturn = 50
+FloorTransformation.warpWithBorders = false
 FloorTransformation.cornerDistanceLimit = 25
-FloorTransformation.minInliersForMatch = 3
+FloorTransformation.minInliersForMatch = 2
 
 function FloorTransformation.findTransformationStandard(image1Path, image2Path)
    img_src = FloorTransformation.imagePreProcessing(image1Path)
