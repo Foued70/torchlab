@@ -13,11 +13,7 @@ FloorTransformation.radius_local_max = 12;
 FloorTransformation.blockSize =2
 FloorTransformation.kSize =3
 FloorTransformation.k = .04
-<<<<<<< HEAD
 FloorTransformation.maxNumReturn = 50
-=======
-FloorTransformation.maxNumReturn = 25
->>>>>>> 62a5d380049a816613697aeffe35d2bfe9230082
 FloorTransformation.warpWithBorders = false
 FloorTransformation.cornerDistanceLimit = 25
 FloorTransformation.minInliersForMatch = 2
