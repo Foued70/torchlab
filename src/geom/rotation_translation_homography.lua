@@ -24,6 +24,6 @@ end
 
 --get the actual transformation matrix T such that T*src points = dest points
 function getHomography(A_inv, b) 
-   t = torch.mm(A_inv, b):resize(4)
+   local t = torch.mm(A_inv, b):resize(4)
    return Homography.new(torch.Tensor({{t[1], -t[2], t[3]}, {t[2], t[1], t[4]}, {0, 0, 1}} ))
 end
