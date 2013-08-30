@@ -42,3 +42,10 @@ pcl:
 	cd deps/eigen; make
 	cd deps/flann; make
 	cd deps/pcl; make
+
+pcl-rebuild:
+	cd deps/boost; make rebuild
+	cd deps/eigen; make rebuild
+	cd deps/flann; make rebuild
+	cd deps/pcl; make rebuild
+
