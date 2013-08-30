@@ -479,9 +479,9 @@ extern "C" {
   get the pairwise distance between all pairs of points in A and B
   if A is mxp and B is nxp then the result will be mxn 
   */
-    Mat* getPairwiseDistances(const Mat* A, const Mat* B)
+    void getPairwiseDistances(const Mat* A, const Mat* B, Mat* result)
   {
-   Mat AdA;
+     Mat AdA;
      reduce((*A).mul(*A), AdA, 1, CV_REDUCE_SUM, -1); //nx1
 
      Mat A_new = AdA * Mat::ones(1,B->rows, A->type()); //mxn
@@ -491,24 +491,34 @@ extern "C" {
      Mat B_new = Mat::ones(A->rows,1, A->type()) * BdB.t(); //mxn
 
      Mat dis_square = A_new + B_new - 2*(*A)*((*B).t()); //mxn
-     Mat sqrtMat;
-     sqrt(dis_square, sqrtMat);
-     return new Mat(sqrtMat);
+     sqrt(dis_square, *result);
      
    }
 
+  bool isSameTransformation(Mat* H1, Mat *H2, int size_x, int size_y, double threshold) {
+    Mat corners = (Mat_<double>(3,4) << size_x, 1, 1, size_x, 1, 1, size_y, size_y, 1, 1, 1, 1);
 
-   Mat* getInverseMatrixFromSource(const Point2d* p1, const Point2d* p2) {
-    Mat A = (Mat_<double>(4, 4) << p1->x, -p1->y, 1, 0,p1->y, p1->x, 0, 1,p2->x,-p2->y, 1,0, p2->y, p2->x, 0, 1);
-    return new Mat(A.inv());
+    Mat transformedCorners1 = (*H1)*corners;
+    Mat transformedCorners2 = (*H2)*corners;
+    Mat C = (transformedCorners2-transformedCorners1);
+    Mat mult = C.mul(C);
+    Mat dis;
+    sqrt(mult.rowRange(0,1)+mult.rowRange(1,2), dis);
+    int totalCloseCorners = sum(dis<=threshold)[0]/255;
+    return totalCloseCorners==4;
   }
 
-  Mat* getMatrixFromDestination(const Point2d* p1, const Point2d* p2) {
-    Mat b = (Mat_<double>(4, 1) << p1->x, p1->y, p2->x, p2->y);
-    return new Mat(b);
+  void getInverseMatrixFromSource(Point2d* src_pt1, Point2d* src_pt2, Mat* A_inv) {
+    Mat A = (Mat_<double>(4, 4) <<src_pt1->x, -src_pt1->y, 1, 0,src_pt1->y, src_pt1->x, 0, 1,src_pt2->x,-src_pt2->y, 1,0, src_pt2->y, src_pt2->x, 0, 1);
+    *A_inv = A.inv();
   }
 
-  Mat* getHomographyFromAb(const Mat* A_inv, const Mat* b)
+  Mat* getMatrixFromDestination(const Point2d* p1, const Point2d* p2, Mat* result) {
+    *result = (Mat_<double>(4, 1) << p1->x, p1->y, p2->x, p2->y);
+    
+  }
+
+  void getHomographyFromAb(const Mat* A_inv, const Mat* b, Mat* homography)
   {
     Mat result = (*A_inv)*(*b);
     double b1 = result.at<double>(0,0);
@@ -516,75 +526,66 @@ extern "C" {
     double b3 = result.at<double>(2,0);
     double b4 = result.at<double>(3,0);
     
-    Mat returnVal= (Mat_<double>(3,3) << b1, -b2, b3, b2, b1, b4, 0, 0, 1);
-    return new Mat(returnVal);
+    *homography= (Mat_<double>(3,3) << b1, -b2, b3, b2, b1, b4, 0, 0, 1);
   }
-  bool isSameTransformation(Mat H1, Mat H2, int size_x, int size_y, double threshold) {
-    Mat corners = (Mat_<double>(3,4) << size_x, 1, 1, size_x, 1, 1, size_y, size_y, 1, 1, 1, 1);
-
-    Mat transformedCorners1 = (H1)*corners;
-    Mat transformedCorners2 = (H2)*corners;
-    Mat C = (transformedCorners2-transformedCorners1);
-    Mat mult = C.mul(C);
-    Mat dis;
-    sqrt(mult.rowRange(0,1)+mult.rowRange(1,2), dis);
-    int totalCloseCorners = sum(dis<=threshold)[0]/255;
-return totalCloseCorners==4;
- }
 
  Mat* findBestTransformation(const Mat* goodLocationsX_src, const Mat* goodLocationsY_src, const Mat* scores_src,  const Mat* pairwise_dis_src,
   const Mat* goodLocationsX_dest, const Mat* goodLocationsY_dest, const Mat* scores_dest, const Mat* pairwise_dis_dest, 
   double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, int size_x, int size_y)
  {
-  Mat* bestH;
   Mat* bestHMatrix = new Mat(Mat::zeros(numInliersMax,10,CV_64F));
+  Mat A_inv, b, H, temp, concatWithOnes, transformed_src, compareResult, reshapedTransformation, reshaped, subSelected;
+  Point2d src_pt1, src_pt2, dest_pt1, dest_pt2;
+  Point minLoc; Point maxLoc;
   int numTransfSoFar = 0;
   for (int i_src = 0; i_src < goodLocationsX_src->rows; i_src++)
   {
     int pt1_src = (*goodLocationsX_src).at<double>(i_src,0)-1;
     int pt2_src = (*goodLocationsY_src).at<double>(i_src,0)-1;
-    Point2d src_pt1= Point((*scores_src).at<double>(pt1_src,0), (*scores_src).at<double>(pt1_src,1));
-    Point2d src_pt2= Point((*scores_src).at<double>(pt2_src,0), (*scores_src).at<double>(pt2_src,1));
+    src_pt1= Point2d((*scores_src).at<double>(pt1_src,0), (*scores_src).at<double>(pt1_src,1));
+    src_pt2= Point2d((*scores_src).at<double>(pt2_src,0), (*scores_src).at<double>(pt2_src,1));
 
     double d_src = (*pairwise_dis_src).at<double>(pt1_src, pt2_src);
       //calculate transformation matrix and it's inverse
-    Mat* A_inv = getInverseMatrixFromSource(&src_pt1, &src_pt2);
+    getInverseMatrixFromSource(&src_pt1, &src_pt2, &A_inv);
 
     for (int i_dest = 0; i_dest < goodLocationsX_dest->rows; i_dest++) 
     {
       int pt1_dest = (*goodLocationsX_dest).at<double>(i_dest,0)-1;
       int pt2_dest = (*goodLocationsY_dest).at<double>(i_dest,0)-1;
-      Point2d dest_pt1= Point((*scores_dest).at<double>(pt1_dest,0), (*scores_dest).at<double>(pt1_dest,1));
-      Point2d dest_pt2= Point((*scores_dest).at<double>(pt2_dest,0), (*scores_dest).at<double>(pt2_dest,1));
+      dest_pt1= Point2d((*scores_dest).at<double>(pt1_dest,0), (*scores_dest).at<double>(pt1_dest,1));
+      dest_pt2= Point2d((*scores_dest).at<double>(pt2_dest,0), (*scores_dest).at<double>(pt2_dest,1));
 
       double d_dest = (*pairwise_dis_dest).at<double>(pt1_dest, pt2_dest);
+      
       if (abs(d_dest-d_src)<corr_thresh) 
       {
+        getMatrixFromDestination(&dest_pt1, &dest_pt2, &b);
+        getHomographyFromAb(&A_inv, &b, &H);
+        
 
-        Mat* b = getMatrixFromDestination(&dest_pt1, &dest_pt2);
-        Mat* H = getHomographyFromAb(A_inv, b);
-        Mat concatWithOnes;
         vconcat((*scores_src).t(),Mat::ones(1,scores_src->rows, scores_src->type()), concatWithOnes);
-
-        Mat transformed_src = (*H)*concatWithOnes;
-
-        Mat roi = (transformed_src.rowRange(0,2)).t();
-
+        transformed_src = H*concatWithOnes;
+        transformed_src = (transformed_src.rowRange(0,2)).t();
           //When the comparison result is true, the corresponding element of output array is set to 255.
-        Mat compareResult = (*getPairwiseDistances(&roi, scores_dest)) <= corr_thresh;
+        getPairwiseDistances(&transformed_src, scores_dest, &temp);
+        compareResult = temp <= corr_thresh;
+
         long num_inliers = sum(compareResult)[0]/255;
-        double minVal; double maxVal; Point minLoc; Point maxLoc;
+        double minVal; double maxVal; 
         minMaxLoc( bestHMatrix->colRange(0,1), &minVal, &maxVal, &minLoc, &maxLoc);
+       
         if(num_inliers > minVal && num_inliers >= minInliers) {
           bool shouldUse = true;
+          reshaped = H.reshape(1,1);
+
           for (int tn = 0; tn < numTransfSoFar; tn++) 
           {
-            Mat reshapedTransformation = (*bestHMatrix)(Range(tn,tn+1), Range(1,10)).reshape(1,3);
-            if (isSameTransformation(reshapedTransformation, *H, size_x, size_y, cornerComparisonThreshold))
+            reshapedTransformation = (*bestHMatrix)(Range(tn,tn+1), Range(1,10)).reshape(1,3);
+            if (isSameTransformation(&reshapedTransformation, &H, size_x, size_y, cornerComparisonThreshold))
             {
               if(num_inliers > bestHMatrix->at<double>(tn,0)) 
               {
-                Mat reshaped = (*H).reshape(1,1);
                 (*bestHMatrix)(Range(tn,tn+1), Range(1,10)) = reshaped;
                 bestHMatrix->at<double>(tn,0) = num_inliers;
               }
@@ -592,18 +593,20 @@ return totalCloseCorners==4;
               break;
             }
           }
+
           if(shouldUse) {
-                Mat reshaped = (*H).reshape(1,1);
+            subSelected = (*bestHMatrix)(Range(minLoc.y,minLoc.y+1), Range(1,10));
 
-           Mat subSelected = (*bestHMatrix)(Range(minLoc.y,minLoc.y+1), Range(1,10));
-
-           reshaped.copyTo(subSelected);
-           bestHMatrix->at<double>(minLoc.y,0) = num_inliers;
-           numTransfSoFar++;
-           numTransfSoFar = std::min(numTransfSoFar,bestHMatrix->rows);
+             reshaped.copyTo(subSelected);
+             bestHMatrix->at<double>(minLoc.y,0) = num_inliers;
+             numTransfSoFar++;
+             numTransfSoFar = std::min(numTransfSoFar,bestHMatrix->rows);
          }
+         
        }
+
       }
+
     }
  }
 
