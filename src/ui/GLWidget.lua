@@ -110,6 +110,7 @@ function GLWidget:resize(width, height)
 end
 
 function GLWidget:paint()
+  self:make_current()
   self.renderer:render()
   glfw.SwapBuffers(self.window)
 end
