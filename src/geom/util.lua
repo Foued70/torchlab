@@ -101,19 +101,19 @@ that is returns a matrix of size 1xn where each element represents the distance 
 the transf source matrix and ith point in dest mat
 --]]
 function distance(src_mat, dest_mat)
-   diff = src_mat-dest_mat
-   mul_diff = diff:cmul(diff)
-   squared_distance = mul_diff:select(1,1)+mul_diff:select(1,2)
+   local diff = src_mat-dest_mat
+   local mul_diff = diff:cmul(diff)
+   local squared_distance = mul_diff:select(1,1)+mul_diff:select(1,2)
    return squared_distance:apply(math.sqrt)
 end
 
 --get the pairwise distance between all pairs of points in A and B
 --if A is mxp and B is nxp then the result will be mxn
 function pairwise_distance(A, B)
-   AdA = torch.sum(torch.cmul(A,A),2) --mx1
-   A_new = AdA * torch.Tensor(1,B:size(1)):fill(1) --mxn
-   BdB = torch.sum(torch.cmul(B,B),2) --nx1
-   B_new = torch.Tensor(A:size(1),1):fill(1) *BdB:t() --mxn
-   dis_square = A_new + B_new - torch.mul(A*B:t(), 2)
+   local AdA = torch.sum(torch.cmul(A,A),2) --mx1
+   local A_new = AdA * torch.Tensor(1,B:size(1)):fill(1) --mxn
+   local BdB = torch.sum(torch.cmul(B,B),2) --nx1
+   local B_new = torch.Tensor(A:size(1),1):fill(1) *BdB:t() --mxn
+   local dis_square = A_new + B_new - torch.mul(A*B:t(), 2)
    return dis_square:apply(math.sqrt)
 end

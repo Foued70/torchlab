@@ -5,16 +5,16 @@ Homography = Class()
 
 function Homography:__init(arg1, arg2) 
    if not(arg2) then
-      tensorMatrix = arg1
+      local tensorMatrix = arg1
       if tensorMatrix:size()[1] ~=3 or tensorMatrix:size()[2]~=3 then
          error("wrong input size, homography must be three by three")
       end
       self.H = tensorMatrix;
    else
-      angle = arg1
-      translation = arg2
-      cosA = math.cos(angle)
-      sinA = math.sin(angle)
+      local angle = arg1
+      local translation = arg2
+      local cosA = math.cos(angle)
+      local sinA = math.sin(angle)
       self.H = torch.Tensor({{cosA, sinA, translation[1]},{-sinA, cosA, translation[2]},{0, 0, 1}})
 end
    -- origin starting point of the ray
@@ -24,7 +24,7 @@ end
 --return tensor equivalent of homography for opencv
 function Homography:getEquivalentCV()
    --x,y is reversed in opencv!
-   bestT = self.H:clone()
+   local bestT = self.H:clone()
    bestT[1][2] = -self.H[1][2]
    bestT[2][1]=-self.H[2][1]
    bestT[1][3]=self.H[2][3]
