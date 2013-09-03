@@ -398,7 +398,7 @@ function PointCloud:make_flattened_images(scale,mask)
 		local lrind = torch.range(1,wdth)
 		--local dst = 1
 		
-		local inline_tol = 0.05
+		local inline_tol = 0.10
 		
 		udind:apply(function(h)
 						local crdh = coords[h]
@@ -482,13 +482,10 @@ function PointCloud:make_flattened_images(scale,mask)
 						end)
 					end)
 		
-		imagez:pow(2)
 		show_threshold = 0.01
 		imagez:div(imagez:max()+0.000001):add(-show_threshold)
 		imagez:add(imagez:clone():abs()):div(2)
 		imagez:div(imagez:max()+0.000001)
-						
-		--imagez=imagez:mul(256):floor()
 			
 		self.imagez = imagez:clone():repeatTensor(3,1,1)	
 

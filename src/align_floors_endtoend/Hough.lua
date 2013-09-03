@@ -6,7 +6,7 @@ Hough.houghMinLineLength = 25
 Hough.houghMaxLineGap = 80
 Hough.minThreshold = 10
 Hough.maxThreshold = 150
-Hough.numLinesDesired = 40
+Hough.numLinesDesired = 10--50
 
 function Hough.getHoughLinesAndPoints(img, display)
 --slope, intersect
@@ -42,6 +42,7 @@ while(table.getn(linesSoFar) < Hough.numLinesDesired and counter < torch.ceil(Ho
 					shouldAdd = false;
 				end
 			end
+			   
 		end
 		if(shouldAdd) then
 			linesSoFar[table.getn(linesSoFar)+1] = torch.Tensor({slopes[k], intersects[k]})
@@ -84,19 +85,44 @@ if(display) then
 	image.display(img_copy)
 end
 
+local imgtens = img:toTensor():type('torch.DoubleTensor')
+local kern = torch.ones(3,3)
+imgtens = torch.conv2(imgtens:clone(),kern,'F'):sub(2,img:size()[1]+1,2,img:size()[2]+1)
+
 local points = torch.zeros((firstGroupIndices:size()[1])*secondGroupIndices:size()[1], 2)
 local counter = 1
 for i=1, firstGroupIndices:size()[1] do
 	for j=1, secondGroupIndices:size()[1] do
 		local x, y = Hough.findIntersect(slopeIntersectTensor[{firstGroupIndices[i],{}}],
 			slopeIntersectTensor[{secondGroupIndices[j],{}}])
-         --if (x>0) and (x<=img:size()[1]) and (y>0 ) and (y<=img:size()[2]) then
-         points[{counter,{}}] = torch.Tensor({x,y})
-         counter = counter+1
-         --end
+		 local xc = math.ceil(x)
+		 local yc = math.ceil(y)
+		 local xf = math.floor(x)
+		 local yf = math.floor(y)
+		 if xc-x < x-xf then
+		 	x = xc
+		 else
+		 	x = xf
+		 end
+		 if yc-y < y-yf then
+		 	y = yc
+		 else
+		 	y = yf
+		 end
+		 
+         if (x>0) and (x<=img:size()[1]) and (y>0 ) and (y<=img:size()[2]) then
+         	if imgtens[x][y] > 0 then
+	         	points[{counter,{}}] = torch.Tensor({x,y})
+		        counter = counter+1
+		    end
+         end
      end
  end
- return points[{{1,counter-1},{}}]
+ if counter > 1 then
+	 return points[{{1,counter-1},{}}]
+ else
+ 	return nil
+ end
 
 end
 
