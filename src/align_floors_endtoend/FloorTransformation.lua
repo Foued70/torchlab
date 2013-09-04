@@ -5,12 +5,12 @@ Homography = geom.Homography
 homography_funs = geom.rotation_translation_homography
 
 FloorTransformation.erosion_size =1
-FloorTransformation.npts_interest = 1000
+FloorTransformation.npts_interest = 25--1000
 FloorTransformation.corr_thresh = 2
 FloorTransformation.structElement = opencv.imgproc.getDefaultStructuringMat(FloorTransformation.erosion_size) 
-FloorTransformation.threshold = 70 --anything w score > .1*max score will be kept
-FloorTransformation.radius_local_max = 12;
-FloorTransformation.blockSize =2
+FloorTransformation.threshold = 50--70 --anything w score > .1*max score will be kept
+FloorTransformation.radius_local_max = 5--12;
+FloorTransformation.blockSize =5--2
 FloorTransformation.kSize =3
 FloorTransformation.k = .04
 FloorTransformation.maxNumReturn = 50
@@ -88,19 +88,61 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    scores_src_torch = scores_src_torch[{{}, {1,2}}]
    scores_dest_torch = scores_dest_torch[{{}, {1,2}}]
    
+   print(scores_src_torch:size(1))
+   print(scores_dest_torch:size(1))
+   
    if(FloorTransformation.useHough) then
       local locations_hough_source = align_floors_endtoend.Hough.getHoughLinesAndPoints(img_src)--FloorTransformation.getHoughLineIntersects(img_src)
       local locations_hough_dest = align_floors_endtoend.Hough.getHoughLinesAndPoints(img_dest)--FloorTransformation.getHoughLineIntersects(img_dest)
 
-      scores_src_torch = torch.cat(scores_src_torch, locations_hough_source,1)
-      scores_dest_torch = torch.cat(scores_dest_torch, locations_hough_dest,1)
+	  if locations_hough_source then
+	      scores_src_torch = torch.cat(scores_src_torch, locations_hough_source,1)
+	  end  
+	  if locations_hough_dest then
+	      scores_dest_torch = torch.cat(scores_dest_torch, locations_hough_dest,1)
+	  end
+      
+      print(scores_src_torch:size(1))
+   print(scores_dest_torch:size(1))
    end
    scores_src = opencv.Mat.new(scores_src_torch:clone())
    scores_dest = opencv.Mat.new(scores_dest_torch:clone())
 
    if(display) then
+   	
+   	--[[]]
+      imgsizex = img_src:size(1)
+      imgsizey = img_src:size(2)
+   	  local indd = torch.range(1,scores_src_torch:size(1))
+   	  indd:apply(function(i)
+   	    local scoresi = scores_src_torch[i]
+   	    local sx = scoresi[1]
+   	    local sy = scoresi[2]
+   	    if sx < 1 or sy < 1 or sx > imgsizex or sy > imgsizey then
+   	    	scores_src_torch[i][1] = 1
+   	    	scores_src_torch[i][2] = 1
+   	    end
+   	  end)
       image.displayPoints(img_src:toTensor(), scores_src_torch, colors.MAGENTA, 2)
+      --[[]]
+      
+      --[[]]
+      imgsizex = img_dest:size(1)
+      imgsizey = img_dest:size(2)
+   	  local indd = torch.range(1,scores_dest_torch:size(1))
+   	  indd:apply(function(i)
+   	    local scoresi = scores_dest_torch[i]
+   	    local sx = scoresi[1]
+   	    local sy = scoresi[2]
+   	    if sx < 1 or sy < 1 or sx > imgsizex or sy > imgsizey then
+   	    	scores_dest_torch[i][1] = 1
+   	    	scores_dest_torch[i][2] = 1
+   	    end
+   	  end)
       image.displayPoints(img_dest:toTensor(), scores_dest_torch, colors.CYAN, 2)
+      --[[]]
+      
+      return 0
    end
    --pairwise distance between corner points
    --we can then threshold this, to make sure we only look at pairs which are not too close together
