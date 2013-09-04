@@ -9,8 +9,8 @@ local validation = Class()
 validation.default_parameters = {
 	scale = 0.015,
 	radius_max = 5.0,
-	center_dist_max = 5.0,
-	center_dist_min = 0.1,
+	center_dist_max = 10.0,
+	center_dist_min = 0.05,
 
 	pixelate_max = 0.30,
 	wiggle_max = 0.25,
