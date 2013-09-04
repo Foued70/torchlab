@@ -18,54 +18,28 @@ function Hough:__init(parameters)
       end
    end
 end
+
+
+function Hough:getHoughCorners(img1)
+	local linesXYSoFar1 = {}, linesXYSoFar2
+
+	Hough.houghMaxLineGap = 20
+	linesP = self:binarySearchForClosestNumberLines(img1, Hough.minThreshold, Hough.maxThreshold, Hough.numLinesDesired )
+	slopes, intersects, linesT = Hough.getSlopeIntersectFromHoughP(linesP)
+	for k=1,linesT:size()[1] do
+		linesXYSoFar1[table.getn(linesXYSoFar1)+1] = linesT[{k,{}}]
+	end
+	local corners1 = torch.zeros(table.getn(linesXYSoFar1)*2, 2)
+	for i =1, table.getn(linesXYSoFar1) do
+		corners1[{2*i-1,{}}] = linesXYSoFar1[i][{{1,2}}]
+		corners1[{2*i,{}}] = linesXYSoFar1[i][{{3,4}}]
+	end
+
+	return corners1, corners2
+end
+
 function Hough:getHoughLinesAndPoints(img, display)
---slope, intersect
-local linesSoFar = {}
-local linesP = self:binarySearchForClosestNumberLines(img, Hough.minThreshold, Hough.maxThreshold, 3)
-local slopes, intersects = Hough.getSlopeIntersectFromHoughP(linesP)
---initialize with first round
-for k=1,slopes:size()[1] do
-	linesSoFar[table.getn(linesSoFar)+1] = torch.Tensor({slopes[k], intersects[k]})
-end
-
-local counter = 2
-local prev_size = table.getn(linesSoFar)
-while(table.getn(linesSoFar) < Hough.numLinesDesired and counter < torch.ceil(Hough.numLinesDesired/3)) do
-	linesP = self:binarySearchForClosestNumberLines(img, Hough.minThreshold, Hough.maxThreshold, 3*counter)
-	slopes, intersects = getSlopeIntersectFromHoughP(linesP)
-	local number_added=0
-	for k=1,linesP:size()[2] do
-		local shouldAdd = true;
-		for j = 1, table.getn(linesSoFar) do
-			if Hough.isSameLine(linesSoFar[j], torch.Tensor({slopes[k], intersects[k]})) then
-				shouldAdd = false
-				break
-			end
-			local x, y = Hough.findIntersect(linesSoFar[j], torch.Tensor({slopes[k], intersects[k]}))
-			if (x>0) and (x<=img:size()[1]) and (y>0) and (y<=img:size()[2]) then
-				local angle1 = torch.atan(linesSoFar[j][1])
-				local angle2= torch.atan(slopes[k])
-				if(angle1 < 0) then angle1=math.pi+angle1 end;
-				if(angle2 < 0) then angle2=math.pi+angle2 end;
-				if (torch.abs(angle1-angle2) < 2*math.pi/360*10) then
-					shouldAdd = false;
-				end
-			end
-			   
-		end
-		if(shouldAdd) then
-			linesSoFar[table.getn(linesSoFar)+1] = torch.Tensor({slopes[k], intersects[k]})
-		end
-	end
-
-	if(table.getn(linesSoFar) == prev_size) then
-		break
-	end
-	prev_size = table.getn(linesSoFar)
-	counter = counter+1
-end
-
-
+local linesSoFar = self:getHoughLines(img, display)
 local slopeIntersectTensor = torch.zeros(table.getn(linesSoFar), 2)
 for i =1, table.getn(linesSoFar) do
 	slopeIntersectTensor[{i,{}}] = linesSoFar[i]
@@ -133,6 +107,59 @@ for i=1, firstGroupIndices:size()[1] do
  	return nil
  end
 
+end
+
+
+function Hough:getHoughLines(img, display)
+--slope, intersect
+local linesSoFar = {}
+local linesXYSoFar = {}
+local linesP = self:binarySearchForClosestNumberLines(img, Hough.minThreshold, Hough.maxThreshold, 3)
+local slopes, intersects, linesT = Hough.getSlopeIntersectFromHoughP(linesP)
+--initialize with first round
+for k=1,slopes:size()[1] do
+	linesSoFar[table.getn(linesSoFar)+1] = torch.Tensor({slopes[k], intersects[k]})
+	linesXYSoFar[table.getn(linesXYSoFar)+1] = linesT[{k,{}}]
+end
+
+local counter = 2
+local prev_size = table.getn(linesSoFar)
+while(table.getn(linesSoFar) < Hough.numLinesDesired and counter < torch.ceil(Hough.numLinesDesired/3)) do
+	linesP = self:binarySearchForClosestNumberLines(img, Hough.minThreshold, Hough.maxThreshold, 3*counter)
+	slopes, intersects, linesT = getSlopeIntersectFromHoughP(linesP)
+	local number_added=0
+	for k=1,linesP:size()[2] do
+		local shouldAdd = true;
+		for j = 1, table.getn(linesSoFar) do
+			if Hough.isSameLine(linesSoFar[j], torch.Tensor({slopes[k], intersects[k]})) then
+				shouldAdd = false
+				break
+			end
+			local x, y = Hough.findIntersect(linesSoFar[j], torch.Tensor({slopes[k], intersects[k]}))
+			if (x>0) and (x<=img:size()[1]) and (y>0) and (y<=img:size()[2]) then
+				local angle1 = torch.atan(linesSoFar[j][1])
+				local angle2= torch.atan(slopes[k])
+				if(angle1 < 0) then angle1=math.pi+angle1 end;
+				if(angle2 < 0) then angle2=math.pi+angle2 end;
+				if (torch.abs(angle1-angle2) < 2*math.pi/360*10) then
+					shouldAdd = false;
+				end
+			end
+			   
+		end
+		if(shouldAdd) then
+			linesSoFar[table.getn(linesSoFar)+1] = torch.Tensor({slopes[k], intersects[k]})
+			linesXYSoFar[table.getn(linesXYSoFar)+1] = linesT[{k,{}}]
+		end
+	end
+
+	if(table.getn(linesSoFar) == prev_size) then
+		break
+	end
+	prev_size = table.getn(linesSoFar)
+	counter = counter+1
+end
+return linesSoFar, linesXYSoFar
 end
 
 function Hough:getMainDirections(img)
@@ -228,5 +255,8 @@ function Hough.getSlopeIntersectFromHoughP(linesP)
 		intersects[torch.eq(intersects,math.huge)] = a[torch.eq(intersects,math.huge)]:double()
 		intersects[torch.eq(intersects,-math.huge)] = a[torch.eq(intersects,-math.huge)]:double()
 	end
-	return slopes, intersects
+	linesT_12 = torch.cat(linesT[{{},2}], linesT[{{},1}], 2)
+	linesT_34 = torch.cat(linesT[{{},4}], linesT[{{},3}], 2)
+	linesT = torch.cat(linesT_12, linesT_34,2)
+	return slopes, intersects, linesT
 end 

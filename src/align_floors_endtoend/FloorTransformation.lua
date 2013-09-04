@@ -11,7 +11,7 @@ FloorTransformation.parameters.warpWithBorders = false
 FloorTransformation.parameters.cornerDistanceLimit = 25
 FloorTransformation.parameters.corr_thresh = 2
 FloorTransformation.parameters.minInliersForMatch = 2
-FloorTransformation.parameters.rotation_thresh = 2*math.pi * (720/360)
+FloorTransformation.parameters.rotation_thresh = 2*math.pi * (20/360)  --should be 0 to 45 (0 means less results, 45 means all)
 
 harrisParameters = {}
 harrisParameters.threshold = 50 --anything w score > .1*max score will be kept
@@ -137,7 +137,7 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    local best_pts, best_transformations = opencv.imgproc.findBestTransformation(
       opencv.Mat.new(goodLocationsX_src:clone()),  opencv.Mat.new(goodLocationsY_src:clone()), opencv.Mat.new(scores_src_torch), opencv.Mat.new(pairwise_dis_src:clone()),
       opencv.Mat.new(goodLocationsX_dest:clone()), opencv.Mat.new(goodLocationsY_dest:clone()), opencv.Mat.new(scores_dest_torch), opencv.Mat.new(pairwise_dis_dest:clone()),
-      FloorTransformation.parameters.corr_thresh, FloorTransformation.parameters.minInliersForMatch, FloorTransformation.parameters.maxNumReturn*5, 
+      FloorTransformation.parameters.corr_thresh, FloorTransformation.parameters.minInliersForMatch, FloorTransformation.parameters.maxNumReturn, 
       FloorTransformation.parameters.cornerDistanceLimit, img_src:size()[1], img_src:size()[2])
       
       local mainDirections = FloorTransformation.findMainDirections(img_src, img_dest)
@@ -160,7 +160,7 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    for k=1,table.getn(best_transformations) do
       local i=k
       local trans1_i, trans2_i, combined_i
-      if FloorTransformation.warpWithBorders then
+      if FloorTransformation.parameters.warpWithBorders then
          trans1_i, trans2_i, combined_i = image.warpAndCombineWithBorders(best_transformations[i], img_src, img_dest)
       else
          trans1_i, trans2_i, combined_i = image.warpAndCombine(best_transformations[i], img_src, img_dest)
@@ -196,8 +196,8 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
       size_y_all_tmp[i] = img_src:size(2)
       
       --the closer to zero the better
-	  anglediff_tmp[i] = FloorTransformation.isAlignedWithMainDirection(mainDirections, best_transformations[i ].H)
-     
+	   anglediff_tmp[i] = FloorTransformation.findMainDirections(opencv.Mat.new(combined_tmp[i][1]:byte()), opencv.Mat.new(combined_tmp[i][2]:byte()))
+   
       local srci = combined_i:clone():select(1,1)
       srci:cdiv(srci:clone():add(0.0000000001)):ceil()
       local desi = combined_i:clone():select(1,2)
@@ -234,10 +234,10 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
       
       local o = ordering[i]
       
-      --if anglediff_tmp[o] <  FloorTransformation.parameters.rotation_thresh then
+      if anglediff_tmp[o] <  FloorTransformation.parameters.rotation_thresh then
       	k = k+1
       	inliers[k] = best_pts[o]
-	    scores[k] = 2*sorted[i]/sorted:max() + inliers[k]/math.max(scores_src_torch:size(1),scores_dest_torch:size(1))
+	      scores[k] = 2*sorted[i]/sorted:max() + inliers[k]/math.max(scores_src_torch:size(1),scores_dest_torch:size(1))
       
       	src_centers_h[k] = src_centers_h_tmp[o]
       	src_centers_w[k] = src_centers_w_tmp[o]
@@ -253,8 +253,8 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
       	size_y_all[k] = size_x_all_tmp[o]
       
       	--the closer to zero the better
-	  	anglediff[k] = anglediff_tmp[o]
-	  --end
+	  	  anglediff[k] = anglediff_tmp[o]
+	  end
 	  i = i-1
 	  collectgarbage()
 	  
@@ -263,32 +263,6 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    if k < numRet then
    	scores = scores:sub(1,k)
    end
-   
-   --[[
-   for k=1,numRet do
-      local i=table.getn(best_transformations)-k+1
-      inliers[k] = best_pts[ordering[i] ]
-      scores[k] = sorted[i]/sorted:max() + inliers[k]/math.max(scores_src_torch:size(1),scores_dest_torch:size(1))
-      
-      src_centers_h[k] = src_centers_h_tmp[ordering[i] ]
-      src_centers_w[k] = src_centers_w_tmp[ordering[i] ]
-      tgt_centers_h[k] = tgt_centers_h_tmp[ordering[i] ]
-      tgt_centers_w[k] = tgt_centers_w_tmp[ordering[i] ]
-      
-      transformations[k] = best_transformations[ordering[i] ]
-      trans1[k] = trans1_tmp[ordering[i] ]
-      trans2[k] = trans2_tmp[ordering[i] ]
-      combined[k] = combined_tmp[ordering[i] ]
-      
-      size_x_all[k] = size_x_all_tmp[ordering[i] ]
-      size_y_all[k] = size_x_all_tmp[ordering[i] ]
-      
-      --the closer to zero the better
-	  anglediff[k] = anglediff_tmp[ordering[i] ]
-	  collectgarbage()
-	  
-   end
-   ]]
    
    trans1_tmp = nil
    trans2_tmp = nil
@@ -303,71 +277,6 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    anglediff_tmp = nil
    
    collectgarbage()
-   --[[]]
-   
-   --[[
-   local trans1 = {}
-   local trans2 = {}
-   local combined = {}
-   local inliers = {}
-   local transformations = {}
-   local src_centers_h = {}
-   local src_centers_w = {}
-   local tgt_centers_h = {}
-   local tgt_centers_w = {}
-   
-
-   sorted,ordering = torch.sort(best_pts)
-   
-   for k=1,table.getn(best_transformations) do
-      i=table.getn(best_transformations)-k+1
-      inliers[k] = sorted[i]
-      local trans1_i, trans2_i, combined_i
-      if FloorTransformation.warpWithBorders then
-         trans1_i, trans2_i, combined_i = image.warpAndCombineWithBorders(best_transformations[ordering[i] ], img_src, img_dest)
-      else
-         trans1_i, trans2_i, combined_i = image.warpAndCombine(best_transformations[ordering[i] ], img_src, img_dest)
-      end
-      
-      local center1y = img_src:size(1)/2
-      local center1x = img_src:size(2)/2
-      
-      local center2y = img_dest:size(1)/2
-      local center2x = img_dest:size(2)/2
-      
-      local t1 = opencv.Mat.toTensor(trans1_i)
-      local t2 = opencv.Mat.toTensor(trans2_i)
-      
-      local center1 = t1*torch.Tensor({{center1x},{center1y},{1}})+1
-      local center2 = t2*torch.Tensor({{center2x},{center2y},{1}})+1
-      
-      center1x = math.floor(center1[1][1])
-      center1y = math.floor(center1[2][1])
-      center2x = math.floor(center2[1][1])
-      center2y = math.floor(center2[2][1])
-     
-      src_centers_h[k] = center1y
-      src_centers_w[k] = center1x
-      tgt_centers_h[k] = center2y
-      tgt_centers_w[k] = center2x
-
-
-      size_x_all[k] = img_src:size(1)
-      size_y_all[k] = img_src:size(2)
-
-      transformations[k] = best_transformations[ordering[i] ]
-      
-      trans1[k] = trans1_i
-      trans2[k] = trans2_i
-      combined[k] = combined_i
-      
-      --the closer to zero the better
-      anglediff[k] = FloorTransformation.isAlignedWithMainDirection(mainDirections, best_transformations[ordering[i] ].H)
-      
-   end
-   ]]
-   
-   
    print(log.toc())
 
    return transformations, trans1, trans2, combined, inliers, anglediff, src_centers_h, src_centers_w, tgt_centers_h, tgt_centers_w, size_x_all, size_y_all, scores
@@ -417,37 +326,8 @@ function FloorTransformation.findMainDirections(img_src, img_dest)
 
    local angle_options_real = torch.Tensor({angle_options[1]+angle_options[2], angle_options[3]+angle_options[4],
       angle_options[5]+angle_options[6],angle_options[7]+angle_options[8]})/2
-   return angle_options_real
-end
 
-function FloorTransformation.isAlignedWithMainDirection(angle_options_real, H)
-   if (H[1][1]) > 1 then
-      theta1 = 0
-   elseif H[1][1] < -1 then
-      theta1 = math.pi
-   else
-      theta1 = torch.acos(H[1][1])
-   end
-   if (H[1][2]) > 1 then
-      theta2= -math.pi/2
-   elseif H[1][2] < -1 then
-      theta2 = math.pi/2
-   else
-      theta2 = -torch.asin(H[1][2])
-   end
-   theta = (theta1+theta2)/2
-    --if both are positive, we are in upper right and correct
-    --if theta1 positive, and theta2 negative, should be negative
-    if(theta1<=math.pi/2 and theta2<=0) then
-      theta = 2*math.pi+theta2
-    elseif (theta1<=math.pi/2 and theta2 > 0) then
-      theta = theta1
-    elseif (theta1 > math.pi/2 and theta2 <= 0) then
-      theta = 2*math.pi+theta2
-    elseif (theta1 > math.pi/2 and theta2 >0) then
-      theta = theta1
-    end
-    return math.min(torch.min(torch.abs(angle_options_real-theta)), torch.min(torch.abs(-angle_options_real+theta+2*math.pi)))
+   return (math.min(angle_options_real[1], math.pi/2-angle_options_real[1]))
 end
 
 function FloorTransformation.getParameterString(prefix, parameters)
