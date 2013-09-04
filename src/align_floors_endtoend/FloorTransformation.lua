@@ -137,7 +137,7 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    local best_pts, best_transformations = opencv.imgproc.findBestTransformation(
       opencv.Mat.new(goodLocationsX_src:clone()),  opencv.Mat.new(goodLocationsY_src:clone()), opencv.Mat.new(scores_src_torch), opencv.Mat.new(pairwise_dis_src:clone()),
       opencv.Mat.new(goodLocationsX_dest:clone()), opencv.Mat.new(goodLocationsY_dest:clone()), opencv.Mat.new(scores_dest_torch), opencv.Mat.new(pairwise_dis_dest:clone()),
-      FloorTransformation.parameters.corr_thresh, FloorTransformation.parameters.minInliersForMatch, FloorTransformation.parameters.maxNumReturn, 
+      FloorTransformation.parameters.corr_thresh, FloorTransformation.parameters.minInliersForMatch, FloorTransformation.parameters.maxNumReturn*10, 
       FloorTransformation.parameters.cornerDistanceLimit, img_src:size()[1], img_src:size()[2])
       
       local mainDirections = FloorTransformation.findMainDirections(img_src, img_dest)

@@ -35,7 +35,7 @@ function Hough:getHoughCorners(img1)
 		corners1[{2*i,{}}] = linesXYSoFar1[i][{{3,4}}]
 	end
 
-	return corners1, corners2
+	return corners1
 end
 
 function Hough:getHoughLinesAndPoints(img, display)
