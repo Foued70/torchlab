@@ -110,24 +110,24 @@ function Mat:fromTensor(tensor)
 
    tensor_type = tensor:type()
 
-   tensor = tensor:contiguous()
+   self.tensor = tensor:contiguous()
 
    if tensor_type == "torch.DoubleTensor" then
-      mat = ffi.gc( libopencv.THDoubleTensor_toMat( torch.cdata(tensor)), destructor())
+      mat = ffi.gc( libopencv.THDoubleTensor_toMat( torch.cdata(self.tensor)), destructor())
    elseif tensor_type == "torch.FloatTensor" then
-      mat = ffi.gc(  libopencv.THFloatTensor_toMat( torch.cdata(tensor)), destructor())
+      mat = ffi.gc(  libopencv.THFloatTensor_toMat( torch.cdata(self.tensor)), destructor())
    elseif tensor_type == "torch.ByteTensor" then
-      mat = ffi.gc(   libopencv.THByteTensor_toMat( torch.cdata(tensor)), destructor())
+      mat = ffi.gc(   libopencv.THByteTensor_toMat( torch.cdata(self.tensor)), destructor())
    elseif tensor_type == "torch.IntTensor" then
-      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(tensor)), destructor())
+      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(self.tensor)), destructor())
    elseif tensor_type == "torch.LongTensor" then
       print("Warning no analog for LongTensor in opencv. casting to int")
       tensor = tensor:int()
-      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(tensor)),destructor())
+      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(self.tensor)),destructor())
    elseif tensor_type == "torch.CharTensor" then
-      mat = ffi.gc(   libopencv.THCharTensor_toMat( torch.cdata(tensor)), destructor())
+      mat = ffi.gc(   libopencv.THCharTensor_toMat( torch.cdata(self.tensor)), destructor())
    elseif tensor_type == "torch.ShortTensor" then
-      mat = ffi.gc(  libopencv.THShortTensor_toMat( torch.cdata(tensor)), destructor())
+      mat = ffi.gc(  libopencv.THShortTensor_toMat( torch.cdata(self.tensor)), destructor())
    end
 
    -- make sure we keep link to original torch Tensor so data is not

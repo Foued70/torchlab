@@ -612,7 +612,6 @@ end
 --result is transformation should apply to img_src, translation should apply to img_dest, and combined image with
 --transformed img_src on one channel and translated img_sest on another
 function image.warpAndCombine(bestT, img_src, img_dest)
-   require "../geom/Homography"
    Homography = geom.Homography
    local corners_src = image.getCorners(img_src)
    local corners_dest = image.getCorners(img_dest)
@@ -639,7 +638,7 @@ function image.warpAndCombine(bestT, img_src, img_dest)
    local tensor3d = torch.zeros(3,warpedSrc:size()[1], warpedSrc:size()[2])
    tensor3d[1] = warpedSrc:toTensor()
    tensor3d[2] = warpedDest:toTensor()
-   return src_transform, dest_transform, tensor3d
+   return src_transform, dest_transform, tensor3d, warpedSrc, warpedDest
 end
 
 --returns the coordinates of the 4 corners
@@ -647,6 +646,10 @@ function image.getCorners(img_src)
    return torch.Tensor({{0,0}, {0, img_src:size()[2]}, {img_src:size()[1],0}, {img_src:size()[1],img_src:size()[2]}}):t()
 end
 
+--returns the coordinates of the 4 corners
+function image.getCornersFromSize(size_x, size_y)
+   return torch.Tensor({{0,0}, {0, size_y}, {size_x,0}, {size_x,size_y}}):t()
+end
 --only keep value greater than threshold
 function image.thresholdReturnCoordinates(squareMatrix,threshold, le)
    local h=squareMatrix:size(1)

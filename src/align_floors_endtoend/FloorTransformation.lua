@@ -4,96 +4,71 @@ colors = require '../opencv/types/Colors.lua'
 Homography = geom.Homography
 homography_funs = geom.rotation_translation_homography
 
-FloorTransformation.erosion_size =1
-FloorTransformation.npts_interest = 25--1000
-FloorTransformation.corr_thresh = 2
-FloorTransformation.structElement = opencv.imgproc.getDefaultStructuringMat(FloorTransformation.erosion_size) 
-FloorTransformation.threshold = 50--70 --anything w score > .1*max score will be kept
-FloorTransformation.radius_local_max = 5--12;
-FloorTransformation.blockSize =5--2
-FloorTransformation.kSize =3
-FloorTransformation.k = .04
-FloorTransformation.maxNumReturn = 50
-FloorTransformation.warpWithBorders = false
-FloorTransformation.cornerDistanceLimit = 25
-FloorTransformation.minInliersForMatch = 2
+FloorTransformation.parameters = {}
+FloorTransformation.parameters.erosion_size =1
+FloorTransformation.parameters.maxNumReturn = 50
+FloorTransformation.parameters.warpWithBorders = false
+FloorTransformation.parameters.cornerDistanceLimit = 25
+FloorTransformation.parameters.corr_thresh = 2
+FloorTransformation.parameters.minInliersForMatch = 2
+
+
+harrisParameters = {}
+harrisParameters.threshold = 50 --anything w score > .1*max score will be kept
+harrisParameters.blockSize =5
+harrisParameters.kSize =3
+harrisParameters.k = .04
+harrisParameters.npts_interest = 25
+harrisParameters.radius_local_max = 5;
+FloorTransformation.parameters.Harris = harrisParameters
+
 
 --HOUGH PARAMETERS
-FloorTransformation.houghRo = 1
-FloorTransformation.houghTheta = math.pi/360
-FloorTransformation.houghNumLines = 10 -- you will get roughly half this number squared of corner points
-FloorTransformation.houghMinLineLength = 25
-FloorTransformation.houghMaxLineGap = 80
-FloorTransformation.useHough = true
+HoughParameters = {}
+HoughParameters.houghRo = 1
+HoughParameters.houghTheta = math.pi/360
+HoughParameters.houghMinLineLength = 25
+HoughParameters.houghMaxLineGap = 80
+HoughParameters.minThreshold = 10
+HoughParameters.maxThreshold = 150
+HoughParameters.defaultThreshold = 25
+HoughParameters.numLinesDesired = 10
 
-function FloorTransformation.findTransformationStandard(image1Path, image2Path)
-   img_src = FloorTransformation.imagePreProcessing(image1Path)
-   img_dest = FloorTransformation.imagePreProcessing(image2Path)
+FloorTransformation.parameters.HoughParameters = HoughParameters
 
-   dtype = "SIFT"
-   detector    = opencv.Detector.new(dtype)
-   kpts_src, npts_src  = detector:detect(img_src,FloorTransformation.npts_interest)
-   kpts_dest, npts_dest  = detector:detect(img_dest,FloorTransformation.npts_interest)
-   
-   src_corners = torch.Tensor(npts_src,2)
-   dest_corners = torch.Tensor(npts_dest,2)
+FloorTransformation.parameters.useHough = false
 
-   for i=1, npts_src do
-      src_x = torch.ceil(kpts_src[i].pt.x)
-      src_y = torch.ceil(kpts_src[i].pt.y)
+local GeneralInterestPointsParameters={}
+GeneralInterestPointsParameters.dtype = "SIFT"
+GeneralInterestPointsParameters.npts_interest = 150
 
-      src_corners[i][1] = src_y
-      src_corners[i][2] = src_x
-   end
-   for i=1, npts_dest do
-      dest_x = torch.ceil(kpts_dest[i].pt.x)
-      dest_y = torch.ceil(kpts_dest[i].pt.y)
-      dest_corners[i][1] = dest_y
-      dest_corners[i][2] = dest_x
-   end
-   --image.displayPoints(img_src:toTensor(), src_corners, colors.CYAN, 2)
-   --image.displayPoints(img_dest:toTensor(), dest_corners, colors.MAGENTA, 2)
+FloorTransformation.parameters.GeneralInterestPointsParameters = GeneralInterestPointsParameters
 
-   extractor_type = "SIFT"
-   extractor   = opencv.Extractor.new(extractor_type)
+--initialize based on parameters
+local parameterizedHough = align_floors_endtoend.Hough.new(FloorTransformation.parameters.HoughParameters)
+local parameterizedHarris = align_floors_endtoend.cornerHarris.new(FloorTransformation.parameters.Harris)
+local parameterizedGeneral = align_floors_endtoend.GeneralInterestPoints.new(FloorTransformation.parameters.GeneralInterestPointsParameters.Harris)
 
-   descriptors_src  = extractor:compute(img_src,kpts_src,npts_src)
-   descriptors_dest = extractor:compute(img_dest,kpts_dest,npts_dest)
-
-   matcher_type = "FlannBased"
-   matcher      = opencv.Matcher.new(matcher_type)
-   sizeSrc      = descriptors_src:size()[1]
-   sizeDest     = descriptors_dest:size()[1]
-
-   matches,nmatches = matcher:match(descriptors_src, descriptors_dest, sizeSrc*sizeDest)
-
-   matches_good,nmatches_good = matcher:reduce(matches, nmatches)
-
-   if(nmatches_good < 10) then
-      matches_good = matches
-      nmatches_good = nmatches
-   end
-   H = opencv.calib3d.getHomography(kpts_src, npts_src, kpts_dest, npts_dest, matches_good, nmatches_good)
-
-   warped = opencv.imgproc.warpImage(img_src, H)
-   image.displayGrayInLua(warped)
-end
 function FloorTransformation.findTransformationOurs(image1Path, image2Path, display)
    log.tic()
+
    local img_src = FloorTransformation.imagePreProcessing(image1Path)
    local img_dest = FloorTransformation.imagePreProcessing(image2Path)
-   local scores_src_torch = FloorTransformation.cornerHarris(img_src)
-   local scores_dest_torch = FloorTransformation.cornerHarris(img_dest)
+   local scores_src_torch = parameterizedHarris:findCorners(img_src)
+   local scores_dest_torch = parameterizedHarris:findCorners(img_dest)
 
    scores_src_torch = scores_src_torch[{{}, {1,2}}]
    scores_dest_torch = scores_dest_torch[{{}, {1,2}}]
    
    print(scores_src_torch:size(1))
    print(scores_dest_torch:size(1))
+
+   --example of how to do sift points:
+   --src_corners, dest_corners = parameterizedGeneral:getPoints(img_src, img_dest)   
    
-   if(FloorTransformation.useHough) then
-      local locations_hough_source = align_floors_endtoend.Hough.getHoughLinesAndPoints(img_src)--FloorTransformation.getHoughLineIntersects(img_src)
-      local locations_hough_dest = align_floors_endtoend.Hough.getHoughLinesAndPoints(img_dest)--FloorTransformation.getHoughLineIntersects(img_dest)
+   if(FloorTransformation.parameters.useHough) then
+      local locations_hough_source = parameterizedHough:getHoughLinesAndPoints(img_src)--FloorTransformation.getHoughLineIntersects(img_src)
+      local locations_hough_dest = parameterizedHough:getHoughLinesAndPoints(img_dest)--FloorTransformation.getHoughLineIntersects(img_dest)
 
 	  if locations_hough_source then
 	      scores_src_torch = torch.cat(scores_src_torch, locations_hough_source,1)
@@ -149,8 +124,8 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    local pairwise_dis_src = geom.util.pairwise_distance(scores_src_torch, scores_src_torch)
    local pairwise_dis_dest = geom.util.pairwise_distance(scores_dest_torch, scores_dest_torch)
 
-   goodLocationsX_src, goodLocationsY_src = image.thresholdReturnCoordinates(pairwise_dis_src,2 *FloorTransformation.corr_thresh)
-   goodLocationsX_dest, goodLocationsY_dest = image.thresholdReturnCoordinates(pairwise_dis_dest,2 *FloorTransformation.corr_thresh)
+   goodLocationsX_src, goodLocationsY_src = image.thresholdReturnCoordinates(pairwise_dis_src,2 *FloorTransformation.parameters.corr_thresh)
+   goodLocationsX_dest, goodLocationsY_dest = image.thresholdReturnCoordinates(pairwise_dis_dest,2 *FloorTransformation.parameters.corr_thresh)
 
    goodLocationsX_src = goodLocationsX_src:reshape(goodLocationsX_src:size()[1],1)
    goodLocationsY_src = goodLocationsY_src:reshape(goodLocationsY_src:size()[1],1)
@@ -162,25 +137,31 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    local best_pts, best_transformations = opencv.imgproc.findBestTransformation(
       opencv.Mat.new(goodLocationsX_src:clone()),  opencv.Mat.new(goodLocationsY_src:clone()), opencv.Mat.new(scores_src_torch), opencv.Mat.new(pairwise_dis_src:clone()),
       opencv.Mat.new(goodLocationsX_dest:clone()), opencv.Mat.new(goodLocationsY_dest:clone()), opencv.Mat.new(scores_dest_torch), opencv.Mat.new(pairwise_dis_dest:clone()),
-      FloorTransformation.corr_thresh, FloorTransformation.minInliersForMatch, FloorTransformation.maxNumReturn, 
-      FloorTransformation.cornerDistanceLimit, img_src:size()[1], img_src:size()[2])
+      FloorTransformation.parameters.corr_thresh, FloorTransformation.parameters.minInliersForMatch, FloorTransformation.parameters.maxNumReturn, 
+      FloorTransformation.parameters.cornerDistanceLimit, img_src:size()[1], img_src:size()[2])
+
+   mainDirections = FloorTransformation.findMainDirections(img_src, img_dest)
 
    local trans1 = {}
    local trans2 = {}
    local combined = {}
-   local outliers = {}
+   local inliers = {}
    local transformations = {}
    local src_centers_h = {}
    local src_centers_w = {}
    local tgt_centers_h = {}
    local tgt_centers_w = {}
+   local size_x_all = {}
+   local size_y_all = {}
+   
+   local anglediff = torch.zeros(table.getn(best_transformations))
   
    sorted,ordering = torch.sort(best_pts)
    for k=1,table.getn(best_transformations) do
       i=table.getn(best_transformations)-k+1
-      outliers[k] = sorted[i]
+      inliers[k] = sorted[i]
       local trans1_i, trans2_i, combined_i
-      if FloorTransformation.warpWithBorders then
+      if FloorTransformation.parameters.warpWithBorders then
          trans1_i, trans2_i, combined_i = image.warpAndCombineWithBorders(best_transformations[ordering[i]], img_src, img_dest)
       else
          trans1_i, trans2_i, combined_i = image.warpAndCombine(best_transformations[ordering[i]], img_src, img_dest)
@@ -207,19 +188,34 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
       src_centers_w[k] = center1x
       tgt_centers_h[k] = center2y
       tgt_centers_w[k] = center2x
-      
+
+      size_x_all[k] = img_src:size(1)
+      size_y_all[k] = img_src:size(2)
+
       transformations[k] = best_transformations[ordering[i]]
       trans1[k] = trans1_i
       trans2[k] = trans2_i
       combined[k] = combined_i
-      --if(display) then
-      --   image.display(combined[i])
-      --end
+      --the closer to zero the better
+      anglediff[k] = FloorTransformation.isAlignedWithMainDirection(mainDirections, best_transformations[ordering[i]].H)
    end
    print(log.toc())
-   return best_transformations, trans1, trans2, combined, outliers, src_centers_h, src_centers_w, tgt_centers_h, tgt_centers_w
+   return transformations, trans1, trans2, combined, inliers, anglediff, src_centers_h, src_centers_w, tgt_centers_h, tgt_centers_w, size_x_all, size_y_all
 end
 
+--intersect/union
+function FloorTransformation.scoreTransformationPair(H1, H2, size_x, size_y)
+   H1 = geom.Homography.new(H1)
+   H2 = geom.Homography.new(H2)
+   
+   a = opencv.Mat.new(torch.ones(size_x, size_y))
+
+   t1, t2, t3, first, t5 = image.warpAndCombine(H1, a, a)
+   t1, t2, t3, warped1, warped2 = image.warpAndCombine(H2, a, first)
+   warped1 = warped1:toTensor()
+   warped2 = warped2:toTensor()
+   return torch.sum(torch.eq(warped1+warped2, 2))/torch.sum(torch.ge(warped1+warped2, 1))
+end
 
 --returns an opencv mat with the image with the following done to it:
 --loaded in opencv 
@@ -228,70 +224,74 @@ end
 function FloorTransformation.imagePreProcessing(imagePath)
    local img = opencv.Mat.new(imagePath)
    img:convert("RGB2GRAY");
-   opencv.imgproc.dilate(img, FloorTransformation.structElement);
-   opencv.imgproc.erode(img, FloorTransformation.structElement);
+   structElement = opencv.imgproc.getDefaultStructuringMat(FloorTransformation.parameters.erosion_size) 
+   opencv.imgproc.dilate(img, structElement);
+   opencv.imgproc.erode(img, structElement);
    return img
 end
 
---return 3xn matrix where each coordinate represents x,y,score of a key point using opencv's cornerHarris method
-function FloorTransformation.cornerHarris(img)
-   local scoresMat  = opencv.imgproc.detectCornerHarris(img, FloorTransformation.blockSize, FloorTransformation.kSize, FloorTransformation.k)
-   local scoresTorchF = scoresMat:toTensor()
-   local scoresTorchSquare = torch.DoubleTensor(scoresTorchF:size()):copy(scoresTorchF)
+function FloorTransformation.findMainDirections(img_src, img_dest)
+   Hough = align_floors_endtoend.Hough
+   local domAngle1_src,domAngle2_src = parameterizedHough:getMainDirections(img_src)
+   local domAngle1_dest,domAngle2_dest = parameterizedHough:getMainDirections(img_dest)
+
+   local angle_options = torch.Tensor({domAngle1_dest-domAngle1_src,domAngle2_dest-domAngle2_src, domAngle1_dest-domAngle2_src, domAngle2_dest-domAngle1_src})
+   angle_options = torch.cat(angle_options, angle_options+math.pi, 1)
+   angle_options:apply(function(v) if(v<0) then return 2*math.pi+v elseif (v>2*math.pi) then return v-2*math.pi else return v end end);
+   angle_options = torch.sort(angle_options)
+
+   if torch.abs(2*math.pi-angle_options[1] - angle_options[angle_options:size()[1]])<2*math.pi/360*20 then
    
-   --FloorTransformation.pickLocalMax(scoresTorchSquare)
-   local thresholdScores= scoresTorchSquare[torch.ge(scoresTorchSquare, FloorTransformation.threshold)]
-   local goodLocationsX, goodLocationsY = image.thresholdReturnCoordinates(scoresTorchSquare,FloorTransformation.threshold)
-   
-   local scoresTorchSquare = FloorTransformation.pickLocalMaxFast(scoresTorchSquare, goodLocationsX, goodLocationsY)
-   local thresholdScores= scoresTorchSquare[torch.ge(scoresTorchSquare,FloorTransformation.threshold)]
-   local goodLocationsX, goodLocationsY = image.thresholdReturnCoordinates(scoresTorchSquare, FloorTransformation.threshold)
-   local t1,sortOrder = torch.sort(thresholdScores,1,true)
-   local topScores = torch.Tensor(math.min(FloorTransformation.npts_interest,thresholdScores:size(1)),3)
-   for i=1,math.min(FloorTransformation.npts_interest,thresholdScores:size(1))  do
-      topScores[{i,{}}]=torch.Tensor({goodLocationsX[sortOrder[i]],goodLocationsY[sortOrder[i]],t1[i]})
+      angle_options = torch.cat( angle_options[{{2,angle_options:size()[1]},1}],-angle_options[{{1}}]+2*math.pi, 1)
    end
-   return topScores;
+
+   local angle_options_real = torch.Tensor({angle_options[1]+angle_options[2], angle_options[3]+angle_options[4],
+      angle_options[5]+angle_options[6],angle_options[7]+angle_options[8]})/2
+   return angle_options_real
 end
 
---removes points which are not local max's in a radius_local_max bounding box around them
---only considers points which have been deemed as goods (i.e. larger than the threshold and in goodlocationsX/Y)
-function FloorTransformation.pickLocalMaxFast(scores_torch, goodLocationsX, goodLocationsY)
-   local output = torch.zeros(scores_torch:size())
-   i =0
-   goodLocationsX:apply(function(val) 
-      i=i+1
-      x = goodLocationsX[i]
-      y = goodLocationsY[i]
-      localMax = scores_torch[{
-         {math.max(x-FloorTransformation.radius_local_max,1), math.min(x+FloorTransformation.radius_local_max, scores_torch:size(1))},
-         {math.max(y-FloorTransformation.radius_local_max,1), math.min(y+FloorTransformation.radius_local_max, scores_torch:size(2))}
-         }]:max();
-      if(scores_torch[x][y]>=localMax) then
-         output[x][y] =scores_torch[x][y]
-      end
-   end)
-   return output
+function FloorTransformation.isAlignedWithMainDirection(angle_options_real, H)
+   if (H[1][1]) > 1 then
+      theta1 = 0
+   elseif H[1][1] < -1 then
+      theta1 = math.pi
+   else
+      theta1 = torch.acos(H[1][1])
+   end
+   if (H[1][2]) > 1 then
+      theta2= -math.pi/2
+   elseif H[1][2] < -1 then
+      theta2 = math.pi/2
+   else
+      theta2 = -torch.asin(H[1][2])
+   end
+   theta = (theta1+theta2)/2
+    --if both are positive, we are in upper right and correct
+    --if theta1 positive, and theta2 negative, should be negative
+    if(theta1<=math.pi/2 and theta2<=0) then
+      theta = 2*math.pi+theta2
+    elseif (theta1<=math.pi/2 and theta2 > 0) then
+      theta = theta1
+    elseif (theta1 > math.pi/2 and theta2 <= 0) then
+      theta = 2*math.pi+theta2
+    elseif (theta1 > math.pi/2 and theta2 >0) then
+      theta = theta1
+    end
+    return math.min(torch.min(torch.abs(angle_options_real-theta)), torch.min(torch.abs(-angle_options_real+theta+2*math.pi)))
 end
---removes points which are not local max's in a radius_local_max bounding box around them
-function FloorTransformation.pickLocalMaxSlow(scores_torch)
-   local output = scores_torch:clone()
-   i =0
-   output:apply(function(val) 
-      i=i+1
-      x = torch.ceil(i/scores_torch:size(2))
-      y = (i-1)%scores_torch:size(2)+1
-      localMax = scores_torch[{
-         {math.max(x-FloorTransformation.radius_local_max,1), math.min(x+FloorTransformation.radius_local_max, scores_torch:size(1))},
-         {math.max(y-FloorTransformation.radius_local_max,1), math.min(y+FloorTransformation.radius_local_max, scores_torch:size(2))}
-         }]:max();
-      if(scores_torch[x][y]>=localMax) then
-         return val
-      else
-         return 0
+
+function FloorTransformation.getParameterString(prefix, parameters)
+   toReturn = ""
+   if type(parameters)=="table" then
+      for i in pairs(parameters) do
+            if type(parameters[i])=="table" then
+               toReturn = toReturn ..  getParameterString(prefix .. i .. "." , parameters[i])
+            else
+               toReturn = toReturn .. prefix .. i .. '=' .. string.format("%s",parameters[i]) .. "\n"
+            end
       end
-   end)
-   return output
+   end
+   return toReturn 
 end
 
 
