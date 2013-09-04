@@ -100,7 +100,7 @@ function arcDownload:flattenedToTransformation()
 			file:write(align_floors_endtoend.FloorTransformation.getParameterString("FloorTransformation.parameters.", align_floors_endtoend.FloorTransformation.parameters))
 			file:close()
 
-			local bestT,trans1, trans2, combined, inliers, anglediff, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w, size_x_all, size_y_all = align_floors_endtoend.FloorTransformation.findTransformationOurs(fname1,fname2)
+			local bestT,trans1, trans2, combined, inliers, anglediff, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w, size_x_all, size_y_all, scores = align_floors_endtoend.FloorTransformation.findTransformationOurs(fname1,fname2)
 			
 			collectgarbage()				
 			
