@@ -1,8 +1,12 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8 FATAL_ERROR)
 
-SET (CMAKE_CXX_COMPILER "/Users/lihui815/cloudlab/build/usr/local/bin/g++")
+CMAKE_POLICY(VERSION 2.6)
+
+INCLUDE(../common.cmake REQUIRED)
 
 PROJECT(pcl_register)
+
+LINK_DIRECTORIES(${install_lib})
 
 FIND_PACKAGE(PCL 1.5 REQUIRED)
 
@@ -12,5 +16,3 @@ ADD_DEFINITIONS(${PCL_DEFINITIONS})
 
 ADD_EXECUTABLE (pcl_register pcl_register.cpp)
 TARGET_LINK_LIBRARIES (pcl_register ${PCL_LIBRARIES})
-
-

@@ -513,7 +513,7 @@ extern "C" {
     *A_inv = A.inv();
   }
 
-  Mat* getMatrixFromDestination(const Point2d* p1, const Point2d* p2, Mat* result) {
+  void getMatrixFromDestination(const Point2d* p1, const Point2d* p2, Mat* result) {
     *result = (Mat_<double>(4, 1) << p1->x, p1->y, p2->x, p2->y);
     
   }
