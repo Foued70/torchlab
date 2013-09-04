@@ -652,7 +652,6 @@ function PointCloud:make_normal_map()
 	    	crossprod = crossprod:clone():cdiv(crossprodnorm:clone()):transpose(1,3)
 		
 			self.normal_map=crossprod:clone()
-			return xyz
 		end
 	end
 end
