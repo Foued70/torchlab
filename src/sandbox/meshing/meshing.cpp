@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+#define DEBUG
+
 using namespace cv;
 using namespace std;
 
@@ -54,7 +56,7 @@ float scoreLine(cv::Point p1, cv::Point p2)
             
             if(graystore.at<uchar>(y, x) == 0)
             {
-            	score -= 155;
+            	score -= 50;
             }
         }
         
@@ -102,7 +104,7 @@ int tests = 0;
 float scoreQuad(cv::Point p1, cv::Point p2, cv::Point p3, cv::Point p4)
 {
 	tests++;
-    return (float)(scoreLine(p1, p2) + scoreLine(p2, p3) + scoreLine(p3, p4) + scoreLine(p4, p1));// / (float)(lineDistance(p1, p2) + lineDistance(p2, p3) + lineDistance(p3, p4) + lineDistance(p4, p1));
+    return (float)(scoreLine(p1, p2) + scoreLine(p2, p3) + scoreLine(p3, p4) + scoreLine(p4, p1)) / (float)(lineDistance(p1, p2) + lineDistance(p2, p3) + lineDistance(p3, p4) + lineDistance(p4, p1));
 }
 
 void drawPoly(polygon poly, Mat img, Scalar color)
@@ -202,6 +204,7 @@ int main(int argc, char** argv)
     
     Mat m_lines = m.clone();
     Mat m_lines_bak = m.clone();
+    Mat m_polys = m.clone();
     
     Mat vert = gray.clone();
     Mat hori = gray.clone();
@@ -303,9 +306,10 @@ int main(int argc, char** argv)
     int max_r = -1;
     int max_s = -1;
     vector<cv::Point> p1v, p2v, p3v, p4v;
-    const int search_window = 4;
+    const int search_window = 5;
     
     polygon room_poly;
+    std::vector<polygon> room_polys;
     
     int img_num = 0;
 	
@@ -366,6 +370,8 @@ int main(int argc, char** argv)
 								
 								quads.insert(std::pair<float, polygon>(score,quad));
 								
+								drawPoly(quad, m_polys, cv::Scalar(255, 0 ,255));
+								
 // 								std::vector<boost_point> const& points2 = quad.outer(); 
 // 											
 // 								if(points2.size()>3)
@@ -414,22 +420,32 @@ int main(int argc, char** argv)
     	
     	std::vector<polygon> poly_union_results;
 		poly_union_results.clear();
-		
-// 		m_lines = m_lines_bak.clone();
-// 		drawPoly(it->second, m_lines, cv::Scalar(0, 0 ,255)); // * (float)(quads.size()-count++)/quads.size())
-// 		imshow("detected quads", m_lines);
-// 		waitKey();
 
+#ifdef DEBUG
+		m_lines = m_lines_bak.clone();
+		drawPoly(it->second, m_lines, cv::Scalar(0, 0 ,255)); // * (float)(quads.size()-count++)/quads.size())
+		imshow("detected quads", m_lines);
+		waitKey();
+#endif
+		
+		boost::geometry::correct(it->second);
+		boost::geometry::correct(room_poly);
 	
-		if (! boost::geometry::intersects(room_poly) &&  ! boost::geometry::intersects(it->second)) 
+		//if (! boost::geometry::intersects(room_poly))// &&  ! boost::geometry::intersects(it->second)) 
 		{ 
 			boost::geometry::union_(room_poly, it->second, poly_union_results);
 		} 
-		// else
+// 		else
 // 		{
-// 			cout<<"self intersection error!"<<endl;
+// 			cout<<"self intersection error!"<<boost::geometry::intersects(room_poly)<< boost::geometry::intersects(it->second)<<endl;
 // 		}
 		
+		if(count == 0)
+		{
+		  room_poly = poly_union_results[0];
+		}
+		else
+		{
 		
 		int max_poly_count = -1;
 	
@@ -439,12 +455,14 @@ int main(int argc, char** argv)
 		{
 			float poly_score = scorePoly(p);
 			
-// 			m_lines = m_lines_bak.clone();
-// 			drawPoly(p, m_lines, cv::Scalar(255, 0 ,0));
-// 			imshow("detected quads", m_lines);
-// 			waitKey();
+#ifdef DEBUG
+			m_lines = m_lines_bak.clone();
+			drawPoly(p, m_lines, cv::Scalar(255, 0 ,0));
+			imshow("detected quads", m_lines);
+			waitKey();
+#endif
 			
-			if(poly_score > max_poly_score)// && boost::geometry::area(p) > boost::geometry::area(room_poly))
+			if(poly_score > max_poly_score)// && poly_score - max_poly_score > 1000)// && boost::geometry::area(p) > boost::geometry::area(room_poly))
 			{
 				//cout<<"poly_score: "<<poly_score<<"  max_poly_score: "<<max_poly_score<<"  max_poly_count: "<<max_poly_count<<endl<<endl;
 				cout<<"Delta :"<<poly_score - max_poly_score<<endl;
@@ -456,12 +474,19 @@ int main(int argc, char** argv)
 			poly_count++;
 		}
 		
+		if(poly_count > 1)
+			cout<<"wow!"<<endl;
+		
 		boost::geometry::correct(room_poly);
+		}
     	
-//     	m_lines = m_lines_bak.clone();
-// 		drawPoly(room_poly, m_lines, cv::Scalar(0, 255 ,0));
-// 		imshow("detected quads", m_lines);
-// 		waitKey();
+    	count++;
+#ifdef DEBUG
+    	m_lines = m_lines_bak.clone();
+		drawPoly(room_poly, m_lines, cv::Scalar(0, 255 ,0));
+		imshow("detected quads", m_lines);
+		waitKey();
+#endif
     }
     drawPoly(room_poly, m_lines, cv::Scalar(0, 255 ,0));
     imshow("detected quads", m_lines);
@@ -607,7 +632,7 @@ int main(int argc, char** argv)
     printf("%lu\n", intersections.size());
         
     imshow("detected lines", m);
-    //imshow("slice", graystore);
+    imshow("slice", m_polys);
     imshow("detected quads", m_lines);
     
     setMouseCallback( "detected lines", onMouse, 0 );
@@ -615,7 +640,9 @@ int main(int argc, char** argv)
     cout<<"tests: "<<tests<<endl;
     waitKey();
     
+#ifdef DEBUG
     waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();
+#endif
     
     return 0;
 }
