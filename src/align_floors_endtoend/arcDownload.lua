@@ -34,6 +34,9 @@ function arcDownload:getImgDir(arc)
 	return path.join(arc:dirname(), 'work', self.version, 'flattened')
 end
 
+function arcDownload:getGroundTruthDir(arc)
+	return path.join(arc:dirname(), 'work', self.version, 'ground_truth')
+end
 function arcDownload:getImgArc(arc)
 	return arc.work[self.version].flattened;
 end
@@ -76,6 +79,7 @@ function arcDownload:flattenedToTransformation()
 			params["from"] = self:getImgDir(arc)
 			params["fromArc"] = self:getImgArc(arc)
 			params["combined"] = self:getCombinedDir(arc)
+			params["groundtruth"] = self:getGroundTruthDir(arc)
 			return params
 		end
 
@@ -86,17 +90,25 @@ function arcDownload:flattenedToTransformation()
 			local bname2 = string.sub(bname2,1,#bname2-4)
 			local bname1 = string.sub(bname1,#bname1-2,#bname1)
 			local bname2 = string.sub(bname2,#bname2-2,#bname2)
+
+			local combinedFolder = path.join(params["combined"], bname1 .. '_' .. bname2)
+			util.fs.mkdir_p(combinedFolder)
 			
-			bestT,trans1, trans2, combined, inliers, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w = align_floors_endtoend.FloorTransformation.findTransformationOurs(fname1,fname2)
+			--write properties file
+			local properties_file = path.join(combinedFolder, "FloorTransformation.properties")
+			local file = io.open (properties_file, "w")					
+			file:write(align_floors_endtoend.FloorTransformation.getParameterString("FloorTransformation.parameters.", align_floors_endtoend.FloorTransformation.parameters))
+			file:close()
+
+			local bestT,trans1, trans2, combined, inliers, anglediff, src_cnt_h, src_cnt_w, tgt_cnt_h, tgt_cnt_w, size_x_all, size_y_all = align_floors_endtoend.FloorTransformation.findTransformationOurs(fname1,fname2)
 			
-			collectgarbage()
+			collectgarbage()				
 			
 			local all_scores = torch.Tensor(table.getn(combined),9)
 			
 			local inl = torch.Tensor(inliers)
 			print(fname1..' - '..fname2..': '..inl:max()..' '..inl:min())
 			
-			--for i = 1,table.getn(combined) do
 			for i = 1,table.getn(combined) do
 			
 				local comb = combined[i]
@@ -123,11 +135,24 @@ function arcDownload:flattenedToTransformation()
 			local order = order_scores:transpose(1,2)[1]
 			
 			sorted_scores = all_scores:index(1,order)
-			print(sorted_scores)
+			--print(sorted_scores)
 			
 			local i = 1
 			local k = 1
-			 while k < 6 and i <= table.getn(combined) do
+			
+			--[[
+			groundTruth = path.join(params["groundtruth"], bname1..'_'..bname2..'.txt')
+			local file = assert(io.open (groundTruth, "r"))
+			local data = file:read("*all")
+			counter = 1
+			truthH = torch.zeros(3,3)		
+			for i in string.gmatch(data, "[^,]+") do 		
+				 truthH[torch.ceil(counter/3)][(counter-1)%3+1]=i
+				 counter = counter+1
+			end
+			]]--
+
+			 while i <= table.getn(combined) do
 			
 				local j = order[i]
 				
@@ -139,16 +164,26 @@ function arcDownload:flattenedToTransformation()
 				
 				collectgarbage()
 				
-				if total_score <= 9000 and vid_fine_t <= 9900 and vid_rugh_t <= 9500 then
-				
-					local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..i..'_'..j..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..inliers[i]..'.png')
+				--if total_score <= 9000 and vid_fine_t <= 9900 and vid_rugh_t <= 9500 then
+				if anglediff[j]<  2*math.pi/360*8 then
+					--ground_truth_score = align_floors_endtoend.FloorTransformation.scoreTransformationPair(bestT[j].H, truthH, size_x_all[j], size_y_all[j])
+					ground_truth_score = 0
+					local cname = path.join(combinedFolder,bname1..'_'..bname2..'_'..i..'_'..j..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..inliers[i]..'_'..anglediff[i]..'_'..'truth'..ground_truth_score..'.png')
 					--local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..j..'_'..total_score..'.png')
 					image.save(cname, combined[j])
-					
+
+					file = io.open (string.sub(cname,1,#cname-4)..'.txt', "w")					
+					orig_transform =bestT[j].H
+					file:write(string.format("%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n", orig_transform[1][1], orig_transform[1][2], orig_transform[1][3], 
+						orig_transform[2][1], orig_transform[2][2], orig_transform[2][3],orig_transform[3][1], orig_transform[3][2], orig_transform[3][3]))
+					file:close()
+
+
 					k = k + 1
-					
+				--end
 				else
 					print('rejected: '..i..'_'..j..': total: '..total_score..', vid_fine: '..vid_fine_t..', vid_rugh: '..vid_rugh_t)
+					print('rejected'..anglediff[j])
 				end
 				
 				i = i + 1
@@ -213,7 +248,7 @@ function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension
 
 					local function postDownload()
 						local filetb = util.fs.files_only(params["from"])
-						for i=1,#filetb do
+						for i= 1, #filetb do
 							local fname1 = filetb[i]
 							--if path.basename(fname1) == 'sweep_004.png' or path.basename(fname1) == 'sweep_009.png' then
 							if util.fs.extname(fname1) == extension then

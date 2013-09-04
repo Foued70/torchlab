@@ -6,13 +6,22 @@ Hough.houghMinLineLength = 25
 Hough.houghMaxLineGap = 80
 Hough.minThreshold = 10
 Hough.maxThreshold = 150
-Hough.numLinesDesired = 10--50
+Hough.defaultThreshold = 25
+Hough.numLinesDesired = 40
 
-function Hough.getHoughLinesAndPoints(img, display)
+function Hough:__init(parameters)
+	for paramName in pairs(parameters) do
+      if(Hough[paramName]) then
+         Hough[paramName] = parameters[paramName]
+      else
+         error("invalid initializing of Hough with variable" .. paramName)
+      end
+   end
+end
+function Hough:getHoughLinesAndPoints(img, display)
 --slope, intersect
 local linesSoFar = {}
-
-local linesP = Hough.binarySearchForClosestNumberLines(img, Hough.minThreshold, Hough.maxThreshold, 3)
+local linesP = self:binarySearchForClosestNumberLines(img, Hough.minThreshold, Hough.maxThreshold, 3)
 local slopes, intersects = Hough.getSlopeIntersectFromHoughP(linesP)
 --initialize with first round
 for k=1,slopes:size()[1] do
@@ -22,7 +31,7 @@ end
 local counter = 2
 local prev_size = table.getn(linesSoFar)
 while(table.getn(linesSoFar) < Hough.numLinesDesired and counter < torch.ceil(Hough.numLinesDesired/3)) do
-	linesP = Hough.binarySearchForClosestNumberLines(img, Hough.minThreshold, Hough.maxThreshold, 3*counter)
+	linesP = self:binarySearchForClosestNumberLines(img, Hough.minThreshold, Hough.maxThreshold, 3*counter)
 	slopes, intersects = getSlopeIntersectFromHoughP(linesP)
 	local number_added=0
 	for k=1,linesP:size()[2] do
@@ -126,7 +135,23 @@ for i=1, firstGroupIndices:size()[1] do
 
 end
 
+function Hough:getMainDirections(img)
+	local linesP = opencv.imgproc.HoughLinesProbabilistic(img, Hough.houghRo, Hough.houghTheta, Hough.defaultThreshold, Hough.houghMinLineLength, Hough.houghMaxLineGap);
+	local slopes, intersects = Hough.getSlopeIntersectFromHoughP(linesP)
+	--find the corners! split into two perpendicular "clusters", corners are intersections of any point in one cluster with points in the other
+	local angles = torch.atan(slopes)
+	 angles:apply(function(val) if val<0 then return math.pi + val end end)
+	local vals, order = torch.sort(angles)
+	local absoluted = torch.abs(vals[{{1,vals:size()[1]-1},1}]-vals[{{2,vals:size()[1]},1}])
+	local maxV, locV = torch.max(absoluted,1)
+	--vals[locV] and vals[locV+1] is the boundary
 
+
+	local firstGroup = vals[{{1,locV[1]},1}]
+	local secondGroup = vals[{{locV[1]+1, vals:size()[1]},1}]
+
+	return torch.mean(firstGroup), torch.mean(secondGroup)
+end
 function Hough.drawLine(img, smb, value)
 	local startY = 1
 	local endY =img:size()[2]
@@ -174,7 +199,7 @@ function Hough.isSameLine(smb, dmb)
 
 end
 
-function Hough.binarySearchForClosestNumberLines(dst, minH, maxH, num_lines)
+function Hough:binarySearchForClosestNumberLines(dst, minH, maxH, num_lines)
 	local houghThreshold = torch.floor((maxH+minH)/2)
 	local linesP = opencv.imgproc.HoughLinesProbabilistic(dst, Hough.houghRo, Hough.houghTheta, houghThreshold, Hough.houghMinLineLength, Hough.houghMaxLineGap);
 
@@ -184,9 +209,9 @@ function Hough.binarySearchForClosestNumberLines(dst, minH, maxH, num_lines)
 		return linesP
 	end
 	if(numLines > num_lines) then
-		return Hough.binarySearchForClosestNumberLines(dst, houghThreshold, maxH, num_lines)
+		return self:binarySearchForClosestNumberLines(dst, houghThreshold, maxH, num_lines)
 	else
-		return Hough.binarySearchForClosestNumberLines(dst, minH, houghThreshold, num_lines)
+		return self:binarySearchForClosestNumberLines(dst, minH, houghThreshold, num_lines)
 	end
 end
 
@@ -200,8 +225,8 @@ function Hough.getSlopeIntersectFromHoughP(linesP)
 
 	if(torch.eq(intersects,math.huge):sum()>0) then
 		a = (linesT[{{},2}])
-		intersects[torch.eq(intersects,math.huge)] = a[torch.eq(intersects,math.huge)] 
-		intersects[torch.eq(intersects,-math.huge)] = a[torch.eq(intersects,-math.huge)] 
+		intersects[torch.eq(intersects,math.huge)] = a[torch.eq(intersects,math.huge)]:double()
+		intersects[torch.eq(intersects,-math.huge)] = a[torch.eq(intersects,-math.huge)]:double()
 	end
 	return slopes, intersects
 end 
