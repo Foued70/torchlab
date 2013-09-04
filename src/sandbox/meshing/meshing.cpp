@@ -29,6 +29,9 @@ cv::Point selectedQuad[4];
 
 float scoreLine(cv::Point p1, cv::Point p2)
 {
+	if(p1.x == p2.x && p1.y == p2.y)
+		return 0;
+
     float score = 0;
     
     int T = p2.x - p1.x;
@@ -48,6 +51,11 @@ float scoreLine(cv::Point p1, cv::Point p2)
         if(x > 0 && y > 0 && y < graystore.cols && x < graystore.rows )
         {
             score += graystore.at<uchar>(y, x);
+            
+            if(graystore.at<uchar>(y, x) == 0)
+            {
+            	score -= 155;
+            }
         }
         
         t = t + 1.0/steps;
@@ -89,10 +97,47 @@ int lineDistance(cv::Point p1, cv::Point p2)
     return (int) sqrt((p1.x-p2.x)*(p1.x-p2.x) + (p1.y-p2.y)*(p1.y-p2.y));
 }
 
+int tests = 0;
 
 float scoreQuad(cv::Point p1, cv::Point p2, cv::Point p3, cv::Point p4)
 {
+	tests++;
     return (float)(scoreLine(p1, p2) + scoreLine(p2, p3) + scoreLine(p3, p4) + scoreLine(p4, p1));// / (float)(lineDistance(p1, p2) + lineDistance(p2, p3) + lineDistance(p3, p4) + lineDistance(p4, p1));
+}
+
+void drawPoly(polygon poly, Mat img, Scalar color)
+{
+	std::vector<boost_point> const& points = poly.outer(); 
+										
+	if(points.size()>3)
+	{
+		for (int i = 0; i < points.size() -1; ++i) 
+		{ 
+			line( img, cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]), color, 2, CV_AA);
+			//cout<<cvPointFromBoostPoint(points[i]);
+		} 
+
+		if(cvPointFromBoostPoint(points[points.size()-1]) != cvPointFromBoostPoint(points[0]))
+		{
+			line( img, cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]), color, 2, CV_AA);
+			//cout<<cvPointFromBoostPoint(points[points.size()-1])<<endl;
+		}
+	}
+}
+
+float scorePoly(polygon p)
+{
+	float poly_score = 0;
+	std::vector<boost_point> const& points = p.outer(); 
+	for (int i = 0; i < points.size() -1; ++i) 
+	{ 
+		poly_score += scoreLine(cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]));
+	} 
+	
+	if(cvPointFromBoostPoint(points[points.size()-1]) != cvPointFromBoostPoint(points[0]))
+		poly_score += scoreLine(cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]));
+		
+	return poly_score;
 }
 
 Point _p1;
@@ -156,6 +201,7 @@ int main(int argc, char** argv)
     cvtColor(gray, m, CV_GRAY2RGBA);
     
     Mat m_lines = m.clone();
+    Mat m_lines_bak = m.clone();
     
     Mat vert = gray.clone();
     Mat hori = gray.clone();
@@ -198,17 +244,17 @@ int main(int argc, char** argv)
         }
     }
     
-    cout<<lines.size()<<endl;
+    //cout<<lines.size()<<endl;
     
     
     //distanceTransform(vert, vert, CV_DIST_C, 5);
     //cv::dilate(vert, vert, element);
     //cv::dilate(hori, hori, element);
     
-    GaussianBlur(graystore, graystore, cv::Size(11, 11), 5.0, 5.0);
+    GaussianBlur(graystore, graystore, cv::Size(3, 3), 1, 1);
     //GaussianBlur(hori, hori, cv::Size(1, 2*kernel_size+1), 1.2, 1.2);
     
-    graystore = graystore * 10;
+    //graystore = graystore * 10;
     
     for( size_t i = 0; i < vertlines.size(); i++ )
     {
@@ -220,9 +266,9 @@ int main(int argc, char** argv)
             
             cv::Point intersection = findIntersection(cv::Point(vl[0], vl[1]), cv::Point(vl[2], vl[3]), cv::Point(hl[0], hl[1]), cv::Point(hl[2], hl[3]));
             
-            const int dist_int = 30;
+            const int dist_int = 150;
             
-            //if(lineDistance(cv::Point(vl[0], vl[1]), intersection) < dist_int || lineDistance(cv::Point(vl[2], vl[3]), intersection) < dist_int || lineDistance(cv::Point(hl[0], hl[1]), intersection) < dist_int || lineDistance(cv::Point(hl[2], hl[3]), intersection) < dist_int)
+            if(lineDistance(cv::Point(vl[0], vl[1]), intersection) < dist_int || lineDistance(cv::Point(vl[2], vl[3]), intersection) < dist_int || lineDistance(cv::Point(hl[0], hl[1]), intersection) < dist_int || lineDistance(cv::Point(hl[2], hl[3]), intersection) < dist_int)
             {
                 int mindist = 9999;
                 for( size_t i = 0; i < intersections.size(); i++ )
@@ -257,9 +303,13 @@ int main(int argc, char** argv)
     int max_r = -1;
     int max_s = -1;
     vector<cv::Point> p1v, p2v, p3v, p4v;
-    const int search_window = 5;
+    const int search_window = 4;
     
     polygon room_poly;
+    
+    int img_num = 0;
+	
+	std::map<float, polygon> quads;
 
     for(int i =0; i< intersections.size(); i++)
     {
@@ -290,7 +340,7 @@ int main(int argc, char** argv)
 			
 			if(p1v.size() > 0 && p2v.size() > 0 && p3v.size() > 0 && p4v.size() > 0)
 			{
-				printf("candidate sizes - %ld, %ld, %ld, %ld\n", p1v.size(), p2v.size(), p3v.size(), p4v.size());
+				//printf("candidate sizes - %ld, %ld, %ld, %ld\n", p1v.size(), p2v.size(), p3v.size(), p4v.size());
 			
 				for( size_t p = 0; p < p1v.size(); p++ )
 				{
@@ -302,32 +352,124 @@ int main(int argc, char** argv)
 							{
 							
 								float score = scoreQuad(p1v[p], p2v[q], p3v[r], p4v[s]);
-												
-								if(score > max_score)
-								{
-									cout<<max_score<<endl;
-
-									max_score = score;
-									selectedQuad[0] = p1v[p];
-									selectedQuad[1] = p2v[q];
-									selectedQuad[2] = p3v[r];
-									selectedQuad[3] = p4v[s];
-									
-								}
 								
-								if(score > 5000)
-								{
-									line( m_lines, p1v[p], p2v[q], cv::Scalar(255,0,255), 2, CV_AA);
-									line( m_lines, p2v[q], p3v[r], cv::Scalar(255,0,255), 2, CV_AA);
-									line( m_lines, p3v[r], p4v[s], cv::Scalar(255,0,255), 2, CV_AA);
-									line( m_lines, p4v[s], p1v[p], cv::Scalar(255,0,255), 2, CV_AA);
+								polygon quad;
 									
-									polygon quad;
+								quad.clear();
+								
+								boost::geometry::append(  quad, boost_point(p1v[p].x, p1v[p].y));
+								boost::geometry::append(  quad, boost_point(p2v[q].x, p2v[q].y));
+								boost::geometry::append(  quad, boost_point(p3v[r].x, p3v[r].y));
+								boost::geometry::append(  quad, boost_point(p4v[s].x, p4v[s].y));
+								
+								boost::geometry::correct(quad);
+								
+								quads.insert(std::pair<float, polygon>(score,quad));
+								
+// 								std::vector<boost_point> const& points2 = quad.outer(); 
+// 											
+// 								if(points2.size()>3)
+// 								{
+// 									for (int i = 0; i < points2.size() -1; ++i) 
+// 									{ 
+// 										line( m_lines, cvPointFromBoostPoint(points2[i]), cvPointFromBoostPoint(points2[i+1]), cv::Scalar(255,0,255), 2, CV_AA);
+// 										cout<<cvPointFromBoostPoint(points2[i]);
+// 									} 
+// 
+// 									line( m_lines, cvPointFromBoostPoint(points2[points2.size()-1]), cvPointFromBoostPoint(points2[0]), cv::Scalar(255, 0,255), 2, CV_AA);
+// 									cout<<cvPointFromBoostPoint(points2[points2.size()-1])<<endl;
+// 								}
+												
+// 								if(score > max_score)
+// 								{
+// 									//cout<<max_score<<endl;
+// 
+// 									max_score = score;
+// 									selectedQuad[0] = p1v[p];
+// 									selectedQuad[1] = p2v[q];
+// 									selectedQuad[2] = p3v[r];
+// 									selectedQuad[3] = p4v[s];
+// 									
+// 								}
+								//cout<<score;
+
+						
+							}
+						}
+					}
+				}
+			}
+		}
+    }
+    
+    std::map<float, polygon>::reverse_iterator it = quads.rbegin();
+    
+    float prev_max_poly_score = 0;
+    float max_poly_score = -1;
+    int count = 0;
+    
+  	for (it=quads.rbegin(); it!=quads.rend(); ++it)
+  	{
+    	//std::cout << it->first<<endl;// << " => " << it->second << '\n';
+    	
+    	std::vector<polygon> poly_union_results;
+		poly_union_results.clear();
+		
+// 		m_lines = m_lines_bak.clone();
+// 		drawPoly(it->second, m_lines, cv::Scalar(0, 0 ,255)); // * (float)(quads.size()-count++)/quads.size())
+// 		imshow("detected quads", m_lines);
+// 		waitKey();
+
+	
+		if (! boost::geometry::intersects(room_poly) &&  ! boost::geometry::intersects(it->second)) 
+		{ 
+			boost::geometry::union_(room_poly, it->second, poly_union_results);
+		} 
+		// else
+// 		{
+// 			cout<<"self intersection error!"<<endl;
+// 		}
+		
+		
+		int max_poly_count = -1;
+	
+		int poly_count = 0;
+	
+		BOOST_FOREACH(polygon const& p, poly_union_results)
+		{
+			float poly_score = scorePoly(p);
+			
+// 			m_lines = m_lines_bak.clone();
+// 			drawPoly(p, m_lines, cv::Scalar(255, 0 ,0));
+// 			imshow("detected quads", m_lines);
+// 			waitKey();
+			
+			if(poly_score > max_poly_score)// && boost::geometry::area(p) > boost::geometry::area(room_poly))
+			{
+				//cout<<"poly_score: "<<poly_score<<"  max_poly_score: "<<max_poly_score<<"  max_poly_count: "<<max_poly_count<<endl<<endl;
+				cout<<"Delta :"<<poly_score - max_poly_score<<endl;
+				max_poly_score = poly_score;
+				max_poly_count = poly_count;
+				room_poly = poly_union_results[max_poly_count];
+			}
+			
+			poly_count++;
+		}
+		
+		boost::geometry::correct(room_poly);
+    	
+//     	m_lines = m_lines_bak.clone();
+// 		drawPoly(room_poly, m_lines, cv::Scalar(0, 255 ,0));
+// 		imshow("detected quads", m_lines);
+// 		waitKey();
+    }
+    drawPoly(room_poly, m_lines, cv::Scalar(0, 255 ,0));
+    imshow("detected quads", m_lines);
+	waitKey();
+    
+    								//if(score > 10)
+								/*{
 									
-									boost::geometry::append(  quad, boost_point(p1v[p].x, p1v[p].y));
-									boost::geometry::append(  quad, boost_point(p2v[q].x, p2v[q].y));
-									boost::geometry::append(  quad, boost_point(p3v[r].x, p3v[r].y));
-									boost::geometry::append(  quad, boost_point(p4v[s].x, p4v[s].y));
 									
 									// std::vector<Point> quad_points;
 // 									quad_points.push_back(boost_point(p1v[p].x, p1v[p].y));
@@ -339,7 +481,7 @@ int main(int argc, char** argv)
 									std::vector<polygon> poly_union_results;
 									poly_union_results.clear();
 									
-									cout<<room_poly.outer().size()<<" -- " << quad.outer().size() <<endl;
+									//cout<<room_poly.outer().size()<<" -- " << quad.outer().size() <<endl;
 									
 									if (! boost::geometry::intersects(room_poly) &&  ! boost::geometry::intersects(quad)) 
 									{ 
@@ -353,68 +495,127 @@ int main(int argc, char** argv)
 									
 									BOOST_FOREACH(polygon const& p, poly_union_results)
 									{
-										std::cout <<  boost::geometry::area(p) << std::endl;
+										//std::cout <<  boost::geometry::area(p) << std::endl;
 										
-										float poly_score = 0;
-										std::vector<boost_point> const& points = p.outer(); 
-										for (int i = 0; i < points.size() -1; ++i) 
-										{ 
-											poly_score += scoreLine(cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]));
-											cout<<points[i].x()<<", "<<points[i].y()<<"  "; 
-										} 
+										//score poly
+											
+										std::vector<boost_point> const& points2 = p.outer(); 
+											
+											if(points2.size()>3)
+											{
+												for (int i = 0; i < points2.size() -1; ++i) 
+												{ 
+													line( m_lines, cvPointFromBoostPoint(points2[i]), cvPointFromBoostPoint(points2[i+1]), cv::Scalar(255,0,255), 2, CV_AA);
+													cout<<cvPointFromBoostPoint(points2[i]);
+												} 
+			
+												line( m_lines, cvPointFromBoostPoint(points2[points2.size()-1]), cvPointFromBoostPoint(points2[0]), cv::Scalar(255, 0,255), 2, CV_AA);
+												cout<<cvPointFromBoostPoint(points2[points2.size()-1])<<endl;
+											}
+											
+																						imshow("detected quads", m_lines);
+
 										
-										poly_score += scoreLine(cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]));
-										
-										if(poly_score > max_poly_score)
-										{
+										if(poly_score > max_poly_score && boost::geometry::area(p) > boost::geometry::area(room_poly))// && !boost::geometry::covered_by(boost_point(0,0), room_poly))
+										{											
+											cout<<"new: "<<boost::geometry::area(p)<<", old: "<<boost::geometry::area(room_poly)<<endl;
+											
+											std::vector<boost_point> const& points = room_poly.outer(); 
+											
+											if(points.size()>3)
+											{
+												for (int i = 0; i < points.size() -1; ++i) 
+												{ 
+													line( m_lines, cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]), cv::Scalar(0,255,255), 2, CV_AA);
+												} 
+			
+												line( m_lines, cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]), cv::Scalar(0,255,255), 2, CV_AA);
+											}
+											
+
+											
 											max_poly_score = poly_score;
 											max_poly_count = poly_count;
 											room_poly = poly_union_results[max_poly_count];
+											
+											imshow("detected quads", m_lines);
+											
+// 											std::stringstream ss;
+// 											ss << img_num;
+// 
+// 											std::string save_num(ss.str());
+// 	
+// 											string save_filename = std::string("frames/") + save_num + std::string(".jpg");
+// 											
+// 											imwrite(save_filename, m_lines);
+// 											img_num++;
+											
+											waitKey();
+											m_lines = m_lines_bak.clone();
+
+											std::vector<boost_point> const& points1 = room_poly.outer(); 
+
+											for (int i = 0; i < points1.size() -1; ++i) 
+											{ 
+												line( m_lines, cvPointFromBoostPoint(points1[i]), cvPointFromBoostPoint(points1[i+1]), cv::Scalar(0,255,255), 2, CV_AA);
+											} 
+			
+											line( m_lines, cvPointFromBoostPoint(points1[points1.size()-1]), cvPointFromBoostPoint(points1[0]), cv::Scalar(0,255,255), 2, CV_AA);
+
+											imshow("detected quads", m_lines);
+											
+// 											ss.str("");
+// 											ss << img_num;
+// 
+// 											save_num = ss.str();
+// 	
+// 											save_filename = std::string("frames/") + save_num + std::string(".jpg");
+// 											
+// 											imwrite(save_filename, m_lines);
+// 											img_num++;
+																						
+											waitKey();
+											m_lines = m_lines_bak.clone();
 										}
 										
-										cout<<endl;
+										//cout<<endl;
 										poly_count++;
 									}
 
-								}
-						
-							}
-						}
-					}
-				}
-			}
-		}
-    }
+								}*/
     
-	std::vector<boost_point> const& points = room_poly.outer(); 
-
-    for (int i = 0; i < points.size() -1; ++i) 
-	{ 
-		line( m_lines, cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]), cv::Scalar(0,255,255), 2, CV_AA);
-	} 
-			
-	line( m_lines, cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]), cv::Scalar(0,255,255), 2, CV_AA);
+// 	std::vector<boost_point> const& points = room_poly.outer(); 
+// 
+//     for (int i = 0; i < points.size() -1; ++i) 
+// 	{ 
+// 		line( m_lines, cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]), cv::Scalar(0,255,255), 2, CV_AA);
+// 	} 
+// 			
+// 	line( m_lines, cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]), cv::Scalar(0,255,255), 2, CV_AA);
 
     
-    cout<<selectedQuad[0]<<" "<<selectedQuad[1]<<" "<<selectedQuad[2]<<" "<<selectedQuad[3]<<endl;
+    //cout<<selectedQuad[0]<<" "<<selectedQuad[1]<<" "<<selectedQuad[2]<<" "<<selectedQuad[3]<<endl;
     
-    if(max_score > 0 )
-    {
-        line( m_lines, selectedQuad[0], selectedQuad[1], cv::Scalar(255,255,255), 2, CV_AA);
-        line( m_lines, selectedQuad[1], selectedQuad[2], cv::Scalar(255,255,255), 2, CV_AA);
-        line( m_lines, selectedQuad[2], selectedQuad[3], cv::Scalar(255,255,255), 2, CV_AA);
-        line( m_lines, selectedQuad[3], selectedQuad[0], cv::Scalar(255,255,255), 2, CV_AA);
-    }
-    
+//     if(max_score > 0 )
+//     {
+//         line( m_lines, selectedQuad[0], selectedQuad[1], cv::Scalar(255,255,255), 2, CV_AA);
+//         line( m_lines, selectedQuad[1], selectedQuad[2], cv::Scalar(255,255,255), 2, CV_AA);
+//         line( m_lines, selectedQuad[2], selectedQuad[3], cv::Scalar(255,255,255), 2, CV_AA);
+//         line( m_lines, selectedQuad[3], selectedQuad[0], cv::Scalar(255,255,255), 2, CV_AA);
+//     }
+//     
     printf("%lu\n", intersections.size());
         
     imshow("detected lines", m);
-    imshow("slice", graystore);
+    //imshow("slice", graystore);
     imshow("detected quads", m_lines);
     
     setMouseCallback( "detected lines", onMouse, 0 );
     
+    cout<<"tests: "<<tests<<endl;
     waitKey();
+    
+    waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();
     
     return 0;
 }
