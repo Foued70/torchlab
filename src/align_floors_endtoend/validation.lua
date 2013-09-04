@@ -300,7 +300,7 @@ function validation.compute_score (combined_img, src_cnt_h, src_cnt_w, tgt_cnt_h
 	local vrs4_capped = validation_ray(pixsrc_bold, pixtgt_bold, numangles_vrs, pix_shcnt, pix_swcnt, pix_wiggle, pix_vrs_cap)
 	local vrs_capped = (math.max(vrs1_capped,vrs2_capped)+math.max(vrs3_capped,vrs4_capped))/2
 						
-	local score = (vid_fine_tot + vid_rough_tot + vrs_no_cap + vrs_capped)/4
+	local score = (6*vid_fine_tot + 2*vid_rough_tot + vrs_no_cap + vrs_capped)/10
 						
 	local all_scores= torch.Tensor({score, 			vrs_no_cap, 	vrs_capped, 
 									vid_fine_tot, 	vid_fine_tgt, 	vid_fine_src,

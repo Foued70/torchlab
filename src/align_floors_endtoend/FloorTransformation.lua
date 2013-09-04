@@ -15,7 +15,7 @@ FloorTransformation.kSize =3
 FloorTransformation.k = .04
 FloorTransformation.maxNumReturn = 50
 FloorTransformation.warpWithBorders = false
-FloorTransformation.cornerDistanceLimit = 25
+FloorTransformation.cornerDistanceLimit = 5--25
 FloorTransformation.minInliersForMatch = 2
 
 --HOUGH PARAMETERS
@@ -162,9 +162,64 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    local best_pts, best_transformations = opencv.imgproc.findBestTransformation(
       opencv.Mat.new(goodLocationsX_src:clone()),  opencv.Mat.new(goodLocationsY_src:clone()), opencv.Mat.new(scores_src_torch), opencv.Mat.new(pairwise_dis_src:clone()),
       opencv.Mat.new(goodLocationsX_dest:clone()), opencv.Mat.new(goodLocationsY_dest:clone()), opencv.Mat.new(scores_dest_torch), opencv.Mat.new(pairwise_dis_dest:clone()),
-      FloorTransformation.corr_thresh, FloorTransformation.minInliersForMatch, FloorTransformation.maxNumReturn, 
+      FloorTransformation.corr_thresh, FloorTransformation.minInliersForMatch, FloorTransformation.maxNumReturn*5, 
       FloorTransformation.cornerDistanceLimit, img_src:size()[1], img_src:size()[2])
-
+   
+   --[[]]
+   local trans1_tmp = {}
+   local trans2_tmp = {}
+   local combined_tmp = {}
+   local src_centers_h_tmp = {}
+   local src_centers_w_tmp = {}
+   local tgt_centers_h_tmp = {}
+   local tgt_centers_w_tmp = {}
+   
+   local best_overlap = torch.Tensor(best_pts:size())
+   for k=1,table.getn(best_transformations) do
+      local i=k
+      local trans1_i, trans2_i, combined_i
+      if FloorTransformation.warpWithBorders then
+         trans1_i, trans2_i, combined_i = image.warpAndCombineWithBorders(best_transformations[i], img_src, img_dest)
+      else
+         trans1_i, trans2_i, combined_i = image.warpAndCombine(best_transformations[i], img_src, img_dest)
+      end
+      
+      local center1y = img_src:size(1)/2
+      local center1x = img_src:size(2)/2
+      
+      local center2y = img_dest:size(1)/2
+      local center2x = img_dest:size(2)/2
+      
+      local t1 = opencv.Mat.toTensor(trans1_i)
+      local t2 = opencv.Mat.toTensor(trans2_i)
+      
+      local center1 = t1*torch.Tensor({{center1x},{center1y},{1}})+1
+      local center2 = t2*torch.Tensor({{center2x},{center2y},{1}})+1
+      
+      center1x = math.floor(center1[1][1])
+      center1y = math.floor(center1[2][1])
+      center2x = math.floor(center2[1][1])
+      center2y = math.floor(center2[2][1])
+     
+      src_centers_h_tmp[i] = center1y
+      src_centers_w_tmp[i] = center1x
+      tgt_centers_h_tmp[i] = center2y
+      tgt_centers_w_tmp[i] = center2x
+      
+      trans1_tmp[i] = trans1_i
+      trans2_tmp[i] = trans2_i
+      combined_tmp[i] = combined_i
+     
+      local srci = combined_i:clone():select(1,1)
+      srci:cdiv(srci:clone():add(0.0000000001)):ceil()
+      local desi = combined_i:clone():select(1,2)
+      desi:cdiv(desi:clone():add(0.0000000001)):ceil()
+	  best_overlap[i]=srci:clone():cmul(desi):sum()
+	  
+	  collectgarbage()
+   end
+    collectgarbage()
+   
    local trans1 = {}
    local trans2 = {}
    local combined = {}
@@ -174,16 +229,62 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    local src_centers_w = {}
    local tgt_centers_h = {}
    local tgt_centers_w = {}
-  
+   
+   sorted,ordering = torch.sort(best_overlap)
+   local scores = torch.Tensor(math.min(table.getn(best_transformations),FloorTransformation.maxNumReturn))
+   
+   for k=1,math.min(table.getn(best_transformations),FloorTransformation.maxNumReturn) do
+      local i=table.getn(best_transformations)-k+1
+      scores[k] = sorted[i]
+      outliers[k] = best_pts[ordering[i]]
+     
+      src_centers_h[k] = src_centers_h_tmp[ordering[i]]
+      src_centers_w[k] = src_centers_w_tmp[ordering[i]]
+      tgt_centers_h[k] = tgt_centers_h_tmp[ordering[i]]
+      tgt_centers_w[k] = tgt_centers_w_tmp[ordering[i]]
+      
+      transformations[k] = best_transformations[ordering[i] ]
+      trans1[k] = trans1_tmp[ordering[i]]
+      trans2[k] = trans2_tmp[ordering[i]]
+      combined[k] = combined_tmp[ordering[i]]
+      --if(display) then
+      --   image.display(combined[i])
+      --end
+      collectgarbage()
+   end
+   
+   trans1_tmp = nil
+   trans2_tmp = nil
+   combined_tmp = nil
+   src_centers_h_tmp = nil
+   src_centers_w_tmp = nil
+   tgt_centers_h_tmp = nil
+   tgt_centers_w_tmp = nil
+   
+   collectgarbage()
+   --[[]]
+   
+   --[[
+   local trans1 = {}
+   local trans2 = {}
+   local combined = {}
+   local outliers = {}
+   local transformations = {}
+   local src_centers_h = {}
+   local src_centers_w = {}
+   local tgt_centers_h = {}
+   local tgt_centers_w = {}
+   
    sorted,ordering = torch.sort(best_pts)
+   
    for k=1,table.getn(best_transformations) do
       i=table.getn(best_transformations)-k+1
       outliers[k] = sorted[i]
       local trans1_i, trans2_i, combined_i
       if FloorTransformation.warpWithBorders then
-         trans1_i, trans2_i, combined_i = image.warpAndCombineWithBorders(best_transformations[ordering[i]], img_src, img_dest)
+         trans1_i, trans2_i, combined_i = image.warpAndCombineWithBorders(best_transformations[ordering[i] ], img_src, img_dest)
       else
-         trans1_i, trans2_i, combined_i = image.warpAndCombine(best_transformations[ordering[i]], img_src, img_dest)
+         trans1_i, trans2_i, combined_i = image.warpAndCombine(best_transformations[ordering[i] ], img_src, img_dest)
       end
       
       local center1y = img_src:size(1)/2
@@ -208,7 +309,7 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
       tgt_centers_h[k] = center2y
       tgt_centers_w[k] = center2x
       
-      transformations[k] = best_transformations[ordering[i]]
+      transformations[k] = best_transformations[ordering[i] ]
       trans1[k] = trans1_i
       trans2[k] = trans2_i
       combined[k] = combined_i
@@ -216,8 +317,11 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
       --   image.display(combined[i])
       --end
    end
+   ]]
+   
+   
    print(log.toc())
-   return best_transformations, trans1, trans2, combined, outliers, src_centers_h, src_centers_w, tgt_centers_h, tgt_centers_w
+   return best_transformations, trans1, trans2, combined, outliers, src_centers_h, src_centers_w, tgt_centers_h, tgt_centers_w, scores
 end
 
 
