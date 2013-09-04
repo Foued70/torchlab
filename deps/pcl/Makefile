@@ -10,8 +10,7 @@ git_clone=$(build_dir)/deps/pcl
 install=$(install_root)/lib/libpcl_common.dylib
 
 
-args = $(default_cmake_args) \
-	-D CMAKE_INSTALL_NAME_DIR:FILEPATH=$(install_root)/lib
+args = $(default_cmake_args)
 
 all: $(install)
 

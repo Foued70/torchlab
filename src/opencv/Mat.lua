@@ -17,6 +17,7 @@ function Mat:__init(pathOrTensorOrMat, ...)
    -- Arg?
    args  = {...} 
    nargs = #args
+
    if not pathOrTensorOrMat then
       -- initialize an empty Mat*
       self.mat = ffi.gc(libopencv.Mat_create(0,0,0), destructor())
@@ -105,69 +106,83 @@ function Mat:clone()
    return Mat.new(ffi.gc(libopencv.Mat_clone(self.mat), destructor()))
 end
 
-function Mat:fromTensor(tensor,dimensions)
+function Mat:fromTensor(tensor)
 
    tensor_type = tensor:type()
 
-   self.tensor = tensor:contiguous()
+   tensor = tensor:contiguous()
 
    if tensor_type == "torch.DoubleTensor" then
-      mat = ffi.gc( libopencv.THDoubleTensor_toMat( torch.cdata(self.tensor)), destructor())
+      mat = ffi.gc( libopencv.THDoubleTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.FloatTensor" then
-      mat = ffi.gc(  libopencv.THFloatTensor_toMat( torch.cdata(self.tensor)), destructor())
+      mat = ffi.gc(  libopencv.THFloatTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.ByteTensor" then
-      mat = ffi.gc(   libopencv.THByteTensor_toMat( torch.cdata(self.tensor)), destructor())
+      mat = ffi.gc(   libopencv.THByteTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.IntTensor" then
-      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(self.tensor)), destructor())
+      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.LongTensor" then
       print("Warning no analog for LongTensor in opencv. casting to int")
       tensor = tensor:int()
-      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(self.tensor)),destructor())
+      mat = ffi.gc(    libopencv.THIntTensor_toMat( torch.cdata(tensor)),destructor())
    elseif tensor_type == "torch.CharTensor" then
-      mat = ffi.gc(   libopencv.THCharTensor_toMat( torch.cdata(self.tensor)), destructor())
+      mat = ffi.gc(   libopencv.THCharTensor_toMat( torch.cdata(tensor)), destructor())
    elseif tensor_type == "torch.ShortTensor" then
-      mat = ffi.gc(  libopencv.THShortTensor_toMat( torch.cdata(self.tensor)), destructor())
+      mat = ffi.gc(  libopencv.THShortTensor_toMat( torch.cdata(tensor)), destructor())
    end
 
-   self.mat = mat
+   -- make sure we keep link to original torch Tensor so data is not
+   -- garbage collected should original tensor go out of scope.
+   self.tensor = tensor 
+   self.mat    = mat
 
 end
 
--- datatype,colorspace, and dims determine the type of tensor we want.
-function Mat:toTensor(dimension)
-   mat = self.mat
-   depth = libopencv.Mat_depth(mat)
-   if depth == 0 then  -- CV_8U
-      tensor = torch.ByteTensor()
-      libopencv.THByteTensor_fromMat(mat,torch.cdata(tensor)) 
-   elseif depth == 1 then -- CV_8S
-      tensor = torch.CharTensor()
-      libopencv.THCharTensor_fromMat(mat,torch.cdata(tensor))
-   elseif depth == 2 then -- CV_16U
-      error("no analog in torch for CV_16U")
-   elseif depth == 3 then -- CV_16S
-      tensor = torch.ShortTensor()
-      libopencv.THShortTensor_fromMat(mat,torch.cdata(tensor))
-   elseif depth == 4 then -- CV_32S
-      tensor = torch.IntTensor()
-      libopencv.THIntTensor_fromMat(mat,torch.cdata(tensor))
-   elseif depth == 5 then -- CV_32F
-      tensor = torch.FloatTensor()
-      libopencv.THFloatTensor_fromMat(mat,torch.cdata(tensor))
-   elseif depth == 6 then -- CV_64F
-      tensor = torch.DoubleTensor()
-      libopencv.THDoubleTensor_fromMat(mat,torch.cdata(tensor))
-   else
-      error("something is wrong")
+-- dimensions can be HWD (opencv default) or DHW torch default
+function Mat:toTensor(dimensions_or_nocopy)
+   tensor = nil
+   if not self.tensor then 
+      mat = self.mat
+      depth = libopencv.Mat_depth(mat)
+      if depth == 0 then  -- CV_8U
+         tensor = torch.ByteTensor()
+         libopencv.THByteTensor_fromMat(mat,torch.cdata(tensor)) 
+      elseif depth == 1 then -- CV_8S
+         tensor = torch.CharTensor()
+         libopencv.THCharTensor_fromMat(mat,torch.cdata(tensor))
+      elseif depth == 2 then -- CV_16U
+         error("no analog in torch for CV_16U")
+      elseif depth == 3 then -- CV_16S
+         tensor = torch.ShortTensor()
+         libopencv.THShortTensor_fromMat(mat,torch.cdata(tensor))
+      elseif depth == 4 then -- CV_32S
+         tensor = torch.IntTensor()
+         libopencv.THIntTensor_fromMat(mat,torch.cdata(tensor))
+      elseif depth == 5 then -- CV_32F
+         tensor = torch.FloatTensor()
+         libopencv.THFloatTensor_fromMat(mat,torch.cdata(tensor))
+      elseif depth == 6 then -- CV_64F
+         tensor = torch.DoubleTensor()
+         libopencv.THDoubleTensor_fromMat(mat,torch.cdata(tensor))
+      else
+         error("something is wrong")
+      end
+      
+      self.tensor = tensor
    end
-   if dimension == "DHW" then 
-         tensor = tensor:transpose(3,1):transpose(2,3)
+
+   if dimensions_or_nocopy == "DHW" then 
+      -- changing dimensions always returns a copy
+      return self.tensor:transpose(3,1):transpose(2,3):contiguous() 
+   elseif dimensions_or_nocopy then 
+      -- dangerous user wants pointer to the raw data
+      return self.tensor
+   else 
+      return self.tensor:clone()
    end
-   return tensor
 end
 
 --type_str should be a string, not a number!
-function Mat:convert(...) 
+function Mat:convert(...)
    local output, type_str
    args = {...}
    nargs = #args
