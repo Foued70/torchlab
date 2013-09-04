@@ -235,8 +235,9 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    
    for k=1,math.min(table.getn(best_transformations),FloorTransformation.maxNumReturn) do
       local i=table.getn(best_transformations)-k+1
-      scores[k] = sorted[i]
       outliers[k] = best_pts[ordering[i]]
+      scores[k] = sorted[i]/sorted:max() + outliers[k]/math.max(scores_src_torch:size(1),scores_dest_torch:size(1))
+      
      
       src_centers_h[k] = src_centers_h_tmp[ordering[i]]
       src_centers_w[k] = src_centers_w_tmp[ordering[i]]
