@@ -165,10 +165,10 @@ function arcDownload:flattenedToTransformation()
 				collectgarbage()
 				
 				--if total_score <= 9000 and vid_fine_t <= 9900 and vid_rugh_t <= 9500 then
-				--if anglediff[j]<  2*math.pi/360*8 then
+				if anglediff[j]<  2*math.pi/360*8 then
 					--ground_truth_score = align_floors_endtoend.FloorTransformation.scoreTransformationPair(bestT[j].H, truthH, size_x_all[j], size_y_all[j])
 					ground_truth_score = 0
-					local cname = path.join(combinedFolder,bname1..'_'..bname2..'_'..i..'_'..j..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..inliers[i]..'_'..anglediff[j]..'_'..'truth'..ground_truth_score..'.png')
+					local cname = path.join(combinedFolder,bname1..'_'..bname2..'_'..i..'_'..j..'_'..total_score..'_'..vrs_no_cap..'_'..vrs_capped..'_'..vid_fine_t..'_'..vid_rugh_t..'_'..inliers[i]..'_'..anglediff[i]..'_'..'truth'..ground_truth_score..'.png')
 					--local cname = path.join(params["combined"],bname1..'_'..bname2..'_'..j..'_'..total_score..'.png')
 					image.save(cname, combined[j])
 
@@ -181,9 +181,10 @@ function arcDownload:flattenedToTransformation()
 
 					k = k + 1
 				--end
-				--else
-				--	print('rejected: '..i..'_'..j..': total: '..total_score..', vid_fine: '..vid_fine_t..', vid_rugh: '..vid_rugh_t)
-				--end
+				else
+					print('rejected: '..i..'_'..j..': total: '..total_score..', vid_fine: '..vid_fine_t..', vid_rugh: '..vid_rugh_t)
+					print('rejected'..anglediff[j])
+				end
 				
 				i = i + 1
 			end
@@ -247,7 +248,7 @@ function arcDownload:doForEveryPairInArc(getSourceDestInfo, doForPair, extension
 
 					local function postDownload()
 						local filetb = util.fs.files_only(params["from"])
-						for i= 1,#filetb do--1,#filetb do
+						for i= 1, #filetb do
 							local fname1 = filetb[i]
 							--if path.basename(fname1) == 'sweep_004.png' or path.basename(fname1) == 'sweep_009.png' then
 							if util.fs.extname(fname1) == extension then

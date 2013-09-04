@@ -140,7 +140,7 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
       FloorTransformation.parameters.corr_thresh, FloorTransformation.parameters.minInliersForMatch, FloorTransformation.parameters.maxNumReturn, 
       FloorTransformation.parameters.cornerDistanceLimit, img_src:size()[1], img_src:size()[2])
 
-   mainDirections = FloorTransformation.findMainDirections(img_src, img_dest)
+   local mainDirections = FloorTransformation.findMainDirections(img_src, img_dest)
 
    local trans1 = {}
    local trans2 = {}
@@ -240,7 +240,7 @@ function FloorTransformation.findMainDirections(img_src, img_dest)
    angle_options:apply(function(v) if(v<0) then return 2*math.pi+v elseif (v>2*math.pi) then return v-2*math.pi else return v end end);
    angle_options = torch.sort(angle_options)
 
-   if torch.abs(2*math.pi-angle_options[1] - angle_options[angle_options:size()[1]])<2*math.pi/360*20 then
+   if torch.abs(2*math.pi+angle_options[1] - angle_options[angle_options:size()[1]])<2*math.pi/360*20 then
    
       angle_options = torch.cat( angle_options[{{2,angle_options:size()[1]},1}],-angle_options[{{1}}]+2*math.pi, 1)
    end
