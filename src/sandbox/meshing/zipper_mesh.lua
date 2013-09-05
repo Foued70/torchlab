@@ -5,7 +5,8 @@ img_name = '297.png'
 
 _G.p = PointCloud.PointCloud.new('point.od') -- fname)
 
-_G.xyz  = p:get_xyz_map()
+_G.depth_map = p:get_depth_map()
+_G.xyz       = p:get_xyz_map()
 
 n_cells = xyz[1]:nElement()
 n_verts = p.count 
@@ -67,8 +68,26 @@ mask_map[{height,{}}] = 1
 
 mask_flat = mask_map:reshape(n_cells)
 
+-- remove excessive depth
+diffm = torch.FloatTensor(height,width)
+-- over
+diffm[{{},{1,width-1}}] = depth_map[{{},{1,width-1}}] - depth_map[{{},{2,width}}]
+diffm:abs()
+diffm[{{},width}] = 1
+
+dmask = diffm:gt(0.5)
+diffm:zero()
+
+--down
+diffm[{{1,height-1},{}}] = depth_map[{{1,height-1},{}}] - depth_map[{{2,height},{}}]
+diffm:abs()
+diffm[{height,{}}] = 1
+
+dmask = dmask + diffm:gt(0.5)
+dmask:resize(n_cells)
+
 -- want to mask all faces which touch a non-existing vertex. At this point faces uses the map_index
-_G.mm   = mask_flat[faces[1]] + mask_flat[faces[2]] + mask_flat[faces[3]]
+_G.mm   = dmask + mask_flat[faces[1]] + mask_flat[faces[2]] + mask_flat[faces[3]]
 _G.mm   = mm:eq(0) -- invert this is a map of good faces
 
 n_good_faces = mm:sum()
