@@ -1,11 +1,26 @@
 require 'libimage'
 
+-- local_wand reuses a single wand for these wrapper functions. This
+-- fixes a bug when calling save multiple times in a row.  The
+-- temporary wands created in the load and save helper functions would
+-- end in a segfault. 
+--
+-- TODO: find source of bug when creating and destroying many wands in
+-- a loop
+--
+-- WARNING: If saving mulitple images in a stream, you must call the
+-- garbage collector (collectgarbage()) as the Wand will build up many
+-- internal tensors, especially when passing DHW or non-contiguous tensors
+local local_wand = image.Wand.new()
+
 function image.load (filename, pixel_type, max_size, colorspace, dimensions)
    colorspace = colorspace or "RGB"
    dimensions = dimensions or "DHW"
    pixel_type = pixel_type or torch.getdefaulttensortype()
    log.info("Loading", filename,max_size,colorspace,dimensions)
-   return image.Wand.new(filename,max_size):toTensor(pixel_type,colorspace,dimensions)
+   
+   local_wand:load(filename,max_size)
+   return local_wand:toTensor(pixel_type,colorspace,dimensions)
 end
 
 function image.save (filename,tensor,colorspace,dimensions)
@@ -21,7 +36,8 @@ function image.save (filename,tensor,colorspace,dimensions)
       colorspace = "I"
    end
    log.info("Saving", filename,colorspace,dimensions)
-   image.Wand.new(tensor,colorspace,dimensions):save(filename)
+   local_wand:fromTensor(tensor,colorspace,dimensions)
+   local_wand:save(filename)
    return
 end
 
