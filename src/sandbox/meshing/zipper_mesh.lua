@@ -48,19 +48,53 @@ uvs[2]:copy(uvs_temp[2][vertex_list])
 
 _G.uvs = uvs:transpose(1,2):contiguous()
 
-_G.faces = torch.LongTensor():resize(xyz:size())
 
+-- faces: self, up, over, down, back
+_G.faces = torch.LongTensor():resize(5,height,width)
+
+-- ## over/down faces
 faces[1]:copy(torch.range(1,n_cells)) -- self
 
--- over 
-faces[2]:copy(faces[1]):add(1)
-faces[{2,{},width}]:fill(1) -- invalid right most row
+-- up
+faces[2]:copy(faces[1]):add(-width)
+faces[{2,1,{}}]:fill(1) -- invalid top row
+
+-- back
+faces[3]:copy(faces[1]):add(-1)
+faces[{3,{},1}]:fill(1) -- invalid left most row
 
 -- down
-faces[3]:copy(faces[1]):add(width)
-faces[{3,height,{}}]:fill(1) -- invalid bottom row
+faces[4]:copy(faces[1]):add(width)
+faces[{4,height,{}}]:fill(1) -- invalid bottom row
 
-faces:resize(3,n_cells)
+-- over 
+faces[5]:copy(faces[1]):add(1)
+faces[{5,{},width}]:fill(1) -- invalid right most row
+
+faces:resize(5,n_cells)
+
+faces_all = torch.LongTensor():zeros(4,3,n_cells)
+
+faces_up_back = faces_all[1]
+faces_up_back[1]:copy(faces[1])   -- self
+faces_up_back[2]:copy(faces[2])   -- up
+faces_up_back[3]:copy(faces[3])   -- back
+
+faces_back_down = faces_all[2]
+faces_back_down[1]:copy(faces[1]) -- self
+faces_back_down[2]:copy(faces[3]) -- back
+faces_back_down[3]:copy(faces[4]) -- down
+
+faces_down_over = faces_all[3]
+faces_down_over[1]:copy(faces[1]) -- self
+faces_down_over[2]:copy(faces[4]) -- down
+faces_down_over[3]:copy(faces[5]) -- over
+
+faces_over_up = faces_all[4]
+faces_over_up[1]:copy(faces[1])   -- self
+faces_over_up[2]:copy(faces[5])   -- over
+faces_over_up[3]:copy(faces[2])   -- up
+
 
 -- whack bottom and far right wrap around 
 mask_map[{{},width}]  = 1
@@ -68,48 +102,74 @@ mask_map[{height,{}}] = 1
 
 mask_flat = mask_map:reshape(n_cells)
 
+
 -- remove excessive depth
-diffm = torch.FloatTensor(height,width)
--- over
-diffm[{{},{1,width-1}}] = depth_map[{{},{1,width-1}}] - depth_map[{{},{2,width}}]
+dmask = torch.ByteTensor(4,height,width)
+diffm = torch.FloatTensor(height,width+1)
+
+-- over/back
+diffm[{{},{2,width}}] = depth_map[{{},{1,width-1}}] - depth_map[{{},{2,width}}]
 diffm:abs()
-diffm[{{},width}] = 1
+diffm[{{},1}] = 1
+diffm[{{},width+1}] = 1
 
-dmask = diffm:gt(0.5)
-diffm:zero()
+dmask[2] = diffm[{{},{1,width}}]:gt(0.5)   -- back
+dmask[4] = diffm[{{},{2,width+1}}]:gt(0.5) -- over
 
---down
-diffm[{{1,height-1},{}}] = depth_map[{{1,height-1},{}}] - depth_map[{{2,height},{}}]
+diffm:resize(height+1,width):zero()
+
+-- up/down
+diffm[{{2,height},{}}] = depth_map[{{1,height-1},{}}] - depth_map[{{2,height},{}}]
 diffm:abs()
-diffm[{height,{}}] = 1
+diffm[{1,{}}]        = 1
+diffm[{height+1,{}}] = 1
 
-dmask = dmask + diffm:gt(0.5)
-dmask:resize(n_cells)
+dmask[1] = diffm[{{1,height},{}}]:gt(0.5)   -- up
+dmask[3] = diffm[{{2,height+1},{}}]:gt(0.5) -- down
 
--- want to mask all faces which touch a non-existing vertex. At this point faces uses the map_index
-_G.mm   = dmask + mask_flat[faces[1]] + mask_flat[faces[2]] + mask_flat[faces[3]]
-_G.mm   = mm:eq(0) -- invert this is a map of good faces
+diffm = nil
+collectgarbage()
 
-n_good_faces = mm:sum()
+-- default mask must zap every face for which there is no vertex at self
+_G.face_mask = mask_map:repeatTensor(4,1,1)
+face_mask[1] = face_mask[1] + dmask[1] + dmask[2] -- self, up, back
+face_mask[2] = face_mask[2] + dmask[2] + dmask[3] -- self, back, down
+face_mask[3] = face_mask[3] + dmask[3] + dmask[4] -- self, down, over
+face_mask[4] = face_mask[4] + dmask[4] + dmask[1] -- self, over, up
+
+_G.face_mask   = face_mask:eq(0) -- invert this is a map of good faces
+
+
+_G.face_mask = face_mask:reshape(4,n_cells):transpose(2,1):contiguous():reshape(face_mask:nElement())
+
+
+_G.faces = faces_all:transpose(1,2):transpose(2,3):contiguous():reshape(3,n_cells*4)
+print(faces)
+
+faces_all = nil
+dmask = nil
+collectgarbage()
+
+n_good_faces = face_mask:sum()
 
 fid = 1
 
 -- index to only the good faces
 face_index = torch.LongTensor(n_good_faces)
-for i = 1,mm:size(1) do 
-   if mm[i] > 0 then 
+for i = 1,face_mask:size(1) do 
+   if face_mask[i] > 0 then 
       face_index[fid] = i
       fid = fid + 1
    end
 end
 
--- print(fid - n_good_faces .. " should == 1")
+print(fid - n_good_faces .. " should == 1")
 
 _G.faces_all = torch.LongTensor():zeros(3,3,n_good_faces)
 faces_clean = faces_all[2]
 faces_clean[1]:copy(vertex_map[faces[1][face_index]])
-faces_clean[2]:copy(vertex_map[faces[3][face_index]])
-faces_clean[3]:copy(vertex_map[faces[2][face_index]])
+faces_clean[2]:copy(vertex_map[faces[2][face_index]])
+faces_clean[3]:copy(vertex_map[faces[3][face_index]])
 
 -- one uv per vertex (same id)
 faces_all[3]:copy(faces_all[2])
@@ -138,4 +198,4 @@ o.materials = { material }
 
 _G.objname = path.basename(fname):gsub('xyz','obj')
 
-o:save(objname)
+-- o:save(objname)
