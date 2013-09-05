@@ -7,8 +7,9 @@
 #include <boost/foreach.hpp>
 
 #include <iostream>
+#include <cstdlib>
 
-#define DEBUG
+//#define DEBUG
 
 using namespace cv;
 using namespace std;
@@ -308,8 +309,9 @@ int main(int argc, char** argv)
     vector<cv::Point> p1v, p2v, p3v, p4v;
     const int search_window = 5;
     
-    polygon room_poly;
+    //polygon room_poly;
     std::vector<polygon> room_polys;
+    std::vector<polygon> room_polys_new;
     
     int img_num = 0;
 	
@@ -371,34 +373,6 @@ int main(int argc, char** argv)
 								quads.insert(std::pair<float, polygon>(score,quad));
 								
 								drawPoly(quad, m_polys, cv::Scalar(255, 0 ,255));
-								
-// 								std::vector<boost_point> const& points2 = quad.outer(); 
-// 											
-// 								if(points2.size()>3)
-// 								{
-// 									for (int i = 0; i < points2.size() -1; ++i) 
-// 									{ 
-// 										line( m_lines, cvPointFromBoostPoint(points2[i]), cvPointFromBoostPoint(points2[i+1]), cv::Scalar(255,0,255), 2, CV_AA);
-// 										cout<<cvPointFromBoostPoint(points2[i]);
-// 									} 
-// 
-// 									line( m_lines, cvPointFromBoostPoint(points2[points2.size()-1]), cvPointFromBoostPoint(points2[0]), cv::Scalar(255, 0,255), 2, CV_AA);
-// 									cout<<cvPointFromBoostPoint(points2[points2.size()-1])<<endl;
-// 								}
-												
-// 								if(score > max_score)
-// 								{
-// 									//cout<<max_score<<endl;
-// 
-// 									max_score = score;
-// 									selectedQuad[0] = p1v[p];
-// 									selectedQuad[1] = p2v[q];
-// 									selectedQuad[2] = p3v[r];
-// 									selectedQuad[3] = p4v[s];
-// 									
-// 								}
-								//cout<<score;
-
 						
 							}
 						}
@@ -408,6 +382,7 @@ int main(int argc, char** argv)
 		}
     }
     
+    
     std::map<float, polygon>::reverse_iterator it = quads.rbegin();
     
     float prev_max_poly_score = 0;
@@ -415,221 +390,92 @@ int main(int argc, char** argv)
     int count = 0;
     
   	for (it=quads.rbegin(); it!=quads.rend(); ++it)
-  	{
-    	//std::cout << it->first<<endl;// << " => " << it->second << '\n';
+  	{    	
+    	if(count == 0)
+		{
+		  room_polys.push_back(it->second);// = poly_union_results[0];
+		}
     	
-    	std::vector<polygon> poly_union_results;
-		poly_union_results.clear();
+    	BOOST_FOREACH(polygon &room_poly, room_polys)
+			{
+		
+			std::vector<polygon> poly_union_results;
+			poly_union_results.clear();
 
 #ifdef DEBUG
-		m_lines = m_lines_bak.clone();
-		drawPoly(it->second, m_lines, cv::Scalar(0, 0 ,255)); // * (float)(quads.size()-count++)/quads.size())
-		imshow("detected quads", m_lines);
-		waitKey();
-#endif
-		
-		boost::geometry::correct(it->second);
-		boost::geometry::correct(room_poly);
-	
-		//if (! boost::geometry::intersects(room_poly))// &&  ! boost::geometry::intersects(it->second)) 
-		{ 
-			boost::geometry::union_(room_poly, it->second, poly_union_results);
-		} 
-// 		else
-// 		{
-// 			cout<<"self intersection error!"<<boost::geometry::intersects(room_poly)<< boost::geometry::intersects(it->second)<<endl;
-// 		}
-		
-		if(count == 0)
-		{
-		  room_poly = poly_union_results[0];
-		}
-		else
-		{
-		
-		int max_poly_count = -1;
-	
-		int poly_count = 0;
-	
-		BOOST_FOREACH(polygon const& p, poly_union_results)
-		{
-			float poly_score = scorePoly(p);
-			
-#ifdef DEBUG
 			m_lines = m_lines_bak.clone();
-			drawPoly(p, m_lines, cv::Scalar(255, 0 ,0));
+			drawPoly(it->second, m_lines, cv::Scalar(0, 0 ,255)); // * (float)(quads.size()-count++)/quads.size())
 			imshow("detected quads", m_lines);
 			waitKey();
 #endif
+		
+			boost::geometry::correct(it->second);
+			boost::geometry::correct(room_poly);
+	 
+			boost::geometry::union_(room_poly, it->second, poly_union_results);
 			
-			if(poly_score > max_poly_score)// && poly_score - max_poly_score > 1000)// && boost::geometry::area(p) > boost::geometry::area(room_poly))
+			int max_poly_count = -1;
+	
+			int poly_count = 0;
+	
+			BOOST_FOREACH(polygon const& p, poly_union_results)
 			{
-				//cout<<"poly_score: "<<poly_score<<"  max_poly_score: "<<max_poly_score<<"  max_poly_count: "<<max_poly_count<<endl<<endl;
-				cout<<"Delta :"<<poly_score - max_poly_score<<endl;
-				max_poly_score = poly_score;
-				max_poly_count = poly_count;
-				room_poly = poly_union_results[max_poly_count];
+				float poly_score = scorePoly(p);
+			
+#ifdef DEBUG
+				m_lines = m_lines_bak.clone();
+				drawPoly(p, m_lines, cv::Scalar(255, 0 ,0));
+				imshow("detected quads", m_lines);
+				waitKey();
+#endif
+			
+				if(poly_score > max_poly_score)// && poly_score - max_poly_score > 1000)// && boost::geometry::area(p) > boost::geometry::area(room_poly))
+				{
+					//cout<<"poly_score: "<<poly_score<<"  max_poly_score: "<<max_poly_score<<"  max_poly_count: "<<max_poly_count<<endl<<endl;
+					cout<<"Delta :"<<poly_score - max_poly_score<<endl;
+					max_poly_score = poly_score;
+					max_poly_count = poly_count;
+					room_polys_new.push_back(poly_union_results[max_poly_count]);
+				}
+			
+				poly_count++;
+			}
+		
+			count++;
+#ifdef DEBUG
+			m_lines = m_lines_bak.clone();
+			drawPoly(room_poly, m_lines, cv::Scalar(0, 255 ,0));
+			imshow("detected quads", m_lines);
+			waitKey();
+#endif
 			}
 			
-			poly_count++;
-		}
-		
-		if(poly_count > 1)
-			cout<<"wow!"<<endl;
-		
-		boost::geometry::correct(room_poly);
-		}
-    	
-    	count++;
-#ifdef DEBUG
-    	m_lines = m_lines_bak.clone();
-		drawPoly(room_poly, m_lines, cv::Scalar(0, 255 ,0));
-		imshow("detected quads", m_lines);
-		waitKey();
-#endif
+			if(room_polys_new.size() > 1)
+				cout<<"wow!"<<endl;
+			
+			if(room_polys_new.size() > 0)
+			{
+				room_polys.clear();
+	
+				room_polys = room_polys_new;
+	
+				room_polys_new.clear();
+			}
     }
-    drawPoly(room_poly, m_lines, cv::Scalar(0, 255 ,0));
-    imshow("detected quads", m_lines);
-	waitKey();
     
-    								//if(score > 10)
-								/*{
-									
-									
-									// std::vector<Point> quad_points;
-// 									quad_points.push_back(boost_point(p1v[p].x, p1v[p].y));
-// 									quad_points.push_back(boost_point(p2v[q].x, p2v[q].y));
-// 									quad_points.push_back(boost_point(p3v[r].x, p3v[r].y));
-// 									quad_points.push_back(boost_point(p4v[s].x, p4v[s].y));
-// 									quad.set(quad_points.begin(), quad_points.end());
-									
-									std::vector<polygon> poly_union_results;
-									poly_union_results.clear();
-									
-									//cout<<room_poly.outer().size()<<" -- " << quad.outer().size() <<endl;
-									
-									if (! boost::geometry::intersects(room_poly) &&  ! boost::geometry::intersects(quad)) 
-									{ 
-										boost::geometry::union_(room_poly, quad, poly_union_results);
-									} 
-									
-									float max_poly_score = -1;
-									int max_poly_count = -1;
-									
-									int poly_count = 0;
-									
-									BOOST_FOREACH(polygon const& p, poly_union_results)
-									{
-										//std::cout <<  boost::geometry::area(p) << std::endl;
-										
-										//score poly
-											
-										std::vector<boost_point> const& points2 = p.outer(); 
-											
-											if(points2.size()>3)
-											{
-												for (int i = 0; i < points2.size() -1; ++i) 
-												{ 
-													line( m_lines, cvPointFromBoostPoint(points2[i]), cvPointFromBoostPoint(points2[i+1]), cv::Scalar(255,0,255), 2, CV_AA);
-													cout<<cvPointFromBoostPoint(points2[i]);
-												} 
-			
-												line( m_lines, cvPointFromBoostPoint(points2[points2.size()-1]), cvPointFromBoostPoint(points2[0]), cv::Scalar(255, 0,255), 2, CV_AA);
-												cout<<cvPointFromBoostPoint(points2[points2.size()-1])<<endl;
-											}
-											
-																						imshow("detected quads", m_lines);
-
-										
-										if(poly_score > max_poly_score && boost::geometry::area(p) > boost::geometry::area(room_poly))// && !boost::geometry::covered_by(boost_point(0,0), room_poly))
-										{											
-											cout<<"new: "<<boost::geometry::area(p)<<", old: "<<boost::geometry::area(room_poly)<<endl;
-											
-											std::vector<boost_point> const& points = room_poly.outer(); 
-											
-											if(points.size()>3)
-											{
-												for (int i = 0; i < points.size() -1; ++i) 
-												{ 
-													line( m_lines, cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]), cv::Scalar(0,255,255), 2, CV_AA);
-												} 
-			
-												line( m_lines, cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]), cv::Scalar(0,255,255), 2, CV_AA);
-											}
-											
-
-											
-											max_poly_score = poly_score;
-											max_poly_count = poly_count;
-											room_poly = poly_union_results[max_poly_count];
-											
-											imshow("detected quads", m_lines);
-											
-// 											std::stringstream ss;
-// 											ss << img_num;
-// 
-// 											std::string save_num(ss.str());
-// 	
-// 											string save_filename = std::string("frames/") + save_num + std::string(".jpg");
-// 											
-// 											imwrite(save_filename, m_lines);
-// 											img_num++;
-											
-											waitKey();
-											m_lines = m_lines_bak.clone();
-
-											std::vector<boost_point> const& points1 = room_poly.outer(); 
-
-											for (int i = 0; i < points1.size() -1; ++i) 
-											{ 
-												line( m_lines, cvPointFromBoostPoint(points1[i]), cvPointFromBoostPoint(points1[i+1]), cv::Scalar(0,255,255), 2, CV_AA);
-											} 
-			
-											line( m_lines, cvPointFromBoostPoint(points1[points1.size()-1]), cvPointFromBoostPoint(points1[0]), cv::Scalar(0,255,255), 2, CV_AA);
-
-											imshow("detected quads", m_lines);
-											
-// 											ss.str("");
-// 											ss << img_num;
-// 
-// 											save_num = ss.str();
-// 	
-// 											save_filename = std::string("frames/") + save_num + std::string(".jpg");
-// 											
-// 											imwrite(save_filename, m_lines);
-// 											img_num++;
-																						
-											waitKey();
-											m_lines = m_lines_bak.clone();
-										}
-										
-										//cout<<endl;
-										poly_count++;
-									}
-
-								}*/
+    srand (time(NULL));
     
-// 	std::vector<boost_point> const& points = room_poly.outer(); 
-// 
-//     for (int i = 0; i < points.size() -1; ++i) 
-// 	{ 
-// 		line( m_lines, cvPointFromBoostPoint(points[i]), cvPointFromBoostPoint(points[i+1]), cv::Scalar(0,255,255), 2, CV_AA);
-// 	} 
-// 			
-// 	line( m_lines, cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]), cv::Scalar(0,255,255), 2, CV_AA);
-
+    m_lines = m_lines_bak.clone();
+    BOOST_FOREACH(polygon &room_poly, room_polys)
+	{
+		int r = 255*((double) rand() / (RAND_MAX));
+		int g = 255*((double) rand() / (RAND_MAX));
+		int b = 255*((double) rand() / (RAND_MAX));
+		drawPoly(room_poly, m_lines, cv::Scalar(b, g, r));
+		printf("%d, %d, %d\n", r, g, b);
+	}
     
-    //cout<<selectedQuad[0]<<" "<<selectedQuad[1]<<" "<<selectedQuad[2]<<" "<<selectedQuad[3]<<endl;
-    
-//     if(max_score > 0 )
-//     {
-//         line( m_lines, selectedQuad[0], selectedQuad[1], cv::Scalar(255,255,255), 2, CV_AA);
-//         line( m_lines, selectedQuad[1], selectedQuad[2], cv::Scalar(255,255,255), 2, CV_AA);
-//         line( m_lines, selectedQuad[2], selectedQuad[3], cv::Scalar(255,255,255), 2, CV_AA);
-//         line( m_lines, selectedQuad[3], selectedQuad[0], cv::Scalar(255,255,255), 2, CV_AA);
-//     }
-//     
-    printf("%lu\n", intersections.size());
+    printf("Intersections: %lu\n", intersections.size());
         
     imshow("detected lines", m);
     imshow("slice", m_polys);
@@ -637,11 +483,11 @@ int main(int argc, char** argv)
     
     setMouseCallback( "detected lines", onMouse, 0 );
     
-    cout<<"tests: "<<tests<<endl;
+    cout<<"Tests: "<<tests<<endl;
     waitKey();
     
 #ifdef DEBUG
-    waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();
+    waitKey();waitKey();waitKey();waitKey();waitKey();waitKey();
 #endif
     
     return 0;
