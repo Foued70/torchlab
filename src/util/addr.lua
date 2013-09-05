@@ -35,12 +35,16 @@ function remap(img, offset, mask, out_image)
 
    local image_dim    = img:nDimension()
 
+   -- Multi channel allows us to use the same index for all channels
+   -- of a DHW style input or nchannels x some other dimensions
+   -- in which we index.
+
    local n_slices     = img:size(1)
 
-   -- allow for single slice images with no first dimension
-   if (image_dim == index_dim) then
+   if (n_slices > 3) then 
+      print("Warning treating image as a single channel")
+      n_slices = 1
       img = img:reshape(util.util.add_slices(1,img:size()))
-      n_slices = 1 
    end
 
    -- make output 3 x H x W (or n_slices by whatever)
@@ -68,7 +72,6 @@ function remap(img, offset, mask, out_image)
 
       -- flatten to 1D for fast indexing
       imgd:resize(input_elements_per_slice)
-
       out_image[d]    = imgd[offset]
       if mask then 
          out_image[d][mask] = 0 -- erase out of bounds values
