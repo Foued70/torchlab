@@ -61,9 +61,9 @@ end
 
 function Obj:add_derived_data()
   tic()
-  local n_faces = self.n_faces
-  local n_verts_per_face = self.n_verts_per_face
-  local face_verts = self.face_verts
+  local n_faces             = self.n_faces
+  local n_verts_per_face    = self.n_verts_per_face
+  local face_verts          = self.face_verts
   
   local face_planes         = torch.Tensor(n_faces, 4)
   local face_centers        = torch.ones(n_faces, 4)
@@ -213,7 +213,7 @@ function Obj:load(filename)
         
         face_verts[{face_idx, face_vert_idx, {1, 3}}] = vert -- shortcut to the vert
         
-        faces[{face_idx, face_vert_idx, 1}] = idx -- unified_vert index
+        faces[{face_idx, face_vert_idx, 1}] = idx          -- unified_vert index
         faces[{face_idx, face_vert_idx, 2}] = vert_pos_idx -- vert indx
         if vert_uv_idx then faces[{face_idx, face_vert_idx, 3}] = vert_uv_idx end -- uv index
                 
@@ -292,10 +292,6 @@ function Obj:get_tris()
       local n_verts_per_face = self.n_verts_per_face
       local faces = self.faces
       local tris_idx = 0    
-      -- local submeshes = self.submeshes
-      -- local submesh_count = submeshes:size(1)
-      -- local submesh_idx = 1      
-      -- local submesh_end = submeshes[submesh_idx][2]
       
       -- input face can be a tri, quad, or poly but output face must be a tri      
       for face_idx=1, self.n_faces do
@@ -308,20 +304,10 @@ function Obj:get_tris()
           tris[tris_idx][2] = face[vert_idx+1][1]
           tris[tris_idx][3] = face[vert_idx+2][1]
         end
-        -- submeshes' start and end need to be updated
-        -- if face_idx == submesh_end then
-        --   submeshes[submesh_idx][2] = tris_idx
-        --   submesh_idx = submesh_idx+1
-        --   if submesh_idx <= submesh_count then
-        --     submeshes[submesh_idx][1] = tris_idx+1
-        --     submesh_end = submeshes[submesh_idx][2]
-        --   end          
-        -- end
       end      
       local trimmed_tris = torch.LongTensor(tris_idx, 3)
       trimmed_tris[{{1, tris_idx}}] = tris[{{1, tris_idx}}]
       self.tris = trimmed_tris      
-      -- self.submeshes = submeshes
     end
   end
   
@@ -330,82 +316,115 @@ end
 
 function Obj:save(filename, mtlname)
   filename = filename or "scan.obj"
-  mtlname = mtlname or "scan.mtl"  
+  mtlname = mtlname or filename:gsub("obj","mtl")
   
   local objf = assert(io.open(filename, "w"))  
   objf:write(string.format("mtllib %s\n\n", path.basename(mtlname)))
   
   -- print vertices
-  log.trace('writing verts', self.n_verts)  
   local verts = self.verts
-  for vert_idx = 1,self.n_verts do 
-     local vert = verts[vert_idx]
-     objf:write(string.format("v %f %f %f\n",vert[1],vert[2],vert[3]))
+  if self.n_verts and verts then 
+     log.trace('writing verts', self.n_verts)  
+     for vert_idx = 1,self.n_verts do 
+        local vert = verts[vert_idx]
+        objf:write(string.format("v %f %f %f\n",vert[1],vert[2],vert[3]))
+     end
+  else
+     log.trace("no verts to write")
   end
   
   -- print uvs
-  log.trace('writing uvs', self.n_uvs)  
   local uvs = self.uvs
-  objf:write("\n")
-  for uv_idx = 1,self.n_uvs do 
-    local uv = uvs[uv_idx]
-    objf:write(string.format("vt %f %f\n", uv[1], uv[2]))
+  if uvs then 
+     log.trace('writing uvs', self.n_uvs)  
+     objf:write("\n")
+     for uv_idx = 1,self.n_uvs do 
+        local uv = uvs[uv_idx]
+        objf:write(string.format("vt %f %f\n", uv[1], uv[2]))
+     end
+  else 
+     log.trace('no uvs to write')
   end
-  
+
   -- faces
-  log.trace('writing faces', self.n_faces)    
   local faces = self.faces
-  objf:write("\n")  
-  
   local materials = self.materials
   local submeshes = self.submeshes
   local n_verts_per_face = self.n_verts_per_face
-
-  for submesh_idx=1, submeshes:size(1) do
-    local submesh = submeshes[submesh_idx]
-    objf:write("\n")
-    objf:write(string.format("g face%05d\n",submesh_idx))
-    local material = materials[submesh[3]]      
-    if material then
-      objf:write(string.format("usemtl %s\n", material.name))
-    end
-            
-    for face_idx = submesh[1], submesh[2] do                        
-      local str = "f "
-      for face_vert_idx=1, n_verts_per_face[face_idx] do
-        local vert_idx = faces[face_idx][face_vert_idx][2];
-        local uv_idx = faces[face_idx][face_vert_idx][3];    
-        if uv_idx == -1 then
-          str = str..string.format("%d ", vert_idx)    
-        else
-          str = str..string.format("%d/%d ", vert_idx, uv_idx)          
-        end          
-      end
-      objf:write(str.."\n")
-    end
+     
+  if self.faces then 
+     log.trace('writing faces', self.n_faces)    
+     if submeshes then
+        for submesh_idx= 1,#submeshes do
+           local submesh = submeshes[submesh_idx]
+           objf:write("\n")
+           objf:write(string.format("g face%05d\n",submesh_idx))
+           local material = materials[submesh[3]]      
+           if material then
+              objf:write(string.format("usemtl %s\n", material.name))
+           end
+           
+           for face_idx = submesh[1], submesh[2] do                        
+              local str = "f "
+              for face_vert_idx=1, n_verts_per_face[face_idx] do
+                 local vert_idx = faces[face_idx][face_vert_idx][2];
+                 local uv_idx = faces[face_idx][face_vert_idx][3];    
+                 if uv_idx == -1 then
+                    str = str..string.format("%d ", vert_idx)    
+                 else
+                    str = str..string.format("%d/%d ", vert_idx, uv_idx)          
+                 end          
+              end
+              objf:write(str.."\n")
+           end
+        end   
+     else
+        material = materials[1]
+        objf:write(string.format("usemtl %s\n", material.name))
+        for face_idx = 1, self.n_faces do                        
+              local str = "f "
+              for face_vert_idx=1, n_verts_per_face[face_idx] do
+                 local vert_idx = faces[face_idx][face_vert_idx][2];
+                 local uv_idx = faces[face_idx][face_vert_idx][3];    
+                 if uv_idx == -1 then
+                    str = str..string.format("%d ", vert_idx)    
+                 else
+                    str = str..string.format("%d/%d ", vert_idx, uv_idx)          
+                 end          
+              end
+              objf:write(str.."\n")
+           end
+     end
+     if not materials then
+        materials = {default_material()}
+     end
+     objf:write("\n")        
+     
   end
-  
+
   objf:close()
-  
-  local mtlf = assert(io.open(mtlname, "w"))  
-  log.trace('writing materials', #materials)  
-  for i=1, #materials do
-    local material = materials[i]
-    write_mtl_prop(mtlf, material, 'name', 'newmtl')
-    write_mtl_prop(mtlf, material, 'shininess', 'Ns')
-    write_mtl_prop(mtlf, material, 'ambient', 'Ka')
-    write_mtl_prop(mtlf, material, 'diffuse', 'Kd')
-    write_mtl_prop(mtlf, material, 'specular', 'Ks')
-    write_mtl_prop(mtlf, material, 'alpha', 'd')    
-    write_mtl_prop(mtlf, material, 'illumType', 'illum')
 
-    if material.diffuse_tex_path then      
-      mtlf:write(string.format("map_Kd %s\n", path.basename(material.diffuse_tex_path)))
-    end   
+  if materials then 
+     local mtlf = assert(io.open(mtlname, "w"))  
+     log.trace('writing materials', #materials)  
+     for i=1, #materials do
+        local material = materials[i]
+        write_mtl_prop(mtlf, material, 'name', 'newmtl')
+        write_mtl_prop(mtlf, material, 'shininess', 'Ns')
+        write_mtl_prop(mtlf, material, 'ambient', 'Ka')
+        write_mtl_prop(mtlf, material, 'diffuse', 'Kd')
+        write_mtl_prop(mtlf, material, 'specular', 'Ks')
+        write_mtl_prop(mtlf, material, 'alpha', 'd')    
+        write_mtl_prop(mtlf, material, 'illumType', 'illum')
+        
+        if material.diffuse_tex_path then      
+           mtlf:write(string.format("map_Kd %s\n", path.basename(material.diffuse_tex_path)))
+        end   
     
-    mtlf:write("\n")
+        mtlf:write("\n")
+     end
+     mtlf:close()
   end
-  mtlf:close()
-  
+
   log.trace('obj saved', filename)
 end

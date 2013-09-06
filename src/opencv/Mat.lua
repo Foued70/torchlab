@@ -140,36 +140,34 @@ end
 -- dimensions can be HWD (opencv default) or DHW torch default
 function Mat:toTensor(dimensions_or_nocopy)
    tensor = nil
-   if not self.tensor then 
-      mat = self.mat
-      depth = libopencv.Mat_depth(mat)
-      if depth == 0 then  -- CV_8U
-         tensor = torch.ByteTensor()
-         libopencv.THByteTensor_fromMat(mat,torch.cdata(tensor)) 
-      elseif depth == 1 then -- CV_8S
-         tensor = torch.CharTensor()
-         libopencv.THCharTensor_fromMat(mat,torch.cdata(tensor))
-      elseif depth == 2 then -- CV_16U
-         error("no analog in torch for CV_16U")
-      elseif depth == 3 then -- CV_16S
-         tensor = torch.ShortTensor()
-         libopencv.THShortTensor_fromMat(mat,torch.cdata(tensor))
-      elseif depth == 4 then -- CV_32S
-         tensor = torch.IntTensor()
-         libopencv.THIntTensor_fromMat(mat,torch.cdata(tensor))
-      elseif depth == 5 then -- CV_32F
-         tensor = torch.FloatTensor()
-         libopencv.THFloatTensor_fromMat(mat,torch.cdata(tensor))
-      elseif depth == 6 then -- CV_64F
-         tensor = torch.DoubleTensor()
-         libopencv.THDoubleTensor_fromMat(mat,torch.cdata(tensor))
-      else
-         error("something is wrong")
-      end
-      
-      self.tensor = tensor
+   mat = self.mat
+   depth = libopencv.Mat_depth(mat)
+   if depth == 0 then  -- CV_8U
+      tensor = torch.ByteTensor()
+      libopencv.THByteTensor_fromMat(mat,torch.cdata(tensor)) 
+   elseif depth == 1 then -- CV_8S
+      tensor = torch.CharTensor()
+      libopencv.THCharTensor_fromMat(mat,torch.cdata(tensor))
+   elseif depth == 2 then -- CV_16U
+      error("no analog in torch for CV_16U")
+   elseif depth == 3 then -- CV_16S
+      tensor = torch.ShortTensor()
+      libopencv.THShortTensor_fromMat(mat,torch.cdata(tensor))
+   elseif depth == 4 then -- CV_32S
+      tensor = torch.IntTensor()
+      libopencv.THIntTensor_fromMat(mat,torch.cdata(tensor))
+   elseif depth == 5 then -- CV_32F
+      tensor = torch.FloatTensor()
+      libopencv.THFloatTensor_fromMat(mat,torch.cdata(tensor))
+   elseif depth == 6 then -- CV_64F
+      tensor = torch.DoubleTensor()
+      libopencv.THDoubleTensor_fromMat(mat,torch.cdata(tensor))
+   else
+      error("something is wrong")
    end
-
+   
+   self.tensor = tensor
+   
    if dimensions_or_nocopy == "DHW" then 
       -- changing dimensions always returns a copy
       return self.tensor:transpose(3,1):transpose(2,3):contiguous() 
