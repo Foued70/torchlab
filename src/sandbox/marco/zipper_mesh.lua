@@ -1,18 +1,20 @@
 path = require 'path'
 
-fname    = 'data/297.xyz'
-img_name = '297.png'
+max_dist_btwn_pts = 0.05 -- 5cm
 
-_G.p = PointCloud.PointCloud.new('point.od') -- fname)
+fname    = 'data/296.xyz'
+img_name = '296.png'
+
+_G.p = PointCloud.PointCloud.new(fname)
 
 _G.depth_map = p:get_depth_map()
-_G.xyz       = p:get_xyz_map()
+_G.xyz_map       = p:get_xyz_map()
 
-n_cells = xyz[1]:nElement()
+n_cells = xyz_map[1]:nElement()
 n_verts = p.count 
 
-height = xyz:size(2)
-width  = xyz:size(3)
+height = xyz_map:size(2)
+width  = xyz_map:size(3)
 
 -- mask tells us where the faro returns no points
 _G.mask_map = p.mask_map:clone()
@@ -21,7 +23,7 @@ _G.mask_map = p.mask_map:clone()
 
 -- vertex_map: map_index to point_index
 -- vertex_list: point_index to map_index
-vertex_map  = torch.LongTensor():zeros(n_cells)
+vertex_map  = torch.LongTensor(n_cells):fill(-1)
 vertex_list = torch.LongTensor(n_verts)
 mask_flat   = mask_map:reshape(n_cells)
 
@@ -37,7 +39,7 @@ end
 uvs_temp = torch.FloatTensor(2,n_cells)
 
 x = torch.linspace(0,1,width):resize(1,width):expand(height,width)
-y = torch.linspace(-1,0,height):mul(-1):resize(1,height):expand(width,height)
+y = torch.linspace(-1,0,height):abs():resize(1,height):expand(width,height)
 
 uvs_temp[1]:copy(x)
 uvs_temp[2]:copy(y:t())
@@ -108,24 +110,26 @@ dmask = torch.ByteTensor(4,height,width)
 diffm = torch.FloatTensor(height,width+1)
 
 -- over/back
-diffm[{{},{2,width}}] = depth_map[{{},{1,width-1}}] - depth_map[{{},{2,width}}]
-diffm:abs()
-diffm[{{},1}] = 1
+d = xyz_map[{{},{},{1,width-1}}] - xyz_map[{{},{},{2,width}}]
+diffm[{{},{2,width}}] = d:cmul(d):sum(1):squeeze():sqrt()
+
+diffm[{{},1}]       = 1
 diffm[{{},width+1}] = 1
 
-dmask[2] = diffm[{{},{1,width}}]:gt(0.5)   -- back
-dmask[4] = diffm[{{},{2,width+1}}]:gt(0.5) -- over
+dmask[2] = diffm[{{},{1,width}}]:gt(max_dist_btwn_pts)   -- back
+dmask[4] = diffm[{{},{2,width+1}}]:gt(max_dist_btwn_pts) -- over
 
 diffm:resize(height+1,width):zero()
 
 -- up/down
-diffm[{{2,height},{}}] = depth_map[{{1,height-1},{}}] - depth_map[{{2,height},{}}]
-diffm:abs()
+d = xyz_map[{{},{1,height-1},{}}] - xyz_map[{{},{2,height},{}}]
+diffm[{{2,height},{}}] = d:cmul(d):sum(1):squeeze():sqrt()
+
 diffm[{1,{}}]        = 1
 diffm[{height+1,{}}] = 1
 
-dmask[1] = diffm[{{1,height},{}}]:gt(0.5)   -- up
-dmask[3] = diffm[{{2,height+1},{}}]:gt(0.5) -- down
+dmask[1] = diffm[{{1,height},{}}]:gt(max_dist_btwn_pts)   -- up
+dmask[3] = diffm[{{2,height+1},{}}]:gt(max_dist_btwn_pts) -- down
 
 diffm = nil
 collectgarbage()
@@ -141,8 +145,6 @@ _G.face_mask   = face_mask:eq(0) -- invert this is a map of good faces
 
 
 _G.face_mask = face_mask:reshape(4,n_cells):transpose(2,1):contiguous():reshape(face_mask:nElement())
-
-
 _G.faces = faces_all:transpose(1,2):transpose(2,3):contiguous():reshape(3,n_cells*4)
 print(faces)
 
@@ -198,4 +200,4 @@ o.materials = { material }
 
 _G.objname = path.basename(fname):gsub('xyz','obj')
 
--- o:save(objname)
+o:save(objname)
