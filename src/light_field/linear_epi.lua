@@ -31,10 +31,11 @@ nfiles      = #files
 max_size    = 1024
 colorspace  = 'RGB'
 tensor_type = 'torch.FloatTensor'
-epi_batch_size  = 32
+epi_batch_size  = 339
 print("Processing ".. #files .. " potential files")
 torch.setdefaulttensortype(tensor_type)
 i = 0
+-- make_epi ()
 for _,fpath in pairs(files) do
    -- fpath = d..f
    if fs.existsSync(fpath) and fs.statSync(fpath).is_file then
@@ -61,6 +62,7 @@ nrows = epi_image:size(3) -- height
  
 last = 1
 
+-- slice_epi()
 for i = 1,nrows-epi_batch_size,epi_batch_size do
    -- clone ensures that we save the smaller storage, and that epi_row is contiguous
    epi_row = epi_image:narrow(3,i,epi_batch_size):transpose(1,2):clone()
