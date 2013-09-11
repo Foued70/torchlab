@@ -30,82 +30,87 @@ function Hough:getHoughCorners(img1)
 		linesXYSoFar1[table.getn(linesXYSoFar1)+1] = linesT[{k,{}}]
 	end
 	local corners1 = torch.zeros(table.getn(linesXYSoFar1)*2, 2)
+	
 	for i =1, table.getn(linesXYSoFar1) do
+		
 		corners1[{2*i-1,{}}] = linesXYSoFar1[i][{{1,2}}]
+		
 		corners1[{2*i,{}}] = linesXYSoFar1[i][{{3,4}}]
+		
 	end
 
 	return corners1
 end
 
 function Hough:getHoughLinesAndPoints(img, display)
-local linesSoFar = self:getHoughLines(img, display)
-local slopeIntersectTensor = torch.zeros(table.getn(linesSoFar), 2)
-for i =1, table.getn(linesSoFar) do
-	slopeIntersectTensor[{i,{}}] = linesSoFar[i]
-end
+	local linesSoFar = self:getHoughLines(img, display)
+	local slopeIntersectTensor = torch.zeros(table.getn(linesSoFar), 2)
 
---find the corners! split into two perpendicular "clusters", corners are intersections of any point in one cluster with points in the other
-local angles = torch.atan(slopeIntersectTensor[{{},1}])
-angles:apply(function(val) if val<0 then return math.pi + val end end)
-local vals, order = torch.sort(angles)
-local absoluted = torch.abs(vals[{{1,vals:size()[1]-1},1}]-vals[{{2,vals:size()[1]},1}])
-local maxV, locV = torch.max(absoluted,1)
---vals[locV] and vals[locV+1] is the boundary
-
-
-local firstGroupIndices = order[{{1,locV[1]},1}]
-local secondGroupIndices = order[{{locV[1]+1, vals:size()[1]},1}]
-
-if(display) then
-	local img_copy = image.get3Dfrom1DCopyChannels(img:toTensor():clone())
-	color = torch.Tensor({0, 255, 0})
-	for i = 1,slopeIntersectTensor:size()[1] do
-		for k=1,3 do
-			Hough.drawLine(img_copy[k], slopeIntersectTensor[{i,{}}], color[k])
-		end
+	for i =1, table.getn(linesSoFar) do
+		slopeIntersectTensor[{i,{}}] = linesSoFar[i]
 	end
-	image.display(img_copy)
-end
 
-local imgtens = img:toTensor():type('torch.DoubleTensor')
-local kern = torch.ones(3,3)
-imgtens = torch.conv2(imgtens:clone(),kern,'F'):sub(2,img:size()[1]+1,2,img:size()[2]+1)
+	--find the corners! split into two perpendicular "clusters", corners are intersections of any point in one cluster with points in the other
+	local angles = torch.atan(slopeIntersectTensor[{{},1}])
+	angles:apply(function(val) if val<0 then return math.pi + val end end)
+	local vals, order = torch.sort(angles)
+	local absoluted = torch.abs(vals[{{1,vals:size()[1]-1},1}]-vals[{{2,vals:size()[1]},1}])
+	local maxV, locV = torch.max(absoluted,1)
+	--vals[locV] and vals[locV+1] is the boundary
 
-local points = torch.zeros((firstGroupIndices:size()[1])*secondGroupIndices:size()[1], 2)
-local counter = 1
-for i=1, firstGroupIndices:size()[1] do
-	for j=1, secondGroupIndices:size()[1] do
-		local x, y = Hough.findIntersect(slopeIntersectTensor[{firstGroupIndices[i],{}}],
+
+	local firstGroupIndices = order[{{1,locV[1]},1}]
+	local secondGroupIndices = order[{{locV[1]+1, vals:size()[1]},1}]
+
+	if(display) then
+		local img_copy = image.get3Dfrom1DCopyChannels(img:toTensor():clone())
+		color = torch.Tensor({0, 255, 0})
+		for i = 1,slopeIntersectTensor:size()[1] do
+			for k=1,3 do
+				Hough.drawLine(img_copy[k], slopeIntersectTensor[{i,{}}], color[k])
+			end
+		end
+		image.display(img_copy)
+	end
+
+	local imgtens = img:toTensor():type('torch.DoubleTensor')
+	local kern = torch.ones(3,3)
+	imgtens = torch.conv2(imgtens:clone(),kern,'F'):sub(2,img:size()[1]+1,2,img:size()[2]+1)
+	
+	local points = torch.zeros((firstGroupIndices:size()[1])*secondGroupIndices:size()[1], 2)
+	local counter = 1
+	for i=1, firstGroupIndices:size()[1] do
+		for j=1, secondGroupIndices:size()[1] do
+			local x, y = Hough.findIntersect(slopeIntersectTensor[{firstGroupIndices[i],{}}],
 			slopeIntersectTensor[{secondGroupIndices[j],{}}])
-		 local xc = math.ceil(x)
-		 local yc = math.ceil(y)
-		 local xf = math.floor(x)
-		 local yf = math.floor(y)
-		 if xc-x < x-xf then
-		 	x = xc
-		 else
-		 	x = xf
-		 end
-		 if yc-y < y-yf then
-		 	y = yc
-		 else
-		 	y = yf
-		 end
+			local xc = math.ceil(x)
+			local yc = math.ceil(y)
+		 	local xf = math.floor(x)
+		 	local yf = math.floor(y)
+		 	if xc-x < x-xf then
+		 		x = xc
+			else
+		 		x = xf
+		 	end
+		 	if yc-y < y-yf then
+		 		y = yc
+		 	else
+		 		y = yf
+		 	end
 		 
-         if (x>0) and (x<=img:size()[1]) and (y>0 ) and (y<=img:size()[2]) then
-         	if imgtens[x][y] > 0 then
-	         	points[{counter,{}}] = torch.Tensor({x,y})
-		        counter = counter+1
-		    end
-         end
-     end
- end
- if counter > 1 then
-	 return points[{{1,counter-1},{}}]
- else
- 	return nil
- end
+         	if (x>0) and (x<=img:size()[1]) and (y>0 ) and (y<=img:size()[2]) then
+         		if imgtens[x][y] > 0 then
+	         		points[{counter,{}}] = torch.Tensor({x,y})
+			        counter = counter+1
+			    end
+        	 end
+	     end
+	end
+	if counter > 1 then
+	 	return points[{{1,counter-1},{}}]
+ 	else
+ 		return nil
+	end
 
 end
 

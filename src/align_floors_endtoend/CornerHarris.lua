@@ -30,9 +30,18 @@ function CornerHarris:findCorners(img)
    local goodLocationsX, goodLocationsY = image.thresholdReturnCoordinates(scoresTorchSquare, CornerHarris.threshold)
    local t1,sortOrder = torch.sort(thresholdScores,1,true)
    local topScores = torch.Tensor(math.min(CornerHarris.npts_interest,thresholdScores:size(1)),3)
+   
+   local tmp1 = img:toTensor():type('torch.DoubleTensor')
+   local tmp1 = tmp1:clone():cdiv(tmp1:clone():add(0.00000001))
+   
    for i=1,math.min(CornerHarris.npts_interest,thresholdScores:size(1))  do
-      topScores[{i,{}}]=torch.Tensor({goodLocationsX[sortOrder[i]],goodLocationsY[sortOrder[i]],t1[i]})
-   end
+   
+   	  local cand = torch.Tensor({goodLocationsX[sortOrder[i]],goodLocationsY[sortOrder[i]],t1[i]})
+	  
+		topScores[{i,{}}]= cand
+	  
+	end
+
    return topScores;
 end
 
