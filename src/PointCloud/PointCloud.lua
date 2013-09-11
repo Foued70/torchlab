@@ -50,7 +50,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
             self.points = pts:type('torch.DoubleTensor'):div(10000.0)
             self.rgb = loaded[4]
             self.count = self.points:size(1)
-            self.normal_map = loaded[5]
+            self.normal_map = loaded[5]:type('torch.DoubleTensor'):div(10000.0)
             self:reset_point_stats()
          else
             error('arg #1 must either be empty or a valid file: '..pcfilename)
@@ -153,6 +153,8 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    collectgarbage()
 
    self.points = torch.Tensor(xyz_table)
+   xyz_table = nil
+   
    self.count = count;
    self.centroid = torch.Tensor({{meanx, meany, meanz}}):div(count+0.000001)
    local stdrd = math.sqrt((self.points-self.centroid:repeatTensor(self.count,1)):pow(2):sum(2):mean())
@@ -232,7 +234,8 @@ function PointCloud:write(filename)
 
    if util.fs.extname(filename)==PC_OD_EXTENSION then
       local pts = self.points:clone():mul(10000):type('torch.IntTensor')
-      torch.save(filename, {self.format, self.hwindices, pts, self.rgb, self.normal_map})
+      local nmp = self.normal_map:clone():mul(10000):type('torch.IntTensor')
+      torch.save(filename, {self.format, self.hwindices, pts, self.rgb, nmp})
    elseif util.fs.extname(filename)==PC_ASCII_EXTENSION then
       local file = io.open(filename, 'w');
       local tmpt = torch.range(1,self.count)
@@ -317,7 +320,6 @@ local function connect_lines(img,x1,y1,x2,y2,height,width,dst)
 					local yy = y2 + (xx-x2)*slp
 					if xx <= width and yy <=height and xx >=1 and yy >=1 then
 						img[yy][xx] = img[yy][xx] + dst*3
-						img:sub(yy,yy,math.max(1,xx-1),math.min(width,xx+1)):add(dst*1)
 						if prev > 0 and yy ~= prev then
 							img[prev][xx] = img[prev][xx] + dst*2
 							img[yy][xx-1] = img[yy][xx-1] + dst*2
@@ -337,8 +339,6 @@ local function connect_lines(img,x1,y1,x2,y2,height,width,dst)
 					local xx = x2 + (yy-y2)*slp
 					if xx <= width and yy <=height and xx >=1 and yy >=1 then
 						img[yy][xx] = img[yy][xx] + dst*3
-						--img:sub(math.max(1,yy-1),math.min(height,yy+1),math.max(1,xx-1),math.min(width,xx+1)):add(dst/2)
-						img:sub(math.max(1,yy-1),math.min(height,yy+1),xx,xx):add(dst*1)
 						if prev > 0 and xx ~= prev then
 							img[yy][prev] = img[yy][prev] + dst*2
 							img[yy-1][xx] = img[yy-1][xx] + dst*2
@@ -396,24 +396,13 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 		imagez=(imagez:div(imagez:max()+0.000001):mul(256)):floor()
 		self.imagez = imagez:clone():resize(height,width):repeatTensor(3,1,1)
 	else
-	
-		log.tic()
 		
 		local connections,corners_map = self:find_connections_and_corners()
-		self:make_xyz_map(true)
 		if mask then
 			connections:cmul(mask)
 		end
 		
-		print('found connections in: '..log.toc())
-		
-		log.tic()
-		
 		local image_corners = imagez:clone()
-		
-		print('found corners in: '..log.toc())
-		
-		log.tic()
 		
 		local imgpts = self.xyz_map:clone()
 		local hght = self.height
@@ -430,10 +419,6 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 		local inline_tol = 0.25
 		
 		local points = imgpts:clone()
-		
-		print('setup in: '..log.toc())
-		
-		log.tic()
 		
 		local crdh = coords[1]
 		local ptsh = points[1]
@@ -519,10 +504,6 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 						end)
 					end)
 		
-		print('loop in: '..log.toc())
-		
-		log.tic()
-		
 		show_threshold = 0.025
 		imagez:div(imagez:max()+0.000001):add(-show_threshold)
 		imagez:add(imagez:clone():abs()):div(2)
@@ -589,8 +570,6 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 			--image.display(blank_corners)
 		end
 
-		print('finish connections in: '..log.toc())
-		
 	end
 
 	collectgarbage()
@@ -725,7 +704,7 @@ end
 
 function PointCloud:make_normal_map()
 	if self.format == 1 then
-		if not (self.normal_map and self.xyz_img) then
+		if not (self.normal_map) then
 			local height = self.height
 			local width = self.width
 			self:make_xyz_map(true)
@@ -772,6 +751,8 @@ function PointCloud:make_normal_map()
 	    	crossprod = crossprod:clone():cdiv(crossprodnorm:clone()):transpose(1,3)
 		
 			self.normal_map=crossprod:clone()
+		else
+			self:make_xyz_map(true)
 		end
 	end
 end
@@ -849,45 +830,6 @@ function PointCloud:downsample(leafsize)
    collectgarbage()
    return downsampled
 end
-
---[[
-   function PointCloud:make_flattened_images(scale)
-   scale = scale+0.000000001
-   local ranges = self.radius:clone():mul(2)
-   local minv = self.radius:clone():mul(-1)
-   local maxv = self.radius:clone()
-   local pix = ranges:clone():div(scale):floor()
-   local height = pix[1]+1
-   local width = pix[2]+1
-   local imagez = torch.zeros(height*width)
-
-   --sort points
-   local points = self.points:clone()[{{},{1,2}}]
-
-   local coords = torch.Tensor(points:size()):copy(points)
-   coords:add(minv:sub(1,2):repeatTensor(self.count,1):mul(-1)):div(scale):floor():add(1)
-
-   local ys = torch.LongTensor(self.count):copy(coords[{{},1}])
-   local xs = torch.LongTensor(self.count):copy(coords[{{},2}])
-   local index = ys:add(-1):mul(width):add(xs)
-
-   local dists = torch.Tensor(points:size()):copy(points)
-   dists:add(self.centroid:squeeze():sub(1,2):repeatTensor(self.count,1):mul(-1)):pow(2)
-   dists = dists:sum(2):squeeze()
-
-   local i=1
-   index:apply(function(x)
-   imagez[x]=imagez[x]+dists[i]
-   i=i+1
-   return x
-   end)
-
-   imagez=imagez:pow(2)
-   imagez=(imagez:div(imagez:max()+0.000001):mul(256)):floor()
-   self.imagez = imagez:resize(height,width):repeatTensor(3,1,1)
-   collectgarbage()
-   end
-]]
 
 function PointCloud:make_3dtree()
    self.k3dtree = kdtree.new(self.points)

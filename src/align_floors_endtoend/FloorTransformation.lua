@@ -6,10 +6,10 @@ homography_funs = geom.rotation_translation_homography
 
 FloorTransformation.parameters = {}
 FloorTransformation.parameters.erosion_size =1
-FloorTransformation.parameters.maxNumCompute = 100
-FloorTransformation.parameters.maxNumReturn = 50
+FloorTransformation.parameters.maxNumCompute = 50
+FloorTransformation.parameters.maxNumReturn = 25
 FloorTransformation.parameters.warpWithBorders = false
-FloorTransformation.parameters.cornerDistanceLimit = 10
+FloorTransformation.parameters.cornerDistanceLimit = 1
 FloorTransformation.parameters.corr_thresh = 2
 FloorTransformation.parameters.minInliersForMatch = 2
 FloorTransformation.parameters.rotation_thresh = 2*math.pi * (4.5/360)  --should be 0 to 45 (0 means less results, 45 means all)
@@ -330,7 +330,6 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
 end
 
 function FloorTransformation.findTransformationSavedCorners(image1Path, image2Path, corners1Path, corners2Path, display)
-   log.tic()
    
    local scores_src_torch
    local scores_dest_torc
@@ -352,7 +351,7 @@ function FloorTransformation.findTransformationSavedCorners(image1Path, image2Pa
    --example of how to do sift points:
    src_corners, dest_corners = parameterizedGeneral:getPoints(img_src, img_dest)   
    	
-   	print(scores_src_torch:size(1))
+   print(scores_src_torch:size(1))
    print(scores_dest_torch:size(1))
    	
    scores_src = opencv.Mat.new(scores_src_torch:clone())
@@ -407,15 +406,13 @@ function FloorTransformation.findTransformationSavedCorners(image1Path, image2Pa
    goodLocationsX_dest = goodLocationsX_dest:reshape(goodLocationsX_dest:size()[1],1)
    goodLocationsY_dest = goodLocationsY_dest:reshape(goodLocationsY_dest:size()[1],1)
 
-      print(pairwise_dis_src:size())
-
    local best_pts, best_transformations = opencv.imgproc.findBestTransformation(
       opencv.Mat.new(goodLocationsX_src:clone()),  opencv.Mat.new(goodLocationsY_src:clone()), opencv.Mat.new(scores_src_torch), opencv.Mat.new(pairwise_dis_src:clone()),
       opencv.Mat.new(goodLocationsX_dest:clone()), opencv.Mat.new(goodLocationsY_dest:clone()), opencv.Mat.new(scores_dest_torch), opencv.Mat.new(pairwise_dis_dest:clone()),
       FloorTransformation.parameters.corr_thresh, FloorTransformation.parameters.minInliersForMatch, FloorTransformation.parameters.maxNumCompute, 
       FloorTransformation.parameters.cornerDistanceLimit, img_src:size()[1], img_src:size()[2])
       
-      local mainDirections = FloorTransformation.findMainDirections(img_src, img_dest)
+   local mainDirections = FloorTransformation.findMainDirections(img_src, img_dest)
    
    --[[]]
    local trans1_tmp = {}
@@ -463,8 +460,8 @@ function FloorTransformation.findTransformationSavedCorners(image1Path, image2Pa
       tgt_centers_h_tmp[i] = center2y
       tgt_centers_w_tmp[i] = center2x
       
-      trans1_tmp[i] = trans1_i
-      trans2_tmp[i] = trans2_i
+      trans1_tmp[i] = t1--trans1_i
+      trans2_tmp[i] = t2--trans2_i
       combined_tmp[i] = combined_i
       
       size_x_all_tmp[i] = img_src:size(1)
@@ -512,7 +509,7 @@ function FloorTransformation.findTransformationSavedCorners(image1Path, image2Pa
       if anglediff_tmp[o] <  FloorTransformation.parameters.rotation_thresh then
       	k = k+1
       	inliers[k] = best_pts[o]
-	    scores[k] = sorted[i]/sorted:max() + inliers[k]/math.max(scores_src_torch:size(1),scores_dest_torch:size(1))
+	    scores[k] = sorted[i]/sorted:max()-- + inliers[k]/math.max(scores_src_torch:size(1),scores_dest_torch:size(1))
       
       	src_centers_h[k] = src_centers_h_tmp[o]
       	src_centers_w[k] = src_centers_w_tmp[o]
@@ -552,8 +549,6 @@ function FloorTransformation.findTransformationSavedCorners(image1Path, image2Pa
    anglediff_tmp = nil
    
    collectgarbage()
-   
-   print(log.toc())
 
    return transformations, trans1, trans2, combined, inliers, anglediff, src_centers_h, src_centers_w, tgt_centers_h, tgt_centers_w, size_x_all, size_y_all, scores
 end
