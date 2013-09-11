@@ -16,6 +16,13 @@ function Tree:__init(resolution)
    self.tree = ffi.gc(octomap_ffi.OcTree_new(resolution), destructor())
 end
 
-function Tree:add_points(pointcloud)
+-- points in Nx3 (x,y,z) points you want to add to Octree.
+function Tree:add_points(points, origin, max_range)
+   origin = origin or torch.zeros(3)
+   max_range = max_range or -1 -- -1 is no limit
+   octomap_ffi.OcTree_add_sweep(self.tree, torch.cdata(points), torch.cdata(origin),max_range)
+end
 
+function Tree:stats()
+   octomap_ffi.OcTree_outputStatistics(self.tree)
 end
