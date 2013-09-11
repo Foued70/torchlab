@@ -1,5 +1,5 @@
 ffi = require 'ffi'
-libopencv = require './libopencv'
+opencv_ffi = require './opencv_ffi'
 
 Detector = Class()
 
@@ -11,9 +11,9 @@ function Detector:__init(detectorType)
    if not Detector.types[detectorType] then
       error("Don't understand detectorType: "..detectorType) 
    else
-      self.detector = ffi.gc(libopencv.FeatureDetector_create(ffi.string(detectorType)),
+      self.detector = ffi.gc(opencv_ffi.FeatureDetector_create(ffi.string(detectorType)),
                              function (detector)
-                                   libopencv.FeatureDetector_destroy(detector)
+                                   opencv_ffi.FeatureDetector_destroy(detector)
                              end)
    end
 end
@@ -22,7 +22,7 @@ function Detector:parameters()
    if type(self.detector) ~= "cdata" then
       error("poorly initialized detector object")
    end
-   libopencv.FeatureDetector_parameters(self.detector)
+   opencv_ffi.FeatureDetector_parameters(self.detector)
 end
 
 -- <input> detector, img, npts, Mat mask
@@ -40,6 +40,6 @@ function Detector:detect(img,npts,mask)
    if ((not mask.mat) or (type(mask.mat) ~= "cdata")) then 
       error("problem with image mask")
    end
-   npts = libopencv.FeatureDetector_detect(self.detector,img.mat,mask.mat,keypoints[0],npts)
+   npts = opencv_ffi.FeatureDetector_detect(self.detector,img.mat,mask.mat,keypoints[0],npts)
    return keypoints, npts
 end

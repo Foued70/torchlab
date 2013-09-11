@@ -1,5 +1,5 @@
 ffi = require 'ffi'
-libopencv = require './libopencv'
+opencv_ffi = require './opencv_ffi'
 
 Matcher = Class()
 
@@ -11,9 +11,9 @@ function Matcher:__init(matcherType)
   if not Matcher.types[matcherType]  then
     error("need to pass appropriate matcher type")
   end
-  self.matcher = ffi.gc(libopencv.DescriptorMatcher_create(ffi.string(matcherType)),
+  self.matcher = ffi.gc(opencv_ffi.DescriptorMatcher_create(ffi.string(matcherType)),
    function (matcher)
-    libopencv.DescriptorMatcher_destroy(matcher)
+    opencv_ffi.DescriptorMatcher_destroy(matcher)
     end)
 end
 
@@ -30,7 +30,7 @@ function Matcher:match(descriptors_src, descriptors_dest, nmatches_max)
     error("need to pass integer for max number of matches")
   end
   matches = ffi.new("DMatch[?]", nmatches_max)
-  nmatches_new = libopencv.DescriptorMatcher_match(self.matcher,descriptors_src.mat, descriptors_dest.mat, matches, nmatches_max)
+  nmatches_new = opencv_ffi.DescriptorMatcher_match(self.matcher,descriptors_src.mat, descriptors_dest.mat, matches, nmatches_max)
   return matches, nmatches_new
 end
 
@@ -44,6 +44,6 @@ function Matcher:reduce(matches,nmatches)
     error("need to pass integer for number of matches")
   end
   matches_good = ffi.new("DMatch[?]", nmatches)
-  nmatches_new = libopencv.DescriptorMatcher_reduceMatches(matches, nmatches, matches_good)
+  nmatches_new = opencv_ffi.DescriptorMatcher_reduceMatches(matches, nmatches, matches_good)
   return matches_good, nmatches_new
 end

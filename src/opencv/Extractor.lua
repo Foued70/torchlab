@@ -1,5 +1,5 @@
 ffi = require 'ffi'
-libopencv = require './libopencv'
+opencv_ffi = require './opencv_ffi'
 
 Extractor = Class()
 
@@ -11,9 +11,9 @@ function Extractor:__init(extractorType)
   if not Extractor.types[extractorType] then
       error("Don't understand extractorType: "..extractorType) 
   end
-   self.extractor = ffi.gc(libopencv.DescriptorExtractor_create(ffi.string(extractorType)),
+   self.extractor = ffi.gc(opencv_ffi.DescriptorExtractor_create(ffi.string(extractorType)),
                  function (extractor)
-                    libopencv.DescriptorExtractor_destroy(extractor)
+                    opencv_ffi.DescriptorExtractor_destroy(extractor)
                  end)
 end
 
@@ -30,6 +30,6 @@ function Extractor:compute(img,keypoints,npts,descriptor)
    if ((not descriptor.mat) or (type(descriptor.mat) ~= "cdata")) then 
       error("problem with descriptor mat")
    end
-   libopencv.DescriptorExtractor_compute(self.extractor,img.mat,descriptor.mat,keypoints[0],npts)
+   opencv_ffi.DescriptorExtractor_compute(self.extractor,img.mat,descriptor.mat,keypoints[0],npts)
    return descriptor
 end

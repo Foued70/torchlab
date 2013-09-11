@@ -1,4 +1,4 @@
-libopencv = require './libopencv'
+opencv_ffi = require './opencv_ffi'
 
 Class()
 -- <input> matcher, source descriptor matrix, dest descriptor matrix, nmatches max
@@ -22,5 +22,5 @@ function getHomography(keypoints_src, npts_src, keypoints_dest, npts_dest, match
    if type(nmatches) ~= "number" then
       error("need to pass number object for sixth argument")
    end
-   return opencv.Mat.new(libopencv.getHomography(keypoints_src, npts_src, keypoints_dest, npts_dest, matches, nmatches))
+   return opencv.Mat.new(opencv_ffi.getHomography(keypoints_src, npts_src, keypoints_dest, npts_dest, matches, nmatches))
 end
