@@ -1,0 +1,14 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8 FATAL_ERROR)
+
+PROJECT(pcl_transform)
+
+FIND_PACKAGE(PCL 1.7 REQUIRED)
+
+INCLUDE_DIRECTORIES(${PCL_INCLUDE_DIRS})
+LINK_DIRECTORIES(${PCL_LIBRARY_DIRS})
+ADD_DEFINITIONS(${PCL_DEFINITIONS})
+
+add_executable (pcl_transform pcl_transform.cpp)
+target_link_libraries (pcl_transform ${PCL_LIBRARIES})
+
+install(TARGETS pcl_transform RUNTIME DESTINATION bin)
