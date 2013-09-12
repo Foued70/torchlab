@@ -32,7 +32,8 @@ Mat resultImg;
 Mat graystore;
 cv::Point selectedQuad[4];
 
-
+//calculate score for a line by looking at the value of pixels along the line
+//could be vastly improved!
 float scoreLine(cv::Point p1, cv::Point p2)
 {
 	if(p1.x == p2.x && p1.y == p2.y)
@@ -70,6 +71,7 @@ float scoreLine(cv::Point p1, cv::Point p2)
     return score;
 }
 
+//find intersection of two lines defined by two pairs of points
 cv::Point findIntersection(cv::Point p1, cv::Point p2, cv::Point q1, cv::Point q2)
 {
     cv::Point i(0,0);
@@ -93,11 +95,13 @@ cv::Point findIntersection(cv::Point p1, cv::Point p2, cv::Point q1, cv::Point q
     return i;
 }
 
+//data format conversion
 cv::Point cvPointFromBoostPoint(boost_point b)
 {
 	return cv::Point(b.x(), b.y());
 }
 
+//add epsilon to geometry to avoid issues of self intersection
 void set_epsilon(boost_point & p)
 {
 	using boost::geometry::get;
@@ -139,6 +143,7 @@ void drawPoly(polygon poly, Mat img, Scalar color)
 	}
 }
 
+//write polygon to obj file
 void poly_to_obj(polygon p, float z1, float z2, ofstream& file)
 {
 	std::vector<boost_point> const& points = p.outer(); 
@@ -164,6 +169,7 @@ void poly_to_obj(polygon p, float z1, float z2, ofstream& file)
 // 	}
 }
 
+//score polygon by scoring each line
 float scorePoly(polygon p)
 {
 	float poly_score = 0;
@@ -254,7 +260,7 @@ int main(int argc, char** argv)
     //GaussianBlur(gray, gray, cv::Size(5, 5), 2.5, 2.5);
     //gray = gray * 10;
 
-    
+    //detect lines and sort them into (almost) horizontal and vertical
     HoughLinesP(gray, lines, 1, CV_PI/360, 15, 25, 80 );
     
     for( size_t i = 0; i < lines.size(); i++ )
@@ -292,6 +298,9 @@ int main(int argc, char** argv)
     
     //graystore = graystore * 10;
     
+    // find all 'ghost' intersections that lie within dist_int of any line segment
+    const int dist_int = 100;
+    
     for( size_t i = 0; i < vertlines.size(); i++ )
     {
         Vec4i vl = vertlines[i];
@@ -301,8 +310,6 @@ int main(int argc, char** argv)
             Vec4i hl = horizlines[j];
             
             cv::Point intersection = findIntersection(cv::Point(vl[0], vl[1]), cv::Point(vl[2], vl[3]), cv::Point(hl[0], hl[1]), cv::Point(hl[2], hl[3]));
-            
-            const int dist_int = 100;
             
             if(lineDistance(cv::Point(vl[0], vl[1]), intersection) < dist_int || lineDistance(cv::Point(vl[2], vl[3]), intersection) < dist_int || lineDistance(cv::Point(hl[0], hl[1]), intersection) < dist_int || lineDistance(cv::Point(hl[2], hl[3]), intersection) < dist_int)
             {
@@ -342,7 +349,6 @@ int main(int argc, char** argv)
     int max_r = -1;
     int max_s = -1;
     vector<cv::Point> p1v, p2v, p3v, p4v;
-    const int search_window = 5;
     
     //polygon room_poly;
     std::vector<polygon> room_polys;
@@ -351,6 +357,12 @@ int main(int argc, char** argv)
     int img_num = 0;
 	
 	std::map<float, polygon> quads;
+	
+	// for each pair of intersections calculate the diagonal stroke formed by those two points
+	// treat the diagonal as the diagonal of a quad and search the opposite diagonal for 
+	// potential end points (within search_window pixels). If found, add the quad to the list of quads
+	
+	const int search_window = 5;
 
     for(int i =0; i< intersections.size(); i++)
     {
@@ -360,11 +372,13 @@ int main(int argc, char** argv)
 		{
 			cv::Point strokeEnd = intersections[j];
 			
+			// if diagonal is between the same points or the diagonal is too small, discard
 			if(i == j || lineDistance(intersections[i], intersections[j]) < search_window || abs(strokeStart.x-strokeEnd.x)*abs(strokeStart.y-strokeEnd.y) < 10000)
 				continue;
 				
 			p1v.clear(); p2v.clear(); p3v.clear(); p4v.clear();
 			
+			// find intersections that complete the quad (there may be several in the search_window
 			for( size_t k = 0; k < intersections.size(); k++ )
 			{
 				
@@ -379,6 +393,7 @@ int main(int argc, char** argv)
 	
 			}
 			
+			// for each quad, calculate the score and add it to the map of quads, sorted by score
 			if(p1v.size() > 0 && p2v.size() > 0 && p3v.size() > 0 && p4v.size() > 0)
 			{
 				//printf("candidate sizes - %ld, %ld, %ld, %ld\n", p1v.size(), p2v.size(), p3v.size(), p4v.size());
@@ -425,8 +440,10 @@ int main(int argc, char** argv)
     float max_poly_score = -1;
     int count = 0;
     
+    //iterate through quads with descending score (max first)
   	for (it=quads.rbegin(); it!=quads.rend(); ++it)
-  	{    	
+  	{   
+  		// in the beginning populate the model with the first quad 	
     	if(count == 0)
 		{
 		  room_polys.push_back(it->second);
@@ -442,7 +459,9 @@ int main(int argc, char** argv)
 		imshow("detected quads", m_lines);
 		waitKey();
 #endif
-    	
+		//there can be several possible non-intersection quads that describe a cloud, loop through
+		//each one and add the current quad. if the score improves, regard this as a new room polygon
+		//else ignore. If there is no intersection, create a new room polygon and add to the set
     	BOOST_FOREACH(polygon &room_poly, room_polys)
 			{
 		
@@ -451,7 +470,8 @@ int main(int argc, char** argv)
 		
 				//boost::geometry::correct(it->second);
 				//boost::geometry::correct(room_poly);
-			
+				
+				//to prevent self intersection
 				boost::geometry::for_each_point(room_poly, set_epsilon);
 			
 				//cout<<boost::geometry::intersects(room_poly)<<boost::geometry::intersects(it->second)<<endl;
@@ -469,31 +489,25 @@ int main(int argc, char** argv)
 				
 				}
 			
-				try{
-				}
-				catch(int e)
-				{
-					cout<<"exception"; exit(0);	 		
-				}
-			
 				int max_poly_count = -1;
 	
 				int poly_count = 0;
 			
 				bool intersects = false;
-			
+				
+				//if union results in only 1 result (intersection occured)
 				if(poly_union_results.size() == 1)
 				{
 					polygon p = poly_union_results[0];
 					float poly_score = scorePoly(p);
 				
-					if(poly_score > max_poly_score)
+					if(poly_score > max_poly_score)	// if score improves, add poly to new hypothesis set
 						{
 							max_poly_score = poly_score;
 							room_polys_new.push_back(p);
 						}
 				}
-				else if (poly_union_results.size() == 2)
+				else if (poly_union_results.size() == 2) //no intersection, hence add both polys to new set
 				{
 					room_polys_new.push_back(poly_union_results[0]);
 					room_polys_new.push_back(poly_union_results[1]);
@@ -502,6 +516,7 @@ int main(int argc, char** argv)
 				count++;
 			}
 			
+			//update room polys with new hypotheses after adding current quad
 			if(room_polys_new.size() > 0)
 			{
 				room_polys.clear();
@@ -529,6 +544,8 @@ int main(int argc, char** argv)
     srand (time(NULL));
     
     m_lines = m_lines_bak.clone();
+    
+    //draw/write/render result
     BOOST_FOREACH(polygon &room_poly, room_polys)
 	{
 		int r = 255*((double) rand() / (RAND_MAX));
