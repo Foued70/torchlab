@@ -21,6 +21,7 @@ OcTree* OcTree_new (float resolution);
 void    OcTree_destroy(OcTree* tree);
 
 void    OcTree_add_sweep(OcTree* tree, THDoubleTensor* points, THDoubleTensor* origin, double max_range);
+THDoubleTensor* OcTree_toTensor(OcTree* tree, THDoubleTensor* points);
 void    OcTree_outputStatistics(const OcTree* tree);
 ]]
 

@@ -88,10 +88,30 @@ extern "C"
     // TODO replace with a pointer copy if float
     for (i=0; i< nelem; i+=ndim){
       cloud.push_back((float)pts_d[0], (float)pts_d[1], (float)pts_d[2]);
-      pts_d+=ndim;
+      pts_d += ndim;
     }
 
     tree->insertPointCloud(cloud,sensor_origin, max_range, lazy_eval);
 
+  }
+  
+  THDoubleTensor* OcTree_toTensor(OcTree* tree, THDoubleTensor* points)
+  {
+    size_t nLeafNodes = tree->getNumLeafNodes();
+    THDoubleTensor_resize2d(points,nLeafNodes,3);
+    double * pts_d = THDoubleTensor_data(points);
+    long count = 0;
+    for(OcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
+      if(tree->isNodeOccupied(*it)){
+        pts_d[0] = it.getX();
+        pts_d[1] = it.getY();
+        pts_d[2] = it.getZ();
+        count++;
+        pts_d += 3;
+      }
+    }
+    THDoubleTensor_narrow(points,NULL,0,0,count);
+
+    return points;
   }
 }
