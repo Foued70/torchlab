@@ -234,7 +234,10 @@ function PointCloud:write(filename)
 
    if util.fs.extname(filename)==PC_OD_EXTENSION then
       local pts = self.points:clone():mul(10000):type('torch.IntTensor')
-      local nmp = self.normal_map:clone():mul(10000):type('torch.IntTensor')
+      local nmp
+      if self.normal_map then 
+         nmp = self.normal_map:clone():mul(10000):type('torch.IntTensor')
+      end
       torch.save(filename, {self.format, self.hwindices, pts, self.rgb, nmp})
    elseif util.fs.extname(filename)==PC_ASCII_EXTENSION then
       local file = io.open(filename, 'w');
@@ -852,6 +855,9 @@ function PointCloud:get_index_and_mask(force)
       mask_map  = torch.ByteTensor(self.height,self.width):fill(1)
       -- make sure we get the reverse index
       for i = 1,self.count do
+         if not self.hwindices then
+            error("this pointcloud has no hwindices. can't make maps")
+         end
          hw = self.hwindices[i]
          index_map[{hw[1],hw[2]}] = i
          mask_map[{hw[1],hw[2]}] = 0
