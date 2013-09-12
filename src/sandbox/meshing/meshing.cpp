@@ -4,9 +4,11 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
+#include <boost/geometry/io/wkt/wkt.hpp>
 #include <boost/foreach.hpp>
 
 #include <iostream>
+#include <fstream>
 #include <cstdlib>
 
 //#define DEBUG
@@ -17,6 +19,7 @@ using namespace std;
 typedef boost::geometry::model::d2::point_xy<float> boost_point;
 typedef boost::geometry::model::polygon<boost_point > polygon;
 
+const float scale = 0.01;
 
 void help()
 {
@@ -136,6 +139,31 @@ void drawPoly(polygon poly, Mat img, Scalar color)
 	}
 }
 
+void poly_to_obj(polygon p, float z1, float z2, ofstream& file)
+{
+	std::vector<boost_point> const& points = p.outer(); 
+	
+	int vctr = 1;
+										
+	for (int i = 0; i < points.size() -1; ++i) 
+	{ 
+		file<<"v "<<points[i].x()*scale<<" "<<points[i].y()*scale*-1<<" "<<z1<<endl;
+		file<<"v "<<points[i].x()*scale<<" "<<points[i].y()*scale*-1<<" "<<z2<<endl;
+		file<<"v "<<points[i+1].x()*scale<<" "<<points[i+1].y()*scale*-1<<" "<<z1<<endl;
+		file<<"v "<<points[i+1].x()*scale<<" "<<points[i+1].y()*scale*-1<<" "<<z2<<endl;
+		
+		file<<"f "<<vctr<<" "<<vctr+2<<" "<<vctr+1<<endl;
+		file<<"f "<<vctr+2<<" "<<vctr+3<<" "<<vctr+1<<endl;
+		
+		vctr += 4;
+	} 
+
+// 	if(cvPointFromBoostPoint(points[points.size()-1]) != cvPointFromBoostPoint(points[0]))
+// 	{
+// 		line( img, cvPointFromBoostPoint(points[points.size()-1]), cvPointFromBoostPoint(points[0]), color, 2, CV_AA);
+// 	}
+}
+
 float scorePoly(polygon p)
 {
 	float poly_score = 0;
@@ -176,6 +204,12 @@ int main(int argc, char** argv)
         cout << "can not open " << filename << endl;
         return -1;
     }
+    
+    float z1 = atof(argv[2]);
+    float z2 = atof(argv[3]);
+    
+    ofstream objfile;
+    objfile.open(argv[4]);
     
     resultImg = src.clone();
     
@@ -291,7 +325,7 @@ int main(int argc, char** argv)
         
     }
     
-    cout<<"Intersection detection done!"<<intersections.size()<<endl;   
+    cout<<"Intersection detection done! ("<<intersections.size()<<")"<<endl;   
 
     
     for(int i =0; i< intersections.size(); i++)
@@ -478,7 +512,7 @@ int main(int argc, char** argv)
 				room_polys_new.clear();
 			}
 			
-			cout<<room_polys.size()<<endl;
+			//cout<<room_polys.size()<<endl;
 			
 #ifdef DEBUG
 			m_lines = m_lines_bak.clone();
@@ -501,6 +535,9 @@ int main(int argc, char** argv)
 		int g = 255*((double) rand() / (RAND_MAX));
 		int b = 255*((double) rand() / (RAND_MAX));
 		drawPoly(room_poly, m_lines, cv::Scalar(b, g, r));
+		poly_to_obj(room_poly, z1, z2, objfile);
+		objfile.close();
+		cout<<endl<<endl<<boost::geometry::wkt(room_poly)<<endl<<endl;
 		printf("%d, %d, %d\n", r, g, b);
 		imshow("detected quads", m_lines);
 		waitKey();
