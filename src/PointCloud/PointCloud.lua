@@ -50,7 +50,10 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
             self.points = pts:type('torch.DoubleTensor'):div(10000.0)
             self.rgb = loaded[4]
             self.count = self.points:size(1)
-            self.normal_map = loaded[5]:type('torch.DoubleTensor'):div(10000.0)
+            self.normal_map = loaded[5]
+            if self.normal_map then 
+               self.normal_map:type('torch.DoubleTensor'):div(10000.0)
+            end
             self:reset_point_stats()
          else
             error('arg #1 must either be empty or a valid file: '..pcfilename)
@@ -896,4 +899,15 @@ function PointCloud:get_depth_map()
 
    return self.depth_map
 
+end
+
+-- ugly to get z position of faro scans
+function PointCloud:estimate_faro_pose(degree_above, degree_below)
+   degree_above = degree_above or 90
+   degree_below = degree_below or 60
+   -- get middle z value
+   rowid   = math.floor((degree_above / (degree_above + degree_below)) * self.height)
+   xyz_map = self:get_xyz_map()
+   midrow  = xyz_map[{3,rowid,{}}]
+   return torch.Tensor({0,0,midrow[midrow:gt(0)]:mean()})
 end
