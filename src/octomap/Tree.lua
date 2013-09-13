@@ -34,3 +34,45 @@ function Tree:stats()
    print("octomap.Tree with resolution: " .. self.resolution)
    octomap_ffi.OcTree_outputStatistics(self.tree)
 end
+
+function Tree:writeObjCubes(filename)
+   io = require 'io'
+   objf = assert(io.open(filename, "w"))  
+   pts  = self:toTensor()
+   face_radius = self.resolution * 0.5
+   pid = 1
+   for i = 1,pts:size(1) do 
+      pt = pts[i]
+      xplus  = pt[1] + face_radius
+      xmin   = pt[1] - face_radius
+      yplus  = pt[2] + face_radius
+      ymin   = pt[2] - face_radius
+      zplus  = pt[3] + face_radius
+      zmin   = pt[3] - face_radius
+      
+      objf:write(string.format("v %f %f %f\n",xplus,yplus,zplus)) -- 0
+      objf:write(string.format("v %f %f %f\n",xplus,yplus, zmin)) -- 1
+      objf:write(string.format("v %f %f %f\n",xplus, ymin,zplus)) -- 2
+      objf:write(string.format("v %f %f %f\n",xplus, ymin, zmin)) -- 3
+      objf:write(string.format("v %f %f %f\n", xmin,yplus,zplus)) -- 4
+      objf:write(string.format("v %f %f %f\n", xmin,yplus, zmin)) -- 5
+      objf:write(string.format("v %f %f %f\n", xmin, ymin,zplus)) -- 6
+      objf:write(string.format("v %f %f %f\n", xmin, ymin, zmin)) -- 7
+      
+      -- 1: (+-+)(+--)(---)(--+)
+      objf:write(string.format("f %d %d %d %d\n",pid+6,pid+7,pid+3,pid+2))
+      -- 2: (--+)(---)(-+-)(-++)
+      objf:write(string.format("f %d %d %d %d\n",pid+4,pid+5,pid+7,pid+6))
+      -- 3: (-++)(-+-)(++-)(+++)
+      objf:write(string.format("f %d %d %d %d\n",pid+0,pid+1,pid+5,pid+4))
+      -- 4: (+++)(++-)(+--)(+-+)
+      objf:write(string.format("f %d %d %d %d\n",pid+2,pid+3,pid+1,pid+0))
+      -- 5: (+-+)(--+)(-++)(+++)
+      objf:write(string.format("f %d %d %d %d\n",pid+0,pid+4,pid+6,pid+2))
+      -- 6: (+--)(++-)(-+-)(---)
+      objf:write(string.format("f %d %d %d %d\n",pid+7,pid+5,pid+1,pid+3))
+      
+      pid = pid + 8
+   end
+   objf:close()
+end
