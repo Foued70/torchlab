@@ -3,7 +3,7 @@ hough = require '../image/hough'
 
 scale = 0.01
 pc = PointCloud.PointCloud;
-_G.faro_points = pc.new('/Users/aditya/Work/code/Floored/data/pc/scans0/92.xyz')
+_G.faro_points = pc.new('/Users/aditya/Work/code/Floored/data/pc/scans0/sweep_001.xyz')
 --_G.faro_points = pc.new('/Users/aditya/Work/code/Floored/data/pc/scans0/clean/92_93_94.xyz')
 --_G.faro_points = pc.new('/Users/aditya/Work/code/Floored/data/pc/forAditya/scan_naproom_03.xyz')
 
@@ -37,6 +37,7 @@ _G.sorted_face_centers = faro_points.points:index(1, i);
 -- rotate points
 --sorted_face_centers = geom.quaternion.translate_rotate(translation, quat, sorted_face_centers)
 faro_points.points = geom.quaternion.translate_rotate(translation, quat, faro_points.points)
+faro_points:reset_point_stats()
 
 -- find bounding boxes (currently unused)
 max_z = torch.max(sorted_face_centers, 1):select(2,3)[1];
@@ -84,7 +85,8 @@ for num_slice = 1, num_slices do
 	if ih[num_slice + 1] - 1 > ih[num_slice] + 1 then
 		-- select sliced points just above the lower bound and just below the upper bound
 		local size = ycum[ih[num_slice + 1] - 1] - ycum[ih[num_slice] + 1]
-		print("  From ".. sorted_face_centers[ycum[ih[num_slice] + 1]][3] .. " to " .. sorted_face_centers[ycum[ih[num_slice + 1] - 1]][3]);
+		print("  From ".. ycum[ih[num_slice] + 1] .. " to " .. ycum[ih[num_slice + 1] - 1]);
+		print("       ".. sorted_face_centers[ycum[ih[num_slice]]][3] .. " to " .. sorted_face_centers[ycum[ih[num_slice + 1]]][3]);
 		--faro_points.points = sorted_face_centers:narrow(1, ycum[ih[num_slice] + 1], size);
 		--faro_points.count = size
 		-- create mask with required points
