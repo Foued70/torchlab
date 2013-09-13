@@ -222,9 +222,11 @@ int main(int argc, char** argv)
     
     Mat dst, cdst, gray, m;
     
-    equalizeHist(src, src);
-    
     cvtColor(src, gray, CV_RGB2GRAY);
+    
+    equalizeHist(gray, gray);
+    
+    
     //Canny(gray, dst, 50, 200, 3);
     dst = gray.clone();
     cvtColor(dst, cdst, CV_GRAY2BGR);
