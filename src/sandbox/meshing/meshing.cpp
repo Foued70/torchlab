@@ -221,6 +221,9 @@ int main(int argc, char** argv)
     resultImg = src.clone();
     
     Mat dst, cdst, gray, m;
+    
+    equalizeHist(src, src);
+    
     cvtColor(src, gray, CV_RGB2GRAY);
     //Canny(gray, dst, 50, 200, 3);
     dst = gray.clone();
