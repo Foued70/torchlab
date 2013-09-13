@@ -462,3 +462,8 @@ function Wand:rotate(angle_in_degrees,rgb)
    end
    libgm.MagickRotateImage(self.wand,background,angle_in_degrees)
 end
+
+-- equalize Histogram
+function Wand:histogram_equalize()
+   libgm.MagickEqualizeImage(self.wand)
+end

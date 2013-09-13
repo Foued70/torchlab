@@ -171,6 +171,10 @@ ffi.cdef
 
    // Description
    const char *MagickDescribeImage( MagickWand *wand );
+
+   //  MagickEqualizeImage() equalizes the image histogram.
+   unsigned int MagickEqualizeImage(MagickWand *wand);
+
 ]]
 
 -- Load lib:
