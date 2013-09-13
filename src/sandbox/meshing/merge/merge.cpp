@@ -46,7 +46,7 @@ int main(int argc, char** argv)
     
     if(argc < 4)
     {
-    	cout<<"Usage: ./meshing slice1 [slice2] z_value obj_file"<<endl;exit(0);
+    	cout<<"Usage: ./merge slice1 [slice2] z_value obj_file"<<endl;exit(0);
     }
     
     //open and load slices

@@ -21,13 +21,6 @@ typedef boost::geometry::model::polygon<boost_point > polygon;
 
 const float scale = 0.01;
 
-void help()
-{
-    cout << "\nThis program demonstrates line finding with the Hough transform.\n"
-    "Usage:\n"
-    "./houghlines <image_name>, Default is pic1.jpg\n" << endl;
-}
-
 Mat resultImg;
 Mat graystore;
 cv::Point selectedQuad[4];
@@ -200,13 +193,18 @@ static void onMouse( int event, int x, int y, int, void* )
 }
 
 int main(int argc, char** argv)
-{   
+{
+	if(argc < 6)
+    {
+    	cout<<"Usage: ./meshing slice z_value_low z_value_high obj_file data_file"<<endl;exit(0);
+    }   
+
     const char* filename = argc >= 2 ? argv[1] : "slice1.png";// "pic1_small.jpg";
     
     Mat src = imread(filename, CV_LOAD_IMAGE_COLOR);
     if(src.empty())
     {
-        help();
+        cout<<"Usage: ./meshing slice z_value_low z_value_high obj_file data_file"<<endl;exit(0);
         cout << "can not open " << filename << endl;
         return -1;
     }
@@ -216,6 +214,9 @@ int main(int argc, char** argv)
     
     ofstream objfile;
     objfile.open(argv[4]);
+    
+    ofstream datafile;
+    datafile.open(argv[5]);
     
     resultImg = src.clone();
     
@@ -554,7 +555,9 @@ int main(int argc, char** argv)
 		drawPoly(room_poly, m_lines, cv::Scalar(b, g, r));
 		poly_to_obj(room_poly, z1, z2, objfile);
 		objfile.close();
-		cout<<endl<<endl<<boost::geometry::wkt(room_poly)<<endl<<endl;
+		//cout<<endl<<endl<<boost::geometry::wkt(room_poly)<<endl<<endl;
+		datafile<<boost::geometry::wkt(room_poly);
+		datafile.close();
 		printf("%d, %d, %d\n", r, g, b);
 		imshow("detected quads", m_lines);
 		waitKey();
