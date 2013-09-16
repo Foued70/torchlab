@@ -303,9 +303,9 @@ end
 
 local function connect_lines(img,x1,y1,x2,y2,height,width,dst)
 	
-	local minx = math.min(x1,x2)+1
+	local minx = math.min(x1,x2)
 	local maxx = math.max(x1,x2)
-	local miny = math.min(y1,y2)+1
+	local miny = math.min(y1,y2)
 	local maxy = math.max(y1,y2)
 	
 	local dffx = x1-x2
@@ -319,16 +319,16 @@ local function connect_lines(img,x1,y1,x2,y2,height,width,dst)
 				function(xx)
 					local yy = y2 + (xx-x2)*slp
 					if xx <= width and yy <=height and xx >=1 and yy >=1 then
-						img[yy][xx] = img[yy][xx] + dst*3
+						img[yy][xx] = img[yy][xx] + dst
 						if prev > 0 and yy ~= prev then
-							img[prev][xx] = img[prev][xx] + dst*2
-							img[yy][xx-1] = img[yy][xx-1] + dst*2
+							img[prev][xx] = img[prev][xx] + dst/2
+							img[yy][xx-1] = img[yy][xx-1] + dst/2
 						end
 					end
 					prev = yy
 				end)
 		else
-			img[y1][x1] = img[y1][x1] + dst
+			img[y1][x1] = img[y1][x1] + dst/2
 		end
 	else
 		local slp = dffx / dffy
@@ -338,16 +338,16 @@ local function connect_lines(img,x1,y1,x2,y2,height,width,dst)
 				function(yy)
 					local xx = x2 + (yy-y2)*slp
 					if xx <= width and yy <=height and xx >=1 and yy >=1 then
-						img[yy][xx] = img[yy][xx] + dst*3
+						img[yy][xx] = img[yy][xx] + dst
 						if prev > 0 and xx ~= prev then
-							img[yy][prev] = img[yy][prev] + dst*2
-							img[yy-1][xx] = img[yy-1][xx] + dst*2
+							img[yy][prev] = img[yy][prev] + dst/2
+							img[yy-1][xx] = img[yy-1][xx] + dst/2
 						end
 					end
 					prev = xx
 				end)
 		else
-			img[y1][x1] = img[y1][x1] + dst
+			img[y1][x1] = img[y1][x1] + dst/2
 		end 
 	end
 end
@@ -396,8 +396,9 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 		imagez=(imagez:div(imagez:max()+0.000001):mul(256)):floor()
 		self.imagez = imagez:clone():resize(height,width):repeatTensor(3,1,1)
 	else
-		
+		log.tic()
 		local connections,corners_map = self:find_connections_and_corners()
+		print(log.toc())
 		if mask then
 			connections:cmul(mask)
 		end
@@ -420,12 +421,143 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 		
 		local points = imgpts:clone()
 		
+		local max_corn = 0
+		local max_conn = 0
+		
+		--[[]]
+		local coords_f = coords:transpose(1,2)
+		local points_f = points:transpose(1,2)
+		local connec_f = connections:transpose(1,2)
+		local corner_f = corners_map:transpose(1,2)
+		
+		local coords_cw = coords_f[wdth]
+		local points_cw = points_f[wdth]
+		local connec_cw = connec_f[wdth]
+		local corner_cw = corner_f[wdth]
+		
+		local coords_pw
+		local points_pw
+		local connec_pw
+		local corner_pw
+		
+		local max_depth = (self.maxval-self.minval):squeeze():sub(1,2):norm()
+		
+		lrind:apply(function(w)
+			coords_pw = coords_cw:clone()
+			points_pw = points_cw:clone()
+			connec_pw = connec_cw:clone()
+			corner_pw = corner_cw:clone()
+			
+			coords_cw = coords_f[w]
+			points_cw = points_f[w]
+			connec_cw = connec_f[w]
+			corner_cw = corner_f[w]
+			
+			local coords_cw_ch = coords_cw[1]
+			local points_cw_ch = points_cw[1]
+			local connec_cw_ch = connec_cw[1]
+			local corner_cw_ch = corner_cw[1]
+			
+			local coords_cw_ph
+			local points_cw_ph
+			local connec_cw_ph
+			local corner_cw_ph
+			
+			local dst_corn = 0
+			local dst_conn = 0
+			
+			local do_connec_left = false
+			local connec_left_coord = torch.ones(2)
+			local connec_left_point = torch.zeros(2)
+			
+			udind:apply(function(h)
+			
+				coords_cw_ph = coords_cw_ch
+				points_cw_ph = points_cw_ch
+				connec_cw_ph = connec_cw_ch
+				corner_cw_ph = corner_cw_ch
+			
+				coords_cw_ch = coords_cw[h]
+				points_cw_ch = points_cw[h]
+				connec_cw_ch = connec_cw[h]
+				corner_cw_ch = corner_cw[h]
+				
+				local dst = math.abs(points_cw_ph[3]-points_cw_ch[3])
+				--local dpt = math.sqrt(math.sqrt(points_cw_ph:sub(1,2):norm()/max_depth))
+				
+				if corner_cw_ph == 1 then
+					if corner_cw_ch == 1 then
+						dst_corn = dst_corn + dst
+						if dst_corn > max_corn then
+							max_corn = dst_corn
+						end
+						if h == hght or corner_cw[h+1] ~= 1 then
+							local y = coords_cw_ch[1]
+							local x = coords_cw_ch[2]
+							dst_corn = dst_corn
+							image_corners:sub(y,y,x,x):add(dst_corn)
+							dst_corn = 0
+						end
+					else
+						dst_corn = 0
+					end
+				end
+				
+				if connec_cw_ph == 1 then
+					if connec_cw_ch == 1 then
+						dst_conn = dst_conn + dst
+						if dst_conn > max_conn then
+							max_conn = dst_conn
+						end
+						if not do_connec_left then
+							if connec_pw[h] == 1 then
+								do_connec_left = true
+								connec_left_coord = coords_pw[h]
+								connec_left_point = points_pw[h]
+							end
+						end
+						if h == hght or connec_cw[h+1] ~= 1 then
+							local y1 = coords_cw_ch[1]
+							local x1 = coords_cw_ch[2]
+							dst_conn = dst_conn
+							if do_connec_left then
+								local y2 = connec_left_coord[1]
+								local x2 = connec_left_coord[2]
+										
+								if geom.util.normalize(points_cw_ch:sub(1,2) - connec_left_point:sub(1,2)):dist(
+								   geom.util.normalize(points_cw_ch:sub(1,2) - self.centroid:squeeze():sub(1,2))) > inline_tol and
+								   geom.util.normalize(connec_left_point:sub(1,2) - points_cw_ch:sub(1,2)):dist(
+								   geom.util.normalize(points_cw_ch:sub(1,2) - self.centroid:squeeze():sub(1,2))) > inline_tol then								   
+									connect_lines(imagez,x1,y1,x2,y2,height,width,dst_conn)
+								end
+							else
+								imagez:sub(y1,y1,x1,x1):add(dst_conn)
+							end
+							dst_conn = 0
+							do_connec_left = false
+							connec_left_coord = torch.ones(2)
+							connec_left_point = torch.zeros(2)
+						end
+					else
+						dst_conn = 0
+						if do_connec_left then
+							do_connec_left = false
+							connec_left_coord = torch.ones(2)
+							connec_left_point = torch.zeros(2)
+						end
+					end
+				end
+			end)
+			collectgarbage()
+		end)	
+		
+		--[[
+		
 		local crdh = coords[1]
 		local ptsh = points[1]
 		local connh = connections[1]
 		local cornh = corners_map[1]
 		
-		local crdph
 		local ptsph
 		local connph
 		local cornph
@@ -503,29 +635,20 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 							end
 						end)
 					end)
+		--[[]]
+					
+		print(image_corners:max())
+		print(max_corn)
+		print(imagez:max())
+		print(max_conn)
 		
-		show_threshold = 0.025
-		imagez:div(imagez:max()+0.000001):add(-show_threshold)
-		imagez:add(imagez:clone():abs()):div(2)
-		imagez:div(imagez:max()+0.000001)
+		local max_height = (self.maxval-self.minval):squeeze()[3]
+		local show_thresh = 0.01*imagez:max()
 		
-		local tmp1 = imagez:clone():cdiv(imagez:clone():add(0.0000000001)):ceil()
-		local kern = torch.Tensor({{ 1, 2, 3, 2, 1},
-								   { 2, 9,16, 9, 2},
-								   { 3,16,25,16, 3},
-					     		   { 2, 9,16, 9, 2},
-								   { 1, 2, 3, 2, 1}})
-		
-		local conv1 = torch.conv2(tmp1:clone(),kern,'F')
-		local conv2 = torch.conv2(imagez:clone(),kern,'F')
-		local conv3 = conv2:cdiv(conv1:add(0.0000000001)):clone():sub(3,height+2,3,width+2):cmul(tmp1)
-		local conv4 = conv2:div(kern:sum()):clone():sub(3,height+2,3,width+2):cmul(tmp1)
-		
-		conv3:add(conv4)
-		conv3:div(conv3:max()+0.000001)
-		
-		imagez:add(conv3:mul(3))
-		
+		imagez = imagez:clone():gt(max_height):type('torch.DoubleTensor'):mul(max_height):add(
+		         imagez:clone():le(max_height):type('torch.DoubleTensor'):cmul(imagez)):cmul(
+		         imagez:clone():gt(show_thresh):type('torch.DoubleTensor'))
+		         
 		imagez:div(imagez:max()+0.000001)
 			
 		self.imagez = imagez:clone():repeatTensor(3,1,1)
@@ -538,8 +661,6 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 			local ds =  3
 			local cc = 0
 			local image_corners_orig = image_corners:clone()
-		
-			--local blank_corners = imagez:clone():repeatTensor(3,1,1)
 		
 			while cc < numCorners and image_corners:max() > 0 do
 				local maxmap,maxord = image_corners:max(1)
@@ -557,19 +678,13 @@ function PointCloud:make_flattened_images(scale,mask,numCorners)
 			                      math.min(height,y+bs),
 			                      math.max(1,x-bs),
 			                      math.min(width,x+bs)):mul(0)
-					--[[blank_corners:sub(1,1,math.max(1,y-ds),
-			                      math.min(height,y+ds),
-			                      math.max(1,x-ds),
-			                      math.min(width,x+ds)):add(1)]]
 				else
 					image_corners[y][x] = 0
 				end
 			end
 		
-			--blank_corners:cdiv(blank_corners:clone():add(0.0000001))
-			--image.display(blank_corners)
 		end
-
+		
 	end
 
 	collectgarbage()
@@ -579,7 +694,7 @@ end
 
 function PointCloud:find_connections_and_corners()
 	if self.format == 1 then
-		self:make_normal_map()
+		self:make_normal_map(false,true)
 		local pts = self.xyz_map:clone()
 		
 		local normal_map = self.normal_map:clone()
@@ -626,7 +741,7 @@ function PointCloud:find_connections_and_corners()
 		
 		local nm_tol = 2.5
 		local pc_tol = 0.05
-		local z_tol = 0.25
+		local z_tol = 0.1
 		
 		local tmp11 = compare_plane_lr:clone():add(-pc_tol):mul(-1)
 		tmp11:add(tmp11:clone():abs())
@@ -658,29 +773,17 @@ function PointCloud:find_connections_and_corners()
 		local pc_tol = 0.05
 		local z_tol = 0.1
 		
-		local tmp11 = compare_plane_lr:clone():add(-pc_tol)
-		tmp11:add(tmp11:clone():abs())
-		tmp11:cdiv(tmp11:clone():add(0.000001))
-		--[[local tmp12 = compare_plane_ud:clone():add(-pc_tol):mul(-1)
-		tmp12:add(tmp12:clone():abs())
-		tmp12:cdiv(tmp12:clone():add(0.000001))]]
+		tmp1 = compare_plane_lr:clone():add(-pc_tol)
+		tmp1:add(tmp1:clone():abs())
+		tmp1:cdiv(tmp1:clone():add(0.000001))
 		
-		local tmp1 = tmp11--:cmul(tmp12)
 		tmp1:cdiv(tmp1:clone():add(0.00000001))
 		
-		local tmp21 = compare_normal_lr:clone():add(-nm_tol)
-		tmp21:add(tmp21:clone():abs())
-		tmp21:cdiv(tmp21:clone():add(0.000001))
-		--[[local tmp22 = compare_normal_ud:clone():add(-nm_tol):mul(-1)
-		tmp22:add(tmp22:clone():abs())
-		tmp22:cdiv(tmp22:clone():add(0.000001))]]
+		tmp2 = compare_normal_lr:clone():add(-nm_tol)
+		tmp2:add(tmp2:clone():abs())
+		tmp2:cdiv(tmp2:clone():add(0.000001))
 		
-		local tmp2 = tmp21--:cmul(tmp22)
 		tmp2:cdiv(tmp2:clone():add(0.00000001))
-		
-		local tmp3 = normal_map:select(3,3):clone():abs():add(-z_tol):mul(-1)
-		tmp3:add(tmp3:clone():abs())
-		tmp3:cdiv(tmp3:clone():add(0.000001))
 		
 		local corners = tmp1:add(tmp2):cdiv(tmp1:clone():add(0.0000001)):cmul(tmp3):ceil()
 		
@@ -702,9 +805,49 @@ function PointCloud:make_xyz_map(recompute)
    return self.xyz_map
 end
 
-function PointCloud:make_normal_map()
+function PointCloud:axis_align()
+	self:make_normal_map(false,false)
+	local size = 360
+	local bins = torch.zeros(size)
+	local sumnum = self.height*self.width
+	local znmp = self.normal_map:select(3,3):clone():abs():lt(0.1):resize(sumnum)
+	local xnmp = self.normal_map:select(3,1):clone():resize(sumnum)
+	local ynmp = self.normal_map:select(3,2):clone():resize(sumnum)
+	local ind = torch.range(1,sumnum)
+	ind:apply(function(i)
+		if znmp[i] == 1 then
+			local theta = math.asin(xnmp[i])
+			if ynmp[i] < 0 then
+				theta = math.pi-theta
+			elseif theta < 0 then
+				theta = 2*math.pi+theta
+			end
+			local a = size * theta / (2*math.pi)
+			local b = math.floor(a)
+			local c = b+1
+			if c - a < a - b then
+				b = c
+			end
+			if b <= 0 then
+				b = size
+			end
+			bins:sub(b,b):add(1)
+		end
+	end)
+	bins = bins:repeatTensor(1,1)
+	bins:div(bins:max()+0.0000001)
+	local mb,mo = bins:max(2)
+	local theta = (mo:squeeze()/size)*2*math.pi
+	local sin = math.sin(theta)
+	local cos = math.cos(theta)
+	local mat = torch.Tensor({{cos, -sin, 0},{sin, cos, 0}, {0,0,1}})
+	self.points = (mat:clone()*(self.points:clone():transpose(1,2))):transpose(1,2)
+	self:reset_point_stats()
+end
+
+function PointCloud:make_normal_map(recompute,make_xyz)
 	if self.format == 1 then
-		if not (self.normal_map) then
+		if (not self.normal_map) or recompute then
 			local height = self.height
 			local width = self.width
 			self:make_xyz_map(true)
@@ -751,7 +894,7 @@ function PointCloud:make_normal_map()
 	    	crossprod = crossprod:clone():cdiv(crossprodnorm:clone()):transpose(1,3)
 		
 			self.normal_map=crossprod:clone()
-		else
+		elseif make_xyz then
 			self:make_xyz_map(true)
 		end
 	end
@@ -760,7 +903,7 @@ end
 function PointCloud:make_panoramic_normal_map()
    if self.format == 1 then
       if not self.normal_map then
-         self:make_normal_map()
+         self:make_normal_map(false,true)
       end
 
       local pmap = self.normal_map:clone()

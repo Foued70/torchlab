@@ -36,7 +36,7 @@ local odir_f = '/Users/lihui815/tmp3/flat'
 local odir_c = '/Users/lihui815/tmp3/corners'
 local odir = '/Users/lihui815/tmp3'
 	
---[[]]
+--[[
 local filestb = util.fs.files_only(sdir)
 	
 local loadtime = 0
@@ -76,11 +76,11 @@ for j=1,#filestb do
 	
 	--	local b = a:find_connections()	
 		local d,corn = a:make_flattened_images(scale,nil,30)
-	--[[]]
+		
 		local c = d:clone():cdiv(d:clone():add(0.000000001))
 		d:mul(2):add(c)
 		d:div(d:max()+0.0000000001)
-	--[[]]
+		
 		a = nil
 		
 		downsampletime = log.toc()
@@ -139,7 +139,7 @@ for ii=1,#filestb do
 		cornm1 = path.join(crdir,bname1..'.dat')
 		cornm2 = path.join(crdir,bname2..'.dat')
 		
-		print(bname1..' - '..bname2..': '..inl:max()..' '..inl:min()..' '..sorted_scores:max()..' '..sorted_scores:min())
+		print(bname1..' - '..bname2)
 	
 		--align_floors_endtoend.FloorTransformation.findTransformationSavedCorners(fname1,fname2,cornm1,cornm2,true)
 		
@@ -153,6 +153,8 @@ for ii=1,#filestb do
 			
 		--print(sorted_scores)
 		local inl = torch.Tensor(inliers)
+		
+		print(inl:max()..' '..inl:min()..' '..sorted_scores:max()..' '..sorted_scores:min())
 			
 		local i = 1
 		local k = 1
