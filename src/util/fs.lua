@@ -5,16 +5,23 @@ Class()
 
 
 function is_file(file_path)
-  if not file_path then return false end
-  local stats = fs.statSync(file_path)
-  return stats.is_file
+   if file_path and fs.existsSync(file_path) then
+      local stats = fs.statSync(file_path)
+      if stats then 
+         return stats.is_file
+      end
+   end
+   return false
 end
 
-
 function is_dir(dir_path)
-  if not dir_path then return false end
-  local stats = fs.statSync(dir_path)
-  return stats.is_directory
+   if dir_path and fs.existsSync(dir_path) then 
+      local stats = fs.statSync(dir_path)
+      if stats then 
+         return stats.is_directory
+      end
+   end
+   return false
 end
 
 

@@ -9,7 +9,8 @@ types = require '../types/Morph.lua'
 t2 = opencv.imgproc.getStructuringElement(types.MORPH_CROSS, 25, 25, 8, 8);
 print(t2:toTensor())
 
---libopencv.C.Mat_convert(mat, mat,libopencv.cvtColor_types.RGB2GRAY);
+-- opencv_ffi = require '../opencv_ffi'
+-- opencv_ffi.C.Mat_convert(mat, mat,opencv_ffi.cvtColor_types.RGB2GRAY);
 --note that this overrides what is in mat, which points to the same memory as t_torch2
 dilated = t2:clone();
 opencv.imgproc.dilate(dilated, t);

@@ -275,6 +275,9 @@ function image.display(...)
    else
       xerror('image must be a HxW or KxHxW or Kx3xHxW tensor, or a list of tensors', 'display')
    end
+
+   return input
+
 end
 
 

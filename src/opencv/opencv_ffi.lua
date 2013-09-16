@@ -167,4 +167,4 @@ void dump_keypoints(const KeyPoint* keyptr, int npts);
 void draw_keypoints(Mat* img, const KeyPoint* keyptr, int npts);
 ]]
 
-return util.ffi.load("libopencv")
+return util.ffi.load("libopencv_ffi")

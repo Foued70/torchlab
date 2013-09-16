@@ -1,4 +1,4 @@
-libopencv = require './libopencv'
+opencv_ffi = require './opencv_ffi'
 
 Class()
 
@@ -15,7 +15,7 @@ function warpImage(img, homography, size_x, size_y)
       error("problem with homography matrix")
    end
 
-   return opencv.Mat.new(libopencv.warpImage(img.mat, homography.mat, size_x, size_y))
+   return opencv.Mat.new(opencv_ffi.warpImage(img.mat, homography.mat, size_x, size_y))
 end
 
 -- <input> image1, image2, homography
@@ -31,7 +31,7 @@ function combineImages(img1, img2, homography)
       error("problem with homography matrix")
    end
    error("not implemented")
-   --return opencv.Mat.new(libopencv.combineImages(img1.mat, img2.mat, homography.mat, result_size_x, result_size_y, result_center_x, result_center_y))
+   --return opencv.Mat.new(opencv_ffi.combineImages(img1.mat, img2.mat, homography.mat, result_size_x, result_size_y, result_center_x, result_center_y))
 end
 
 -- <input> img, blockSize, ksize, k
@@ -49,7 +49,7 @@ function detectCornerHarris(img,blockSize,ksize, k)
    if type(k) ~= "number" then
       error("need to pass number as fourth arg")
    end
-   return opencv.Mat.new(libopencv.detectCornerHarris(img.mat, blockSize, ksize, k))
+   return opencv.Mat.new(opencv_ffi.detectCornerHarris(img.mat, blockSize, ksize, k))
 end
 
 -- <input> image, threshold1, threshold2 -- see opencv function
@@ -65,7 +65,7 @@ function CannyDetectEdges(img, threshold1, threshold2)
       error("need to pass number for third argument")
    end
 
-   return opencv.Mat.new(libopencv.CannyDetectEdges(img.mat, threshold1, threshold2))
+   return opencv.Mat.new(opencv_ffi.CannyDetectEdges(img.mat, threshold1, threshold2))
 end
 
 -- <input> -- see opencv function
@@ -86,7 +86,7 @@ function HoughLinesRegular(img, rho, theta, threshold, srn, stn)
    if type(stn) ~= "number" then
       error("need to pass number for fifth argument")
    end
-   return opencv.Mat.new(libopencv.HoughLinesRegular(img.mat, rho, theta, threshold, srn, stn))
+   return opencv.Mat.new(opencv_ffi.HoughLinesRegular(img.mat, rho, theta, threshold, srn, stn))
 end
 
 -- <input> -- see opencv function
@@ -107,7 +107,7 @@ function HoughLinesProbabilistic(img, rho, theta, threshold, mineLineLength, max
    if type(maxLineGap) ~= "number" then
       error("need to pass number for fifth argument")
    end
-   return opencv.Mat.new(libopencv.HoughLinesProbabilistic(img.mat, rho, theta, threshold, mineLineLength, maxLineGap))
+   return opencv.Mat.new(opencv_ffi.HoughLinesProbabilistic(img.mat, rho, theta, threshold, mineLineLength, maxLineGap))
 end
 
 function getPairwiseDistances(A, B)
@@ -117,7 +117,7 @@ function getPairwiseDistances(A, B)
    if ((not B.mat) or (type(B.mat) ~= "cdata")) then 
       error("problem with B Mat -- second argument")
    end
-   return opencv.Mat.new(libopencv.getPairwiseDistances(A.mat,B.mat))
+   return opencv.Mat.new(opencv_ffi.getPairwiseDistances(A.mat,B.mat))
 end
 
 function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_src, pairwise_dis_src, goodLocationsX_dest, goodLocationsY_dest, scores_dest, pairwise_dis_dest, corr_thresh,
@@ -166,7 +166,7 @@ function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_s
    if (type(size_y) ~= "number") then 
       error("problem with y size - fourteenth argument")
    end
-   matOfStuff= opencv.Mat.new(libopencv.findBestTransformation(goodLocationsX_src.mat, goodLocationsY_src.mat, scores_src.mat, 
+   matOfStuff= opencv.Mat.new(opencv_ffi.findBestTransformation(goodLocationsX_src.mat, goodLocationsY_src.mat, scores_src.mat, 
       pairwise_dis_src.mat, goodLocationsX_dest.mat, goodLocationsY_dest.mat, scores_dest.mat, pairwise_dis_dest.mat, corr_thresh,
       minInliers, numInliersMax, cornerComparisonThreshold, size_x, size_y))
    
@@ -203,7 +203,7 @@ function getStructuringElement(structType, size_x, size_y, center_x, center_y)
    if type(center_y) ~= "number" then
       error("need to pass number for fifth argument")
    end
-   return opencv.Mat.new(libopencv.getStructuringElement(structType, size_x, size_y, center_x, center_y))
+   return opencv.Mat.new(opencv_ffi.getStructuringElement(structType, size_x, size_y, center_x, center_y))
 end
 
 function getDefaultStructuringMat(erosion_size)
@@ -221,7 +221,7 @@ function dilate(img, structuringElement)
    if ((not structuringElement.mat) or (type(structuringElement.mat) ~= "cdata")) then 
       error("problem with structuring element images")
    end
-   libopencv.dilate(img.mat, structuringElement.mat);
+   opencv_ffi.dilate(img.mat, structuringElement.mat);
 end
 
 --erode the img 
@@ -232,5 +232,5 @@ function erode(img, structuringElement)
    if ((not structuringElement.mat) or (type(structuringElement.mat) ~= "cdata")) then 
       error("problem with structuring element images")
    end
-   libopencv.erode(img.mat, structuringElement.mat);
+   opencv_ffi.erode(img.mat, structuringElement.mat);
 end
