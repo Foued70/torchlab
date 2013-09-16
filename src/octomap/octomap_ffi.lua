@@ -13,6 +13,7 @@ ffi.cdef [[
 //   opaque pointer (not visible from Lua interface)
 // ------------
 typedef struct OcTree OcTree;
+typedef struct ColorOcTree ColorOcTree;
 
 // ------------
 //   functions on the OcTree
@@ -21,8 +22,20 @@ OcTree* OcTree_new (float resolution);
 void    OcTree_destroy(OcTree* tree);
 
 void    OcTree_add_sweep(OcTree* tree, THDoubleTensor* points, THDoubleTensor* origin, double max_range);
-THDoubleTensor* OcTree_toTensor(OcTree* tree, THDoubleTensor* points);
+THDoubleTensor* OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points);
+THDoubleTensor* OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points);
 void    OcTree_outputStatistics(const OcTree* tree);
+
+// ------------
+//   functions on the ColorOcTree
+// ------------
+ColorOcTree* ColorOcTree_new (float resolution);
+void         ColorOcTree_destroy(ColorOcTree* tree);
+void         ColorOcTree_add_sweep(ColorOcTree* tree, 
+                                   THDoubleTensor* points, THDoubleTensor* origin, double max_range,
+                                   THByteTensor* color);
+
+
 ]]
 
 return util.ffi.load("liboctomap_ffi")

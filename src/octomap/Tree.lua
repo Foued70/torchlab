@@ -24,9 +24,15 @@ function Tree:add_points(points, origin, max_range)
    octomap_ffi.OcTree_add_sweep(self.tree, torch.cdata(points), torch.cdata(origin),max_range)
 end
 
-function Tree:toTensor()
+function Tree:get_occupied()
    points = torch.Tensor()
-   octomap_ffi.OcTree_toTensor(self.tree,torch.cdata(points))
+   octomap_ffi.OcTree_OccupiedCellstoTensor(self.tree,torch.cdata(points))
+   return points
+end
+
+function Tree:get_empty()
+   points = torch.Tensor()
+   octomap_ffi.OcTree_EmptyCellstoTensor(self.tree,torch.cdata(points))
    return points
 end
 
@@ -38,7 +44,7 @@ end
 function Tree:writeObjCubes(filename)
    io = require 'io'
    objf = assert(io.open(filename, "w"))  
-   pts  = self:toTensor()
+   pts  = self:get_occupied()
    face_radius = self.resolution * 0.5
    pid = 1
    for i = 1,pts:size(1) do 
