@@ -920,6 +920,7 @@ function PointCloud:estimate_faro_pose(degree_above, degree_below)
    return torch.Tensor({0,0,midrow[midrow:gt(0)]:mean()})
 end
 
+
 -- TODO make pose and rot getter and setter methods inherited from a View
 
 -- store the position of the scan center in local coordiantes
@@ -945,21 +946,26 @@ function PointCloud:get_local_to_global_pose()
    return self.local_to_global_pose
 end
 
-function PointCloud:set_local_to_global_rot(rot)
-   self.local_to_global_rot = rot
+function PointCloud:set_local_to_global_rotation(quaternion)
+   self.local_to_global_rotation = quaternion
 end
 
 -- rotate all points by this quaternion to place them in global coordinates
-function PointCloud:get_local_to_global_rot()
-   if not self.local_to_global_rot then
-      self.local_to_global_rot = torch.Tensor({0,0,0,1})
+function PointCloud:get_local_to_global_rotation()
+   if not self.local_to_global_rotation then
+      self.local_to_global_rotation = torch.Tensor({0,0,0,1})
    end
-   return self.local_to_global_rot
+   return self.local_to_global_rotation
+end
+
+function PointCloud:set_pose_from_rotation_matrix(mat)
+   self:set_local_to_global_rotation(geom.quaternion.from_rotation_matrix(mat))
+   self:set_local_to_global_pose(mat[{{1,3},4}]:clone())
 end
 
 function PointCloud:get_global_points()
    pose = self:get_local_to_global_pose()
-   rot  = self:get_local_to_global_rot()
+   rot  = self:get_local_to_global_rotation()
    return rotate_translate(rot,pose,self.points)
 end
 
