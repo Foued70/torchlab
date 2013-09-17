@@ -52,7 +52,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
             self.count = self.points:size(1)
             self.normal_map = loaded[5]
             if self.normal_map then 
-               self.normal_map:type('torch.DoubleTensor'):div(10000.0)
+               self.normal_map = self.normal_map:type('torch.DoubleTensor'):div(10000.0)
             end
             self:reset_point_stats()
          else
@@ -246,13 +246,22 @@ function PointCloud:write(filename)
       local file = io.open(filename, 'w');
       local tmpt = torch.range(1,self.count)
       tmpt:apply(function(i)
-                    if self.format == 1 then
-                       local ind = self.hwindices[i]:clone():add(-1)
-                       file:write(''..(ind[1])..' '..(ind[2])..' ')
-                    end
-                    local pt = self.points[i]
+      				local pt = self.points[i]
                     local rgbx = self.rgb[i]
-                    file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+                    if self.format == 1 then
+                       --local ind = self.hwindices[i]:clone()
+                       --local ih = ind[1]
+                       --local iw = ind[2]
+                       if self.normal_map then
+	                       --local nmp = self.normal_map[ih][iw]
+    	                   --file:write(''..(ih-1)..' '..(iw-1)..' '..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..' '..nmp[1]..' '..nmp[2]..' '..nmp[3]..'\n')
+    	                   file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+    	               --else
+    	               --    file:write(''..(ih-1)..' '..(iw-1)..' '..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+    	               end
+                    else
+	                    file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+	                end
                  end)
       file:close()
    end

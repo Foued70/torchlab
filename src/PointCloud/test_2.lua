@@ -22,7 +22,10 @@ local odir_c = path.join(tdir,'CORNERS')
 local odir_a = path.join(tdir,'COMBINED')
 local odir_s = path.join(tdir,'STITCHED')
 local odir_t = path.join(tdir,'TRANSFORM')
-local odir_ft = path.join(tdir,'FULLTRANS')
+local odir_fw = path.join(tdir,'TRANSFRWRD')
+local odir_bk = path.join(tdir,'TRANSBKWRD')
+local odir_ft = path.join(tdir,'TRANSFULL')
+local odir_3d = path.join(tdir,'TRANS3D')
 local odir_ct = path.join(tdir,'CORNERSSTITCH')
 
 local xyzext = '.xyz'
@@ -65,6 +68,8 @@ sweep_pairs_new:sub(1,sweep_pairs:size(1)-30):add(sweep_pairs:sub(1+30,sweep_pai
 sweep_pairs_new:sub(sweep_pairs:size(1)-30+1,sweep_pairs:size(1)):add(sweep_pairs:sub(1,30))
 
 sweep_pairs=sweep_pairs_new
+
+local num = sweep_pairs:size(1)
 
 --[[
 
@@ -117,11 +122,14 @@ local sweep_pairs = torch.Tensor({{1002,1005},
 --[[]]
 
 
---[[
+--[[]]
 local loadtime = 0
 local flattentime = 0
 local savetime = 0
 
+local minht = torch.load(path.join(sdir,'1030.od'))[3]:select(2,3):min()/10000
+
+--[[]]
 for j=1,sweeps:size(1) do
 	
 	log.tic()
@@ -136,15 +144,35 @@ for j=1,sweeps:size(1) do
 	print('loading '..fname)
 		
 	local a = pcl.new(fname)
-	fname = nil
-		
-	loadtime = log.toc()
 	
-	--a:axis_align()
-	--a:make_normal_map(true,true)
+	b = a--:downsample(0.01)
+	
+	local h = torch.load(path.join(odir_3d, bname..'.dat'))
+	local hh = torch.zeros(4,4)
+	hh:sub(1,2,1,2):add(h:sub(1,2,1,2))
+	hh:sub(1,2,4,4):add(h:sub(1,2,3,3))
+	hh[3][4] = minht-b.points:select(2,3):min()
+	hh[3][3]=1
+	hh[4][4]=1
+	local pts = torch.ones(4, a.count)
+	pts:select(1,1):cmul(b.points:select(2,1))
+	pts:select(1,2):cmul(b.points:select(2,2))
+	pts:select(1,3):cmul(b.points:select(2,3))
+	pts = hh*pts
+	local points = torch.zeros(a.points:size())
+	points:select(2,1):add(pts:select(1,1))
+	points:select(2,2):add(pts:select(1,2))
+	points:select(2,3):add(pts:select(1,3))
+	
+	b.points = points:mul(10000):floor():div(100)
+	
+	fname = nil	
+	
+	loadtime = log.toc()
 	
 	log.tic()
 	
+	--[[
 	local b,c = a:make_flattened_images(scale,nil,30)
 		
 	local bn = b:clone():cdiv(b:clone():add(0.000000001))
@@ -158,6 +186,10 @@ for j=1,sweeps:size(1) do
 	image.save(ioname_f,b)
 	torch.save(ioname_c,c)
 	a:write(ioname_o)
+	]]
+	
+	--a:write(path.join(path.join(tdir,'XYZ'),bname..'.xyz'))
+	b:write(path.join(path.join(tdir,'XYZ'),bname..'.xyz'))
 		
 	a = nil
 	
@@ -262,172 +294,186 @@ end
 
 --[[
 
-local sizeH = 5000
-local sizeW = 4000
-local find_cand_time = 0
-local filter_cand_time = 0
-local translateH=2000
-local translateW=600
+local transfor = Homography.new(0,torch.Tensor({0,0}))
+torch.save(path.join(odir_fw, sweep_pairs[1][1]..'.dat'),transfor.H)
+local transbak = Homography.new(0,torch.Tensor({0,0}))
+torch.save(path.join(odir_bk, sweep_pairs[num][2]..'.dat'),transbak.H)
+local pairwise_trans = Homography.new(0,torch.Tensor({0,0}))
 
-for ii=5,sweep_pairs:size(1) do
+for ii=1,num-1 do
 	
 	local bname1 = ''..sweep_pairs[ii][1]
 	local bname2 = ''..sweep_pairs[ii][2]
-	local fname1 = path.join(odir_f,bname1..imgext)
-	local fname2 = path.join(odir_f,bname2..imgext)
-		
-	cornm1 = path.join(odir_c,bname1..datext)
-	cornm2 = path.join(odir_c,bname2..datext)
 	
 	print(bname1..' - '..bname2)
 	
-	if ii == 1 then
-		
-		print('set up first pass')
-		local img = opencv.Mat.new(fname1)
-		img:convert("RGB2GRAY");
-
-		local trans_trans = Homography.new(0,torch.Tensor({translateH,translateW}))
-		local src_transform = opencv.Mat.new(trans_trans:getEquivalentCV())
-    	img  =  opencv.imgproc.warpImage(img, src_transform, sizeW, sizeH)
-		local img_tens = img:toTensor():type('torch.DoubleTensor')
-		img_tens:div(img_tens:max()+0.000000001)
-
-		image.save(path.join(odir_s,'000.png'),img_tens)
-		
-		local corners = torch.load(cornm1)
-		local corners_tmp = torch.zeros(3,corners:size(1))
-		corners_tmp:select(1,1):add(corners:select(2,1))
-		corners_tmp:select(1,2):add(corners:select(2,2))
-		corners_tmp:select(1,3):fill(1)
-		corners_tmp = trans_trans.H * corners_tmp
-		corners = torch.zeros(corners:size())
-		corners:select(2,1):add(corners_tmp:select(1,1))
-		corners:select(2,2):add(corners_tmp:select(1,2))
-		
-		print('corners: '..corners:size(1))
-		
-		torch.save(path.join(odir_ct,bname1..datext),corners)
-		
-		img = nil
-		trans_trans = nil
-		src_transform = nil	
-		corners = nil
-		corners_tmp = nil
-		
-	end
+	pairwise_trans.H = torch.load(path.join(odir_t, bname1..'_'..bname2..'.dat'))
 	
-	collectgarbage()
-	
-	local m = ''..(ii - 1)
-	while #m < 3 do
-		m = '0'..m
-	end
-	
-	fname1 = path.join(odir_s,m..'.png')
-	cornm1 = path.join(odir_ct,bname1..datext)
-	
-	print('updated fnames')
-	
-	log.tic()
-	local bestT,trans2, trans1, combined, inliers, anglediff, tgt_cnt_h, tgt_cnt_w, src_cnt_h, src_cnt_w, size_x_all, size_y_all, scores = FloorTransformation.findTransformationSavedCorners(fname2,fname1,cornm2,cornm1)
-	
-	find_cand_time = log.toc()
-	
-	log.tic()
+	transfor = transfor:combineWith(pairwise_trans)
+	torch.save(path.join(odir_fw, bname2..'.dat'),transfor.H)
 	
 	collectgarbage()
 	    
-	local all_scores = scores:clone():mul(-1)
-	local numcandidates = all_scores:nElement()	
+	local bname1 = ''..sweep_pairs[num-ii+1][2]
+	local bname2 = ''..sweep_pairs[num-ii+1][1]
 	
-	local sorted_scores = all_scores
-	local order = torch.range(1,numcandidates)
-			
-	local inl = torch.Tensor(inliers)
+	print(bname1..' - '..bname2)
 	
-	if inliers ~= nil and #inliers > 0 then
-	print(inl:max()..' '..inl:min()..' '..sorted_scores:max()..' '..sorted_scores:min())
-			
-	local i = 1
-	local k = 1
-	while k < 2 and i <= numcandidates do
-			
-		local j = order[i]
-			
-		local total_score = all_scores[j]
-		local innum = inliers[j]
-		local angnum = anglediff[j]
-				
-		collectgarbage()
-			
-		if total_score < -0 then
-		
-			print('found something')
-			ground_truth_score = 0
-			local cname = path.join(odir_a,bname1..'_'..bname2..'_'..i..'_'..j..'_'..total_score..'_'..innum..'_'..angnum..'_'..'truth'..ground_truth_score..'.png')
-			image.save(cname, combined[j])
-			torch.save(path.join(odir_t,bname1..'_'..bname2..'.dat'),bestT[j].H)
-			
-			local trans_trans = bestT[j]
-		
-			local corners = torch.load(cornm2)
-			local corners_tmp = torch.zeros(3,corners:size(1))
-			corners_tmp:select(1,1):add(corners:select(2,1))
-			corners_tmp:select(1,2):add(corners:select(2,2))
-			corners_tmp:select(1,3):fill(1)
-			corners_tmp = trans_trans.H * corners_tmp
-			corners = torch.zeros(corners:size())
-			corners:select(2,1):add(corners_tmp:select(1,1))
-			corners:select(2,2):add(corners_tmp:select(1,2))
-			--corners = torch.cat(torch.load(cornm1),1)
-			
-			print('corners: '..corners:size(1))
-		
-			torch.save(path.join(odir_ct,bname2..datext),corners)
-			torch.save(path.join(odir_ft,bname1..'_'..bname2..'.dat'),trans_trans.H)
-			
-			local combined_tens = combined[j]:max(1):squeeze():repeatTensor(3,1,1)
-			combined_tens:type('torch.DoubleTensor')
-			combined_tens:div(combined_tens:max()+0.00000000001)
-			
-			m = ''..(ii)
-			while #m < 3 do
-				m = '0'..m
-			end
-			image.save(path.join(odir_s,m..'.png'),combined_tens)
-		
-			img = nil
-			trans_trans = nil
-			src_transform = nil	
-			combined_tens = nil
-			corners = nil
-			corners_tmp = nil
-			
-			print('saved everything')
-						
-			k = k + 1
-		end
-		collectgarbage()
-		i = i + 1
-	end
-	end
-	filter_cand_time = log.toc()
+	pairwise_trans.H = torch.load(path.join(odir_t, bname1..'_'..bname2..'.dat'))
+	
+	transbak = transbak:combineWith(pairwise_trans)
+	torch.save(path.join(odir_bk, bname2..'.dat'),transbak.H)
 	
 	collectgarbage()
-	print('total time: '..(find_cand_time+filter_cand_time)..', find: '..find_cand_time..', filter: '..filter_cand_time)
-	print()
 	
 end
 
---[[]]
+--[[
+
+torch.save(path.join(odir_ft, sweep_pairs[1][1]..'.dat'),Homography.new(0,torch.Tensor({0,0})).H)
+
+for ii=1,num-1 do
+	
+	local bname = ''..sweep_pairs[ii][2]
+	local fname = path.join(odir_f,bname..imgext)
+	local imgtens = image.load(fname)
+	local corners = torch.Tensor({{              0,              0},
+	                              {              0, imgtens:size(2)}})
+	
+	print(bname)
+	
+	local transfor = Homography.new(0,torch.Tensor({0,0}))
+	local transbak = Homography.new(0,torch.Tensor({0,0}))
+	transfor.H = torch.load(path.join(odir_fw, bname..'.dat'))
+	transbak.H = torch.load(path.join(odir_bk, bname..'.dat'))
+	
+	local cornersfor = transfor:applyToPoints(corners:clone())
+	local cornersbak = transbak:applyToPoints(corners:clone())
+	local cornersavg = cornersfor:clone():mul(num-ii):add(cornersbak:clone():mul(ii)):div(num)
+	
+	local th = cornersavg[1][1]
+	local tw = cornersavg[2][1]
+	local costheta = (cornersavg[2][2]-tw)/corners[2][2]
+	local sintheta = (th-cornersavg[1][2])/corners[2][2]
+	
+	local transfull = Homography.new(0,torch.Tensor({0,0}))
+	transfull.H = torch.Tensor({{costheta, -sintheta, th},
+	                            {sintheta,  costheta, tw},
+	                            {       0,         0,  1}})
+	
+	print(transfor.H)
+	print(transbak.H)
+	print(transfull.H)
+	
+	torch.save(path.join(odir_ft, bname..'.dat'),transfull.H)
+	
+	collectgarbage()
+	
+end
+
+--[[
+
+local sizeH = 5000
+local sizeW = 4000
+local translateH=2000
+local translateW=600
+local currTrans = Homography.new(0,torch.Tensor({0,0}))
+local img_dest_tens = torch.zeros(sizeH,sizeW)
+--local img_dest_tens = image.load('/Users/lihui815/tmp2/2013_09_08_Office/STITCHED/071_1100.png','torch.DoubleTensor'):select(1,1)
+--img_dest_tens:div(img_dest_tens:max())
+
+for ii=1,num do
+
+	log.tic()
+	local bname = ''..sweep_pairs[ii][1]
+
+	currTrans.H = torch.load(path.join(odir_ft, bname..'.dat'))
+	
+	local trans_trans = Homography.new(0,torch.Tensor({translateH,translateW}))
+	trans_trans = trans_trans:combineWith(currTrans)
+	
+	local img_src = opencv.Mat.new(path.join(odir_f,bname..'.png'))
+	img_src:convert("RGB2GRAY");
+	
+	local src_transform = opencv.Mat.new(trans_trans:getEquivalentCV())
+    local warped_src_tens  =  opencv.imgproc.warpImage(img_src, src_transform, sizeW, sizeH):toTensor():type('torch.DoubleTensor')
+    warped_src_tens:div(warped_src_tens:max()+0.00000001)
+    
+    local combined = torch.zeros(3,sizeH,sizeW)
+    combined:select(1,1):add(img_dest_tens)
+    combined:select(1,2):add(warped_src_tens)
+    img_dest_tens = combined:max(1):squeeze()
+    combined = img_dest_tens:clone():repeatTensor(3,1,1)
+   
+    local k = ''..(ii)
+	while #k < 3 do
+		k = '0'..k
+	end
+	
+	image.save(path.join(odir_s,k..'_'..bname..'.png'),combined)
+	print(ii..' '..bname..' '..log.toc())
+	
+	k = nil
+	bname = nil
+	img_src = nil
+	warped_src_tens = nil
+	combined = nil
+	trans_trans = nil
+	
+	collectgarbage()
+
+end
+
+--[[
+
+local img_dest_h = 1575
+local img_dest_w = 1520
+
+local dest_ch = math.ceil(img_dest_h/2)
+local dest_cw = math.ceil(img_dest_w/2)
+
+local currTrans = Homography.new(0,torch.Tensor({0,0}))
+
+for ii=1,num do
+
+	log.tic()
+	local bname = ''..sweep_pairs[ii][1]
+	print(bname)
+
+	currTrans.H = torch.load(path.join(odir_ft, bname..'.dat'))
+	local img_src = image.load(path.join(odir_f,bname..'.png'))
+	local img_src_h = img_src:size(2)
+	local img_src_w = img_src:size(3)
+	local src_ch = math.ceil(img_src_h/2)
+	local src_cw = math.ceil(img_src_w/2)
+	
+	local transl_corner_centered = torch.Tensor({currTrans.H[1][3],currTrans.H[2][3]})
+	local src_center = torch.Tensor({src_ch,src_cw})
+	local dst_center = torch.Tensor({dest_ch,dest_cw})
+	local rot = currTrans.H:sub(1,2,1,2)
+	local transl_center_centered = transl_corner_centered - dst_center + (rot * src_center)
+	
+	print(currTrans.H)
+	
+	currTrans.H[1][3] = transl_center_centered[1]*scale
+	currTrans.H[2][3] = transl_center_centered[2]*scale
+	
+	torch.save(path.join(odir_3d, bname..'.dat'),currTrans.H)
+	
+	print(currTrans.H)
+	
+	collectgarbage()
+
+end
+
+--[[
 
 local sizeH = 5000
 local sizeW = 4000
 local translateH=2000
 local translateW=600
 local currTrans1 = Homography.new(0,torch.Tensor({0,0}))
-currTrans1.H = torch.load(path.join(odir_ft,'1101_1102.dat'))
+--currTrans1.H = torch.load(path.join(odir_ft,'1101_1102.dat'))
 
 --local currTrans2 = Homography.new(0,torch.Tensor({0,0}))
 --currTrans2.H = torch.load(path.join(odir_ft,'1100_1099.dat'))
@@ -437,7 +483,7 @@ currTrans1.H = torch.load(path.join(odir_ft,'1101_1102.dat'))
 
 local cnt
 
-for i=73,sweep_pairs:size(1) do
+for i=1,sweep_pairs:size(1) do
 
 	ii = i
 	cnt = ii
