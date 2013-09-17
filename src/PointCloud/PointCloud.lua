@@ -3,6 +3,7 @@ local kdtree = kdtree.kdtree
 local ffi = require 'ffi'
 local ctorch = util.ctorch -- ctorch needs to be loaded before we reference THTensor stuff in a cdef
 local log = require '../util/log'
+local rotate_translate = geom.quaternion.rotate_translate
 
 -- angular to radians and back
 local pi = math.pi
@@ -66,8 +67,15 @@ end
 
 function PointCloud:reset_point_stats()
    self.centroid=torch.Tensor({{0,0,self.points:mean(1)[1][3]}})
-   self.minval,self.minind = self.points:min(1)
-   self.maxval,self.maxind = self.points:max(1)
+   minval,minind = self.points:min(1)
+   maxval,maxind = self.points:max(1)
+
+   self.minval   = minval:squeeze()
+   self.maxval   = maxval:squeeze()
+
+   self.minind   = minind:squeeze()
+   self.maxind   = maxind:squeeze()
+
    local d = torch.Tensor(2,3)
    d[1] = self.maxval:clone():add(self.centroid:clone():mul(-1)):squeeze()
    d[2] = self.centroid:clone():add(self.minval:clone():mul(-1)):squeeze()
@@ -1062,4 +1070,51 @@ function PointCloud:estimate_faro_pose(degree_above, degree_below)
    xyz_map = self:get_xyz_map()
    midrow  = xyz_map[{3,rowid,{}}]
    return torch.Tensor({0,0,midrow[midrow:gt(0)]:mean()})
+end
+
+-- TODO make pose and rot getter and setter methods inherited from a View
+
+-- store the position of the scan center in local coordiantes
+function PointCloud:set_local_scan_center(pose)
+   self.local_scan_center = pose
+end
+
+function PointCloud:get_global_scan_center()
+   pose = self:get_local_to_global_pose()
+   return self.local_scan_center + pose
+end
+
+-- add this vector to all points to get points in global coordinates
+function PointCloud:set_local_to_global_pose(pose)
+   self.local_to_global_pose = pose
+end
+
+-- add this vector to all points to get points in global coordinates
+function PointCloud:get_local_to_global_pose()
+   if not self.local_to_global_pose then 
+      self.local_to_global_pose = torch.zeros(3)
+   end
+   return self.local_to_global_pose
+end
+
+function PointCloud:set_local_to_global_rot(rot)
+   self.local_to_global_rot = rot
+end
+
+-- rotate all points by this quaternion to place them in global coordinates
+function PointCloud:get_local_to_global_rot()
+   if not self.local_to_global_rot then
+      self.local_to_global_rot = torch.Tensor({0,0,0,1})
+   end
+   return self.local_to_global_rot
+end
+
+function PointCloud:get_global_points()
+   pose = self:get_local_to_global_pose()
+   rot  = self:get_local_to_global_rot()
+   return rotate_translate(rot,pose,self.points)
+end
+
+function PointCloud:get_max_radius()
+   return torch.max(self.radius)
 end

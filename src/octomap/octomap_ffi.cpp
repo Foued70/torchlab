@@ -12,6 +12,7 @@ extern "C"
 #include <octomap/Pointcloud.h>
 #include <octomap/octomap.h>
 #include <octomap/OcTree.h>
+#include <octomap/ColorOcTree.h>
 
 using namespace std;
 using namespace octomap;
@@ -95,7 +96,7 @@ extern "C"
 
   }
   
-  THDoubleTensor* OcTree_toTensor(OcTree* tree, THDoubleTensor* points)
+  THDoubleTensor* OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points)
   {
     size_t nLeafNodes = tree->getNumLeafNodes();
     THDoubleTensor_resize2d(points,nLeafNodes,3);
@@ -114,4 +115,42 @@ extern "C"
 
     return points;
   }
+
+
+  THDoubleTensor* OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points)
+  {
+    size_t nLeafNodes = tree->getNumLeafNodes();
+    THDoubleTensor_resize2d(points,nLeafNodes,3);
+    double * pts_d = THDoubleTensor_data(points);
+    long count = 0;
+    for(OcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
+      if(!tree->isNodeOccupied(*it)){
+        pts_d[0] = it.getX();
+        pts_d[1] = it.getY();
+        pts_d[2] = it.getZ();
+        count++;
+        pts_d += 3;
+      }
+    }
+    THDoubleTensor_narrow(points,NULL,0,0,count);
+
+    return points;
+  }
+
+  // unknown cells don't exist in the tre
+  /// return centers of leafs that do NOT exist (but could) in a given bounding box
+  // void getUnknownLeafCenters(point3d_list& node_centers, point3d pmin, point3d pmax) const;
+  // THDoubleTensor* OcTree_UnknownCellstoTensor(OcTree* tree, THDoubleTensor* points)
+
+  ColorOcTree*  ColorOcTree_new(double res)
+  {
+    return new ColorOcTree(res);
+  }
+
+  void ColorOcTree_destroy(ColorOcTree* tree)
+  {
+    delete(tree); 
+  }
+
+
 }

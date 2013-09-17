@@ -5,6 +5,7 @@ cmd:text('PointCloud to voxel grid')
 cmd:text()
 cmd:text('Options')
 cmd:option('-pcloudfile', '', 'xyz pointcloud to process')
+cmd:option('-res', '0.05', 'resolution of voxel grid')
 cmd:option('-outfile', 'output.obj', 'ouput .obj file')
 
 cmd:text()
@@ -16,18 +17,19 @@ params = cmd:parse(process.argv)
 
 input_filename  = params.pcloudfile
 output_filename = params.outfile
+res             = tonumber(params.res)
 
 log.trace("loading ".. input_filename)
 log.tic()
 _G.p = PointCloud.PointCloud.new(input_filename)
 log.trace(" - in ".. log.toc())
 
-scanner_pose = p:get_est_scanner_pose()
+scanner_pose = p:estimate_faro_pose()
 
 max_radius = torch.max(p.radius)
 
 log.trace("building tree ...")log.tic()
-_G.t = octomap.Tree.new()
+_G.t = octomap.Tree.new(res)
 t:add_points(p.points,scanner_pose,max_radius)
 log.trace(" - in ".. log.toc())
 
