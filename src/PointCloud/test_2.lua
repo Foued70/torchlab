@@ -62,7 +62,7 @@ sweep_pairs:select(2,2):mul(0)
 sweep_pairs:select(2,2):sub(1,sweep_pairs:size(1)-1):add(sweep_pairs:select(2,1):sub(2,sweep_pairs:size(1)))
 sweep_pairs:select(2,2):sub(sweep_pairs:size(1)-0,sweep_pairs:size(1)):add(sweep_pairs:select(2,1):sub(1,1))
 
---[[]]
+--[[
 local sweep_pairs_new = torch.zeros(sweep_pairs:size())
 sweep_pairs_new:sub(1,sweep_pairs:size(1)-30):add(sweep_pairs:sub(1+30,sweep_pairs:size(1)))
 sweep_pairs_new:sub(sweep_pairs:size(1)-30+1,sweep_pairs:size(1)):add(sweep_pairs:sub(1,30))
@@ -71,66 +71,54 @@ sweep_pairs=sweep_pairs_new
 
 local num = sweep_pairs:size(1)
 
---[[
-
-local sweep_pairs_new = torch.zeros(sweep_pairs:size())
-sweep_pairs_new:select(2,1):add(sweep_pairs:select(2,2))
-sweep_pairs_new:select(2,2):add(sweep_pairs:select(2,1))
-sweep_pairs = sweep_pairs_new
-
---[[
-local sweep_pairs = torch.Tensor({{1002,1005},
-                                  {1005,1007},
-                                  {1007,1011},
-                                  {1011,1013},
-                                  {1013,1015},
-                                  {1015,1017},
-                                  {1017,1021},
-                                  {1021,1024},
-                                  {1024,1027},
-                                  {1027,1029},
-                                  {1029,1030},
-                                  {1030,1032},
-                            	  {1032,1035},
- 	                              {1035,1039},
-                                  {1039,1042},
-                                  {1042,1045},
-                                  {1045,1048},
-                                  {1048,1051},
-                                  {1051,1053},
-                                  {1053,1056},
-                                  {1056,1057},
-                                  {1057,1060},
-                                  {1060,1062},
-                                  {1062,1064},
-                                  {1064,1068},
-                                  {1068,1072},
-                                  {1072,1075},
-                                  {1075,1079},
-                                  {1079,1082},
-                                  {1082,1086},
-                                  {1086,1088},
-                                  {1088,1091},
-                                  {1091,1095},
-                                  {1095,1097},
-                                  {1097,1099},
-                                  {1099,1100},
-                                  {1100,1102},
-                                  {1102,1104},
-                                  {1104,1002}
-                                  })
---[[]]
-
-
 --[[]]
 local loadtime = 0
 local flattentime = 0
 local savetime = 0
 
+--[[
+local a = pcl.new(path.join(sdir,'1000'..pclext))
+local rgb = image.load('/Users/lihui815/tmp2/2013_09_08_Office/Images/1000.png'):transpose(1,2):transpose(2,3)
+a.rgb=a.rgb:type('torch.DoubleTensor'):div(255)
+for i =1,a.count do
+	local hw = a.hwindices[i]
+	local h = hw[1]
+	local w = hw[2]
+	a.rgb:sub(i,i):cmul(rgb[h][w])
+end
+a.rgb = a.rgb:mul(255):floor():type('torch.ByteTensor')
+image.display(a:get_rgb_map())
+a.format = 0
+a:write('/Users/lihui815/1000.xyz')
+]]
+
+--[[
 local minht = torch.load(path.join(sdir,'1030.od'))[3]:select(2,3):min()/10000
+	b = a--:downsample(0.01)
+	
+	local h = torch.load(path.join(odir_3d, bname..'.dat'))
+	local hh = torch.zeros(4,4)
+	hh:sub(1,2,1,2):add(h:sub(1,2,1,2))
+	hh:sub(1,2,4,4):add(h:sub(1,2,3,3))
+	hh[3][4] = minht-b.points:select(2,3):min()
+	hh[3][3]=1
+	hh[4][4]=1
+	torch.save(path.join(odir_3d,'three_d_'..bname..'.dat'),hh)
+	--[[
+	local pts = torch.ones(4, a.count)
+	pts:select(1,1):cmul(b.points:select(2,1))
+	pts:select(1,2):cmul(b.points:select(2,2))
+	pts:select(1,3):cmul(b.points:select(2,3))
+	pts = hh*pts
+	local points = torch.zeros(a.points:size())
+	points:select(2,1):add(pts:select(1,1))
+	points:select(2,2):add(pts:select(1,2))
+	points:select(2,3):add(pts:select(1,3))
+	b.points = points:mul(10000):floor():div(100)
+--[[]]
 
 --[[]]
-for j=1,sweeps:size(1) do
+for j=1,1 do--sweeps:size(1) do
 	
 	log.tic()
 	
@@ -145,35 +133,14 @@ for j=1,sweeps:size(1) do
 		
 	local a = pcl.new(fname)
 	
-	b = a--:downsample(0.01)
-	
-	local h = torch.load(path.join(odir_3d, bname..'.dat'))
-	local hh = torch.zeros(4,4)
-	hh:sub(1,2,1,2):add(h:sub(1,2,1,2))
-	hh:sub(1,2,4,4):add(h:sub(1,2,3,3))
-	hh[3][4] = minht-b.points:select(2,3):min()
-	hh[3][3]=1
-	hh[4][4]=1
-	local pts = torch.ones(4, a.count)
-	pts:select(1,1):cmul(b.points:select(2,1))
-	pts:select(1,2):cmul(b.points:select(2,2))
-	pts:select(1,3):cmul(b.points:select(2,3))
-	pts = hh*pts
-	local points = torch.zeros(a.points:size())
-	points:select(2,1):add(pts:select(1,1))
-	points:select(2,2):add(pts:select(1,2))
-	points:select(2,3):add(pts:select(1,3))
-	
-	b.points = points:mul(10000):floor():div(100)
-	
 	fname = nil	
 	
 	loadtime = log.toc()
 	
 	log.tic()
 	
-	--[[
-	local b,c = a:make_flattened_images(scale,nil,30)
+	a:get_normal_map(true)
+	local b,c = a:get_flattened_images(scale,nil,30)
 		
 	local bn = b:clone():cdiv(b:clone():add(0.000000001))
 	b:mul(4):add(bn)
@@ -185,12 +152,9 @@ for j=1,sweeps:size(1) do
 	
 	image.save(ioname_f,b)
 	torch.save(ioname_c,c)
+
 	a:write(ioname_o)
-	]]
 	
-	--a:write(path.join(path.join(tdir,'XYZ'),bname..'.xyz'))
-	b:write(path.join(path.join(tdir,'XYZ'),bname..'.xyz'))
-		
 	a = nil
 	
 	savetime = log.toc()
@@ -206,7 +170,7 @@ for j=1,sweeps:size(1) do
 	collectgarbage()
 end	
 
---[[
+--[[]]
 
 for ii=1,1 do --sweep_pairs:size(1) do
 	
@@ -258,8 +222,72 @@ for ii=1,sweep_pairs:size(1) do
 	local order = torch.range(1,numcandidates)
 			
 	local inl = torch.Tensor(inliers)
+	
+	if #inliers ~= 0 then
 		
-	print(inl:max()..' '..inl:min()..' '..sorted_scores:max()..' '..sorted_scores:min())
+		print(inl:max()..' '..inl:min()..' '..sorted_scores:max()..' '..sorted_scores:min())
+	end
+			
+	local i = 1
+	local k = 1
+	while k < 2 and i <= numcandidates do
+			
+		local j = order[i]
+			
+		local total_score = all_scores[j]
+		local innum = inliers[j]
+		local angnum = anglediff[j]
+				
+		collectgarbage()
+			
+		if total_score < -0 then
+			ground_truth_score = 0
+			local cname = path.join(odir_a,bname1..'_'..bname2..'_'..i..'_'..j..'_'..total_score..'_'..innum..'_'..angnum..'_'..'truth'..ground_truth_score..'.png')
+			image.save(cname, combined[j])
+			torch.save(path.join(odir_t,bname1..'_'..bname2..'.dat'),bestT[j].H)
+						
+			k = k + 1
+		end
+		collectgarbage()
+		i = i + 1
+	end
+	filter_cand_time = log.toc()
+	
+	collectgarbage()
+	print('total time: '..(find_cand_time+filter_cand_time)..', find: '..find_cand_time..', filter: '..filter_cand_time)
+	print()
+	
+	local bname2 = ''..sweep_pairs[ii][1]
+	local bname1 = ''..sweep_pairs[ii][2]
+	local fname1 = path.join(odir_f,bname1..imgext)
+	local fname2 = path.join(odir_f,bname2..imgext)
+		
+	cornm1 = path.join(odir_c,bname1..datext)
+	cornm2 = path.join(odir_c,bname2..datext)
+		
+	print(bname1..' - '..bname2)
+	
+	log.tic()
+	local bestT,trans2, trans1, combined, inliers, anglediff, tgt_cnt_h, tgt_cnt_w, src_cnt_h, src_cnt_w, size_x_all, size_y_all, scores = FloorTransformation.findTransformationSavedCorners(fname2,fname1,cornm2,cornm1)
+	
+	find_cand_time = log.toc()
+	
+	log.tic()
+	
+	collectgarbage()
+	    
+	local all_scores = scores:clone():mul(-1)
+	local numcandidates = all_scores:nElement()	
+	
+	local sorted_scores = all_scores
+	local order = torch.range(1,numcandidates)
+			
+	local inl = torch.Tensor(inliers)
+	
+	if #inliers ~= 0 then
+		
+		print(inl:max()..' '..inl:min()..' '..sorted_scores:max()..' '..sorted_scores:min())
+	end
 			
 	local i = 1
 	local k = 1
