@@ -650,9 +650,8 @@ function image.warpAndCombine(bestT, img_src, img_dest)
    local src_transform = opencv.Mat.new(src_transformation_lua:getEquivalentCV())
    local dest_transform = opencv.Mat.new(translate:getEquivalentCV())   
 
-   local warpedSrc  =  opencv.imgproc.warpImage(img_src, src_transform, size_y, size_x)
-   --warpedDest =  opencv.imgproc.warpImage(img_dest_copy, dest_transform, size_y, size_x)
-   local warpedDest =  opencv.imgproc.warpImage(img_dest, dest_transform, size_y, size_x)
+   local warpedSrc  =  opencv.imgproc.warpImage(opencv.Mat.new(img_src), src_transform, size_y, size_x)
+   local warpedDest =  opencv.imgproc.warpImage(opencv.Mat.new(img_dest), dest_transform, size_y, size_x)
 
    local tensor3d = torch.zeros(3,warpedSrc:size()[1], warpedSrc:size()[2])
    tensor3d[1] = warpedSrc:toTensor()
@@ -675,9 +674,9 @@ function image.thresholdReturnCoordinates(squareMatrix,threshold, le)
    local w=squareMatrix:size(2)
    local thresholded
    if(le) then
-      thresholded = torch.le(squareMatrix,threshold)
+      thresholded = torch.lt(squareMatrix,threshold)
    else
-      thresholded = torch.ge(squareMatrix,threshold)
+      thresholded = torch.gt(squareMatrix,threshold)
    end
    x = torch.Tensor(h*w)
    i = 0
@@ -687,7 +686,7 @@ function image.thresholdReturnCoordinates(squareMatrix,threshold, le)
    local goodLocationsY = goodLocations:clone()
    goodLocationsY:apply(function(val) return (val -1)%w+1 end) 
 
-   return goodLocationsX, goodLocationsY
+   return goodLocationsX, goodLocationsY, squareMatrix[thresholded]
 end
 
 return image

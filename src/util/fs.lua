@@ -91,7 +91,6 @@ function exec(cmd)
   h = io.popen(cmd) 
   line = h:read("*a") 
   h:close() 
-  print(line) 
   return line 
 end
 
