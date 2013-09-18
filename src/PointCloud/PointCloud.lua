@@ -13,7 +13,9 @@ local d2r = pi/180
 local PointCloud = Class()
 
 PointCloud.PC_OD_EXTENSION = '.od'
-local PC_ASCII_EXTENSION = '.xyz'
+PointCloud.PC_ASCII_EXTENSION = '.xyz'
+PointCloud.fudge_number = 10000
+PointCloud.very_small_number = 0.00000001
 
 function PointCloud:__init(pcfilename, radius, numstd, option)
    self.hwindices = nil;
@@ -34,7 +36,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
 
    if pcfilename then
       if util.fs.is_file(pcfilename) then
-         if util.fs.extname(pcfilename)==PC_ASCII_EXTENSION then
+         if util.fs.extname(pcfilename)==PointCloud.PC_ASCII_EXTENSION then
             self:set_pc_ascii_file(pcfilename, radius, numstd, option)
          elseif util.fs.extname(pcfilename)==PointCloud.PC_OD_EXTENSION then
             local loaded = torch.load(pcfilename)
@@ -48,12 +50,12 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
                self.width = 0
             end
             local pts = loaded[3]
-            self.points = pts:type('torch.DoubleTensor'):div(10000.0)
+            self.points = pts:type('torch.DoubleTensor'):div(PointCloud.fudge_number)
             self.rgb = loaded[4]
             self.count = self.points:size(1)
             self.normal_map = loaded[5]
             if self.normal_map then 
-               self.normal_map = self.normal_map:type('torch.DoubleTensor'):div(10000.0)
+               self.normal_map = self.normal_map:type('torch.DoubleTensor'):div(PointCloud.fudge_number)
             end
             self.local_scan_center = loaded[6] 
             self.local_to_global_pose = loaded[7]
@@ -177,6 +179,8 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       self.hwindices = torch.cat(h[indexGood],w[indexGood],2):short()
    end
    collectgarbage()
+   
+   self.points = self.points:mul(PointCloud.fudge_number):floor():div(PointCloud.fudge_number)
 
    self:reset_point_stats()
 
@@ -186,10 +190,10 @@ end
 function PointCloud:write(filename)
 
    if util.fs.extname(filename)==PointCloud.PC_OD_EXTENSION then
-      local pts = self.points:clone():mul(10000):type('torch.IntTensor')
+      local pts = self.points:clone():mul(PointCloud.fudge_number):type('torch.IntTensor')
       local nmp
       if self.normal_map then 
-         nmp = self.normal_map:clone():mul(10000):type('torch.IntTensor')
+         nmp = self.normal_map:clone():mul(PointCloud.fudge_number):type('torch.IntTensor')
       end
       torch.save(filename, {self.format, self.hwindices, pts, self.rgb, nmp,self.local_scan_center, self.local_to_global_pose, self.local_to_global_rot})
    elseif util.fs.extname(filename)==PC_ASCII_EXTENSION then
@@ -288,7 +292,7 @@ end
 
 function PointCloud:get_flattened_images(scale,mask,numCorners)
 
-    scale = scale+0.000000001
+    scale = scale+PointCloud.very_small_number
     local ranges = self.radius:clone():mul(2)
     local minv = self.radius:clone():mul(-1)
     local maxv = self.radius:clone()
@@ -327,7 +331,7 @@ function PointCloud:get_flattened_images(scale,mask,numCorners)
         
         imagez=imagez:pow(2)
         
-        imagez=(imagez:div(imagez:max()+0.000001):mul(256)):floor()
+        imagez=(imagez:div(imagez:max()+PointCloud.very_small_number):mul(256)):floor()
         imagez = imagez:clone():resize(height,width):repeatTensor(3,1,1)
     else
         local connections,corners_map = self:get_connections_and_corners()
@@ -470,8 +474,8 @@ function PointCloud:get_flattened_images(scale,mask,numCorners)
             collectgarbage()
         end)    
         
-        local mean_height = (imagez:clone():sum())/(imagez:clone():cdiv(imagez:clone()+0.000001):sum())
-        local stdv_height = math.sqrt((imagez:clone():add(-mean_height):pow(2):sum())/(imagez:clone():cdiv(imagez:clone()+0.000001):sum()))
+        local mean_height = (imagez:clone():sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum())
+        local stdv_height = math.sqrt((imagez:clone():add(-mean_height):pow(2):sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum()))
         local max_height = mean_height+stdv_height
         local show_thresh = 0.01*max_height
         
@@ -479,9 +483,9 @@ function PointCloud:get_flattened_images(scale,mask,numCorners)
                  imagez:clone():le(max_height):type('torch.DoubleTensor'):cmul(imagez)):cmul(
                  imagez:clone():gt(show_thresh):type('torch.DoubleTensor'))
                  
-        imagez:div(imagez:max()+0.000001)
+        imagez:div(imagez:max()+PointCloud.very_small_number)
         
-        image_corners:div(image_corners:max()+0.00000001)
+        image_corners:div(image_corners:max()+PointCloud.very_small_number)
         if numCorners and numCorners > 0 then
             local ps = math.ceil(0.10/scale)
             local bs = math.ceil(0.05/scale)
@@ -629,11 +633,11 @@ function PointCloud:get_normal_map(recompute)
             crossprod[3] = minus_lr_tx:clone():cmul(minus_ud_ty):add(
                            minus_lr_ty:clone():cmul(minus_ud_tx):mul(-1))
                        
-            local crossprodnorm = crossprod:clone():pow(2):sum(1):sqrt():squeeze():repeatTensor(3,1,1):add(0.0000000000000000001)
+            local crossprodnorm = crossprod:clone():pow(2):sum(1):sqrt():squeeze():repeatTensor(3,1,1):add(PointCloud.very_small_number)
                 
             crossprod = crossprod:clone():cdiv(crossprodnorm:clone())
             
-            crossprod:mul(10000):floor():div(10000)
+            crossprod:mul(PointCloud.fudge_number):floor():div(PointCloud.fudge_number)
             
             self.normal_map=crossprod:clone()
             
@@ -646,7 +650,7 @@ end
 
 function PointCloud:downsample(leafsize)
    --leafsize is edge length of voxel
-   scale = leafsize + 0.000000001
+   scale = leafsize + PointCloud.very_small_number
    local ranges = self.maxval:clone():squeeze():add(self.minval:clone():squeeze():mul(-1))
    local pix = ranges:clone():div(scale):floor():add(1)
    local tmp = torch.range(1,self.count)
@@ -828,15 +832,15 @@ function PointCloud:get_local_to_global_pose()
 end
 
 function PointCloud:set_local_to_global_rotation(quaternion)
-   self.local_to_global_rotation = quaternion
+   self.local_to_global_rot = quaternion
 end
 
 -- rotate all points by this quaternion to place them in global coordinates
 function PointCloud:get_local_to_global_rotation()
-   if not self.local_to_global_rotation then
-      self.local_to_global_rotation = torch.Tensor({0,0,0,1})
+   if not self.local_to_global_rot then
+      self.local_to_global_rot = torch.Tensor({0,0,0,1})
    end
-   return self.local_to_global_rotation
+   return self.local_to_global_rot
 end
 
 function PointCloud:set_pose_from_rotation_matrix(mat)
@@ -874,7 +878,18 @@ end
 function PointCloud:save_downsampled_global_to_xyz(leafsize, fname)
    local downsampled = self:downsample(leafsize)
    local pose = self:get_local_to_global_pose()
-   local rot  = self:get_local_to_global_rot()
+   local rot  = self:get_local_to_global_rotation()
    downsampled.points = rotate_translate(rot,pose,downsampled.points)
    saveHelper(downsampled.points, downsampled.rgb, fname)
+end
+
+function PointCloud:setRGB(imagefile)
+	local rgb = image.load(imagefile)
+	rgb=rgb:div(rgb:max()+PointCloud.very_small_number):mul(255):ceil():type('torch.ByteTensor')
+	for i = 1,self.count do
+		local hw = self.hwindices[i]
+		local h = hw[1]
+		local w = hw[2]
+		self.rgb[i] = rgb:sub(1,3,h,h,w,w):squeeze()
+	end
 end
