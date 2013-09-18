@@ -8,7 +8,7 @@ local loaded_classes = {}
 
 local function get_class_for_name(name)
   local package = _G
-  for part in name:gmatch('[^.]+') do
+  for part in name:gmatch('[^/]+') do
     package = package[part]
   end
 
