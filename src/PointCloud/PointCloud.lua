@@ -57,7 +57,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
             end
             self.local_scan_center = loaded[6] 
             self.local_to_global_pose = loaded[7]
-            self.local_to_global_rot = loaded[8]
+            self.local_to_global_rotation = loaded[8]
 
             self:reset_point_stats()
          else
@@ -191,7 +191,7 @@ function PointCloud:write(filename)
       if self.normal_map then 
          nmp = self.normal_map:clone():mul(10000):type('torch.IntTensor')
       end
-      torch.save(filename, {self.format, self.hwindices, pts, self.rgb, nmp,self.local_scan_center, self.local_to_global_pose, self.local_to_global_rot})
+      torch.save(filename, {self.format, self.hwindices, pts, self.rgb, nmp,self.local_scan_center, self.local_to_global_pose, self.local_to_global_rotation})
    elseif util.fs.extname(filename)==PC_ASCII_EXTENSION then
       local file = io.open(filename, 'w');
       local tmpt = torch.range(1,self.count)
@@ -899,8 +899,8 @@ function PointCloud:set_pose_from_rotation_matrix(mat)
 end
 
 function PointCloud:get_global_points()
-   pose = self:get_local_to_global_pose()
-   rot  = self:get_local_to_global_rotation()
+   local pose = self:get_local_to_global_pose()
+   local rot  = self:get_local_to_global_rotation()
    return rotate_translate(rot,pose,self.points)
 end
 
