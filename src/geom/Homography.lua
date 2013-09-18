@@ -20,6 +20,10 @@ end
    -- origin starting point of the ray
 end
 
+function Homography:__write_keys()
+  return {'H'}
+end
+
 --x and y are reversed in opencv
 --return tensor equivalent of homography for opencv
 function Homography:getEquivalentCV()
@@ -31,6 +35,23 @@ function Homography:getEquivalentCV()
    bestT[2][3]=self.H[1][3]
    return bestT
 end
+
+function Homography:getEquivalentPCL()
+   --x,y is reversed in opencv!
+   local bestT = self.H:clone()
+   bestT[1][2] = -self.H[1][2]
+   bestT[2][1]=-self.H[2][1]
+   return bestT
+end
+
+function Homography:getEquivalentPCLString()
+   --x,y is reversed in opencv!
+   local bestT = self:getEquivalentPCL()
+   return string.format("%f,%f,%f,%f,%f,%f,%f,%f,%f", bestT[1][1], bestT[1][2], bestT[1][3],
+         bestT[2][1], bestT[2][2], bestT[2][3],
+         bestT[3][1], bestT[3][2], bestT[3][3])
+end
+
 
 --T is 3x3 transformation matrix, mat_src is 2xn matrix
 function Homography:applyToPoints(mat_src)

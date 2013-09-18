@@ -495,8 +495,8 @@ extern "C" {
      
    }
 
-  bool isSameTransformation(Mat* H1, Mat *H2, int size_x, int size_y, double threshold) {
-    Mat corners = (Mat_<double>(3,4) << size_x, 1, 1, size_x, 1, 1, size_y, size_y, 1, 1, 1, 1);
+  bool isSameTransformation(Mat* H1, Mat *H2, int min_x, int max_x, int min_y, int max_y, double threshold) {
+    Mat corners = (Mat_<double>(3,4) << min_x, min_x, max_x, max_x, min_y, max_y, min_y, max_y, 1, 1, 1, 1);
 
     Mat transformedCorners1 = (*H1)*corners;
     Mat transformedCorners2 = (*H2)*corners;
@@ -531,10 +531,10 @@ extern "C" {
 
  Mat* findBestTransformation(const Mat* goodLocationsX_src, const Mat* goodLocationsY_src, const Mat* scores_src,  const Mat* pairwise_dis_src,
   const Mat* goodLocationsX_dest, const Mat* goodLocationsY_dest, const Mat* scores_dest, const Mat* pairwise_dis_dest, 
-  double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, int size_x, int size_y)
+  double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, double minx, double maxx, double miny, double maxy)
  {
   Mat* bestHMatrix = new Mat(Mat::zeros(numInliersMax,10,CV_64F));
-  Mat A_inv, b, H, temp, concatWithOnes, transformed_src, compareResult, reshapedTransformation, reshaped, subSelected;
+  Mat A_inv, b, H, temp, concatWithOnes, transformed_src, reshapedTransformation, reshaped, subSelected, compareResult;
   Point2d src_pt1, src_pt2, dest_pt1, dest_pt2;
   Point minLoc; Point maxLoc;
   int numTransfSoFar = 0;
@@ -570,8 +570,28 @@ extern "C" {
           //When the comparison result is true, the corresponding element of output array is set to 255.
         getPairwiseDistances(&transformed_src, scores_dest, &temp);
         compareResult = temp <= corr_thresh;
-
         long num_inliers = sum(compareResult)[0]/255;
+
+        /*
+          bool onetoone = (temp.at<double>(pt1_src, pt1_dest) < corr_thresh/2) && (temp.at<double>(pt2_src, pt2_dest) < corr_thresh/2);
+          double num_inliers = 0;
+          for(int i = 0; i < temp.rows; i++) {
+              for(int j=0; j < temp.cols; j++) {
+                  if (temp.at<double>(i,j) < corr_thresh) {
+                      double d_dest1 = (*pairwise_dis_dest).at<double>(pt1_dest, j);
+                      double d_dest2 = (*pairwise_dis_dest).at<double>(pt2_dest, j);
+                      double d_src1 = (*pairwise_dis_src).at<double>(pt1_src, i);
+                      double d_src2 = (*pairwise_dis_src).at<double>(pt2_src, i);
+                      
+                      if (onetoone && (abs(d_dest1-d_src1)<corr_thresh) && (abs(d_dest2-d_src2)<corr_thresh)) {
+                          num_inliers++;
+                      } else if ((~onetoone) && (abs(d_dest1-d_src2)<corr_thresh) && (abs(d_dest2-d_src1)<corr_thresh)) {
+                          num_inliers++;
+                      }
+                  }
+              }
+          }
+  */
         double minVal; double maxVal; 
         minMaxLoc( bestHMatrix->colRange(0,1), &minVal, &maxVal, &minLoc, &maxLoc);
        
@@ -582,7 +602,7 @@ extern "C" {
           for (int tn = 0; tn < numTransfSoFar; tn++) 
           {
             reshapedTransformation = (*bestHMatrix)(Range(tn,tn+1), Range(1,10)).reshape(1,3);
-            if (isSameTransformation(&reshapedTransformation, &H, size_x, size_y, cornerComparisonThreshold))
+            if (isSameTransformation(&reshapedTransformation, &H, minx, maxx, miny, maxy, cornerComparisonThreshold))
             {
               if(num_inliers > bestHMatrix->at<double>(tn,0)) 
               {
@@ -613,6 +633,34 @@ extern "C" {
  return new Mat(bestHMatrix->rowRange(0,numTransfSoFar));
 }
 
+void flann_knn(Mat* m_object, Mat* m_destinations, int knn, Mat* m_indices, Mat* m_dists) {
+    // find nearest neighbors using FLANN
+    //cv::Mat m_indices(m_object->rows, 1, CV_32S);
+    //cv::Mat m_dists(m_object->rows, 1, CV_32F);
+ 
+    Mat dest_32f; (*m_destinations).convertTo(dest_32f,CV_32FC2);
+    Mat obj_32f; (*m_object).convertTo(obj_32f,CV_32FC2);
+ 
+    assert(dest_32f.type() == CV_32F);
+ 
+    cv::flann::Index flann_index(dest_32f, cv::flann::KDTreeIndexParams(2));  // using 2 randomized kdtrees
+    flann_index.knnSearch(obj_32f, *m_indices, *m_dists, knn, cv::flann::SearchParams(64) ); 
+ 
+  }
 
+void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresults, Mat* m_indices, Mat* m_dists) {
+    // find nearest neighbors using FLANN
+    //cv::Mat m_indices(m_object->rows, 1, CV_32S);
+    //cv::Mat m_dists(m_object->rows, 1, CV_32F);
+ 
+    Mat dest_32f; (*m_destinations).convertTo(dest_32f,CV_32FC2);
+    Mat obj_32f; (*m_object).convertTo(obj_32f,CV_32FC2);
+ 
+    assert(dest_32f.type() == CV_32F);
+ 
+    cv::flann::Index flann_index(dest_32f, cv::flann::KDTreeIndexParams(2));  // using 2 randomized kdtrees
+    flann_index.radiusSearch(obj_32f, *m_indices, *m_dists, radius, maxresults, cv::flann::SearchParams(64) ); 
+ 
+  }
 
 } // extern "C"

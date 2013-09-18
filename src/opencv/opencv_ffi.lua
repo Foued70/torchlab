@@ -157,8 +157,9 @@ Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k);
 Mat* getPairwiseDistances(const Mat* A, const Mat* B);
 Mat* findBestTransformation(const Mat* goodLocationsX_src, const Mat* goodLocationsY_src, const Mat* scores_src,  const Mat* pairwise_dis_src,
   const Mat* goodLocationsX_dest, const Mat* goodLocationsY_dest, const Mat* scores_dest, const Mat* pairwise_dis_dest, 
-  double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, int size_x, int size_y);
-
+  double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, double minx, double maxx, double miny, double maxy);
+void flann_knn(Mat* m_object, Mat* m_destinations, int knn, Mat* m_indices, Mat* m_dists);
+void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresults, Mat* m_indices, Mat* m_dists);
 ]]
 
 -- utils.lua
