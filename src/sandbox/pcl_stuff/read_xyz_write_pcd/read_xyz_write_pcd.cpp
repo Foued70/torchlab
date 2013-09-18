@@ -82,8 +82,8 @@ main (int argc, char** argv)
 
   if (strcmp(option, "faro") == 0)
   {
-    cloud.width = width;
-    cloud.height = height;
+    cloud.width = width*height;
+    cloud.height = 1;
   }
   else if (strcmp(option, "cc") == 0)
   {
