@@ -46,7 +46,7 @@ end
 
 function ColorTree:get_colored()
    points = torch.Tensor()
-   rgb = torch.FloatTensor()
+   rgb = torch.ByteTensor()
    octomap_ffi.ColorOcTree_OccupiedCellstoTensor(self.tree,torch.cdata(points),torch.cdata(rgb))
    return points,rgb
 end
