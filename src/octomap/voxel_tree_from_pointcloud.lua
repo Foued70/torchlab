@@ -34,6 +34,9 @@ t:add_points(p.points,scanner_pose,max_radius)
 log.trace(" - in ".. log.toc())
 
 t:stats()
+t:info()
+
+_G.thres = t:get_thresholds()
 
 -- write obj
 log.trace("writing "..output_filename) log.tic()
