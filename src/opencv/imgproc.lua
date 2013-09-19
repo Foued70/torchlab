@@ -121,7 +121,7 @@ function getPairwiseDistances(A, B)
 end
 
 function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_src, pairwise_dis_src, goodLocationsX_dest, goodLocationsY_dest, scores_dest, pairwise_dis_dest, corr_thresh,
-      minInliers, numInliersMax, cornerComparisonThreshold, size_x, size_y)
+      minInliers, numInliersMax, cornerComparisonThreshold, minx, maxx, miny, maxy)
 
    if ((not goodLocationsX_src.mat) or (type(goodLocationsX_src.mat) ~= "cdata")) then 
       error("problem with source locations Mat - first argument")
@@ -160,15 +160,21 @@ function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_s
    if (type(cornerComparisonThreshold) ~= "number") then 
       error("problem with corner threshold - twelfth argument")
    end
-   if (type(size_x) ~= "number") then 
+   if (type(minx) ~= "number") then 
       error("problem with x size - thirteenth argument")
    end
-   if (type(size_y) ~= "number") then 
-      error("problem with y size - fourteenth argument")
+   if (type(maxx) ~= "number") then 
+      error("problem with x size - fourteenth argument")
+   end
+   if (type(miny) ~= "number") then 
+      error("problem with y size - 15th argument")
+   end
+   if (type(maxy) ~= "number") then 
+      error("problem with y size - 16th argument")
    end
    matOfStuff= opencv.Mat.new(opencv_ffi.findBestTransformation(goodLocationsX_src.mat, goodLocationsY_src.mat, scores_src.mat, 
       pairwise_dis_src.mat, goodLocationsX_dest.mat, goodLocationsY_dest.mat, scores_dest.mat, pairwise_dis_dest.mat, corr_thresh,
-      minInliers, numInliersMax, cornerComparisonThreshold, size_x, size_y))
+      minInliers, numInliersMax, cornerComparisonThreshold, minx, maxx, miny, maxy))
    
    best_transformations = {};
    if(matOfStuff:toTensor():nDimension() ~=0) then

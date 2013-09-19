@@ -400,7 +400,7 @@ function FloorTransformation.findTransformationSavedCorners(image1Path, image2Pa
 
    goodLocationsX_src, goodLocationsY_src = image.thresholdReturnCoordinates(pairwise_dis_src,2 *FloorTransformation.parameters.corr_thresh)
    goodLocationsX_dest, goodLocationsY_dest = image.thresholdReturnCoordinates(pairwise_dis_dest,2 *FloorTransformation.parameters.corr_thresh)
-
+	
    goodLocationsX_src = goodLocationsX_src:reshape(goodLocationsX_src:size()[1],1)
    goodLocationsY_src = goodLocationsY_src:reshape(goodLocationsY_src:size()[1],1)
    goodLocationsX_dest = goodLocationsX_dest:reshape(goodLocationsX_dest:size()[1],1)
@@ -532,7 +532,7 @@ function FloorTransformation.findTransformationSavedCorners(image1Path, image2Pa
 	  
    end
    
-   if k < numRet then
+   if k < numRet and k > 0 then
    	scores = scores:sub(1,k)
    end
    
