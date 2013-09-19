@@ -1,4 +1,5 @@
 local io = require 'io'
+local path = require 'path'
 local kdtree = kdtree.kdtree
 local ffi = require 'ffi'
 local ctorch = util.ctorch -- ctorch needs to be loaded before we reference THTensor stuff in a cdef
@@ -36,6 +37,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
 
    if pcfilename then
       if util.fs.is_file(pcfilename) then
+        print('loading '..path.basename(pcfilename))
          if util.fs.extname(pcfilename)==PointCloud.PC_ASCII_EXTENSION then
             self:set_pc_ascii_file(pcfilename, radius, numstd, option)
          elseif util.fs.extname(pcfilename)==PointCloud.PC_OD_EXTENSION then
@@ -92,6 +94,7 @@ function PointCloud:reset_point_stats()
 end
 
 function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
+
    local rad2d = math.sqrt(math.pow(radius,2)*2/2.25)
 
    --first pass to see what type of file it is, whether it has 6 columns, or 8 (h/w first)
@@ -695,6 +698,9 @@ function PointCloud:downsample(leafsize)
    downsampled.points = points:sub(1,count)
    downsampled.rgb = rgb:sub(1,count)
    downsampled.count = count
+   --downsampled:set_local_scan_center(self:get_local_scan_center())
+   downsampled:set_local_to_global_pose(self:get_local_to_global_pose())
+   downsampled:set_local_to_global_rotation(self:get_local_to_global_rotation())
 
    downsampled:reset_point_stats()
    collectgarbage()
