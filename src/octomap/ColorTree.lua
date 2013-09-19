@@ -38,6 +38,15 @@ function ColorTree:add_points(points, origin, max_range, rgb)
                                      torch.cdata(rgb))
 end
 
+function ColorTree:add_pointcloud(pc)
+   -- use rgb stored in the pointcloud
+   pc_rgb_points = pc:get_rgb():contiguous()
+   pc_points     = pc:get_global_points():contiguous()
+   pc_pose       = pc:get_global_scan_center():contiguous()
+   pc_max_radius = pc:get_max_radius()
+   self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points)
+end
+
 function ColorTree:get_occupied()
    points = torch.Tensor()
    octomap_ffi.OcTree_OccupiedCellstoTensor(self.tree,torch.cdata(points))
