@@ -41,11 +41,11 @@ bool         ColorOcTree_read(ColorOcTree* tree, const char* filename);
 
 void         ColorOcTree_add_sweep(ColorOcTree* tree, 
                                    THDoubleTensor* points, THDoubleTensor* origin, double max_range,
-                                   THFloatTensor* color);
+                                   THByteTensor* color);
 
 THDoubleTensor* OcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);
 THDoubleTensor* OcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);
-THDoubleTensor* ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THFloatTensor* rgb);
+THDoubleTensor* ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THByteTensor* rgb);
 
 void         ColorOcTree_outputStatistics(const ColorOcTree* tree);
 void         ColorOcTree_getInfo(const ColorOcTree* tree);

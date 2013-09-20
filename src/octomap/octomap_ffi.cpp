@@ -269,12 +269,12 @@ extern "C"
 
   void ColorOcTree_add_sweep(ColorOcTree* tree, 
                              THDoubleTensor* points, THDoubleTensor* origin, double max_range, 
-                             THFloatTensor* rgb )
+                             THByteTensor* rgb )
   {
 
     THArgCheck(THDoubleTensor_nDimension(points) == 2, 1, "points should be Nx3 invalid dimension");
     THArgCheck(THDoubleTensor_nElement(origin)   == 3, 2, "origin is of dimension 3,1x3 or 3x1");
-    THArgCheck(THFloatTensor_nElement(rgb) == THDoubleTensor_nElement(points), 5, "number of rgb values not equal to numer of points");
+    THArgCheck(THByteTensor_nElement(rgb) == THDoubleTensor_nElement(points), 5, "number of rgb values not equal to numer of points");
     
     Pointcloud cloud;
 
@@ -298,26 +298,26 @@ extern "C"
     }
     
     tree->insertPointCloud(cloud,sensor_origin, max_range, lazy_eval);
-    cout << "inserted points" << endl;
-    ColorOcTree_outputStatistics(tree);
+    // cout << "inserted points" << endl;
+    // ColorOcTree_outputStatistics(tree);
   
     // first try with a second loop
     long count = 0;
     pts_d  = THDoubleTensor_data(points); // reset to start of tensor
-    float * rgb_d  = THFloatTensor_data(rgb);
+    unsigned char * rgb_d  = THByteTensor_data(rgb);
     OcTreeKey key ;
     for (i=0; i< npts ; i++){
       if (tree->coordToKeyChecked(point3d(pts_d[0], pts_d[1], pts_d[2]),key)) {
-        tree->averageNodeColor(key , (unsigned char) rgb_d[0], (unsigned char) rgb_d[1], (unsigned char) rgb_d[2]);
+        tree->averageNodeColor(key , rgb_d[0], rgb_d[1], rgb_d[2]);
         count++;
       }
       pts_d += 3;
       rgb_d += 3;
     }
-    cout << "colored: " << count << " of " << npts << endl;
+    // cout << "colored: " << count << " of " << npts << endl;
   }
 
-  THDoubleTensor* ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THFloatTensor* rgb)
+  THDoubleTensor* ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THByteTensor* rgb)
   {
     unsigned int numOccupied, numOther;
     Color_calcOccupiedNodes(tree, numOccupied, numOther);
@@ -325,9 +325,9 @@ extern "C"
     if (numOccupied > 0) {
       long count = 0;
       THDoubleTensor_resize2d(points,numOccupied,3);
-      THFloatTensor_resize2d(rgb, numOccupied,3);
+      THByteTensor_resize2d(rgb, numOccupied,3);
       double * pts_d = THDoubleTensor_data(points);
-      float * rgb_d = THFloatTensor_data(rgb);
+      unsigned char * rgb_d = THByteTensor_data(rgb);
       ColorOcTreeNode::Color c;
       for(ColorOcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
         if(tree->isNodeOccupied(*it)){
@@ -352,7 +352,7 @@ extern "C"
         }
       }
     THDoubleTensor_narrow(points,NULL,0,0,count);
-    THFloatTensor_narrow(rgb,NULL,0,0,count);
+    THByteTensor_narrow(rgb,NULL,0,0,count);
     }
     return points;
   }

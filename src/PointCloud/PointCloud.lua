@@ -223,14 +223,6 @@ function PointCloud:write(filename)
    end
 end
 
-function PointCloud:get_rgb_map()
-   
-   rgbT = self.rgb:transpose(1,2):contiguous()
-   index, mask = self:get_index_and_mask()
-   rgb_map = util.addr.remap(rgbT,index,mask)
-   return rgb_map
-   
-end
 
 function PointCloud:get_normal_image(recompute)
    if self.format == 1 then
@@ -902,13 +894,56 @@ function PointCloud:save_downsampled_global_to_xyz(leafsize, fname)
    saveHelper(downsampled.points, downsampled.rgb, fname)
 end
 
-function PointCloud:setRGB(imagefile)
-	local rgb = image.load(imagefile)
-	rgb=rgb:div(rgb:max()+PointCloud.very_small_number):mul(255):ceil():type('torch.ByteTensor')
-	for i = 1,self.count do
-		local hw = self.hwindices[i]
-		local h = hw[1]
-		local w = hw[2]
-		self.rgb[i] = rgb:sub(1,3,h,h,w,w):squeeze()
-	end
+-- rgb_map is a 2D equirectangular grid of rgb values which corresponds to xyz_map
+function PointCloud:load_rgb_map(imagefile, type)
+   type = type or "byte"
+   local rgb_map = image.load(imagefile, type)
+   if rgb_map then 
+      self.rgb_map = rgb_map
+      self.rgb = nil -- needs to be replaced
+   else 
+      print("WARNING: no rgb map loaded")
+   end
+end
+
+-- put rgb values such as those read in from an xyzrgb format into a "map"
+function PointCloud:get_rgb_map(force)
+   if (not self.rgb_map) or force then  
+      if self.rgb then
+         rgbT = self.rgb:transpose(1,2):contiguous()
+         index, mask = self:get_index_and_mask()
+         self.rgb_map = util.addr.remap(rgbT,index,mask)
+      else
+         print("no rgb_map and no rgb values")
+         return
+      end
+   end
+   return self.rgb_map
+end
+
+-- self.rgb is a list of rgb values which corresponds to self.points,
+-- can create these from an rgb_map image if they don't exist
+function PointCloud:get_rgb()
+   if ((not self.rgb) or (self.rgb:size(1) ~= self.points:size(1))) then 
+      if self.rgb_map then
+         img = self.rgb_map
+         index,mask = self:get_index_and_mask()
+         
+         n_chan = img:size(1)
+         n_pts  = self.points:size(1)
+         
+         -- make rgb same type as rgb_map
+         mask = mask:clone():eq(0) -- invert the mask
+         rgb = img:clone():resize(n_chan,n_pts)
+         for chan = 1,n_chan do 
+            rgb[chan] = img[chan][mask]
+         end
+         -- make the matrix Nx3 like self.points
+         self.rgb = rgb:transpose(1,2):contiguous()
+      else
+         print("don't know where to get the data perhaps you need to load the rgb image load_rgb_map()")
+         return nil
+      end
+   end
+   return self.rgb
 end
