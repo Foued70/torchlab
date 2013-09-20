@@ -668,6 +668,7 @@ function PointCloud:downsample(leafsize)
    coord2:mul(-1):add(coord)
    local neq = coord2:ne(torch.zeros(coord2:size())):sum(2):squeeze()
    local uniquecount = neq:sum()
+   
    if uniquecount <= 0 then
       downsampled.count = 0
       return downsampled
@@ -679,6 +680,13 @@ function PointCloud:downsample(leafsize)
 
    local tmp = torch.range(1,self.count)
    local count = 0
+   
+   uniquecount = nil
+   neq = nil
+   coord2 = nil
+   ranges = nil
+   pix = nil
+   
    tmp:apply(function(i)
                    local c = coord[i]
                    local c1 = c[1]
@@ -687,18 +695,23 @@ function PointCloud:downsample(leafsize)
                    local tmpbin = bin[{c1,c2,c3}]
                    if tmpbin < 1 then
                       count = count + 1
-
                       bin[{c1,c2,c3}] = tmpbin + 1
                       points[count] = ptss[i]
                       rgb[count] = self.rgb[i]
                    end
+                   --[[
+                   c = nil
+                   c1 = nil
+                   c2 = nil
+                   c3 = nil
+                   tmpbin = nil
+                   ]]
+                   collectgarbage()
              end)
-
    
    downsampled.points = points:sub(1,count)
    downsampled.rgb = rgb:sub(1,count)
    downsampled.count = count
-   --downsampled:set_local_scan_center(self:get_local_scan_center())
    downsampled:set_local_to_global_pose(self:get_local_to_global_pose())
    downsampled:set_local_to_global_rotation(self:get_local_to_global_rotation())
 
@@ -838,15 +851,15 @@ function PointCloud:get_local_to_global_pose()
 end
 
 function PointCloud:set_local_to_global_rotation(quaternion)
-   self.local_to_global_rot = quaternion
+   self.local_to_global_rotation = quaternion
 end
 
 -- rotate all points by this quaternion to place them in global coordinates
 function PointCloud:get_local_to_global_rotation()
-   if not self.local_to_global_rot then
-      self.local_to_global_rot = torch.Tensor({0,0,0,1})
+   if not self.local_to_global_rotation then
+      self.local_to_global_rotation = torch.Tensor({0,0,0,1})
    end
-   return self.local_to_global_rot
+   return self.local_to_global_rotation 
 end
 
 function PointCloud:set_pose_from_rotation_matrix(mat)

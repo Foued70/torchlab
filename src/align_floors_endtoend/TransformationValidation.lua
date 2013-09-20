@@ -57,7 +57,7 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
 
    local i = table.getn(best_transformations)
    local k = 0
-   print(i)
+   print('validate: num transformations '..i)
    while k<numRet and i > 0 do
 
       local o = ordering[i]

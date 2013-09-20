@@ -51,7 +51,6 @@ local parameterizedHarris = align_floors_endtoend.cornerHarris.new(FloorTransfor
 local parameterizedGeneral = align_floors_endtoend.GeneralInterestPoints.new(FloorTransformation.parameters.GeneralInterestPointsParameters.Harris)
 
 function FloorTransformation.findTransformationOurs(image1Path, image2Path, display)
-   log.tic()
    
    local scores_src_torch
    local scores_dest_torc
@@ -123,9 +122,6 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    		return nil
    	end
    	
-   	print(scores_src_torch:size(1))
-   print(scores_dest_torch:size(1))
-   	
    scores_src = opencv.Mat.new(scores_src_torch:clone())
    scores_dest = opencv.Mat.new(scores_dest_torch:clone())
 
@@ -177,8 +173,6 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    goodLocationsY_src = goodLocationsY_src:reshape(goodLocationsY_src:size()[1],1)
    goodLocationsX_dest = goodLocationsX_dest:reshape(goodLocationsX_dest:size()[1],1)
    goodLocationsY_dest = goodLocationsY_dest:reshape(goodLocationsY_dest:size()[1],1)
-
-      print(pairwise_dis_src:size())
 
    local best_pts, best_transformations = opencv.imgproc.findBestTransformation(
       opencv.Mat.new(goodLocationsX_src:clone()),  opencv.Mat.new(goodLocationsY_src:clone()), opencv.Mat.new(scores_src_torch), opencv.Mat.new(pairwise_dis_src:clone()),
@@ -323,8 +317,6 @@ function FloorTransformation.findTransformationOurs(image1Path, image2Path, disp
    anglediff_tmp = nil
    
    collectgarbage()
-   
-   print(log.toc())
 
    return transformations, trans1, trans2, combined, inliers, anglediff, src_centers_h, src_centers_w, tgt_centers_h, tgt_centers_w, size_x_all, size_y_all, scores
 end
@@ -350,9 +342,6 @@ function FloorTransformation.findTransformationSavedCorners(image1Path, image2Pa
    	
    --example of how to do sift points:
    src_corners, dest_corners = parameterizedGeneral:getPoints(img_src, img_dest)   
-   	
-   print(scores_src_torch:size(1))
-   print(scores_dest_torch:size(1))
    	
    scores_src = opencv.Mat.new(scores_src_torch:clone())
    scores_dest = opencv.Mat.new(scores_dest_torch:clone())
