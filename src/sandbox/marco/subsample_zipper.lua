@@ -1,6 +1,6 @@
 path = require 'path'
 
-max_dist_btwn_pts = 0.5 -- 5cm
+max_dist_btwn_pts = 10 -- 0.25 -- 10 cm
 
 fname    = 'data/297.xyz'
 img_name = '297.png'
@@ -217,6 +217,6 @@ material.diffuse_tex_path = img_name
 o.materials = { material }
 
 
-_G.objname = path.basename(fname):gsub('.xyz','-subsample.obj')
+_G.objname = path.basename(fname):gsub('.xyz','-subsample-' .. max_dist_btwn_pts .. '.obj')
 
 o:save(objname)
