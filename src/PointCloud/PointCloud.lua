@@ -198,13 +198,14 @@ function PointCloud:write(filename)
       if self.normal_map then 
          nmp = self.normal_map:clone():mul(PointCloud.fudge_number):type('torch.IntTensor')
       end
-      torch.save(filename, {self.format, self.hwindices, pts, self.rgb, nmp,self.local_scan_center, self.local_to_global_pose, self.local_to_global_rotation})
+      torch.save(filename, {self.format, self.hwindices, pts, self:get_rgb(), nmp,self.local_scan_center, self.local_to_global_pose, self.local_to_global_rotation})
    elseif util.fs.extname(filename)==PC_ASCII_EXTENSION then
       local file = io.open(filename, 'w');
       local tmpt = torch.range(1,self.count)
+      local rgb = self:get_rgb()
       tmpt:apply(function(i)
                     local pt = self.points[i]
-                    local rgbx = self.rgb[i]
+                    local rgbx = rgb[i]
                     if self.format == 1 then
                        local ind = self.hwindices[i]:clone()
                        local ih = ind[1]

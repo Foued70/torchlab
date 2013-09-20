@@ -79,7 +79,7 @@ function Sweep:getPC()
     else
         pc = pcl.new(self.fxyz)
         if util.fs.is_dir(path.join(self.base_dir,Sweep.PNG)) and util.fs.is_file(self.fpng) then
-            pc:setRGB(self.fpng)
+            pc::load_rgb_map(self.fpng)
             pc:write(self.fxyz)
         end
         pc:write(self.fod)
