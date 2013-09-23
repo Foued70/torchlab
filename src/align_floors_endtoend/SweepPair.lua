@@ -40,14 +40,14 @@ function SweepPair:__init(base_dir, sweep1, sweep2, steps_from_orig, forward)
     local parameters = {}
     parameters.corr_thresh = 2
     parameters.minInliersForMatch =2
-    parameters.maxNumCompute = 30
+    parameters.maxNumCompute = 50
     parameters.cornerDistanceLimit =1
     self.fTParameters = path.join(self.base_dir, SweepPair.TRANSFORM, self.name .. '_' .. 'properties.dat')
     torch.save(self.fTParameters, parameters)
 
     local parameters = {}
     parameters.warpWithBorders = false
-    parameters.maxNumReturn = 10
+    parameters.maxNumReturn = 25
     parameters.rotation_thresh = 2*math.pi * (4.5/360)
     self.fVParameters = path.join(self.base_dir, SweepPair.VALIDATION, self.name .. '_' .. 'properties.dat')
     torch.save(self.fVParameters, parameters)
@@ -131,14 +131,35 @@ function SweepPair:doValidation()
 end
 
 function SweepPair:setBestDiffTransformation(i)
-    
-    local bestTransformation = (self:doValidation()).transformations[i]
+
+	local bestTransformation = (self:doValidation()).transformations[i]
     if self.forward then
-        self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, true)
+       	self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, true)
     else    
-        self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, false)
-    end
+    	self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, false)
+	end
         
+end
+
+function SweepPair:setBestTransformation()
+	
+	local parameters = torch.load(self.fVParameters)
+	local anglediff = parameters.rotation_thresh
+	local valid = self:doValidation()
+	local transformations = valid.transformations
+	local scores_metric = valid.scores_metrics.anglediff
+	local ct = 1
+	while scores_metric[ct] > anglediff do
+		ct = ct + 1
+		if ct > scores_metric:size(1) then
+			self:setBestDiffTransformation(1)
+			print('NO GOOD CANDIDATE FOUND!!!')
+			print(scores_metric[1])
+			return
+		end
+	end
+	self:setBestDiffTransformation(ct)
+	
 end
 
 function SweepPair:setInlierTransformation(i)
@@ -158,8 +179,12 @@ end
 function SweepPair:setBestTransformationH(H)
 
     if self.forward then
+    	print('setting forward trans')
+    	print(H)
         self.sweep2:setAlignmentTransformation(H, self.steps_from_orig, true)
     else
+	    print('setting backward trans')
+	    print(H)
         self.sweep2:setAlignmentTransformation(H, self.steps_from_orig, false)
     end
 
@@ -219,14 +244,34 @@ function SweepPair:displayTransformation(i)
 end
 
 function SweepPair:displayResultH(H)
-    local corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners()
-    local corners2, flattenedxy2, flattenedv2  = self.sweep2:flattenAndCorners(true,true)
+    local corners1, flattenedxy1, flattenedv1
+    if self.forward then
+        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,true)
+    else
+        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,false)
+    end
+    local corners2, flattenedxy2, flattenedv2  = self.sweep2:flattenAndCorners()
+    local temp, temp, combined = SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
+    image.display(combined)
+end
+
+function SweepPair:displayResult()
+    local corners1, flattenedxy1, flattenedv1
+    local corners2, flattenedxy2, flattenedv2
+    if self.forward then
+        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,true)
+        corners2, flattenedxy2, flattenedv2 = self.sweep2:flattenAndCorners(true,true)
+    else
+        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,false)
+        corners2, flattenedxy2, flattenedv2 = self.sweep2:flattenAndCorners(true,false)
+    end
+    local H = geom.Homography.new(0,torch.Tensor({0,0}))
     local temp, temp, combined = SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
     image.display(combined)
 end
 
 function SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
-   flattenedxy1 = H:applyToPointsReturn2d(flattenedxy1:t()):t()
+   flattenedxy2 = H:applyToPointsReturn2d(flattenedxy2:t()):t()
    local src_center =    H:applyToPointsReturn2d(torch.zeros(2,1))
    local dest_center = torch.zeros(2,1)
    local combinedMin = torch.cat(torch.min(flattenedxy1,1), torch.min(flattenedxy2,1), 1)
@@ -246,8 +291,8 @@ function SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
    local combined = torch.zeros(3, su1, su2)
    
    
-   for i = 1, flattenedxy1:size(1) do
-      local f = flattenedxy1[i]
+   for i = 1, flattenedxy2:size(1) do
+      local f = flattenedxy2[i]
       local hh = f[1]
       local ww = f[2]
       local hh_l = math.max(1,math.floor(hh))
@@ -269,8 +314,28 @@ function SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
       
       combined[1][hh][ww]=255
    end
-   for i = 1, flattenedxy2:size(1) do
-      combined[2][flattenedxy2[i][1]][flattenedxy2[i][2]]=255
+   for i = 1, flattenedxy1:size(1) do
+      local f = flattenedxy1[i]
+      local hh = f[1]
+      local ww = f[2]
+      local hh_l = math.max(1,math.floor(hh))
+      local ww_l = math.max(1,math.floor(ww))
+      local hh_h = math.min(su1,math.ceil(hh))
+      local ww_h = math.min(su2,math.ceil(ww))
+      
+      if hh_h - hh < hh - hh_l then
+        hh = hh_l
+      else
+        hh = hh_h
+      end
+      
+      if ww_h - ww < ww - hh_l then
+        ww = ww_l
+      else
+        ww = ww_h
+      end
+      
+      combined[2][hh][ww]=255
    end
    src_center = H_translation:applyToPointsReturn2d(src_center):reshape(2)
    dest_center = H_translation:applyToPointsReturn2d(dest_center):reshape(2)

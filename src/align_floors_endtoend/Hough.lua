@@ -168,7 +168,20 @@ return linesSoFar, linesXYSoFar
 end
 
 function Hough:getMainDirections(img)
+	
+	local imgorig = img:clone()
+	
 	local linesP = opencv.imgproc.HoughLinesProbabilistic(img, Hough.houghRo, Hough.houghTheta, Hough.defaultThreshold, Hough.houghMinLineLength, Hough.houghMaxLineGap);
+	--local linesP = opencv.imgproc.HoughLinesRegular(img, Hough.houghRo, Hough.houghTheta, Hough.defaultThreshold, 1,1);
+	
+	if linesP:size(1) == 0 then
+		print('getMainDirections 2')
+		print(img:size())
+		print(imgorig:size())
+		print(linesP:size())
+		--image.display(imgorig:toTensor())
+	end
+	
 	local slopes, intersects = Hough.getSlopeIntersectFromHoughP(linesP)
 	--find the corners! split into two perpendicular "clusters", corners are intersections of any point in one cluster with points in the other
 	local angles = torch.atan(slopes)
@@ -250,18 +263,28 @@ end
 
 ---helper to take opencv format and return something more useul, two tensors, one with slopes other with intersects
 function Hough.getSlopeIntersectFromHoughP(linesP)
-	local linesT = linesP:toTensor()+1;
-	linesT = linesT:reshape(linesT:size()[2], linesT:size()[3])
-	local slopes = torch.cdiv((linesT[{{},1}]-linesT[{{},3}]):double(),(linesT[{{},2}]-linesT[{{},4}]):double())
-	local intersects = linesT[{{},1}]:double()-slopes:clone():cmul(linesT[{{},2}]:double())
+	
+	if linesP:size(3) == 4 then
+		local linesT = linesP:toTensor()+1;
+		linesT = linesT:reshape(linesT:size()[2], linesT:size()[3])
+		local slopes = torch.cdiv((linesT[{{},1}]-linesT[{{},3}]):double(),(linesT[{{},2}]-linesT[{{},4}]):double())
+		local intersects = linesT[{{},1}]:double()-slopes:clone():cmul(linesT[{{},2}]:double())
 
-	if(torch.eq(intersects,math.huge):sum()>0) then
-		a = (linesT[{{},2}])
-		intersects[torch.eq(intersects,math.huge)] = a[torch.eq(intersects,math.huge)]:double()
-		intersects[torch.eq(intersects,-math.huge)] = a[torch.eq(intersects,-math.huge)]:double()
+		if(torch.eq(intersects,math.huge):sum()>0) then
+			a = (linesT[{{},2}])
+			intersects[torch.eq(intersects,math.huge)] = a[torch.eq(intersects,math.huge)]:double()
+			intersects[torch.eq(intersects,-math.huge)] = a[torch.eq(intersects,-math.huge)]:double()
+		end
+		linesT_12 = torch.cat(linesT[{{},2}], linesT[{{},1}], 2)
+		linesT_34 = torch.cat(linesT[{{},4}], linesT[{{},3}], 2)
+		linesT = torch.cat(linesT_12, linesT_34,2)
+		return slopes, intersects, linesT
+	elseif linesP:size(3) == 2 then
+		local linesT = linesP:toTensor()+1;
+		linesT = linesT:reshape(linesT:size()[2], linesT:size()[3])
+		local slopes = torch.Tensor(linesT[{{},2}]:clone():double():size()):fill(-1):cdiv(linesT[{{},2}]:clone():double():tan())
+		local intersects = linesT[{{},1}]:clone():double():cdiv(linesT[{{},2}]:clone():double():sin())
+		
+		return slopes, intersects, linesT
 	end
-	linesT_12 = torch.cat(linesT[{{},2}], linesT[{{},1}], 2)
-	linesT_34 = torch.cat(linesT[{{},4}], linesT[{{},3}], 2)
-	linesT = torch.cat(linesT_12, linesT_34,2)
-	return slopes, intersects, linesT
 end 

@@ -79,7 +79,7 @@ function Sweep:getPC()
     else
         pc = pcl.new(self.fxyz)
         if util.fs.is_dir(path.join(self.base_dir,Sweep.PNG)) and util.fs.is_file(self.fpng) then
-            pc::load_rgb_map(self.fpng)
+            pc:load_rgb_map(self.fpng)
             pc:write(self.fxyz)
         end
         pc:write(self.fod)
@@ -419,19 +419,47 @@ function Sweep:axisAlign()
     self:setAlignmentTransformation(geom.Homography.new(H),0)
 end
 
-function Sweep.flattened2Image(flattenedxy)
+function Sweep.flattened2Image(flattenedxy,corners)
     local combinedMin = torch.min(flattenedxy,1)
     local minT = torch.min(combinedMin, 1)
+    if corners then
+    	local cMin = torch.min(corners,1)
+    	minT[1][1] = math.min(minT[1][1],cMin[1][1])
+    	minT[1][2] = math.min(minT[1][2],cMin[1][2])
+    end
     
     local combinedMax = torch.max(flattenedxy,1)
     local maxT = torch.max(combinedMax, 1)
+    if corners then
+    	local cMax = torch.max(corners,1)
+    	maxT[1][1] = math.max(maxT[1][1],cMax[1][1])
+    	maxT[1][2] = math.max(maxT[1][2],cMax[1][2])
+    end
 
     flattenedxy = flattenedxy-torch.repeatTensor(minT, flattenedxy:size(1), 1)+1
     
     local size_us = (maxT-minT+1):ceil():reshape(2)
     local combined = torch.zeros(size_us[1], size_us[2])
     for i = 1, flattenedxy:size(1) do
-        combined[flattenedxy[i][1]][flattenedxy[i][2]]=1
+        combined[math.max(1,flattenedxy[i][1])][math.max(1,flattenedxy[i][2])]=1
     end
+
+    if corners then
+    	corners_orig = corners
+    	corners = corners - torch.repeatTensor(minT, corners:size(1),1)+1
+		combined = combined:repeatTensor(3,1,1)
+    	for i = 1, corners:size(1) do
+	    	combined:sub(1,1,math.max(1,corners[i][1]-3),math.min(size_us[1],corners[i][1]+3),math.max(1,corners[i][2]-3),math.min(size_us[2],corners[i][2]+3)):fill(1)
+	    	combined:sub(2,2,math.max(1,corners[i][1]-3),math.min(size_us[1],corners[i][1]+3),math.max(1,corners[i][2]-3),math.min(size_us[2],corners[i][2]+3)):fill(0)
+	    	combined:sub(3,3,math.max(1,corners[i][1]-3),math.min(size_us[1],corners[i][1]+3),math.max(1,corners[i][2]-3),math.min(size_us[2],corners[i][2]+3)):fill(0)
+	    end
+	end
+	print('flattened2Image')
+	print(combined:size())
     return combined
+end
+
+function Sweep:show_flattened(global,forward)
+	local c,fxy,fv = self:flattenAndCorners(global,forward)
+	image.display(Sweep.flattened2Image(fxy,c))
 end

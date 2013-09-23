@@ -24,6 +24,7 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
 
       combined_tmp[i] = combined_i
       --the closer to zero the better
+      
       scores_metrics_temp.anglediff_tmp[i] = TransformationValidation.findAngleDifference(opencv.Mat.new(torch.gt(combined_tmp[i][1],0)), opencv.Mat.new(torch.gt(combined_tmp[i][2],0)))
 
       srci_mat =opencv.Mat.new(combined_i:clone():select(1,1))
@@ -62,10 +63,9 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
 
       local o = ordering[i]
       
-      --if scores_metrics_temp.anglediff_tmp[o] <  parameters.rotation_thresh then
          k = k+1
          scores_metrics.inliers[k] = best_pts[o]
-         scores_metrics.imgdiff[k] = 2*sorted[i]/sorted:max() + scores_metrics.inliers[k]
+         scores_metrics.imgdiff[k] = 2*sorted[i]/(sorted:max()+0.0000001) + scores_metrics.inliers[k]
          image_properties[k] = image_properties_tmp[o]
 
          transformations[k] = best_transformations[o]
@@ -85,10 +85,7 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
                return x
             end
             end)
-         --local validation_scores = align_floors_endtoend.validation.compute_score(combcpy,sch,scw,tch,tcw)
 
-         --scores_metrics.ray[k] = (validation_scores * 10000):ceil()
-      --end
       i = i-1
       collectgarbage()
 
@@ -109,6 +106,8 @@ end
 
 
 function TransformationValidation.findAngleDifference(img_src, img_dest)
+
+	
    angle_options_real = TransformationValidation.findMainDirections(img_src, img_dest)
 
    return math.min(angle_options_real[1], math.pi/2-angle_options_real[1])
@@ -127,6 +126,7 @@ function TransformationValidation.findMainDirections(img_src, img_dest)
    parameterizedHough = align_floors_endtoend.Hough.new(HoughParameters)
 
    Hough = align_floors_endtoend.Hough
+   
    local domAngle1_src,domAngle2_src = parameterizedHough:getMainDirections(img_src)
    local domAngle1_dest,domAngle2_dest = parameterizedHough:getMainDirections(img_dest)
 

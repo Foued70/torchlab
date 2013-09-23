@@ -77,7 +77,7 @@ function Scan:find_forward_and_backward_transformations()
                     forward = false
                 end
                 
-                print(numcur..' '..numnex)
+                print('aligning '..numcur..' '..numnex)
                 
                 fnamecur = all_files[numcur]
                 bnamecur = path.basename(fnamecur,'.xyz')
@@ -87,7 +87,7 @@ function Scan:find_forward_and_backward_transformations()
                 bnamenex = path.basename(fnamenex,'.xyz')
                 sweepnex = Sweep.new(self.base_dir,bnamenex)
                 
-                if i == 1 then
+                if i == 1 and j == 0 then
                 
                     print('axis align the first sweep')
                     sweepcur:axisAlign()
@@ -98,7 +98,10 @@ function Scan:find_forward_and_backward_transformations()
                 print('create new sweep pair')
                 sweepPair_curr_to_nex = align_floors_endtoend.SweepPair.new(self.base_dir, sweepcur, sweepnex, i, forward)
                 sweepPair_curr_to_nex :getAllTransformations()
-                sweepPair_curr_to_nex:setBestDiffTransformation(1)
+ 	            --sweepPair_curr_to_nex:setBestTransformation()
+                --sweepPair_curr_to_nex:setBestDiffTransformation(1)
+                sweepPair_curr_to_nex:setInlierTransformation(1)
+                --sweepPair_curr_to_nex:setBestTransformationH(sweepPair_curr_to_nex:getAllTransformations().transformations[1])
                 sweepPair_curr_to_nex:doIcp2d()
                 
                 print()
@@ -129,6 +132,7 @@ function Scan:find_forward_and_backward_transformations()
                 
                 sweepcur:setAlignmentTransformation(transfull)
             
+            	print('forward, backward, and full transforms')
                 print(transf)
                 print(transb)
                 print(transfull.H)
