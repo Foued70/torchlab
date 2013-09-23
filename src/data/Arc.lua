@@ -8,7 +8,7 @@ CACHE_ROOT = path.join(CLOUDLAB_ROOT, 'tmp', 'arcs')
 
 function get(id, callback)
   local arc = Arc.new(id)
-  arc:refresh(function (err) callback(err, arc) end)
+  arc:refresh(function (err) if callback then callback(err, arc) end end)
 
   return arc -- useful for the repl
 end

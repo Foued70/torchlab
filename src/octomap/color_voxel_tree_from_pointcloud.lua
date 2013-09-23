@@ -23,44 +23,28 @@ res             = tonumber(params.res)
 
 log.trace("loading ".. input_filename)
 log.tic()
-_G.p = PointCloud.PointCloud.new(input_filename)
+_G.pc = PointCloud.PointCloud.new(input_filename)
 log.trace(" - in ".. log.toc())
 
-img = image.load(image_filename,"float") -- ,nil,"LAB")
-xyz_map = p:get_xyz_map()
-index,mask = p:get_index_and_mask()
-
-mask = mask:eq(0)
-
-npts = mask:sum()
-print(npts, p.points:size(1))
-if (npts ~= p.points:size(1)) then 
-   error("something doesn't sync with the image data")
-end
-
-rgb = torch.FloatTensor(3,npts)
-
-rgb[1] = img[1][mask]
-rgb[2] = img[2][mask]
-rgb[3] = img[3][mask]
-
-rgb = rgb:transpose(1,2):contiguous():mul(255)
-
-_G.rgb = rgb
-
-scanner_pose = p:estimate_faro_pose()
-
-max_radius = torch.max(p.radius)
+printf(" - loading image %s", image_filename)
+pc:load_rgb_map(image_filename)
 
 log.trace("building tree ...")log.tic()
-_G.t = octomap.ColorTree.new(res)
-t:add_points(p.points,scanner_pose,max_radius,rgb)
+_G.tree = octomap.ColorTree.new(res)
 log.trace(" - in ".. log.toc())
 
-t:stats()
-t:info()
+-- hack for faro
+pc:set_local_scan_center(pc:estimate_faro_pose())
+
+printf(" - adding points ...")log.tic()
+tree:add_pointcloud(pc)
+printf(" - in %2.4fs",10e-4 * log.toc())
+
+
+tree:stats()
+tree:info()
 
 -- write obj
 log.trace("writing "..output_filename) log.tic()
-t:writeColoredPointsPly(output_filename)
+tree:writeColoredPointsPly(output_filename)
 log.trace(" - in ".. log.toc())

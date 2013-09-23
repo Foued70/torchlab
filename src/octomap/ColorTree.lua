@@ -56,7 +56,9 @@ end
 function ColorTree:get_colored()
    points = torch.Tensor()
    rgb = torch.ByteTensor()
-   octomap_ffi.ColorOcTree_OccupiedCellstoTensor(self.tree,torch.cdata(points),torch.cdata(rgb))
+   octomap_ffi.ColorOcTree_OccupiedCellstoTensor(self.tree,
+                                                 torch.cdata(points),
+                                                 torch.cdata(rgb))
    return points,rgb
 end
 
@@ -64,6 +66,19 @@ function ColorTree:get_empty()
    points = torch.Tensor()
    octomap_ffi.OcTree_EmptyCellstoTensor(self.tree,torch.cdata(points))
    return points
+end
+
+function ColorTree:ray_trace(origin, directions, max_range, output_rgb)
+   origin     = origin:contiguous()
+   directions = directions:contiguous()
+   max_range  = max_range or -1
+   output_rgb = output_rgb or torch.ByteTensor()
+   -- TODO check types and sizes before calling the c++, can be flaky with wrong input.
+   octomap_ffi.ColorOcTree_castRays(self.tree,
+                                    torch.cdata(origin), torch.cdata(directions),
+                                    max_range,
+                                    torch.cdata(output_rgb))
+   return output_rgb
 end
 
 function ColorTree:stats()

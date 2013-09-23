@@ -54,6 +54,14 @@ function Projection:pixels_to_angles(pixels, angles)
    -- convert unit sphere projection normalized_coords to angles
    self:normalized_coords_to_angles(normalized_coords,angles)
 
+   -- remove nans
+   nans = angles:lt(1):add(angles:ge(1)):eq(0)
+   n_nans = nans:sum()
+   if (n_nans > 0) then 
+      printf("removing %d nans",n_nans) 
+      angles[nans] = 0
+   end
+
    return angles
 end
 

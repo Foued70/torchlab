@@ -41,8 +41,8 @@ res             = tonumber(params.res)
 do_z_hack       = params.dozhack
 
 pointclouds = util.fs.glob(pointcloud_dir,{"od"})
-transforms  = util.fs.glob(transform_dir,"dat")
-images      = util.fs.glob(image_dir,"png")
+transforms  = util.fs.glob(transform_dir,{"dat"})
+images      = util.fs.glob(image_dir,{"png"})
 
 load_transforms = false
 load_images    = false
@@ -64,9 +64,10 @@ if (#images > 0) then
 end
 
 log.trace("building tree ...")log.tic()
-tree = octomap.ColorTree.new(res)
+_G.tree = octomap.ColorTree.new(res)
 log.trace(" - in ".. log.toc())
 
+_G.camera_centers = {}
 for i,fname in pairs(pointclouds) do 
 
    printf("[%d] loading pointcloud %s",i,fname)
@@ -92,6 +93,8 @@ for i,fname in pairs(pointclouds) do
 
    -- hack for faro
    pc:set_local_scan_center(pc:estimate_faro_pose())
+
+   table.insert(camera_centers, pc:get_global_scan_center())
 
    printf(" - adding points ...")log.tic()
    tree:add_pointcloud(pc)

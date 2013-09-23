@@ -1,3 +1,4 @@
+#!/bin/bash
 # for dcraw processing if there is chromatic aberration (super common
 # at extremes in wide angle lenses).  Light of different colors is
 # bent different angles throught the light path.  You can test with dcraw.
@@ -7,6 +8,7 @@
 chromaR=0.9992 # chromatic aberration Red Channel
 q=3      # ADH interpolation
 m=3      # median filter 3 pass
+b=2      #brightness
 
 manual="1.445312 1.000000 1.75 1.000000"
 camera_fixed="1.671875 1.000000 1.542969 1.000000"
@@ -17,7 +19,7 @@ Daylight="2.132483 1.000000 1.480864 1"
 Fluorescent="1.783446 1.000000 1.997113 1"
 Shade="2.531894 1.000000 1.223749 1"
 Flash="2.429833 1.000000 1.284593 1"
-Cloudy="2.336605 1.000000 1.334642 1"
+Cloudy="2.267915 1.000000 1.217263 1.000000"
 
 for f in $*
 do 
@@ -29,5 +31,5 @@ do
 # -6 16 bit output or we are losing dynamic range (advantage of raw)
 # -W don't automatically brighten (or we lose all sense of radiance)
 # -r use fixed white balance 
-    dcraw -v -T -6 -W -r ${camera_fixed} ${f}    
+    dcraw -v -T -6 -W -r ${Cloudy} -b ${b} ${f}    
 done

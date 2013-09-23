@@ -17,7 +17,7 @@ extern "C"
 using namespace std;
 using namespace octomap;
 
-// TODO use abstract class eg. (confusing in a generic ...) 
+// TODO use abstract class eg. (confusing in a generic ...)
 // AbstractOcTree* t = it->second.octree;
 // if (dynamic_cast<OcTree*>(t)) {
 //   ((OcTree*) t)->toMaxLikelihood();
@@ -38,12 +38,12 @@ void getInfo(const AbstractOccupancyOcTree* tree)
   cout << "getResolution: " << tree->getResolution() << endl;
   cout << "getOccupancyThres: " << tree->getOccupancyThres() << endl;
   cout << "getOccupancyThresLog: " << tree->getOccupancyThresLog() << endl;
-  
+
   cout << "getProbHit: " << tree->getProbHit() << endl;
   cout << "getProbHitLog: " << tree->getProbHitLog() << endl;
   cout << "getProbMiss: " << tree->getProbMiss() << endl;
   cout << "getProbMissLog: " << tree->getProbMissLog() << endl;
-  
+
   cout << "getClampingThresMin: " << tree->getClampingThresMin() << endl;
   cout << "getClampingThresMinLog: " << tree->getClampingThresMinLog() << endl;
   cout << "getClampingThresMax: " << tree->getClampingThresMax() << endl;
@@ -85,12 +85,12 @@ extern "C"
   }
 
   void Color_calcOccupiedNodes(const ColorOcTree* tree,
-                                  unsigned int& num_occupied,
-                                  unsigned int& num_other)
+                               unsigned int& num_occupied,
+                               unsigned int& num_other)
   {
     num_occupied = 0;
     num_other = 0;
-    
+
     for(ColorOcTree::tree_iterator it = tree->begin_tree(), end=tree->end_tree(); it!= end; ++it){
       if (tree->isNodeOccupied(*it))
         num_occupied++;
@@ -98,14 +98,14 @@ extern "C"
         num_other++;
     }
   }
-  
+
   void ColorOcTree_outputStatistics(const ColorOcTree* tree){
     unsigned int numOccupied, numOther;
     Color_calcOccupiedNodes(tree, numOccupied, numOther);
     size_t memUsage = tree->memoryUsage();
     unsigned long long memFullGrid = tree->memoryFullGrid();
     size_t numLeafNodes = tree->getNumLeafNodes();
-    
+
     cout << "Tree size: " << tree->size() <<" nodes (" << numLeafNodes<< " leafs). ";
     cout << numOccupied <<" nodes occupied, "<< numOther << " other\n";
     cout << "Memory: " << memUsage << " byte (" << memUsage/(1024.*1024.) << " MB)" << endl;
@@ -127,7 +127,7 @@ extern "C"
 
   void OcTree_destroy(OcTree* tree)
   {
-    delete(tree); 
+    delete(tree);
   }
 
 
@@ -173,7 +173,7 @@ extern "C"
     cout << "lazy_eval: " << lazy_eval << endl;
     tree->insertPointCloud(cloud, sensor_origin, max_range, lazy_eval);
   }
-  
+
   // TODO make generic by calling AbstractOcTree funcs
   THDoubleTensor* OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points)
   {
@@ -258,31 +258,30 @@ extern "C"
 
   bool ColorOcTree_read(ColorOcTree* tree, const char* filename)
   {
-    bool result = tree->read(filename);
-    return result;
+    return tree->read(std::string(filename));
   }
 
   void ColorOcTree_destroy(ColorOcTree* tree)
   {
-    delete(tree); 
+    delete(tree);
   }
 
-  void ColorOcTree_add_sweep(ColorOcTree* tree, 
-                             THDoubleTensor* points, THDoubleTensor* origin, double max_range, 
+  void ColorOcTree_add_sweep(ColorOcTree* tree,
+                             THDoubleTensor* points, THDoubleTensor* origin, double max_range,
                              THByteTensor* rgb )
   {
 
     THArgCheck(THDoubleTensor_nDimension(points) == 2, 1, "points should be Nx3 invalid dimension");
     THArgCheck(THDoubleTensor_nElement(origin)   == 3, 2, "origin is of dimension 3,1x3 or 3x1");
     THArgCheck(THByteTensor_nElement(rgb) == THDoubleTensor_nElement(points), 5, "number of rgb values not equal to numer of points");
-    
+
     Pointcloud cloud;
 
     double * pts_d  = THDoubleTensor_data(points);
     double * orig_d = THDoubleTensor_data(origin);
 
     point3d sensor_origin ((float)orig_d[0],(float)orig_d[1],(float)orig_d[2]);
-    
+
     long npts  = points->size[0];
     long nelem = THDoubleTensor_nElement(points);
     long ndim  = points->size[1];
@@ -296,11 +295,11 @@ extern "C"
       cloud.push_back((float)pts_d[0], (float)pts_d[1], (float)pts_d[2]);
       pts_d += ndim;
     }
-    
+
     tree->insertPointCloud(cloud,sensor_origin, max_range, lazy_eval);
     // cout << "inserted points" << endl;
     // ColorOcTree_outputStatistics(tree);
-  
+
     // first try with a second loop
     long count = 0;
     pts_d  = THDoubleTensor_data(points); // reset to start of tensor
@@ -334,7 +333,7 @@ extern "C"
           pts_d[0] = it.getX();
           pts_d[1] = it.getY();
           pts_d[2] = it.getZ();
-          
+
           ColorOcTreeNode* node = tree->search(it.getKey());
           if (node) {
             c = node->getColor();
@@ -351,11 +350,65 @@ extern "C"
           rgb_d += 3;
         }
       }
-    THDoubleTensor_narrow(points,NULL,0,0,count);
-    THByteTensor_narrow(rgb,NULL,0,0,count);
+      THDoubleTensor_narrow(points,NULL,0,0,count);
+      THByteTensor_narrow(rgb,NULL,0,0,count);
     }
     return points;
   }
 
+  void ColorOcTree_castRays(ColorOcTree* tree, 
+                            THDoubleTensor* origin, THDoubleTensor* directions, 
+                            double max_range, 
+                            THByteTensor* rgb)
+  {
+    // all in global coordinates
+    // origin (x,y,z)
+    // endpoints 3xHxW (x, y, z)
+    // resize RGB to directions
 
-}
+    long height = directions->size[1];
+    long width  = directions->size[2];
+
+    THByteTensor_resize3d(rgb, 3, height, width);
+    THByteTensor_fill(rgb,255);
+
+    double * origin_d     = THDoubleTensor_data(origin);
+    double * dirs_d       = THDoubleTensor_data(directions);
+    unsigned char * rgb_d = THByteTensor_data(rgb);
+
+    point3d origin_3d = point3d(float(origin_d[0]),float(origin_d[1]),float(origin_d[2]));
+
+    ColorOcTreeNode::Color c;
+    double * x = dirs_d;
+    double * y = x + directions->stride[0];
+    double * z = y + directions->stride[0];
+
+    unsigned char * r = rgb_d;
+    unsigned char * g = r + rgb->stride[0];
+    unsigned char * b = g + rgb->stride[0];
+    long count_ray = 0, count_occ = 0;
+    long h,w;
+    for (h=0;h<height;h++){
+      for (w=0;w<width;w++){
+        point3d dir_3d = point3d(float(*x),float(*y),float(*z));
+        point3d end_3d = point3d(100,100,100);
+        if (tree->castRay(origin_3d, dir_3d, end_3d, true, max_range)){
+          // cout << "end3d x:" << end_3d(0) << " y: " << end_3d(1) << " z: " << end_3d(2) << endl;
+          ColorOcTreeNode* node = tree->search(end_3d);
+          count_ray++;
+          if (node && (tree->isNodeOccupied(node))) {
+            c = node->getColor();
+            // cout << "node at: " << node->depth << endl;
+            *r = c.r;
+            *g = c.g;
+            *b = c.b;
+            count_occ++;
+          }
+        } 
+        x++ ; y++ ; z++;
+        r++ ; g++ ; b++;
+      }
+    }
+    cout << "found " << count_occ << " occupied notes in " << count_ray << " rays cast" << endl; 
+  } // castrays
+} // extern "C"

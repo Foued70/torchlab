@@ -47,6 +47,10 @@ THDoubleTensor* OcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* 
 THDoubleTensor* OcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);
 THDoubleTensor* ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THByteTensor* rgb);
 
+void         ColorOcTree_castRays(ColorOcTree* tree, 
+                                  THDoubleTensor* origin, THDoubleTensor* directions, double max_range, 
+                                  THByteTensor* rgb);
+
 void         ColorOcTree_outputStatistics(const ColorOcTree* tree);
 void         ColorOcTree_getInfo(const ColorOcTree* tree);
 
