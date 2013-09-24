@@ -47,10 +47,15 @@ function ColorTree:add_pointcloud(pc)
    self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points)
 end
 
-function ColorTree:get_occupied()
+
+function ColorTree:get_empty()
    points = torch.Tensor()
-   octomap_ffi.OcTree_OccupiedCellstoTensor(self.tree,torch.cdata(points))
+   octomap_ffi.ColorOcTree_EmptyCellstoTensor(self.tree,torch.cdata(points))
    return points
+end
+
+function ColorTree:get_occupied()
+   return self:get_colored()
 end
 
 function ColorTree:get_colored()
@@ -62,11 +67,6 @@ function ColorTree:get_colored()
    return points,rgb
 end
 
-function ColorTree:get_empty()
-   points = torch.Tensor()
-   octomap_ffi.OcTree_EmptyCellstoTensor(self.tree,torch.cdata(points))
-   return points
-end
 
 function ColorTree:ray_trace(origin, directions, max_range, output_rgb)
    origin     = origin:contiguous()

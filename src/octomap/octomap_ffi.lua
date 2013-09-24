@@ -43,8 +43,10 @@ void         ColorOcTree_add_sweep(ColorOcTree* tree,
                                    THDoubleTensor* points, THDoubleTensor* origin, double max_range,
                                    THByteTensor* color);
 
-THDoubleTensor* OcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);
-THDoubleTensor* OcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);
+// TODO make single version of these
+THDoubleTensor* ColorOcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);
+THDoubleTensor* ColorOcTree_getThresholds(ColorOcTree* tree, THDoubleTensor* occupancy);
+
 THDoubleTensor* ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THByteTensor* rgb);
 
 void         ColorOcTree_castRays(ColorOcTree* tree, 

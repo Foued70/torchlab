@@ -234,6 +234,45 @@ extern "C"
     return points;
   }
 
+  // TODO make generic by calling AbstractOcTree funcs. Just stupid to have two versions of exact same functions.
+
+  THDoubleTensor* ColorOcTree_getThresholds(ColorOcTree* tree, THDoubleTensor* thresholds)
+  {
+    unsigned int numLeafNodes = tree->getNumLeafNodes();
+    if (numLeafNodes > 0) {
+      THDoubleTensor_resize1d(thresholds,numLeafNodes);
+      double * thr_d = THDoubleTensor_data(thresholds);
+      long count = 0;
+      for(ColorOcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
+        ColorOcTreeNode* node = tree->search(it.getKey());
+        thr_d[0] = node->getOccupancy();
+        thr_d++;
+      }
+    }
+    return thresholds;
+  }
+
+
+  THDoubleTensor* ColorOcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points)
+  {
+    unsigned int numOccupied, numOther;
+    Color_calcOccupiedNodes(tree, numOccupied, numOther);
+
+    THDoubleTensor_resize2d(points,numOther,3);
+    double * pts_d = THDoubleTensor_data(points);
+    long count = 0;
+    for(ColorOcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
+      if(!tree->isNodeOccupied(*it)){
+        pts_d[0] = it.getX();
+        pts_d[1] = it.getY();
+        pts_d[2] = it.getZ();
+        count++;
+        pts_d += 3;
+      }
+    }
+    return points;
+  }
+
   // TODO get list of unknown cells
   // unknown cells don't exist in the tree
   /// return centers of leafs that do NOT exist (but could) in a given bounding box
