@@ -51,6 +51,10 @@ void         ColorOcTree_castRays(ColorOcTree* tree,
                                   THDoubleTensor* origin, THDoubleTensor* directions, double max_range, 
                                   THByteTensor* rgb);
 
+void         ColorOcTree_get_color_for_xyz(ColorOcTree* tree, 
+                                           THDoubleTensor* points,
+                                           THByteTensor* rgb);
+
 void         ColorOcTree_outputStatistics(const ColorOcTree* tree);
 void         ColorOcTree_getInfo(const ColorOcTree* tree);
 

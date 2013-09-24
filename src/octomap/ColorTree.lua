@@ -81,6 +81,14 @@ function ColorTree:ray_trace(origin, directions, max_range, output_rgb)
    return output_rgb
 end
 
+-- for a list of points return the color of corresponding voxel grid
+function ColorTree:get_color_for_xyz(points,rgb)
+   output_rgb = output_rgb or torch.ByteTensor()
+   points = points:contiguous()
+   octomap_ffi.ColorOcTree_get_color_for_xyz(self.tree, torch.cdata(points), torch.cdata(output_rgb))
+   return output_rgb
+end
+
 function ColorTree:stats()
    print("octomap.ColorTree with resolution: " .. self.resolution)
    octomap_ffi.ColorOcTree_outputStatistics(self.tree)

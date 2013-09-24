@@ -356,6 +356,9 @@ extern "C"
     return points;
   }
 
+  // WARNING origin and directions has channels first 3xN where and
+  // returns DxHxW which is consistent with the projections. Other
+  // functions use Nx3 .
   void ColorOcTree_castRays(ColorOcTree* tree, 
                             THDoubleTensor* origin, THDoubleTensor* directions, 
                             double max_range, 
@@ -411,4 +414,41 @@ extern "C"
     }
     cout << "found " << count_occ << " occupied notes in " << count_ray << " rays cast" << endl; 
   } // castrays
+
+
+  void ColorOcTree_get_color_for_xyz(ColorOcTree* tree, 
+                                     THDoubleTensor* points,
+                                     THByteTensor* rgb)
+  {
+
+    long n_points = THDoubleTensor_nElement(points) / 3;
+    THByteTensor_resize2d(rgb, n_points, 3);
+    THByteTensor_fill(rgb,255);
+    
+    double * points_d     = THDoubleTensor_data(points);
+    unsigned char * rgb_d = THByteTensor_data(rgb);
+    
+    ColorOcTreeNode::Color c;
+    double * pts_d = points_d;
+        
+    long count_colored = 0;
+    long i;
+    
+    for (i=0;i<n_points;i++){
+      point3d pt_3d = point3d(float(pts_d[0]),float(pts_d[1]),float(pts_d[2]));
+      ColorOcTreeNode* node = tree->search(pt_3d);
+      if (node && (tree->isNodeOccupied(node))) {
+        c = node->getColor();
+        // cout << "node at: " << node->depth << endl;
+        rgb_d[0] = c.r;
+        rgb_d[1] = c.g;
+        rgb_d[2] = c.b;
+        count_colored++;
+      } 
+      pts_d += 3;
+      rgb_d += 3;
+    }
+    cout << "found " << count_colored << " colors for " << n_points << " points" << endl; 
+  } // get color
+
 } // extern "C"
