@@ -825,9 +825,18 @@ end
 function PointCloud:set_local_scan_center(pose)
    self.local_scan_center = pose
 end
+
+function PointCloud:get_local_scan_center()
+   if not self.local_scan_center then
+      self.local_scan_center = self.centroid
+   end
+   return self.local_scan_center
+end
+
 function PointCloud:get_global_scan_center()
    local pose = self:get_local_to_global_pose()
-   return self.local_scan_center + pose
+   local local_center = self:get_local_scan_center()
+   return local_center + pose
 end
 
 -- add this vector to all points to get points in global coordinates
