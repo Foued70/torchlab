@@ -39,8 +39,8 @@ function SphericalProjection:angles_map(scale,hfov,vfov, hoffset, voffset)
                                                                                                                                                      
    local angles = torch.Tensor(2,maph,mapw)
 
-   angles[1]:copy(phi:t())
-   angles[2]:copy(lambda)
+   angles[1]:copy(lambda)
+   angles[2]:copy(phi:t()):mul(-1) -- angles have +z up
 
    return angles
 
