@@ -30,12 +30,13 @@ function ColorTree:load(filename)
 end
 
 -- points in Nx3 (x,y,z) points you want to add to Octree.
-function ColorTree:add_points(points, origin, max_range, rgb)
+function ColorTree:add_points(points, origin, max_range, rgb, cost)
    origin = origin or torch.zeros(3)
+   cost   = cost or torch.Tensor() -- empty tensor is sign that there is no cost
    max_range = max_range or -1 -- -1 is no limit
    octomap_ffi.ColorOcTree_add_sweep(self.tree,
                                      torch.cdata(points), torch.cdata(origin), max_range,
-                                     torch.cdata(rgb))
+                                     torch.cdata(rgb), torch.cdata(cost))
 end
 
 function ColorTree:add_pointcloud(pc)
@@ -45,6 +46,18 @@ function ColorTree:add_pointcloud(pc)
    pc_pose       = pc:get_global_scan_center():contiguous()
    pc_max_radius = pc:get_max_radius()
    self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points)
+end
+
+function ColorTree:add_pointcloud_with_depth_cost(pc)
+   -- use rgb stored in the pointcloud
+   pc_rgb_points = pc:get_rgb():contiguous()
+   pc_points     = pc:get_global_points():contiguous()
+   pc_pose       = pc:get_global_scan_center():contiguous()
+   pc_max_radius = pc:get_max_radius()
+
+   depth_cost = torch.norm(torch.add(pc_points, pc_pose:reshape(1,3):expandAs(pc_points)),2,2):squeeze()
+
+   self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points,depth_cost)
 end
 
 

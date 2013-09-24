@@ -10,6 +10,7 @@ cmd:option('-datadir',   '', 'dir with transform matrices to pointcloud')
 cmd:option('-res',       '0.05', 'resolution of voxel grid')
 cmd:option('-outfile',   'output.ply', 'output .ply file')
 cmd:option('-dozhack', false, 'move points to 0 at min z')
+cmd:option('-use_depth_cost', false, 'add closer colors')
 cmd:text()
 
 arg = ''
@@ -97,7 +98,11 @@ for i,fname in pairs(pointclouds) do
    table.insert(camera_centers, pc:get_global_scan_center())
 
    printf(" - adding points ...")log.tic()
-   tree:add_pointcloud(pc)
+   if params.use_depth_cost then 
+      tree:add_pointcloud_with_depth_cost(pc)
+   else
+      tree:add_pointcloud(pc)
+   end
    printf(" - in %2.4fs",10e-4 * log.toc())
 
    tree:stats()

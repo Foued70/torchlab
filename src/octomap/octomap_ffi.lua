@@ -41,7 +41,8 @@ bool         ColorOcTree_read(ColorOcTree* tree, const char* filename);
 
 void         ColorOcTree_add_sweep(ColorOcTree* tree, 
                                    THDoubleTensor* points, THDoubleTensor* origin, double max_range,
-                                   THByteTensor* color);
+                                   THByteTensor* color, 
+                                   THDoubleTensor* cost);
 
 // TODO make single version of these
 THDoubleTensor* ColorOcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);

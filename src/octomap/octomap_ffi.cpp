@@ -307,7 +307,7 @@ extern "C"
 
   void ColorOcTree_add_sweep(ColorOcTree* tree,
                              THDoubleTensor* points, THDoubleTensor* origin, double max_range,
-                             THByteTensor* rgb )
+                             THByteTensor* rgb, THDoubleTensor* cost)
   {
 
     THArgCheck(THDoubleTensor_nDimension(points) == 2, 1, "points should be Nx3 invalid dimension");
@@ -318,13 +318,14 @@ extern "C"
 
     double * pts_d  = THDoubleTensor_data(points);
     double * orig_d = THDoubleTensor_data(origin);
-
+    
     point3d sensor_origin ((float)orig_d[0],(float)orig_d[1],(float)orig_d[2]);
 
     long npts  = points->size[0];
     long nelem = THDoubleTensor_nElement(points);
     long ndim  = points->size[1];
 
+    bool useCost   = (THDoubleTensor_nElement(cost) == npts);
     bool lazy_eval = false;
 
     long i,pi = 0;
@@ -336,21 +337,35 @@ extern "C"
     }
 
     tree->insertPointCloud(cloud,sensor_origin, max_range, lazy_eval);
-    // cout << "inserted points" << endl;
-    // ColorOcTree_outputStatistics(tree);
 
     // first try with a second loop
     long count = 0;
     pts_d  = THDoubleTensor_data(points); // reset to start of tensor
     unsigned char * rgb_d  = THByteTensor_data(rgb);
     OcTreeKey key ;
-    for (i=0; i< npts ; i++){
-      if (tree->coordToKeyChecked(point3d(pts_d[0], pts_d[1], pts_d[2]),key)) {
-        tree->averageNodeColor(key , rgb_d[0], rgb_d[1], rgb_d[2]);
-        count++;
+    if (useCost) {
+      cout << " - using cost" << endl;
+      double * cost_d = THDoubleTensor_data(cost);
+      for (i=0; i< npts ; i++){
+        if (tree->coordToKeyChecked(point3d(pts_d[0], pts_d[1], pts_d[2]),key)) {
+          tree->integrateNodeColor(key , rgb_d[0], rgb_d[1], rgb_d[2], (float)*cost_d);
+          count++;
+        }
+        pts_d += 3;
+        rgb_d += 3;
+        cost_d++;
       }
-      pts_d += 3;
-      rgb_d += 3;
+    }
+    else {
+      // do averaging like before
+      for (i=0; i< npts ; i++){
+        if (tree->coordToKeyChecked(point3d(pts_d[0], pts_d[1], pts_d[2]),key)) {
+          tree->averageNodeColor(key , rgb_d[0], rgb_d[1], rgb_d[2]);
+          count++;
+        }
+        pts_d += 3;
+        rgb_d += 3;
+      }
     }
     // cout << "colored: " << count << " of " << npts << endl;
   }
@@ -397,7 +412,7 @@ extern "C"
 
   // WARNING origin and directions has channels first 3xN where and
   // returns DxHxW which is consistent with the projections. Other
-  // functions use Nx3 .
+  // functions use Nx3.
   void ColorOcTree_castRays(ColorOcTree* tree, 
                             THDoubleTensor* origin, THDoubleTensor* directions, 
                             double max_range, 
@@ -451,7 +466,7 @@ extern "C"
         r++ ; g++ ; b++;
       }
     }
-    cout << "found " << count_occ << " occupied notes in " << count_ray << " rays cast" << endl; 
+    cout << "found " << count_occ << " occupied nodes in " << count_ray << " rays cast" << endl; 
   } // castrays
 
 
