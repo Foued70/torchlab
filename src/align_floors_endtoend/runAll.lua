@@ -34,7 +34,7 @@ for i=minWanted, maxWanted do --table.getn(all_files_xyz)-1 do
 	sweep12:setBestDiffTransformation(1)
 	sweep12:doIcp2d()
 	sweep2_lua:transformIn3D()
-	sweep2_lua:getPC():save_global_points_to_xyz(path.join(base_dir_transformed, sweep2 .. ".xyz"))
+--	sweep2_lua:getPC():save_global_points_to_xyz(path.join(base_dir_transformed, sweep2 .. ".xyz"))
 end
 
 for i=minWanted, maxWanted do --table.getn(all_files_xyz)-1 do 
