@@ -957,3 +957,23 @@ function PointCloud:get_rgb()
    end
    return self.rgb
 end
+
+-- returns list of depths corresponding to points
+function PointCloud:get_depth()
+   if not self.depth then 
+      points     = self.points
+      pose       = self:get_local_scan_center():clone():mul(-1)
+      self.depth = torch.sqrt(torch.norm(torch.add(points, pose:reshape(1,3):expandAs(points)),2,2)):squeeze()
+   end
+   return self.depth
+end
+
+-- returns list of depths corresponding to points
+function PointCloud:get_intensity_cost(scale, mid_value)
+   scale = scale or 1
+   mid_value = mid_value or 127
+   rgb_cost = self:get_rgb():double()
+   rgb_cost:add(-mid_value):mul(scale/(3*255)):abs()
+   rgb_cost = rgb_cost:sum(2):squeeze()
+   return rgb_cost
+end

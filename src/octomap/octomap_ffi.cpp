@@ -395,9 +395,9 @@ extern "C"
             rgb_d[1] = c.g;
             rgb_d[2] = c.b;
           } else {
-            rgb_d[0] = 255;
-            rgb_d[1] = 255;
-            rgb_d[2] = 255;
+            rgb_d[0] = 204;
+            rgb_d[1] = 204;
+            rgb_d[2] = 204;
           }
           count++;
           pts_d += 3;
@@ -427,7 +427,7 @@ extern "C"
     long width  = directions->size[2];
 
     THByteTensor_resize3d(rgb, 3, height, width);
-    THByteTensor_fill(rgb,255);
+    THByteTensor_fill(rgb,204);
 
     double * origin_d     = THDoubleTensor_data(origin);
     double * dirs_d       = THDoubleTensor_data(directions);
@@ -477,7 +477,7 @@ extern "C"
 
     long n_points = THDoubleTensor_nElement(points) / 3;
     THByteTensor_resize2d(rgb, n_points, 3);
-    THByteTensor_fill(rgb,255);
+    THByteTensor_fill(rgb,204);
     
     double * points_d     = THDoubleTensor_data(points);
     unsigned char * rgb_d = THByteTensor_data(rgb);

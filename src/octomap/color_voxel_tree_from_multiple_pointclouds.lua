@@ -7,10 +7,13 @@ cmd:text('Options')
 cmd:option('-pclouddir', '', 'dir with pointclouds to process')
 cmd:option('-imagedir',  '', 'dir with images corresponding to pointcloud')
 cmd:option('-datadir',   '', 'dir with transform matrices to pointcloud')
-cmd:option('-res',       '0.05', 'resolution of voxel grid')
+cmd:option('-res',       0.05, 'resolution of voxel grid')
 cmd:option('-outfile',   'output.ply', 'output .ply file')
 cmd:option('-dozhack', false, 'move points to 0 at min z')
-cmd:option('-use_depth_cost', false, 'add closer colors')
+cmd:option('-depth_cost', 1, 'weight for adding points closer to the scanner')
+cmd:option('-intensity_cost', 1, 'weight for adding points closer to middle gray')
+cmd:option('-mid_gray', 204, 'value of mid gray (default to pleasing 20%')
+cmd:option('-doFrames', false, 'do we run tree_view.lua after')
 cmd:text()
 
 arg = ''
@@ -37,8 +40,13 @@ if transform_dir == '' then
 end
 print("transform_dir: " .. transform_dir)
 
+path = require 'path'
+
 output_filename = params.outfile
 res             = tonumber(params.res)
+depth_cost      = tonumber(params.depth_cost) or 0
+intensity_cost  = tonumber(params.intensity_cost) or 0
+mid_gray        = tonumber(params.mid_gray)
 do_z_hack       = params.dozhack
 
 pointclouds = util.fs.glob(pointcloud_dir,{"od"})
@@ -98,11 +106,37 @@ for i,fname in pairs(pointclouds) do
    table.insert(camera_centers, pc:get_global_scan_center())
 
    printf(" - adding points ...")log.tic()
-   if params.use_depth_cost then 
-      tree:add_pointcloud_with_depth_cost(pc)
-   else
-      tree:add_pointcloud(pc)
+
+   cost = nil
+
+   if depth_cost > 0 then 
+      cost = pc:get_depth():clone():mul(depth_cost)
+      printf(" - using depth cost %.2f min: %f max: %f", depth_cost, cost:min(), cost:max())       
    end
+   
+   if intensity_cost > 0 then
+      i_cost = pc:get_intensity_cost(intensity_cost, mid_gray) 
+      printf(" - using intensity cost %.2f mid: %d min: %f max: %f", 
+             intensity_cost, mid_gray, i_cost:min(), i_cost:max())
+      if cost then
+         cost:add(i_cost)
+      else
+         cost = i_cost
+      end
+   end
+
+   if params.doFrames and i > 1 then
+      start_n  = i-3
+      if start_n < 1 then start_n = 1 end
+      pc_start = path.basename(pointclouds[start_n]):gsub(".od","")
+      pc_end   = path.basename(pointclouds[i-1]):gsub(".od","")
+      _G.fname = string.format("pc_%d-%d",pc_start,pc_end)
+      print("computing frames")
+      require './tree_view'
+   end
+
+   tree:add_pointcloud(pc,cost)
+
    printf(" - in %2.4fs",10e-4 * log.toc())
 
    tree:stats()
@@ -115,3 +149,13 @@ end
 log.trace("writing "..output_filename) log.tic()
 tree:writeColoredPointsPly(output_filename)
 log.trace(" - in ".. log.toc())
+
+-- do last full walkthrough
+if params.doFrames then
+   pc_start = path.basename(pointclouds[1]):gsub(".od","")
+   pc_end   = path.basename(pointclouds[#pointclouds]):gsub(".od","")
+   _G.fname = string.format("pc_%d-%d",pc_start,pc_end)
+   print("computing frames")
+   require './tree_view'
+end
+

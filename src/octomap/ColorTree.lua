@@ -39,27 +39,14 @@ function ColorTree:add_points(points, origin, max_range, rgb, cost)
                                      torch.cdata(rgb), torch.cdata(cost))
 end
 
-function ColorTree:add_pointcloud(pc)
+function ColorTree:add_pointcloud(pc, cost)
    -- use rgb stored in the pointcloud
    pc_rgb_points = pc:get_rgb():contiguous()
    pc_points     = pc:get_global_points():contiguous()
    pc_pose       = pc:get_global_scan_center():contiguous()
    pc_max_radius = pc:get_max_radius()
-   self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points)
+   self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points, cost)
 end
-
-function ColorTree:add_pointcloud_with_depth_cost(pc)
-   -- use rgb stored in the pointcloud
-   pc_rgb_points = pc:get_rgb():contiguous()
-   pc_points     = pc:get_global_points():contiguous()
-   pc_pose       = pc:get_global_scan_center():contiguous()
-   pc_max_radius = pc:get_max_radius()
-
-   depth_cost = torch.norm(torch.add(pc_points, pc_pose:reshape(1,3):expandAs(pc_points)),2,2):squeeze()
-
-   self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points,depth_cost)
-end
-
 
 function ColorTree:get_empty()
    points = torch.Tensor()

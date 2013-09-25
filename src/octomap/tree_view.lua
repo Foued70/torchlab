@@ -35,7 +35,8 @@ for c = 1, #camera_centers -1 do
       frame = tree:ray_trace(camera_pose, dirs, max_range)
 
       -- image.display(frame)
-      image.save(string.format("frame_%03d.%02d.png", c, s), frame)
+      fname = fname or "frame"
+      image.save(string.format("%s_%03d.%02d.png", fname, c, s), frame)
 
       -- next
       camera_pose:add(camera_delta)
