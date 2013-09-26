@@ -5,6 +5,7 @@ local ffi = require 'ffi'
 local ctorch = util.ctorch -- ctorch needs to be loaded before we reference THTensor stuff in a cdef
 local log = require '../util/log'
 local rotate_translate = geom.quaternion.rotate_translate
+local fix_newline = PointCloud.fix_newline
 
 -- angular to radians and back
 local pi = math.pi
@@ -98,6 +99,9 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    local rad2d = math.sqrt(math.pow(radius,2)*2/2.25)
 
    --first pass to see what type of file it is, whether it has 6 columns, or 8 (h/w first)
+   
+   fix_newline.fix_newline(pcfilename)
+   
    local file = io.open(pcfilename, 'r');
    local line = file:read();
    if line == nil or line:len() < 5 then
@@ -109,6 +113,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    for token in string.gmatch(line, "[^%s]+") do
       countColumns = countColumns + 1
    end
+   print(countColumns)
 
    if (countColumns == 6) then
       -- x y z r g b 
@@ -122,6 +127,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       -- be incompatible with already processed and saved pointclouds
       self.format = 2 
    else
+      print(line)
       error("unknown format, input should have either 6 or 8 columns")
    end
 
@@ -623,13 +629,12 @@ end
 function PointCloud:downsample(leafsize)
    --leafsize is edge length of voxel
    print('downsample: points rotated')
-    
    scale = leafsize + PointCloud.very_small_number
    local ranges = self.maxval:clone():squeeze():add(self.minval:clone():squeeze():mul(-1))
    local nmp = self:get_normal_map(true):clone()
    local pts = self:get_xyz_map_no_mask():clone()
    local crd = pts:clone():add(self.minval:clone():mul(-1):squeeze():repeatTensor(self.width,self.height,1):transpose(1,3)):div(scale):floor():add(1)
-   local rgb = self:get_rgb_map_no_mask(true):type('torch.ByteTensor')
+   local rgb = self:get_rgb_map_no_mask():type('torch.ByteTensor')
    
    print('normals,pts,crd,rgb found')
    
@@ -897,7 +902,7 @@ end
 function PointCloud:get_rgb_map(force)
    if (not self.rgb_map) or force then  
       if self.rgb then
-         rgbT = self.get_rgb():transpose(1,2):contiguous()
+         rgbT = self:get_rgb():transpose(1,2):contiguous()
          index, mask = self:get_index_and_mask()
          self.rgb_map = util.addr.remap(rgbT,index,mask)
       else
@@ -912,12 +917,12 @@ end
 function PointCloud:get_rgb_map_no_mask(force)
    if (not self.rgb_map_no_mask) or force then  
       if self.rgb then
-         rgbT = self.get_rgb():transpose(1,2):contiguous()
+         rgbT = self:get_rgb():transpose(1,2):contiguous()
          index, mask = self:get_index_and_mask()
-         self.rgb_map = util.addr.remap(rgbT,index,mask,torch.Tensor(3,self.height,self.width))
+         self.rgb_map_no_mask = util.addr.remap(rgbT,index,mask,torch.Tensor(3,self.height,self.width))
       else
          print("no rgb_map and no rgb values")
-         return
+         return nil
       end
    end
    return self.rgb_map_no_mask
@@ -1013,7 +1018,7 @@ local function saveHelper_xyz(points, rgb, fname)
 end
 
 function PointCloud:save_global_points_to_xyz(fname)
-   saveHelper_xyz(self:get_global_points(), self.get_rgb(), fname)
+   saveHelper_xyz(self:get_global_points(), self:get_rgb(), fname)
 end
 
 function PointCloud:save_downsampled_to_xyz(leafsize, fname)
