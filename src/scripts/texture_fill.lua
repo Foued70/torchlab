@@ -63,7 +63,7 @@ gaussian = image.gaussian(ws)
 -- patch  : a window around the pixel (eg. 5x5)
 -- lookup : a set of windows (eg. 10x10 of 5x5)
 
-n_random_patches = 7
+n_random_patches = 3
 
 ctr = math.ceil(ws*0.5)
 
@@ -358,10 +358,11 @@ function fill_patches (mask_offsets,lookup_mask_windows,debug)
          -- print(mask_patches[lookup_patch_xy[1]][lookup_patch_xy[2]])
          printf("index: %d",ri)
          print(distances[ri])
+      else
+         -- only update mask if no not copying zeros (zeros in alpha channel need to be filled)
+         global_tofill_mask[mask_h][mask_w] = 1
       end
 
-      -- update mask (zeros in alpha channel need to be filled)
-      global_tofill_mask[mask_h][mask_w] = 1
       local t7 = timer:time()
       s6 = s6 + t7.real - t6.real
    end

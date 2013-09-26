@@ -77,8 +77,8 @@ function get_centers(mask,patch_height,patch_width)
 
    local ctr_height = math.ceil(patch_height * 0.5)
    local ctr_width  = math.ceil(patch_width * 0.5)
-   local n_height = mask_height - patch_height + 1
-   local n_width  = mask_width  - patch_width + 1
+   local n_height   = mask_height - patch_height + 1
+   local n_width    = mask_width  - patch_width + 1
 
    return mask:narrow(1,ctr_height,n_height):narrow(2,ctr_width,n_width)
 end
