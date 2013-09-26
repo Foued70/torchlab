@@ -115,11 +115,17 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    end
    print(countColumns)
 
-   if countColumns == 6 then
-   -- x y z r g b format
+   if (countColumns == 6) then
+      -- x y z r g b 
       self.format = 0
    elseif  (countColumns == 8) then
+      -- h w x y z r g b 
       self.format = 1
+   elseif  (countColumns == 3) then
+      -- x y z 
+      -- TODO make this format 0 as that is more consistent, but would
+      -- be incompatible with already processed and saved pointclouds
+      self.format = 2 
    else
       print(line)
       error("unknown format, input should have either 6 or 8 columns")
@@ -144,12 +150,15 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    local x = xyzrgbTensor:select(2,1+offset)
    local y = xyzrgbTensor:select(2,2+offset)
    local z = xyzrgbTensor:select(2,3+offset)
-   local r = xyzrgbTensor:select(2,4+offset)
-   local g = xyzrgbTensor:select(2,5+offset)
-   local b = xyzrgbTensor:select(2,6+offset)
+   local r, g, b
+   if self.format<2 then
+      r = xyzrgbTensor:select(2,4+offset)
+      g = xyzrgbTensor:select(2,5+offset)
+      b = xyzrgbTensor:select(2,6+offset)
+   end
 
    local indexGood = torch.lt((torch.cmul(x,x)+torch.cmul(y,y)):sqrt(), rad2d)
-   if(self.format) then
+   if(self.format==1) then
       self.height = h[indexGood]:max()
       self.width = w[indexGood]:max()
    end
@@ -172,7 +181,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
          local allXYZ = xyzrgbTensor[{{},{1+offset,3+offset}}]
          local distanceTensor = (allXYZ-self.centroid:repeatTensor(allXYZ:size(1),1)):pow(2):sum(2):sqrt()     
          indexGood = torch.lt(distanceTensor, radius)
-         if(self.format) then
+         if(self.format==1) then
             self.height = h[indexGood]:max()
             self.width = w[indexGood]:max()
          end
@@ -182,8 +191,9 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
          self.centroid = torch.Tensor({{0, 0, meanz}})
    end
 
-   self.rgb = torch.cat(torch.cat(r[indexGood],g[indexGood],2),b[indexGood],2):byte()
-
+   if r and g and b then 
+      self.rgb = torch.cat(torch.cat(r[indexGood],g[indexGood],2),b[indexGood],2):byte()
+   end
    if self.format == 1 then
       self.hwindices = torch.cat(h[indexGood],w[indexGood],2):short()
    end
