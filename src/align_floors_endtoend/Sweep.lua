@@ -80,7 +80,7 @@ function Sweep:getPC()
         pc = pcl.new(self.fxyz)
         if util.fs.is_dir(path.join(self.base_dir,Sweep.PNG)) and util.fs.is_file(self.fpng) then
             pc:load_rgb_map(self.fpng)
-            pc:write(self.fxyz)
+            --pc:write(self.fxyz)
         end
         pc:write(self.fod)
         pc = pc
