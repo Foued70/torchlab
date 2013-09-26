@@ -111,6 +111,7 @@ function mask_out_of_bounds(pixel_coords,max_dims,min_dims,mask)
    return mask
 end
 
+-- offsets are torch style starting at 1
 -- convert the x and y index into a single 1D offset (y * stride + x)
 function pixel_coords_to_offset(pixel_coords,stride,mask,offset)
 
@@ -134,6 +135,7 @@ function pixel_coords_to_offset(pixel_coords,stride,mask,offset)
    end
    -- Last dimension is indexed starting at 1 (so no -0.5)
    output_map:add(pixel_coords[-1]):floor()
+
    -- remove spurious out of bounds from output
    if mask then
       output_map[mask] = 1
@@ -145,21 +147,26 @@ function pixel_coords_to_offset(pixel_coords,stride,mask,offset)
 end
 
 function offset_to_pixel_coords (offset, stride, pixels)
-   local ndims = stride:size(1)
-   local size = util.util.add_slices(ndims,offset:size())
-   pixels = pixels or torch.Tensor(size)
+   if type(offset) == "number" then 
+      offset = torch.Tensor({offset})
+   end
+   local ndims    = stride:size(1)
+   local size     = util.util.add_slices(ndims,offset:size())
+   pixels         = pixels or torch.Tensor(size)
    pixels:resize(size)
 
-   local remainder = torch.Tensor(offset:size())
-   -- put index back into torch 1 offset
-   remainder:copy(offset):add(1)
-   pixels[1]:copy(remainder):mul(1/stride[1]):ceil()
+   -- offsets are torch style starting at 1
+   local remainder = torch.Tensor(offset:size()):copy(offset):add(-1)
+  
+   pixels[1]:copy(remainder):mul(1/stride[1]):floor()
    
    for d = 2,ndims do 
-      remainder:add(torch.add(pixels[d-1],-1):mul(-1*stride[d-1]))
-      pixels[d]:copy(remainder):mul(1/stride[d]):floor() 
+      remainder:add(torch.mul(pixels[d-1],-stride[d-1]))
+      pixels[d-1]:add(1)
+      pixels[d]:copy(remainder):mul(1/stride[d]):floor()
    end
-
+   -- put index back into torch 1 offset
+   pixels[ndims]:add(1)
    return pixels
 end
 

@@ -1,8 +1,8 @@
 -- Class()
 
 log.tic()
-
 pi = math.pi
+d2r = pi / 180
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -14,6 +14,7 @@ cmd:option('-imagefile', '', '360x180 equirectangular image for skybox')
 cmd:option('-outfile', 'skybox', 'basename for 6 output images for skybox')
 cmd:option('-size', 0, 'size in pixels of side of skybox cube')
 cmd:option('-display', 0, 'display the cubemaps or not') 
+cmd:option('-fov', 90 , 'field of view of each side of box')
 cmd:text()
 
 -- parse input params
@@ -22,6 +23,11 @@ params = cmd:parse(process.argv)
 image_file = params.imagefile
 out_size   = tonumber(params.size)
 out_file   = params.outfile
+
+fov = tonumber(params.fov)
+if fov then 
+   fov = d2r * fov
+end
 
 display_imgs = false
 if params.display ~= 0 then 
@@ -57,17 +63,21 @@ printf(" - load image in %2.4fms", time_prep)
 log.tic()
 
 p("Creating Skybox Projection")
-cmap = projection.CubeMap.new(proj_from,out_size)
+cmap = projection.CubeMap.new(proj_from,out_size,fov)
 
 time_map = log.toc()
 printf(" - make map %2.4fms", time_map)
 log.tic()
 
-faces = cmap:remap(img)
-for name,face in pairs(faces) do 
-   outf = out_file .."_"..name..".jpg"
+for fn = 1,6 do 
+   face = cmap:remap(img,fn)
+   name = cmap.names[fn]
+ -- faces = cmap:remap(img)
+-- for name,face in pairs(faces) do 
+   outf = out_file .."_"..name..".png"
    printf(" - saving: %s", outf)
    image.save(outf,face)
+   collectgarbage()
 end
 
 if display_imgs then
