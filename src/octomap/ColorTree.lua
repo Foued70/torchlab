@@ -30,27 +30,32 @@ function ColorTree:load(filename)
 end
 
 -- points in Nx3 (x,y,z) points you want to add to Octree.
-function ColorTree:add_points(points, origin, max_range, rgb)
+function ColorTree:add_points(points, origin, max_range, rgb, cost)
    origin = origin or torch.zeros(3)
+   cost   = cost or torch.Tensor() -- empty tensor is sign that there is no cost
    max_range = max_range or -1 -- -1 is no limit
    octomap_ffi.ColorOcTree_add_sweep(self.tree,
                                      torch.cdata(points), torch.cdata(origin), max_range,
-                                     torch.cdata(rgb))
+                                     torch.cdata(rgb), torch.cdata(cost))
 end
 
-function ColorTree:add_pointcloud(pc)
+function ColorTree:add_pointcloud(pc, cost)
    -- use rgb stored in the pointcloud
    pc_rgb_points = pc:get_rgb():contiguous()
    pc_points     = pc:get_global_points():contiguous()
    pc_pose       = pc:get_global_scan_center():contiguous()
    pc_max_radius = pc:get_max_radius()
-   self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points)
+   self:add_points(pc_points,pc_pose,pc_max_radius,pc_rgb_points, cost)
+end
+
+function ColorTree:get_empty()
+   points = torch.Tensor()
+   octomap_ffi.ColorOcTree_EmptyCellstoTensor(self.tree,torch.cdata(points))
+   return points
 end
 
 function ColorTree:get_occupied()
-   points = torch.Tensor()
-   octomap_ffi.OcTree_OccupiedCellstoTensor(self.tree,torch.cdata(points))
-   return points
+   return self:get_colored()
 end
 
 function ColorTree:get_colored()
@@ -62,11 +67,6 @@ function ColorTree:get_colored()
    return points,rgb
 end
 
-function ColorTree:get_empty()
-   points = torch.Tensor()
-   octomap_ffi.OcTree_EmptyCellstoTensor(self.tree,torch.cdata(points))
-   return points
-end
 
 function ColorTree:ray_trace(origin, directions, max_range, output_rgb)
    origin     = origin:contiguous()
@@ -78,6 +78,14 @@ function ColorTree:ray_trace(origin, directions, max_range, output_rgb)
                                     torch.cdata(origin), torch.cdata(directions),
                                     max_range,
                                     torch.cdata(output_rgb))
+   return output_rgb
+end
+
+-- for a list of points return the color of corresponding voxel grid
+function ColorTree:get_color_for_xyz(points,rgb)
+   output_rgb = output_rgb or torch.ByteTensor()
+   points = points:contiguous()
+   octomap_ffi.ColorOcTree_get_color_for_xyz(self.tree, torch.cdata(points), torch.cdata(output_rgb))
    return output_rgb
 end
 

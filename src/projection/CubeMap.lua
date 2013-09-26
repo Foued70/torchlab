@@ -5,14 +5,14 @@ local pi2 = pi/2
 
 -- wrapper of a bunch of Gnomonic Projections to create a CubeMap
 
-function CubeMap:__init(projection_from, out_size)
+function CubeMap:__init(projection_from, out_size, fov)
 
    self.projection_from = projection_from
 
    self.width = out_size
    self.height = out_size
-   self.hfov = pi2
-   self.vfov = pi2
+   self.hfov = fov or pi2
+   self.vfov = fov or pi2
    self.pixel_center_x = out_size/2
    self.pixel_center_y = out_size/2
 
@@ -36,11 +36,17 @@ function CubeMap:__init(projection_from, out_size)
 end
 
 
-function CubeMap:remap(img)
+function CubeMap:remap(img,n_face)
    local faces = {}
    local names = self.names
-   for i,r in ipairs(self.remappers) do 
-      faces[names[i]] = r:remap(img)
+   if n_face then 
+      -- when memory is wanting do one at a time
+      return self.remappers[n_face]:remap(img)
+   else
+      -- do them all
+      for i,r in ipairs(self.remappers) do 
+         faces[names[i]] = r:remap(img)
+      end
    end
    return faces
 end

@@ -1,9 +1,8 @@
 include ../Makefile.common
 
-ver=6510db9d452b26c8c87e69bf205c82a3be072921
+ver=master
 
-git_src=git@github.com:OctoMap/octomap.git
-
+git_src=git@github.com:floored/octomap.git
 git_clone=$(build_dir)/deps/octomap
 
 install=$(install_root)/lib/liboctomap.dylib
@@ -58,6 +57,6 @@ clean:
 purge: uninstall
 	-rm -rf $(git_clone)
 
-rebuild: uninstall update $(install)
+rebuild: clean uninstall $(install)
 
 .PHONY: all update uninstall clean purge

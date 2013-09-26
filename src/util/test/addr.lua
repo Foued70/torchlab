@@ -1,12 +1,12 @@
-function test_offset_to_coords(debug)
+function test_offset_to_pixel_coords(debug)
    -- 120 has long list of divisors, to test 1D to 2D
    local index = torch.LongTensor():range(0,119) -- C index
    local rw = torch.Tensor({2,3,4,5,6,8,10,12,15,20,24,30,40,60})
    local toterr = 0
    for r = 1,rw:size(1) do 
       local stride    = torch.Tensor({rw[r],1})
-      local coords    = util.addr.offset_to_coords(index,stride)
-      local index_out = util.addr.coords_to_offset(coords,stride)
+      local coords    = util.addr.offset_to_pixel_coords(index,stride)
+      local index_out = util.addr.pixel_coords_to_offset(coords,stride)
       -- compute errors
       local err = index - index_out
       local err_int = err:ne(0):sum()
@@ -28,8 +28,8 @@ function test_offset_to_coords(debug)
    for r = 1,#rw do 
       local size      = torch.LongTensor(rw[r])
       local stride    = torch.Tensor(size:storage()):stride()
-      local coords    = util.addr.offset_to_coords(index,stride)
-      local index_out = util.addr.coords_to_offset(coords,stride)
+      local coords    = util.addr.offset_to_pixel_coords(index,stride)
+      local index_out = util.addr.pixel_coords_to_offset(coords,stride)
       -- compute errors
       local err = index - index_out
       local err_int = err:ne(0):sum()
@@ -47,3 +47,5 @@ function test_offset_to_coords(debug)
    printf("Errors: %d/%d",toterr,120*#rw)
 end
 
+test_offset_to_pixel_coords()
+   
