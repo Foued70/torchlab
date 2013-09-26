@@ -14,10 +14,10 @@ max_range = 50
 
 axes = torch.eye(3)
 
-for c = 1, #camera_centers -1 do
+for c = 1, #camera_poses -1 do
 
-   camera_pose = camera_centers[c]
-   camera_delta = camera_centers[c+1] - camera_pose
+   camera_pose = camera_poses[c]
+   camera_delta = camera_poses[c+1] - camera_pose
    direction_vector = geom.util.normalize(camera_delta)
    camera_delta:mul(1/(camera_delta:norm()*(n_shots + 1)))
 

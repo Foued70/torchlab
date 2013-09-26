@@ -76,7 +76,7 @@ log.trace("building tree ...")log.tic()
 _G.tree = octomap.ColorTree.new(res)
 log.trace(" - in ".. log.toc())
 
-_G.camera_centers = {}
+camera_centers = {}
 for i,fname in pairs(pointclouds) do 
 
    printf("[%d] loading pointcloud %s",i,fname)
@@ -130,6 +130,10 @@ for i,fname in pairs(pointclouds) do
       if start_n < 1 then start_n = 1 end
       pc_start = path.basename(pointclouds[start_n]):gsub(".od","")
       pc_end   = path.basename(pointclouds[i-1]):gsub(".od","")
+      _G.camera_poses = {}
+      for c = start_n,i-1 do
+         table.insert(camera_poses,camera_centers[c])
+      end
       _G.fname = string.format("pc_%d-%d",pc_start,pc_end)
       print("computing frames")
       require './tree_view'
@@ -152,6 +156,7 @@ log.trace(" - in ".. log.toc())
 
 -- do last full walkthrough
 if params.doFrames then
+   _G.camera_poses = camera_centers
    pc_start = path.basename(pointclouds[1]):gsub(".od","")
    pc_end   = path.basename(pointclouds[#pointclouds]):gsub(".od","")
    _G.fname = string.format("pc_%d-%d",pc_start,pc_end)
