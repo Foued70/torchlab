@@ -102,7 +102,7 @@ function Scan:find_forward_and_backward_transformations()
                 --sweepPair_curr_to_nex:setBestDiffTransformation(1)
                 sweepPair_curr_to_nex:setInlierTransformation(1)
                 --sweepPair_curr_to_nex:setBestTransformationH(sweepPair_curr_to_nex:getAllTransformations().transformations[1])
-                sweepPair_curr_to_nex:doIcp2d()
+                --sweepPair_curr_to_nex:doIcp2d()
                 
                 print()
                 

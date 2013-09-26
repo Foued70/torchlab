@@ -203,19 +203,25 @@ function PointCloud:write(filename)
       local file = io.open(filename, 'w');
       local tmpt = torch.range(1,self.count)
       local rgb = self:get_rgb()
+      --[[]]
+      local pose = self:get_local_to_global_pose()
+      local rot  = self:get_local_to_global_rotation()
+      local points = rotate_translate(rot,pose,self.points)
+      --[[]]
+      --local points = self.points
       tmpt:apply(function(i)
-                    local pt = self.points[i]
+                    local pt = points[i]
                     local rgbx = rgb[i]
                     if self.format == 1 then
                        local ind = self.hwindices[i]:clone()
                        local ih = ind[1]
                        local iw = ind[2]
-                       if self.normal_map then
+                       --[[if self.normal_map then
                            local nmp = self.normal_map[ih][iw]
                            file:write(''..(ih-1)..' '..(iw-1)..' '..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..' '..nmp[1]..' '..nmp[2]..' '..nmp[3]..'\n')
-                       else
+                       else]]
                            file:write(''..(ih-1)..' '..(iw-1)..' '..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
-                       end
+                       --end
                     else
                         file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
                     end
@@ -638,13 +644,14 @@ function PointCloud:get_normal_map(recompute)
             self.normal_map=crossprod:clone()
             
         else
+            print('normal map exists')
             self:get_xyz_map_no_mask()
         end
         return self.normal_map
     end
 end
 
-function PointCloud:downsample(leafsize)
+function PointCloud:downsample_map(leafsize)
    --leafsize is edge length of voxel
    scale = leafsize + PointCloud.very_small_number
    local ranges = self.maxval:clone():squeeze():add(self.minval:clone():squeeze():mul(-1))
@@ -658,49 +665,59 @@ function PointCloud:downsample(leafsize)
    local coord = self.points:clone():add(self.minval:clone():squeeze():mul(-1):repeatTensor(self.count,1)):div(scale):floor():add(1)
    local coord2 = torch.zeros(coord:size())
    coord2:sub(2,self.count):copy(coord:sub(1,self.count-1))
-   coord2:mul(-1):add(coord)
-   local neq = coord2:ne(torch.zeros(coord2:size())):sum(2):squeeze()
+   coord2 = coord2:mul(-1):add(coord):pow(2):sum(2)
+   local neq = coord2:ne(0):squeeze()
    local uniquecount = neq:sum()
    
    if uniquecount <= 0 then
       downsampled.count = 0
       return downsampled
    end
+   
+   print('uniquecount: '..uniquecount..', total points: '..self.count)
+   
    local ptss = coord:clone():add(-1):mul(scale):add(self.minval:squeeze():repeatTensor(self.count,1))
 
    local points = torch.zeros(uniquecount,3)
    local rgb = torch.zeros(uniquecount,3):type('torch.ByteTensor')
+   
+   coord = coord:type('torch.LongTensor')
 
-   local tmp = torch.range(1,self.count)
    local count = 0
    
    uniquecount = nil
-   neq = nil
+   --neq = nil
    coord2 = nil
    ranges = nil
    pix = nil
    
    tmp:apply(function(i)
-                   local c = coord[i]
-                   local c1 = c[1]
-                   local c2 = c[2]
-                   local c3 = c[3]
-                   local tmpbin = bin[{c1,c2,c3}]
-                   if tmpbin < 1 then
-                      count = count + 1
-                      bin[{c1,c2,c3}] = tmpbin + 1
-                      points[count] = ptss[i]
-                      rgb[count] = self.rgb[i]
-                   end
-                   --[[
-                   c = nil
-                   c1 = nil
-                   c2 = nil
-                   c3 = nil
-                   tmpbin = nil
-                   ]]
+   				   if neq[i] > 0 then
+	                   local c = coord[i]:clone()
+	                   if bin[c:storage()] < 1 then
+    	                  count = count + 1
+    	                  local c1 = c[1]
+        	           	  local c2 = c[2]
+            	          local c3 = c[3]
+                	      bin:sub(c1,c1,c2,c2,c3,c3):add(1)
+            	          points:sub(count,count):add(ptss[i])
+                	      rgb:sub(count,count):add(self.rgb[i])
+                	      if count % 25000 == 0 then
+	                    	  print('curr count: '..count..' processed: '..i)
+	                      end
+	                   end
+    	               --[[
+        	           c = nil
+            	       c1 = nil
+                	   c2 = nil
+	                   c3 = nil
+    	               tmpbin = nil
+        	           ]]
+        	        end
                    collectgarbage()
              end)
+    print('done downsample loop')
+    collectgarbage()
    
    downsampled.points = points:sub(1,count)
    downsampled.rgb = rgb:sub(1,count)
@@ -710,6 +727,159 @@ function PointCloud:downsample(leafsize)
 
    downsampled:reset_point_stats()
    collectgarbage()
+   return downsampled
+end
+
+function PointCloud:downsample(leafsize,fnamexyz,fnameobj)
+   --leafsize is edge length of voxel
+   
+   --[[]]
+   local pose = self:get_local_to_global_pose()
+   local rot  = self:get_local_to_global_rotation()
+   self.points = rotate_translate(rot,pose,self.points)
+   --[[]]
+   
+   print('downsample: points rotated')
+    
+   scale = leafsize + PointCloud.very_small_number
+   local ranges = self.maxval:clone():squeeze():add(self.minval:clone():squeeze():mul(-1))
+   local nmp = self:get_normal_map(true):clone()
+   local pts = self:get_xyz_map_no_mask():clone()
+   local crd = pts:clone():add(self.minval:clone():mul(-1):squeeze():repeatTensor(self.width,self.height,1):transpose(1,3)):div(scale):floor():add(1)
+   local rgb = self:get_rgb_map_no_mask(true):type('torch.ByteTensor')
+   
+   print('normals,pts,crd,rgb found')
+   
+   pts = crd:clone():add(-1):mul(scale):add(self.minval:squeeze():repeatTensor(self.height,self.width,1):transpose(1,3))
+   
+   nmp = nmp:transpose(1,2):transpose(2,3)
+   pts = pts:transpose(1,2):transpose(2,3)
+   crd = crd:transpose(1,2):transpose(2,3)
+   rgb = rgb:transpose(1,2):transpose(2,3)
+   
+   local downsampled = PointCloud.new()
+   downsampled.height = 0;
+   downsampled.width = 0;
+
+   local points = torch.zeros(self.count,3)
+   local dsrgb = torch.zeros(self.count,3):type('torch.ByteTensor')
+   local normals = torch.zeros(self.count,3)
+
+   local count = 0
+   
+   local c_h = torch.Tensor(self.width,3):fill(math.huge)
+   local p_h = torch.Tensor(self.width,3):fill(math.huge)
+   local n_h = torch.Tensor(self.width,3):fill(math.huge)
+   
+   print('start loop')
+   
+   torch.range(1,self.height):apply(function(h)
+
+     local c_ph = c_h
+     
+     c_h = crd[h]
+     p_h = pts[h]
+     n_h = nmp[h]
+     r_h = rgb[h]
+     
+     local c_h_w = torch.Tensor(3):fill(math.huge)
+     local c_ph_w = torch.Tensor(3):fill(math.huge)
+     
+     torch.range(1,self.width):apply(function(w)
+       
+       local c_h_pw = c_h_w
+       local c_ph_pw = c_ph_w
+       c_ph_w = c_ph[w]:clone()
+       c_h_w = c_h[w]:clone()
+       
+       if c_h_w:sum() ~= math.huge then
+         if torch.dist(c_h_w,c_ph_pw) > 0 and torch.dist(c_h_w,c_ph_w) > 0 and torch.dist(c_h_w,c_h_pw) > 0 then
+
+           count = count + 1
+           
+           points:sub(count,count):add(p_h[w])
+           dsrgb:sub(count,count):add(r_h[w])
+           normals:sub(count,count):add(n_h[w])
+           
+           if count % 100000 == 0 then
+	         print('curr count: '..count..' processed: '..h..','..w)
+	       end
+	     end
+	   else
+	     if c_ph_pw:sum() ~= math.huge then
+	       crd[h][w] = c_ph_pw
+	     elseif c_ph_w:sum() ~= math.huge then
+	       crd[h][w] = c_ph_w
+	     elseif c_h_pw:sum() ~= math.huge then
+	       crd[h][w] = c_h_pw
+	     end
+	   end
+	   
+	 end)
+   end)
+   collectgarbage()
+         
+   downsampled.points = points:sub(1,count)
+   downsampled.rgb = dsrgb:sub(1,count)
+   downsampled.normals = normals:sub(1,count)
+   downsampled.count = count
+   downsampled:set_local_to_global_pose(self:get_local_to_global_pose())
+   downsampled:set_local_to_global_rotation(self:get_local_to_global_rotation())
+
+   downsampled:reset_point_stats()
+   collectgarbage()
+   print('end loop')
+   
+   if fnamexyz then
+     local filexyz = io.open(fnamexyz, 'w')
+     local bnamexyz = path.basename(fnamexyz)
+     print('create xyz file '..bnamexyz)
+     for i = 1,count do
+       local nmp = normals[i]
+	   local pt = points[i]
+	   local rgbx = dsrgb[i]
+	     filexyz:write(pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..--[[' '..nmp[1]..' '..nmp[2]..' '..nmp[3]..]]'\n')
+	   end
+    end
+    filexyz:close()
+    
+   end
+   collectgarbage()
+   
+   if fnameobj then
+     local fileobj = io.open(fnameobj, 'w')
+     local bnameobj = path.basename(fnameobj)
+     print('create obj file '..bnameobj)
+     
+     fileobj:write('####\n')
+     fileobj:write('#\n')
+     fileobj:write('# OBJ File Generated by Cloudlab\n')
+     fileobj:write('####\n')
+     fileobj:write('# Object '..bnameobj..'\n')
+     fileobj:write('#\n')
+     fileobj:write('# Vertices: '..count..'\n')
+     fileobj:write('# Faces: 0\n')
+     fileobj:write('#\n')
+     fileobj:write('####\n')
+     
+     local rgb = dsrgb:type('torch.DoubleTensor'):div(255)
+     
+     for i = 1,count do
+       local pt = points[i]
+       local rgbx = rgb[i]
+       local nmp = normals[i]
+       fileobj:write('vn '..nmp[1]..' '..nmp[2]..' '..nmp[3]..'\n')
+       fileobj:write('v '..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+    end
+     
+     fileobj:write('# '..count..' vertices, '..count..' vertices normals\n\n')
+     fileobj:write('# 0 faces, 0 coords texture\n\n')
+     fileobj:write('# End of File')
+     fileobj:close()
+   
+   end
+   collectgarbage()
+   
    return downsampled
 end
 
@@ -870,7 +1040,7 @@ function PointCloud:get_max_radius()
    return torch.max(self.radius)
 end
 
-local function saveHelper(points, rgb, fname)
+local function saveHelper_xyz(points, rgb, fname)
    local file = io.open(fname, 'w')
    local tmpt = torch.range(1,points:size(1))                                                                                                                                  
    tmpt:apply(function(i) 
@@ -880,19 +1050,22 @@ local function saveHelper(points, rgb, fname)
    end)
    file:close()
 end
+
 function PointCloud:save_global_points_to_xyz(fname)
-   saveHelper(self:get_global_points(), self.rgb, fname)
+   saveHelper_xyz(self:get_global_points(), self.rgb, fname)
 end
+
 function PointCloud:save_downsampled_to_xyz(leafsize, fname)
    local downsampled = self:downsample(leafsize)
-   saveHelper(downsampled.points, downsampled.rgb, fname)
+   saveHelper_xyz(downsampled.points, downsampled.rgb, fname)
 end
+
 function PointCloud:save_downsampled_global_to_xyz(leafsize, fname)
    local downsampled = self:downsample(leafsize)
    local pose = self:get_local_to_global_pose()
    local rot  = self:get_local_to_global_rotation()
    downsampled.points = rotate_translate(rot,pose,downsampled.points)
-   saveHelper(downsampled.points, downsampled.rgb, fname)
+   saveHelper_xyz(downsampled.points, downsampled.rgb, fname)
 end
 
 -- rgb_map is a 2D equirectangular grid of rgb values which corresponds to xyz_map
@@ -914,6 +1087,21 @@ function PointCloud:get_rgb_map(force)
          rgbT = self.rgb:transpose(1,2):contiguous()
          index, mask = self:get_index_and_mask()
          self.rgb_map = util.addr.remap(rgbT,index,mask)
+      else
+         print("no rgb_map and no rgb values")
+         return
+      end
+   end
+   return self.rgb_map
+end
+
+-- put rgb values such as those read in from an xyzrgb format into a "map"
+function PointCloud:get_rgb_map_no_mask(force)
+   if (not self.rgb_map) or force then  
+      if self.rgb then
+         rgbT = self.rgb:transpose(1,2):contiguous()
+         index, mask = self:get_index_and_mask()
+         self.rgb_map = util.addr.remap(rgbT,index,mask,torch.Tensor(3,self.height,self.width))
       else
          print("no rgb_map and no rgb values")
          return
