@@ -8,10 +8,14 @@ local Scan = Class()
 Scan.XYZ = "XYZ"
 
 
-function Scan:__init(base_dir)
+function Scan:__init(base_dir, complete_loop)
     self.base_dir = base_dir
     self.xyz_dir = path.join(base_dir,Scan.XYZ)
     self.first_sweep = 1
+    self.complete_loop = false
+    if complete_loop then
+      self.complete_loop = true
+    end
 end
 
 function Scan:set_first_sweep(num)
@@ -63,51 +67,50 @@ function Scan:find_forward_and_backward_transformations()
             
             for j = 0,1 do
                 
-                local global = true
-                local forward = true
+                if self.complete_loop or j == 0 then
                 
-                if j == 0 then
-                    -- forwards
-                    numcur = (self.first_sweep + (i-1) + (numfiles-1)) % numfiles + 1
-                    numnex = (numcur + 1 + (numfiles-1)) % numfiles + 1
-                else
-                    --backwards
-                    numcur = (self.first_sweep - (i-1) + (numfiles-1)) % numfiles + 1
-                    numnex = (numcur - 1 + (numfiles-1)) % numfiles + 1
-                    forward = false
-                end
+	                local global = true
+    	            local forward = true
                 
-                print('aligning '..numcur..' '..numnex)
+        	        if j == 0 then
+            	        -- forwards
+                	    numcur = (self.first_sweep + (i-1) + (numfiles-1)) % numfiles + 1
+                    	numnex = (numcur + 1 + (numfiles-1)) % numfiles + 1
+	                else
+    	                --backwards
+        	            numcur = (self.first_sweep - (i-1) + (numfiles-1)) % numfiles + 1
+            	        numnex = (numcur - 1 + (numfiles-1)) % numfiles + 1
+                	    forward = false
+	                end
                 
-                fnamecur = all_files[numcur]
-                bnamecur = path.basename(fnamecur,'.xyz')
-                sweepcur = Sweep.new(self.base_dir,bnamecur)
+    	            print('aligning '..numcur..' '..numnex)
+        	        
+            	    fnamecur = all_files[numcur]
+                	bnamecur = path.basename(fnamecur,'.xyz')
+	                sweepcur = Sweep.new(self.base_dir,bnamecur)
             
-                fnamenex = all_files[numnex]
-                bnamenex = path.basename(fnamenex,'.xyz')
-                sweepnex = Sweep.new(self.base_dir,bnamenex)
+    	            fnamenex = all_files[numnex]
+        	        bnamenex = path.basename(fnamenex,'.xyz')
+            	    sweepnex = Sweep.new(self.base_dir,bnamenex)
                 
-                if i == 1 and j == 0 then
+                	if i == 1 and j == 0 then
                 
-                    print('axis align the first sweep')
-                    sweepcur:axisAlign()
-                    local corners, flattenedxy, flattenedv = sweepcur:flattenAndCorners(global,forward)
-                    sweepcur:transformIn3D()
-                end
+                    	print('axis align the first sweep')
+	                    sweepcur:axisAlign()
+    	                local corners, flattenedxy, flattenedv = sweepcur:flattenAndCorners(global,forward)
+        	            sweepcur:transformIn3D()
+            	    end
             
-                print('create new sweep pair')
-                sweepPair_curr_to_nex = align_floors_endtoend.SweepPair.new(self.base_dir, sweepcur, sweepnex, i, forward)
-                sweepPair_curr_to_nex :getAllTransformations()
- 	            --sweepPair_curr_to_nex:setBestTransformation()
-                --sweepPair_curr_to_nex:setBestDiffTransformation(1)
-                sweepPair_curr_to_nex:setInlierTransformation(1)
-                --sweepPair_curr_to_nex:setBestTransformationH(sweepPair_curr_to_nex:getAllTransformations().transformations[1])
-                --sweepPair_curr_to_nex:doIcp2d()
+                	print('create new sweep pair')
+	                sweepPair_curr_to_nex = align_floors_endtoend.SweepPair.new(self.base_dir, sweepcur, sweepnex, i, forward)
+    	            sweepPair_curr_to_nex :getAllTransformations()
+        	        sweepPair_curr_to_nex:setInlierTransformation(1)
                 
-                print()
+            	    print()
                 
-            end
-            collectgarbage()
+	            end
+    	        collectgarbage()
+    	    end
         end
         print('done looping through forward and back pairs')
         print()
@@ -124,8 +127,13 @@ function Scan:find_forward_and_backward_transformations()
             if i > 1 then
             
                 local transf = sweepcur:getTransformation(true).H
-                local transb = sweepcur:getTransformation(false).H
-                local transavg = transf:clone():mul(sweepcur.steps_B):add(transb:clone():mul(sweepcur.steps_F)):div(sweepcur.steps_F+sweepcur.steps_B)
+                local transavg
+                if self.complete_loop then
+	                local transb = sweepcur:getTransformation(false).H
+	                transavg = transf:clone():mul(sweepcur.steps_B):add(transb:clone():mul(sweepcur.steps_F)):div(sweepcur.steps_F+sweepcur.steps_B)
+                else
+                	transavg = sweepcur:getTransformation(true).H
+                end
             
                 local transfull = geom.Homography.new(0,torch.Tensor({0,0}))
                 transfull.H = transavg
@@ -135,15 +143,14 @@ function Scan:find_forward_and_backward_transformations()
             	print('forward, backward, and full transforms')
                 print(transf)
                 print(transb)
+                print(transavg)
                 print(transfull.H)
             end
             
             collectgarbage()
             
             sweepcur:transformIn3D()
-            
-            sweepcur:getPC():save_global_points_to_xyz(path.join(self.base_dir,"DOWNSAMPLEDXYZ",bnamecur..'.xyz'))
-            --sweepcur:getPC():save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",bnamecur..'.xyz'))
+            sweepcur:getPC():save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",bnamecur..'.xyz'))
             print()
 
         end
