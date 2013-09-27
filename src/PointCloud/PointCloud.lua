@@ -721,6 +721,217 @@ function PointCloud:downsample(leafsize)
    return downsampled
 end
 
+
+--[[
+function PointCloud:get_normal_map_new()
+  if self.format == 1 then
+    local xyz = self:get_xyz_map_no_mask()
+    local height = self.height
+    local width = self.width
+    local shift = torch.zeros(xyz:size())
+    
+    shift:sub(1,3,1,height,2,width):copy(xyz:sub(1,3,1,height,1,width-1))
+    shift:sub(1,3,1,height,1,1):copy(xyz:sub(1,3,1,height,width,width))
+    
+    local minus_l = torch.Tensor(xyz:size()):copy(xyz)
+	minus_l:add(shift:clone():mul(-1))  
+	
+	shift:sub(1,3,1,height,1,width-1):copy(xyz:sub(1,3,1,height,2,width))
+    shift:sub(1,3,1,height,width,width):copy(xyz:sub(1,3,1,height,1,1))
+    
+    local minus_r = torch.zeros(xyz:size()):copy(xyz)
+	minus_r:add(shift:clone():mul(-1))  
+    
+    shift:sub(1,3,2,height,1,width):copy(xyz:sub(1,3,1,height-1,1,width))
+    shift:sub(1,3,1,1,1,width):copy(xyz:sub(1,3,1,1,1,width))
+    
+    local minus_u = torch.zeros(xyz:size()):copy(xyz)
+	minus_u:add(shift:clone():mul(-1))  
+	
+	shift:sub(1,3,1,height-1,1,width):copy(xyz:sub(1,3,2,height,1,width))
+    shift:sub(1,3,height,height,1,width):copy(xyz:sub(1,3,height,height,1,width))
+    
+    local minus_d = torch.zeros(xyz:size()):copy(xyz)
+	minus_d:add(shift:clone():mul(-1))
+	
+	local minus_1_x = minus_l:select(1,1)
+    local minus_1_y = minus_l:select(1,2)
+    local minus_1_z = minus_l:select(1,3)
+            
+    local minus_2_x = minus_u:select(1,1)
+    local minus_2_y = minus_u:select(1,2)
+    local minus_2_z = minus_u:select(1,3)
+        
+    local crossprod_1 = torch.Tensor(3,height,width)
+        
+    crossprod_1[1] = minus_1_y:clone():cmul(minus_2_z):add(
+                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
+    crossprod_1[2] = minus_1_z:clone():cmul(minus_2_x):add(
+                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
+    crossprod_1[3] = minus_1_x:clone():cmul(minus_2_y):add(
+                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
+    
+    local crossprod_norm = crossprod_1:clone():pow(2):sum(1):repeatTensor(3,1,1)
+    crossprod_1:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+                     
+    minus_1_x = minus_u:select(1,1)
+    minus_1_y = minus_u:select(1,2)
+    minus_1_z = minus_u:select(1,3)
+            
+    minus_2_x = minus_r:select(1,1)
+    minus_2_y = minus_r:select(1,2)
+    minus_2_z = minus_r:select(1,3)
+	
+	local crossprod_2 = torch.Tensor(3,height,width)
+	
+	crossprod_norm = crossprod_2:clone():pow(2):sum(1):repeatTensor(3,1,1)
+    crossprod_2:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+        
+    crossprod_2[1] = minus_1_y:clone():cmul(minus_2_z):add(
+                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
+    crossprod_2[2] = minus_1_z:clone():cmul(minus_2_x):add(
+                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
+    crossprod_2[3] = minus_1_x:clone():cmul(minus_2_y):add(
+                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
+    
+    minus_1_x = minus_r:select(1,1)
+    minus_1_y = minus_r:select(1,2)
+    minus_1_z = minus_r:select(1,3)
+            
+    minus_2_x = minus_d:select(1,1)
+    minus_2_y = minus_d:select(1,2)
+    minus_2_z = minus_d:select(1,3)
+	
+	local crossprod_3 = torch.Tensor(3,height,width)
+        
+    crossprod_3[1] = minus_1_y:clone():cmul(minus_2_z):add(
+                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
+    crossprod_3[2] = minus_1_z:clone():cmul(minus_2_x):add(
+                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
+    crossprod_3[3] = minus_1_x:clone():cmul(minus_2_y):add(
+                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
+                     
+    crossprod_norm = crossprod_3:clone():pow(2):sum(1):repeatTensor(3,1,1)
+    crossprod_3:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+                     
+    minus_1_x = minus_d:select(1,1)
+    minus_1_y = minus_d:select(1,2)
+    minus_1_z = minus_d:select(1,3)
+            
+    minus_2_x = minus_l:select(1,1)
+    minus_2_y = minus_l:select(1,2)
+    minus_2_z = minus_l:select(1,3)
+	
+	local crossprod_4 = torch.Tensor(3,height,width)
+        
+    crossprod_4[1] = minus_1_y:clone():cmul(minus_2_z):add(
+                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
+    crossprod_4[2] = minus_1_z:clone():cmul(minus_2_x):add(
+                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
+    crossprod_4[3] = minus_1_x:clone():cmul(minus_2_y):add(
+                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
+    
+    crossprod_norm = crossprod_4:clone():pow(2):sum(1):repeatTensor(3,1,1)
+    crossprod_4:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    minus_l = nil
+    minus_r = nil
+    minus_u = nil
+    minus_d = nil
+    
+    minus_1_x = nil
+    minus_1_y = nil
+    minus_1_z = nil
+            
+    minus_2_x = nil
+    minus_2_y = nil
+    minus_2_z = nil
+    
+    collectgarbage()
+    
+    local c1 = crossprod_1:transpose(1,2):transpose(2,3)
+    local c2 = crossprod_2:transpose(1,2):transpose(2,3)
+    local c3 = crossprod_3:transpose(1,2):transpose(2,3)
+    local c4 = crossprod_4:transpose(1,2):transpose(2,3)
+    
+    local crossprod = torch.zeros(height,width,3)
+    
+    crossprod:add(c1):add(c2):add(c3):add(c4):div(4)
+    crossprod_norm = crossprod:clone():pow(2):sum(3):repeatTensor(1,1,3)
+    crossprod = crossprod:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    image.display(c1:transpose(2,3):transpose(1,2))
+    image.display(crossprod:transpose(2,3):transpose(1,2))
+    
+    local thresh = 0.1
+    local c = torch.zeros(4,3)
+    
+    for i = 1,height do
+      for j = 1,width do
+        c[1] = c1[i][j]
+        c[2] = c2[i][j]
+        c[3] = c3[i][j]
+        c[4] = c4[i][j]
+        local avg = crossprod[i][j]
+        local sim = torch.zeros(4)
+        local sum = c:clone()
+        for k = 1,4 do
+          local comp_targ = c[k]
+          for l = k+1,4 do
+            local comp_src = c[l]
+            if comp_targ:dist(comp_src) < thresh then
+              sim[k] = sim[k] + 1
+              sum[k] = sum[k] + comp_src
+            end
+            if sim[k] > 0 then
+              sum[k] = sum[k]:div(sim[k])
+            end
+          end
+        end
+        local maxsim, maxind = sim:max(1)
+        maxsim = maxsim:squeeze()
+        maxind = maxind:squeeze()
+        if maxsim > 1 then
+          avg = sum[maxind]
+        end
+        crossprod[i][j] = avg
+      end
+    end
+    
+    c1 = nil
+    c2 = nil
+    c3 = nil
+    c4 = nil
+    collectgarbage()
+    
+    crossprod_norm = crossprod:clone():pow(2):sum(3):repeatTensor(1,1,3)
+    crossprod = crossprod:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    crossprod = crossprod:transpose(2,3):transpose(1,2)
+    
+    crossprod_norm = nil
+    crossprod_1 = nil
+    crossprod_2 = nil
+    crossprod_3 = nil
+    crossprod_4 = nil
+    
+    image.display(crossprod)
+    
+  end
+end
+]]
+
+function PointCloud:get_plane_constants_map()
+
+end
+
+function PointCloud:upsample(leafsize)
+  
+  local connections,corners = self:get_connections_and_corners()
+  local pt_map = self:get_xyz_map_no_mask()
+  
+  
+end
+
 function PointCloud:get_3dtree()
    self.k3dtree = kdtree.new(self.points)
    collectgarbage()
