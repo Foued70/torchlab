@@ -34,21 +34,34 @@ using namespace octomap;
 
 void getInfo(const AbstractOccupancyOcTree* tree)
 {
-  cout << "size: " << tree->size() << endl;
-  cout << "getResolution: " << tree->getResolution() << endl;
-  cout << "getOccupancyThres: " << tree->getOccupancyThres() << endl;
-  cout << "getOccupancyThresLog: " << tree->getOccupancyThresLog() << endl;
+  cout << "size: "                   << tree->size()                   << endl;
+  cout << "getResolution: "          << tree->getResolution()          << endl;
+  cout << "getOccupancyThres: "      << tree->getOccupancyThres()      << endl;
+  cout << "getOccupancyThresLog: "   << tree->getOccupancyThresLog()   << endl;
 
-  cout << "getProbHit: " << tree->getProbHit() << endl;
-  cout << "getProbHitLog: " << tree->getProbHitLog() << endl;
-  cout << "getProbMiss: " << tree->getProbMiss() << endl;
-  cout << "getProbMissLog: " << tree->getProbMissLog() << endl;
+  cout << "getProbHit: "             << tree->getProbHit()             << endl;
+  cout << "getProbHitLog: "          << tree->getProbHitLog()          << endl;
+  cout << "getProbMiss: "            << tree->getProbMiss()            << endl;
+  cout << "getProbMissLog: "         << tree->getProbMissLog()         << endl;
 
-  cout << "getClampingThresMin: " << tree->getClampingThresMin() << endl;
+  cout << "getClampingThresMin: "    << tree->getClampingThresMin()    << endl;
   cout << "getClampingThresMinLog: " << tree->getClampingThresMinLog() << endl;
-  cout << "getClampingThresMax: " << tree->getClampingThresMax() << endl;
+  cout << "getClampingThresMax: "    << tree->getClampingThresMax()    << endl;
   cout << "getClampingThresMaxLog: " << tree->getClampingThresMaxLog() << endl;
 }
+
+void getBBX(const AbstractOcTree* tree, THDoubleTensor* size){
+  THDoubleTensor_resize2d(size,2,3);
+  double* xmin = THDoubleTensor_data(size);
+  double* ymin = xmin+1;
+  double* zmin = ymin+1;
+  double* xmax = zmin+1;
+  double* ymax = xmax+1;
+  double* zmax = ymax+1;
+  tree->getMetricMin(xmin[0], ymin[0], zmin[0]);
+  tree->getMetricMax(xmax[0], ymax[0], zmax[0]);
+}
+
 
 extern "C"
 {
@@ -83,6 +96,7 @@ extern "C"
     cout << "Size: " << x << " x " << y << " x " << z << " m^3\n";
     cout << endl;
   }
+
 
   void Color_calcOccupiedNodes(const ColorOcTree* tree,
                                unsigned int& num_occupied,
@@ -123,6 +137,11 @@ extern "C"
   void OcTree_getInfo(OcTree* tree)
   {
     getInfo(tree);
+  }
+
+  void OcTree_getBBX(OcTree* tree, THDoubleTensor* size)
+  {
+    getBBX(tree,size);
   }
 
   void OcTree_destroy(OcTree* tree)
@@ -174,16 +193,16 @@ extern "C"
     tree->insertPointCloud(cloud, sensor_origin, max_range, lazy_eval);
   }
 
-  // TODO make generic by calling AbstractOcTree funcs
-  THDoubleTensor* OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points)
+  long OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points)
   {
     unsigned int numOccupied, numOther;
     calcOccupiedNodes(tree, numOccupied, numOther);
 
+    long count = 0;
     if (numOccupied > 0) {
       THDoubleTensor_resize2d(points,numOccupied,3);
-      double * pts_d = THDoubleTensor_data(points);
-      long count = 0;
+      THDoubleTensor_fill(points,0);
+      double* pts_d = THDoubleTensor_data(points);
       for(OcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
         if(tree->isNodeOccupied(*it)){
           pts_d[0] = it.getX();
@@ -193,28 +212,31 @@ extern "C"
           pts_d += 3;
         }
       }
+      THDoubleTensor_narrow(points,NULL,0,0,count);
     }
-    return points;
+    return count;
   }
 
-  THDoubleTensor* OcTree_getThresholds(OcTree* tree, THDoubleTensor* thresholds)
+  long OcTree_getThresholds(OcTree* tree, THDoubleTensor* thresholds)
   {
     unsigned int numLeafNodes = tree->getNumLeafNodes();
+    long count = 0;
     if (numLeafNodes > 0) {
       THDoubleTensor_resize1d(thresholds,numLeafNodes);
       double * thr_d = THDoubleTensor_data(thresholds);
-      long count = 0;
       for(OcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
         OcTreeNode* node = tree->search(it.getKey());
         thr_d[0] = node->getOccupancy();
         thr_d++;
+        count++;
       }
+      THDoubleTensor_narrow(thresholds,NULL,0,0,count);
     }
-    return thresholds;
+    return count;
   }
 
 
-  THDoubleTensor* OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points)
+  long OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points)
   {
     unsigned int numOccupied, numOther;
     calcOccupiedNodes(tree, numOccupied, numOther);
@@ -231,29 +253,30 @@ extern "C"
         pts_d += 3;
       }
     }
-    return points;
+    THDoubleTensor_narrow(points,NULL,0,0,count);
+    return count;
   }
 
-  // TODO make generic by calling AbstractOcTree funcs. Just stupid to have two versions of exact same functions.
-
-  THDoubleTensor* ColorOcTree_getThresholds(ColorOcTree* tree, THDoubleTensor* thresholds)
+  long ColorOcTree_getThresholds(ColorOcTree* tree, THDoubleTensor* thresholds)
   {
     unsigned int numLeafNodes = tree->getNumLeafNodes();
+    long count = 0;
     if (numLeafNodes > 0) {
       THDoubleTensor_resize1d(thresholds,numLeafNodes);
       double * thr_d = THDoubleTensor_data(thresholds);
-      long count = 0;
       for(ColorOcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
         ColorOcTreeNode* node = tree->search(it.getKey());
         thr_d[0] = node->getOccupancy();
         thr_d++;
+        count++;
       }
+      THDoubleTensor_narrow(thresholds,NULL,0,0,count);
     }
-    return thresholds;
+    return count;
   }
 
 
-  THDoubleTensor* ColorOcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points)
+  long ColorOcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points)
   {
     unsigned int numOccupied, numOther;
     Color_calcOccupiedNodes(tree, numOccupied, numOther);
@@ -266,11 +289,12 @@ extern "C"
         pts_d[0] = it.getX();
         pts_d[1] = it.getY();
         pts_d[2] = it.getZ();
-        count++;
         pts_d += 3;
+        count++;
       }
     }
-    return points;
+    THDoubleTensor_narrow(points,NULL,0,0,count);
+    return count;
   }
 
   // TODO get list of unknown cells
@@ -287,6 +311,11 @@ extern "C"
   void ColorOcTree_getInfo(ColorOcTree* tree)
   {
     getInfo(tree);
+  }
+
+  void ColorOcTree_getBBX(ColorOcTree* tree, THDoubleTensor* size)
+  {
+    getBBX(tree,size);
   }
 
   bool ColorOcTree_write(ColorOcTree* tree, const char* filename)
@@ -370,13 +399,13 @@ extern "C"
     // cout << "colored: " << count << " of " << npts << endl;
   }
 
-  THDoubleTensor* ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THByteTensor* rgb)
+  long ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THByteTensor* rgb)
   {
     unsigned int numOccupied, numOther;
     Color_calcOccupiedNodes(tree, numOccupied, numOther);
-
+    long count = 0;
+      
     if (numOccupied > 0) {
-      long count = 0;
       THDoubleTensor_resize2d(points,numOccupied,3);
       THByteTensor_resize2d(rgb, numOccupied,3);
       double * pts_d = THDoubleTensor_data(points);
@@ -399,15 +428,15 @@ extern "C"
             rgb_d[1] = 204;
             rgb_d[2] = 204;
           }
-          count++;
           pts_d += 3;
           rgb_d += 3;
+          count++; 
         }
       }
       THDoubleTensor_narrow(points,NULL,0,0,count);
       THByteTensor_narrow(rgb,NULL,0,0,count);
     }
-    return points;
+    return count;
   }
 
   // WARNING origin and directions has channels first 3xN where and
