@@ -39,8 +39,13 @@ function SphericalProjection:angles_map(scale,hfov,vfov, hoffset, voffset)
                                                                                                                                                      
    local angles = torch.Tensor(2,maph,mapw)
 
-   angles[1]:copy(lambda)
-   angles[2]:copy(phi:t()):mul(-1) -- angles have +z up
+   -- Images are stored row major so the image projections index
+   -- height then width therefore the 2D angles are elevation,
+   -- azimuth. Furthermore images have 0,0 (or 1,1) in the upper left
+   -- corner, so z (elevation is inverted w/respect to our 3D z up.
+
+   angles[1]:copy(phi:t()) -- elevation
+   angles[2]:copy(lambda)  -- azimuth
 
    return angles
 

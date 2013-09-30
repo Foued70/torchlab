@@ -50,6 +50,25 @@ function angle_between(vec1, vec2)
    return torch.acos(torch.dot(vec1, vec2) / (vec1:norm()*vec2:norm()))
 end
 
+function projection_to_spherical_angles (angles, notinline)
+   input_elevation = angles[1]
+   input_azimuth   = angles[2]
+   output = angles
+   if notinline then 
+      output          = angles:clone()
+   else 
+      input_elevation = angles[1]:clone()
+   end
+   output[1] = input_azimuth
+   output[2] = input_elevation
+   output[2]:mul(-1)
+   return output
+end
+
+function spherical_to_projection_angles (angles, notinline)
+   return projection_to_spherical_angles(angles, notinline)
+end
+
 -- input:  3xN tensor of unit cartesian vectors
 -- output: 2xN tensor of azimuth and elevation for a set of points
 -- these are in camera coords
@@ -71,7 +90,8 @@ function unit_cartesian_to_spherical_angles(uc)
 
 end
 
--- input:  2xN tensor of azimuth and elevation for a set of points
+-- input: 2xN tensor of azimuth, elevation for a set of points. These are 3D coordinates so +elevation is up.
+
 -- output: 3xN tensor of unit cartesian vectors
 -- these are in camera coords
 --    x : right

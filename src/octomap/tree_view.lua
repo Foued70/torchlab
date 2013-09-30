@@ -25,12 +25,11 @@ for c = 1, #camera_poses -1 do
    -- rotation = geom.quaternion.angle_between(direction_vector, forward_vector)
 
    proj = projection.SphericalProjection.new(camera_width,camera_height,camera_hfov,camera_vfov)
+   _G.angles = geom.util.projection_to_spherical_angles(proj:angles_map())
+   dirs = geom.util.spherical_angles_to_unit_cartesian(angles)
 
    for s = 1,n_shots do
 
-      _G.angles = proj:angles_map()
-
-      dirs = geom.util.spherical_angles_to_unit_cartesian(angles)
       
       frame = tree:ray_trace(camera_pose, dirs, max_range)
 
