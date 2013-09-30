@@ -166,7 +166,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    end
 
    local radius2d  = torch.cmul(x,x):add(torch.cmul(y,y)):sqrt()
-   local indexGood = torch.lt(radius2d, radius[2]):add(torch.gt(radius2d, radius[1])):eq(2)
+   local indexGood = torch.lt(radius2d, radius[2]):mul(torch.gt(radius2d, radius[1]))
 
    if(self.format==1) then
       self.height = h[indexGood]:max()
@@ -191,7 +191,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       
       local allXYZ = xyzrgbTensor[{{},{1+offset,3+offset}}]
       local distanceTensor = (allXYZ-self.centroid:repeatTensor(allXYZ:size(1),1)):pow(2):sum(2):sqrt()     
-      indexGood = torch.lt(distanceTensor, radius[2]):add(torch.gt(distanceTensor, radius[1])):eq(2)
+      indexGood = torch.lt(distanceTensor, radius[2]):mul(torch.gt(distanceTensor, radius[1]))
       
       if (self.format==1) then
          self.height = h[indexGood]:max()
