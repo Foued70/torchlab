@@ -10,30 +10,31 @@ void rotate_by_quat(THDoubleTensor *result,
   long *sd               = THLongStorage_data(newSize);
 
   long offset         = 0;
-  // which dimension contains quat or vect
+  // TODO look at torch.min() or torch.max() to allow vector in any dimension.
+  // which dimension contains quat or vect (default to NxD)
+  char DHW            = 0;
   long quatDim        = quat->nDimension-1;
   long vectDim        = vect->nDimension-1;
   long quatSize       = quat->size[quatDim]; // == 4
   long vectSize       = vect->size[vectDim]; // == 3 or 4
   long nElementQuat   = THDoubleTensor_nElement(quat);
   long nElementVect   = THDoubleTensor_nElement(vect);
+  // step to get to next dimension
   long quatDimStride  = 1;
   long vectDimStride  = 1;
+  // step to get to next element
   long quatElemStride = quatSize;
   long vectElemStride = vectSize;
-  long quatVectStride = quatSize;
-  long vectVectStride = vectSize;
-
+ 
   long i,j;
 
-  char DHW = 0;
-
-  // quaternions and vectors are either Nx3,4 oer 3,4 x N but must be consistent.
+  // check for DxN
+  // quaternions and vectors are either Nx3,4 or 3,4 x N but must be consistent.
   if ((quatSize != 4) || ((vectSize != 3) && vectSize != 4)) {
-    vectDim = 0;
-    quatDim = 0;
-    quatSize = quat->size[vectDim];
-    vectSize = vect->size[quatDim];
+    vectDim        = 0; // test DxN
+    quatDim        = 0;
+    quatSize       = quat->size[vectDim];
+    vectSize       = vect->size[quatDim];
     quatElemStride = 1;
     vectElemStride = 1;
     quatDimStride  = quat->stride[vectDim];
@@ -49,31 +50,37 @@ void rotate_by_quat(THDoubleTensor *result,
   long n_vect = nElementVect / vectSize;
   long n_quat = nElementQuat / quatSize;
 
+  // get dimensions for the output
   long start    = 0;
   long quat_end = quat->nDimension-1;
   long vect_end = vect->nDimension-1;
   if (DHW > 0) {
-    // printf("Doing DHW\n");
     start++;
     quat_end++;
     vect_end++;
+    // output 3 x nquat x nvect
     sd[offset] = vectSize;
     offset += 1;
   }
-
+  // quaternion dimensions
   for (i = start ; i < quat_end ; i++){
     sd[offset] = quat->size[i];
     offset += 1;
   }
 
+
+  // vector dimensions
   for (i = start ; i < vect_end ; i++){
     sd[offset] = vect->size[i];
     offset += 1;
   }
+
   if (DHW==0) {
+    // output nquat x nvect x 3
     sd[offset] = vectSize;
   }
 
+  // resize the output
   THDoubleTensor_resize(result, newSize, NULL);
   if (vectSize == 4) // incase homogenous coordinates are requested
     THDoubleTensor_fill(result,1);
@@ -84,6 +91,7 @@ void rotate_by_quat(THDoubleTensor *result,
   double *v   = THDoubleTensor_data(vect);
 
   double x1, y1, z1;
+  // how to step through the result
   long resDimStride  = result->stride[outDimension-1];
   long resElemStride = vectSize;
 
@@ -91,12 +99,6 @@ void rotate_by_quat(THDoubleTensor *result,
     resDimStride  = result->stride[0];
     resElemStride = result->stride[outDimension-1];
   }
-
-  /* printf("quatSize: %ld; vectSize: %ld\n",quatSize, vectSize); */
-  /* printf("quatDimStride: %ld; vectDimStride: %ld; resDimStride: %ld\n", */
-  /*        quatDimStride, vectDimStride,resDimStride); */
-  /* printf("quatElemStride: %ld; vectElemStride: %ld; resElemStride: %ld\n", */
-  /*        quatElemStride, vectElemStride,resElemStride); */
 
   double * res0 = res;
   double * res1 = res0 + resDimStride;
@@ -122,7 +124,7 @@ void rotate_by_quat(THDoubleTensor *result,
           (*res1) = (*v1) + 2 * ((*q3)*y1 + (*q2)*x1 - (*q0)*z1);
           (*res2) = (*v2) + 2 * ((*q3)*z1 + (*q0)*y1 - (*q1)*x1);
 
-          v0+=vectElemStride; v1+=vectElemStride; v2+=vectElemStride;
+            v0+=vectElemStride;  v1+=vectElemStride;  v2+=vectElemStride;
           res0+=resElemStride; res1+=resElemStride; res2+=resElemStride;
         }
       q0+=quatElemStride; q1+=quatElemStride; q2+=quatElemStride; q3+=quatElemStride;

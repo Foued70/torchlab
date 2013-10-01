@@ -20,18 +20,6 @@ function tests.rotation_by_quat()
    local offset = 1
 
 
-   log.tic()
-
-   rot.by_quaternion(res,quats,vecs)
-
-      
-   local d = res - groundt
-   local ce  = d:abs():max()
-   if (ce > maxerr) then maxerr = ce end
-   e = e + d:abs():gt(1e-3):sum()
-   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,log.toc()))
-
    print(" - testing DHW")
    datavec = data.vec:t():contiguous()
    dataquat = data.quat:t():contiguous()
@@ -46,6 +34,18 @@ function tests.rotation_by_quat()
    e = e + d:abs():gt(1e-3):sum()
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
                        e,res:size(2),maxerr,log.toc()))
+
+   log.tic()
+
+   rot.by_quaternion(res,quats,vecs)
+      
+   local d = res - groundt
+   local ce  = d:abs():max()
+   if (ce > maxerr) then maxerr = ce end
+   e = e + d:abs():gt(1e-3):sum()
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,res:size(1),maxerr,log.toc()))
+
 
 end
 
