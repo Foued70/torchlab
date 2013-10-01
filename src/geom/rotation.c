@@ -38,7 +38,7 @@ void rotate_by_quat(THDoubleTensor *result,
     quatElemStride = 1;
     vectElemStride = 1;
     quatDimStride  = quat->stride[vectDim];
-    vectDimStride  = quat->stride[quatDim];
+    vectDimStride  = vect->stride[quatDim];
     DHW = 1;
   }
 
@@ -58,9 +58,6 @@ void rotate_by_quat(THDoubleTensor *result,
     start++;
     quat_end++;
     vect_end++;
-    // output 3 x nquat x nvect
-    sd[offset] = vectSize;
-    offset += 1;
   }
   // quaternion dimensions
   for (i = start ; i < quat_end ; i++){
@@ -68,6 +65,11 @@ void rotate_by_quat(THDoubleTensor *result,
     offset += 1;
   }
 
+  if (DHW > 0) {
+    // output nquat x 3,4 x nvect
+    sd[offset] = vectSize;
+    offset += 1;
+  }
 
   // vector dimensions
   for (i = start ; i < vect_end ; i++){
@@ -78,10 +80,12 @@ void rotate_by_quat(THDoubleTensor *result,
   if (DHW==0) {
     // output nquat x nvect x 3
     sd[offset] = vectSize;
+    offset += 1;
   }
 
   // resize the output
   THDoubleTensor_resize(result, newSize, NULL);
+
   if (vectSize == 4) // incase homogenous coordinates are requested
     THDoubleTensor_fill(result,1);
   THLongStorage_free(newSize);
@@ -94,12 +98,17 @@ void rotate_by_quat(THDoubleTensor *result,
   // how to step through the result
   long resDimStride  = result->stride[outDimension-1];
   long resElemStride = vectSize;
+  long resQuatStride = 0;
 
   if (DHW>0) {
-    resDimStride  = result->stride[0];
+    resDimStride  = result->stride[quat->nDimension-1];
     resElemStride = result->stride[outDimension-1];
+    
+    if (n_quat > 1) {
+      resQuatStride = result->stride[0] - resDimStride;
+    }
   }
-
+  double * qres = res;
   double * res0 = res;
   double * res1 = res0 + resDimStride;
   double * res2 = res1 + resDimStride;
@@ -124,10 +133,14 @@ void rotate_by_quat(THDoubleTensor *result,
           (*res1) = (*v1) + 2 * ((*q3)*y1 + (*q2)*x1 - (*q0)*z1);
           (*res2) = (*v2) + 2 * ((*q3)*z1 + (*q0)*y1 - (*q1)*x1);
 
-            v0+=vectElemStride;  v1+=vectElemStride;  v2+=vectElemStride;
+          v0+=vectElemStride;  v1+=vectElemStride;  v2+=vectElemStride;
           res0+=resElemStride; res1+=resElemStride; res2+=resElemStride;
-        }
+      }
       q0+=quatElemStride; q1+=quatElemStride; q2+=quatElemStride; q3+=quatElemStride;
+      // facilitate nquats x 3 x nvect output
+      res0 = res0 + resQuatStride;
+      res1 = res0 + resDimStride;
+      res2 = res1 + resDimStride;
     }
 }
 

@@ -14,7 +14,7 @@ function tests.rotation_by_quat()
    local nvecs  = vecs:size(1)
    local quats  = data.quat
    local nquats = quats:size(1)
-   local res    = torch.Tensor(nvecs*nquats,3)
+   local res    = torch.Tensor(3,nvecs*nquats)
    local groundt = data.result_rot_by_quat
    local i      = 1
    local offset = 1
@@ -23,18 +23,20 @@ function tests.rotation_by_quat()
    print(" - testing DHW")
    datavec = data.vec:t():contiguous()
    dataquat = data.quat:t():contiguous()
-   res = res:resize(3,nvecs*nquats):fill(0)
    log.tic()
 
    rot.by_quaternion(res,dataquat,datavec)
 
-   local d = res - groundt:t()
+   local d = res - groundt:reshape(25,25,3):transpose(2,3)
    local ce  = d:abs():max()
    if (ce > maxerr) then maxerr = ce end
    e = e + d:abs():gt(1e-3):sum()
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(2),maxerr,log.toc()))
-
+                       e,res:nElement(),maxerr,log.toc()))
+   -- reset
+   e = 0;
+   maxerr = 0;
+   res = res:resize(nvecs*nquats,3):fill(0)
    log.tic()
 
    rot.by_quaternion(res,quats,vecs)
@@ -44,9 +46,7 @@ function tests.rotation_by_quat()
    if (ce > maxerr) then maxerr = ce end
    e = e + d:abs():gt(1e-3):sum()
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,log.toc()))
-
-
+                       e,res:nElement(),maxerr,log.toc()))
 end
 
 function tests.rotate_translate()
