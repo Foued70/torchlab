@@ -1,12 +1,11 @@
-Class()
-
 local quat = geom.quaternion
 local geom = geom.util
 
+tests = {}
 
-local data = require "geom.test.data"
+local data = require "./data"
 
-function quaternion_from_to()
+function tests.quaternion_from_to()
    print("Testing quaternion angle btw. 2 vectors")
    local e = 0
    local p = geom.normalized(data.vec[1])
@@ -24,7 +23,7 @@ function quaternion_from_to()
    print(string.format(" - Found %d/%d errors",e,data.vec:size(1)-1))
 end
 
-function quaternion_to_rotation_matrix()
+function tests.quaternion_to_rotation_matrix()
    print("Testing quaternion to rotation matrix")
    local e = 0
    for i = 1,data.quat:size(1) do
@@ -38,7 +37,7 @@ function quaternion_to_rotation_matrix()
    print(string.format(" - Found %d/%d errors",e,data.quat:size(1)))
 end
 
-function rotation_matrix_to_quaternion()
+function tests.rotation_matrix_to_quaternion()
    print("Testing rotation matrix to quaternion")
    local e = 0
    local maxerr = 0
@@ -72,7 +71,7 @@ function rotation_matrix_to_quaternion()
    print(string.format(" - Found %d/%d errors",e,res:size(1)))
 end
 
-function rotation_by_quat()
+function tests.rotation_by_quat()
    print("Testing rotation with quaternion")
    local e = 0
    local maxerr = 0
@@ -103,7 +102,7 @@ function rotation_by_quat()
                        e,res:size(1),maxerr,log.toc()))
 end
 
-function quat_product()
+function tests.quat_product()
    print("Testing composition of rotations with quaternion product")
    local e = 0
    local maxerr = 0
@@ -162,7 +161,7 @@ function quat_product()
                        e,n_test,maxerr,log.toc()))
 end
 
-function quat_from_to_euler()
+function tests.quat_from_to_euler()
    print("Testing conversion to euler (spherical angles) and back")
    local eps = 0.002 -- terrible numerical results with all the trig functions
    local e = 0
@@ -189,7 +188,7 @@ function quat_from_to_euler()
 end
 
 
-function euler_to_quat_directions()
+function tests.euler_to_quat_directions()
    print("Testing directions in euler to quat conversions")
    log.tic()
    -- step = 25
@@ -256,7 +255,7 @@ function euler_to_quat_directions()
    printf(" - Failed %d/%d tests in %2.4fs", e, 8*3*n_angles, log.toc())
 end
 
-function to_from_axis_angle()
+function tests.to_from_axis_angle()
    sys.tic()
    print("Testing conversion to axis angle and back")
    local e = 0
@@ -291,13 +290,15 @@ function to_from_axis_angle()
                        e,n_test,max_err,sys.toc()))   
 end
 
-function all()
-   quaternion_from_to()
-   quaternion_to_rotation_matrix()
-   rotation_matrix_to_quaternion()
-   rotation_by_quat()
-   quat_product()
-   quat_from_to_euler()
-   euler_to_quat_directions()
-   to_from_axis_angle()
-end
+-- function tests.all()
+--    quaternion_from_to()
+--    testsquaternion_to_rotation_matrix()
+--    rotation_matrix_to_quaternion()
+--    rotation_by_quat()
+--    quat_product()
+--    quat_from_to_euler()
+--    euler_to_quat_directions()
+--    to_from_axis_angle()
+-- end
+
+return tests

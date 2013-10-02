@@ -41,7 +41,7 @@ function remap(img, offset, mask, out_image)
 
    local n_slices     = img:size(1)
 
-   if (n_slices > 3) then 
+   if (n_slices > 4) then 
       print("Warning treating image as a single channel")
       n_slices = 1
       img = img:reshape(util.util.add_slices(1,img:size()))

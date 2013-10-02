@@ -2,44 +2,41 @@ if (not tree) then
    error("you need to build the tree first")
 end
 pi = math.pi
-camera_width  = 1024 -- 512 -- 2048 -- 
-camera_height = 512 -- 256 -- 1024 -- 
-n_shots = 3
+pi2 = pi/2
+aspect_ratio  = 3/4
+camera_width  = 1024  
+camera_height = camera_width * aspect_ratio
+n_shots = 50
 
-camera_hfov   = 2*pi
-camera_vfov   = camera_hfov/2
+camera_hfov   = pi/2 
+camera_vfov   = camera_hfov * aspect_ratio
 
--- forward_vector = torch.Tensor({0,1,0})
-max_range = 50
+max_range     = 50
 
 axes = torch.eye(3)
+forward_vector = axes[2]
 
-for c = 1, #camera_poses -1 do
+proj     = projection.GnomonicProjection.new(camera_width,camera_height,camera_hfov,camera_vfov)
+angles   = geom.util.projection_to_spherical_angles(proj:angles_map())
+dirs     = geom.util.spherical_angles_to_unit_cartesian(angles)
 
-   camera_pose = camera_poses[c]
-   camera_delta = camera_poses[c+1] - camera_pose
-   direction_vector = geom.util.normalize(camera_delta)
-   camera_delta:mul(1/(camera_delta:norm()*(n_shots + 1)))
+rotation = geom.util.normalize(geom.quaternion.from_euler_angle(torch.Tensor({0,-pi2}))):squeeze()
+dirs     = geom.util.normalize(geom.quaternion.rotate(rotation,dirs),1)
 
-   -- rotation to move direction to forward
-   -- rotation = geom.quaternion.angle_between(direction_vector, forward_vector)
+camera_pose      = camera_poses[1]
+camera_delta     = camera_poses[#camera_poses] - camera_pose
+direction_vector = geom.util.normalize(camera_delta)
+camera_delta:mul(1/n_shots)
 
-   proj = projection.SphericalProjection.new(camera_width,camera_height,camera_hfov,camera_vfov)
+for s = 1,n_shots do
 
-   for s = 1,n_shots do
-
-      _G.angles = proj:angles_map()
-
-      dirs = geom.util.spherical_angles_to_unit_cartesian(angles)
-      
-      frame = tree:ray_trace(camera_pose, dirs, max_range)
-
-      -- image.display(frame)
-      fname = fname or "frame"
-      image.save(string.format("%s_%03d.%02d.png", fname, c, s), frame)
-
-      -- next
-      camera_pose:add(camera_delta)
-      collectgarbage()
-   end
+   frame = tree:ray_trace(camera_pose, dirs, max_range)
+   
+   -- image.display(frame)
+   fname = fname or "frame"
+   image.save(string.format("%s_%05d.png", fname, s), frame)
+   -- next
+   camera_pose:add(camera_delta)
+   collectgarbage()
 end
+

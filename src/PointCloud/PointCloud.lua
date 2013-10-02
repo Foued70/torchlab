@@ -51,11 +51,21 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
    self.points = nil;
    self.rgb = nil;
    self.count = 0;
-   self.centroid = torch.Tensor({{0,0,0}});
-   if (not radius) then
-      --default radius prune
-      radius = 25
+   self.centroid   = torch.Tensor({{0,0,0}});
+   local radius_near_far
+
+   if radius then 
+      if type(radius) == "number" then 
+         radius_near_far = torch.zeros(2)
+         radius_near_far[2] = radius
+      else
+         radius_near_far = radius
+      end
+   else
+      radius_near_far = torch.zeros(2)
+      radius_near_far[2] = 25
    end
+
    if (not numstd) then
       --default number of standard dev prune
       numstd = 3
@@ -65,7 +75,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
       if util.fs.is_file(pcfilename) then
         print('loading '..path.basename(pcfilename))
          if util.fs.extname(pcfilename)==PointCloud.PC_ASCII_EXTENSION then
-            self:set_pc_ascii_file(pcfilename, radius, numstd, option)
+            self:set_pc_ascii_file(pcfilename, radius_near_far, numstd, option)
          elseif util.fs.extname(pcfilename)==PointCloud.PC_OD_EXTENSION then
             local loaded = torch.load(pcfilename)
             self.format = loaded[1]
@@ -121,9 +131,7 @@ end
 
 function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 
-   local rad2d = math.sqrt(math.pow(radius,2)*2/2.25)
-
-   --first pass to see what type of file it is, whether it has 6 columns, or 8 (h/w first)
+   --first pass to see what type of file it is, whether it has 3, 6 columns, or 8 (h/w first)
    
    fix_newline.fix_newline(pcfilename)
    
@@ -182,7 +190,9 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       b = xyzrgbTensor:select(2,6+offset)
    end
 
-   local indexGood = torch.lt((torch.cmul(x,x)+torch.cmul(y,y)):sqrt(), rad2d)
+   local radius2d  = torch.cmul(x,x):add(torch.cmul(y,y)):sqrt()
+   local indexGood = torch.lt(radius2d, radius[2]):mul(torch.gt(radius2d, radius[1]))
+
    if(self.format==1) then
       self.height = h[indexGood]:max()
       self.width = w[indexGood]:max()
@@ -196,34 +206,39 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    local perc = 0.75
 
    print("pass 1: count: "..self.count..", height: "..self.height..", width: "..self.width);
-   print("radius: "..radius..", stdrd: "..(stdrd*numstd))
+   print("radius: ("..radius[1]..","..radius[2]..") stdrd: "..(stdrd*numstd))
 
-   if (perc*radius) > (stdrd * numstd) then
-         --only run this if stdrd significantly smaller
-         radius = stdrd * numstd
-         print("make second pass with new radius: "..radius)
-
-         local allXYZ = xyzrgbTensor[{{},{1+offset,3+offset}}]
-         local distanceTensor = (allXYZ-self.centroid:repeatTensor(allXYZ:size(1),1)):pow(2):sum(2):sqrt()     
-         indexGood = torch.lt(distanceTensor, radius)
-         if(self.format==1) then
-            self.height = h[indexGood]:max()
-            self.width = w[indexGood]:max()
-         end
-         self.points = torch.cat(torch.cat(x[indexGood],y[indexGood],2),z[indexGood],2)
-         self.count = self.points:size(1)
-         local meanz = z[indexGood]:sum()/(z[indexGood]:size(1)+.000001)
-         self.centroid = torch.Tensor({{0, 0, meanz}})
+   -- TODO add check if original radius is too small ?
+   if (perc*radius[2]) > (stdrd * numstd) then
+      --only run this if stdrd significantly smaller
+      radius[2] = stdrd * numstd
+      print("make second pass with new radius: "..radius[2])
+      
+      local allXYZ = xyzrgbTensor[{{},{1+offset,3+offset}}]
+      local distanceTensor = (allXYZ-self.centroid:repeatTensor(allXYZ:size(1),1)):pow(2):sum(2):sqrt()     
+      indexGood = torch.lt(distanceTensor, radius[2]):mul(torch.gt(distanceTensor, radius[1]))
+      
+      if (self.format==1) then
+         self.height = h[indexGood]:max()
+         self.width = w[indexGood]:max()
+      end
+      self.points = torch.cat(torch.cat(x[indexGood],y[indexGood],2),z[indexGood],2)
+      self.count = self.points:size(1)
+      local meanz = z[indexGood]:sum()/(z[indexGood]:size(1)+.000001)
+      self.centroid = torch.Tensor({{0, 0, meanz}})
    end
 
    if r and g and b then 
       self.rgb = torch.cat(torch.cat(r[indexGood],g[indexGood],2),b[indexGood],2):byte()
    end
-   if self.format == 1 then
+
+   if(self.format==1) then
       self.hwindices = torch.cat(h[indexGood],w[indexGood],2):short()
    end
+
    collectgarbage()
    
+   -- drop insignificant digits.
    self.points = self.points:mul(PointCloud.fudge_number):floor():div(PointCloud.fudge_number)
 
    self:reset_point_stats()

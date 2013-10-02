@@ -1,8 +1,8 @@
-local libgm  = require '../image/libgm'
-local ffi    = require 'ffi'
-local ctorch = util.ctorch
+libgm  = require '../image/libgm'
+ffi    = require 'ffi'
+ctorch = util.ctorch
 
-local Wand = Class()
+Wand = Class()
 
 -- TODO: add info function for reading exif information.
 -- TODO: return call function to chain commands.
@@ -49,7 +49,7 @@ function Wand:load(path, width, height)
    end
 
    -- Load image:
-   local status = libgm.MagickReadImage(self.wand, path)
+   status = libgm.MagickReadImage(self.wand, path)
    
    -- Error?
    if status == 0 then
@@ -76,7 +76,7 @@ function Wand:save(path, quality)
    libgm.MagickSetCompressionQuality(self.wand, quality) 
 
    -- Save:
-   local status = libgm.MagickWriteImage(self.wand, path)
+   status = libgm.MagickWriteImage(self.wand, path)
    
    -- Error?
    if status == 0 then
@@ -92,13 +92,13 @@ function Wand:size(width,height,filter)
    -- Set or get:
    if width or height then
       -- Get filter:
-      local filter = libgm[(filter or 'Cubic') .. 'Filter']
+      filter = libgm[(filter or 'Cubic') .. 'Filter']
 
       -- Bounding box?
       if not height then
          -- in this case, the image must fit in a widthxwidth box:
-         local box = width
-         local cwidth,cheight = self:size()
+         box = width
+         cwidth,cheight = self:size()
          if cwidth > cheight then
             width = box
             height = box * cheight/cwidth
@@ -111,8 +111,8 @@ function Wand:size(width,height,filter)
       -- Min box?
       if not width then
          -- in this case, the image must cover a heightxheight box:
-         local box = height
-         local cwidth,cheight = self:size()
+         box = height
+         cwidth,cheight = self:size()
          if cwidth < cheight then
             width = box
             height = box * cheight/cwidth
@@ -123,7 +123,7 @@ function Wand:size(width,height,filter)
       end
 
       -- Set dimensions:
-      local status = libgm.MagickResizeImage(self.wand, width, height, filter, 1.0)
+      status = libgm.MagickResizeImage(self.wand, width, height, filter, 1.0)
 
       -- Error?
       if status == 0 then
@@ -151,10 +151,40 @@ function Wand:depth(depth)
       return self
    else
       -- Get depth:
-      local depth = libgm.MagickGetImageDepth(self.wand)
+      return libgm.MagickGetImageDepth(self.wand) 
    end
-   --
-   return depth 
+end
+
+-- Type:
+function Wand:imagetype(type)
+   -- Set or get:
+   if type then
+      -- Set type:
+      libgm.MagickSetImageType(self.wand, imagetypes[type])
+
+      -- return self
+      return self
+   else
+      -- Get type:
+      return imagetypes[tonumber(libgm.MagickGetImageType(self.wand))]
+   end
+end
+
+-- Saved image Type:
+function Wand:savedimagetype(type)
+   -- Set or get:
+   if type then
+      type = imagetypes[type]
+ 
+      -- Set type:
+      libgm.MagickSetImageSavedType(self.wand, type)
+
+      -- return self
+      return self
+   else
+      -- Get type:
+      return imagetypes[tonumber(libgm.MagickGetImageSavedType(self.wand))]
+   end
 end
 
 -- Format:
@@ -174,7 +204,7 @@ function Wand:format(format)
 end
 
 -- Colorspaces available:
-local colorspaces = {
+colorspaces = {
    [0] = 'Undefined',
    'RGB',
    'GRAY',
@@ -197,9 +227,35 @@ local colorspaces = {
    'Rec709YCbCr'
 }
 
+for i = 0,#colorspaces do 
+   colorspaces[colorspaces[i]] = i
+end
+
 -- Colorspaces:
-function Wand:colorspaces()
+function Wand:show_colorspaces()
    return colorspaces
+end
+
+imagetypes = {
+   [0] = 'UndefinedType',
+   'BilevelType',
+   'GrayscaleType',
+   'GrayscaleMatteType',
+   'PaletteType',
+   'PaletteMatteType',
+   'TrueColorType',
+   'TrueColorMatteType',
+   'ColorSeparationType',
+   'ColorSeparationMatteType',
+   'OptimizeType'
+}
+
+for i = 0,#imagetypes do 
+   imagetypes[imagetypes[i]] = i
+end
+
+function Wand:show_imagetypes()
+   return imagetypes
 end
 
 -- Colorspace:
@@ -372,6 +428,9 @@ function Wand:fromTensor(tensor, colorspace, dims)
    local ndim = tensor:nDimension()
    local height,width,depth
    if ndim == 3 then 
+      if not dims and tensor:size(1) <= 5 then
+         dims = "DHW"
+      end
       if dims == 'DHW' then
          depth,height,width= tensor:size(1),tensor:size(2),tensor:size(3)
          tensor = tensor:transpose(1,3):transpose(1,2)
@@ -386,7 +445,7 @@ function Wand:fromTensor(tensor, colorspace, dims)
    
    -- Force contiguous:
    tensor = tensor:contiguous()
-   
+   colorspace = colorspace
    -- Color space:
    if not colorspace then
       if depth == 1 then
@@ -423,6 +482,13 @@ function Wand:fromTensor(tensor, colorspace, dims)
    -- Resize image:
    self:load('xc:black')
    self:size(width,height)
+
+   -- TODO check if we need something similar to save grayscale or other.
+   -- It seems that we need to set this before setting 
+   if (#colorspace == 4) then 
+      -- make sure we get the right type or alpha won't be saved
+      self:imagetype("TrueColorMatteType")
+   end
 
    -- Export:
    libgm.MagickSetImagePixels(self.wand, 

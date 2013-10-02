@@ -8,59 +8,59 @@ ffi  = require 'ffi'
 
 ffi.cdef [[
 // ------------
-//   opaque pointer (not visible from Lua interface)
+//   functions on the OcTree
+//   uses an opaque pointer (not visible from Lua interface)
 // ------------
 typedef struct OcTree OcTree;
-typedef struct ColorOcTree ColorOcTree;
+OcTree*        OcTree_new (double resolution);
+void           OcTree_destroy(OcTree* tree);
+bool           OcTree_write(OcTree* tree, const char* filename);
+bool           OcTree_read(OcTree* tree, const char* filename);
 
-// ------------
-//   functions on the OcTree
-// ------------
-OcTree*         OcTree_new (double resolution);
-void            OcTree_destroy(OcTree* tree);
-bool            OcTree_write(OcTree* tree, const char* filename);
-bool            OcTree_read(OcTree* tree, const char* filename);
-
-void            OcTree_add_sweep(OcTree* tree, 
+void           OcTree_add_sweep(OcTree* tree, 
                                  THDoubleTensor* points, THDoubleTensor* origin, double max_range);
 
-THDoubleTensor* OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points);
-THDoubleTensor* OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points);
-THDoubleTensor* OcTree_getThresholds(OcTree* tree, THDoubleTensor* occupancy);
+long           OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points);
+long           OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points);
+long           OcTree_getThresholds(OcTree* tree, THDoubleTensor* occupancy);
 
-void            OcTree_outputStatistics(const OcTree* tree);
-void            OcTree_getInfo(const OcTree* tree);
+void           OcTree_outputStatistics(const OcTree* tree);
+void           OcTree_getInfo(const OcTree* tree);
+void           OcTree_getBBX(const OcTree* tree, THDoubleTensor* size);
 
 // ------------
 //   functions on the ColorOcTree
 // ------------
-ColorOcTree* ColorOcTree_new (double resolution);
-void         ColorOcTree_destroy(ColorOcTree* tree);
-bool         ColorOcTree_write(ColorOcTree* tree, const char* filename);
-bool         ColorOcTree_read(ColorOcTree* tree, const char* filename);
+typedef struct ColorOcTree ColorOcTree;
 
-void         ColorOcTree_add_sweep(ColorOcTree* tree, 
-                                   THDoubleTensor* points, THDoubleTensor* origin, double max_range,
-                                   THByteTensor* color, 
-                                   THDoubleTensor* cost);
+ColorOcTree*   ColorOcTree_new (double resolution);
+void           ColorOcTree_destroy(ColorOcTree* tree);
+bool           ColorOcTree_write(ColorOcTree* tree, const char* filename);
+bool           ColorOcTree_read(ColorOcTree* tree, const char* filename);
 
-// TODO make single version of these
-THDoubleTensor* ColorOcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);
-THDoubleTensor* ColorOcTree_getThresholds(ColorOcTree* tree, THDoubleTensor* occupancy);
+void           ColorOcTree_add_sweep(ColorOcTree* tree, 
+                                     THDoubleTensor* points, THDoubleTensor* origin, double max_range,
+                                     THByteTensor* color, 
+                                     THDoubleTensor* cost);
 
-THDoubleTensor* ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, THDoubleTensor* points, THByteTensor* rgb);
+long           ColorOcTree_EmptyCellstoTensor(ColorOcTree* tree, THDoubleTensor* points);
+long           ColorOcTree_getThresholds(ColorOcTree* tree, THDoubleTensor* occupancy);
 
-void         ColorOcTree_castRays(ColorOcTree* tree, 
-                                  THDoubleTensor* origin, THDoubleTensor* directions, double max_range, 
-                                  THByteTensor* rgb);
+long           ColorOcTree_OccupiedCellstoTensor(ColorOcTree* tree, 
+                                               THDoubleTensor* points, 
+                                               THByteTensor* rgb);
 
-void         ColorOcTree_get_color_for_xyz(ColorOcTree* tree, 
-                                           THDoubleTensor* points,
-                                           THByteTensor* rgb);
+void           ColorOcTree_castRays(ColorOcTree* tree, 
+                                    THDoubleTensor* origin, THDoubleTensor* directions, double max_range, 
+                                    THByteTensor* rgb);
 
-void         ColorOcTree_outputStatistics(const ColorOcTree* tree);
-void         ColorOcTree_getInfo(const ColorOcTree* tree);
+void           ColorOcTree_get_color_for_xyz(ColorOcTree* tree, 
+                                             THDoubleTensor* points,
+                                             THByteTensor* rgb);
 
+void           ColorOcTree_outputStatistics(const ColorOcTree* tree);
+void           ColorOcTree_getInfo(const ColorOcTree* tree);
+void           ColorOcTree_getBBX(const  ColorOcTree* tree, THDoubleTensor* size);
 
 ]]
 

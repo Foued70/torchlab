@@ -34,8 +34,10 @@ end
 
 function Tree:get_occupied()
    points = torch.Tensor()
-   octomap_ffi.OcTree_OccupiedCellstoTensor(self.tree,torch.cdata(points))
-   return points
+   if (octomap_ffi.OcTree_OccupiedCellstoTensor(self.tree,torch.cdata(points))) then 
+      return points
+   end
+   return nil
 end
 
 function Tree:get_empty()
@@ -60,7 +62,13 @@ function Tree:info()
    octomap_ffi.OcTree_getInfo(self.tree)
 end
 
-function Tree:writeObjPoints(filename)
+function Tree:bbx()
+   size = torch.Tensor()
+   octomap_ffi.OcTree_getBBX(self.tree, torch.cdata(size))
+   return size
+end
+
+function Tree:writePointsXYZ(filename)
    pts  = self:get_occupied()
    if not (pts:nDimension() == 2) then 
       print("error: no occupied points")
@@ -71,7 +79,7 @@ function Tree:writeObjPoints(filename)
       
       for i = 1,pts:size(1) do 
          pt = pts[i]      
-         objf:write(string.format("v %f %f %f\n",pt[1],pt[2],pt[3]))
+         objf:write(string.format("%4.4f %4.4f %4.4f\n",pt[1],pt[2],pt[3]))
       end
       objf:close()
    end

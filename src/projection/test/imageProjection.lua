@@ -8,7 +8,7 @@ cmd:text('Compute image projections')
 cmd:text()
 cmd:text('Options')
 cmd:option('-imagesdir', 'images/', 'directory with the images to load')
-cmd:option('-scale', '0.1', 'downsample ratio')
+cmd:option('-scale', '1', 'downsample ratio')
 cmd:text()
 
 -- parse input params
@@ -54,7 +54,5 @@ for i = 1,#images do
    printf(" - reproject %2.4fs %2.4es per px", time, time*perElement)
    log.tic()
 
-   img_scale = img_out:clone()
-   image.scale(img,img_scale)
-   image.display{image={img_scale,img_out}}
+   image.display{image={img_out}}
 end

@@ -77,10 +77,12 @@ _G.tree = octomap.ColorTree.new(res)
 log.trace(" - in ".. log.toc())
 
 camera_centers = {}
+_G.pclouds = {}
 for i,fname in pairs(pointclouds) do 
 
    printf("[%d] loading pointcloud %s",i,fname)
    pc = PointCloud.PointCloud.new(fname)
+   table.insert(pclouds, pc)
 
    if load_transforms then 
       trans_fname = transforms[i]
@@ -125,7 +127,7 @@ for i,fname in pairs(pointclouds) do
       end
    end
 
-   if params.doFrames and i > 1 then
+   if doInterimFrames and params.doFrames and i > 1 then
       start_n  = i-3
       if start_n < 1 then start_n = 1 end
       pc_start = path.basename(pointclouds[start_n]):gsub(".od","")

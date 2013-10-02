@@ -2,6 +2,47 @@ Class()
 local pi = math.pi
 local pi2 = math.pi*0.5
 
+-- takes a table of images and a table of the corresponding masks
+-- (binary visibility masks) and blends images into a single output
+-- image using the masks.
+function blend (images, masks)
+   img_size = images[1]:size()
+   usealpha = false
+   if not masks then
+      if img_size[1] == 4 then 
+         usealpha = true
+         allmask = images[1][4]:clone()
+      else
+         error("no alpha channel and no masks")
+      end
+   else
+      allmask = masks[1]:clone()
+   end
+   for i = 2,#masks do
+      if usealpha then 
+         allmask:add(images[i][4])
+      else
+         allmask:add(masks[i])
+      end
+   end
+   allmask:add(-(allmask:min()-1))
+
+   allmask = allmask:double():add(-allmask:max()):abs()
+   -- sum to 1
+   allmask = torch.cdiv(torch.ones(allmask:size()),allmask)
+
+   allmask[allmask:eq(math.huge)] = 0
+
+   allmask_size = allmask:size()
+   allmask:resize(util.util.add_slices(1,allmask_size))
+   allmask = allmask:expand(util.util.add_slices(3,allmask_size))
+
+   allimg = torch.cmul(images[1][{{1,3},{},{}}],allmask)
+   for i = 2,#images do
+      allimg:add(torch.cmul(images[i][{{1,3},{},{}}],allmask))
+   end
+   return allimg
+end
 
 function diagonal_to_height_width(diag,aspect_ratio)
    -- horizontal and diagonal fov's are useful for size of our lookup

@@ -1,13 +1,12 @@
-Class()
-
 local rot  = geom.rotation
 local quat = geom.quaternion
 local geom = geom.util
 
-data = require "geom.test.data"
+data = require "./data"
 
+tests = {}
 
-function rotation_by_quat()
+function tests.rotation_by_quat()
    print("Testing rotation with quaternion (C version)")
    local e      = 0
    local maxerr = 0
@@ -15,24 +14,42 @@ function rotation_by_quat()
    local nvecs  = vecs:size(1)
    local quats  = data.quat
    local nquats = quats:size(1)
-   local res    = torch.Tensor(nvecs*nquats,3)
+   local res    = torch.Tensor(3,nvecs*nquats)
    local groundt = data.result_rot_by_quat
    local i      = 1
    local offset = 1
+
+
+   print(" - testing DHW")
+   datavec = data.vec:t():contiguous()
+   dataquat = data.quat:t():contiguous()
+   log.tic()
+
+   rot.by_quaternion(res,dataquat,datavec)
+
+   local d = res - groundt:reshape(25,25,3):transpose(2,3)
+   local ce  = d:abs():max()
+   if (ce > maxerr) then maxerr = ce end
+   e = e + d:abs():gt(1e-3):sum()
+   print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
+                       e,res:nElement(),maxerr,log.toc()))
+   -- reset
+   e = 0;
+   maxerr = 0;
+   res = res:resize(nvecs*nquats,3):fill(0)
    log.tic()
 
    rot.by_quaternion(res,quats,vecs)
-
       
    local d = res - groundt
    local ce  = d:abs():max()
    if (ce > maxerr) then maxerr = ce end
    e = e + d:abs():gt(1e-3):sum()
    print(string.format(" - Found %d/%d errors (max: %e) in %2.4fs",
-                       e,res:size(1),maxerr,log.toc()))
+                       e,res:nElement(),maxerr,log.toc()))
 end
 
-function rotate_translate()
+function tests.rotate_translate()
    print("Testing rotation with quaternion then translation (C version)")
    local e      = 0
    local maxerr = 0
@@ -82,7 +99,7 @@ function rotate_translate()
 end
 
 
-function translate_rotate()
+function tests.translate_rotate()
    print("Testing translation then rotation with quaternion (C version)")
    local e      = 0
    local maxerr = 0
@@ -132,7 +149,7 @@ function translate_rotate()
                        e,res:size(1),maxerr,sys.toc()))
 end
 
-function rotation_by_mat()
+function tests.rotation_by_mat()
    print("Testing rotation w/ rotation matrix")
    local e = 0
    local maxerr = 0
@@ -158,7 +175,7 @@ function rotation_by_mat()
                        e,res:size(1),maxerr,log.toc()))
 end
 
-function z_rotation()
+function tests.z_rotation()
    print("Testing z-rotation")
    local e = 0
    local maxerr = 0
@@ -178,7 +195,7 @@ function z_rotation()
                        e,data.vec:size(1),maxerr,log.toc()))
 end
 
-function x_rotation()
+function tests.x_rotation()
    print("Testing x-rotation")
    local e = 0
    local maxerr = 0
@@ -198,7 +215,7 @@ function x_rotation()
                        e,data.vec:size(1),maxerr,log.toc()))
 end
 
-function y_rotation()
+function tests.y_rotation()
    print("Testing y-rotation")
    local e = 0
    local maxerr = 0
@@ -218,7 +235,7 @@ function y_rotation()
                        e,data.vec:size(1),maxerr,log.toc()))
 end
 
-function largest_rotation()
+function tests.largest_rotation()
    print("Testing largest rotation")
    local e = 0
    local maxerr = 0
@@ -238,16 +255,4 @@ function largest_rotation()
                        e,data.vec:size(1),maxerr,log.toc()))
 end
 
-
-function all()
-   rotation_by_mat()
-   rotation_by_quat()
-   rotate_translate()
-   translate_rotate() 
-   x_rotation()
-   y_rotation()
-   z_rotation()
-   largest_rotation()
-end
-
-
+return tests
