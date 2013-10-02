@@ -3,12 +3,13 @@ local pcl = PointCloud.PointCloud
 local scan = align_floors_endtoend.Scan
 local leafsize = 0.01
 
-local base_dir = '/Users/lihui815/cloudlab/build/usr/local/tmp/arcs/virtuous-walk-1066/work/a_02'
-local complete_loop = false
+--local base_dir = '/Users/lihui815/cloudlab/build/usr/local/tmp/arcs/virtuous-walk-1066/work/a_02'
+local base_dir = '/Users/lihui815/tmp2/Office'
+local complete_loop = true
 
 local aScan = scan.new(base_dir,complete_loop)
 
---aScan:load_and_save_all_sweeps()
+aScan:load_and_save_all_sweeps()
 aScan:find_forward_and_backward_transformations()
 
 --[[

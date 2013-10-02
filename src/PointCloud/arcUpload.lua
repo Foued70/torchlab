@@ -96,6 +96,21 @@ function arcUpload:uploadSourceXYZ(XYZdir)
 	collectgarbage()				
 end
 
+function arcUpload:save()
+
+	local arc = data.Arc.get(self.scanid, 
+					function(err,arc) 
+						if err then
+							print('logging error')
+							log.error(err)
+						end
+						print('saving arc')
+						arc:save()
+					end)
+	collectgarbage()				
+	
+end
+
 function arcUpload:uploadODAndFlatFiles(version,scale)
 	if self.scanid then
 					

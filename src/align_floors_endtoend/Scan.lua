@@ -102,9 +102,13 @@ function Scan:find_forward_and_backward_transformations()
             	    end
             
                 	print('create new sweep pair')
-	                sweepPair_curr_to_nex = align_floors_endtoend.SweepPair.new(self.base_dir, sweepcur, sweepnex, i, forward)
+	                sweepPair_curr_to_nex = SweepPair.new(self.base_dir, sweepcur, sweepnex, i, forward)
     	            sweepPair_curr_to_nex :getAllTransformations()
         	        sweepPair_curr_to_nex:setInlierTransformation(1)
+        	        
+        	        print('saving stuff')
+        	        sweepcur:getPC():write(sweepcur.fod)
+        	        sweepnex:getPC():write(sweepnex.fod)
                 
             	    print()
                 
@@ -151,6 +155,7 @@ function Scan:find_forward_and_backward_transformations()
             
             sweepcur:transformIn3D()
             sweepcur:getPC():save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",bnamecur..'.xyz'))
+            sweepcur:getPC():write(sweepcur.fod)
             print()
 
         end
