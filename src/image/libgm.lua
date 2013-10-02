@@ -103,6 +103,22 @@ ffi.cdef
     Rec709YCbCrColorspace  /* YCbCr according to ITU-R 709 */
   } ColorspaceType;
 
+  // Image types (needed to save images in Grayscale or with Alpha Channel)
+  typedef enum
+  {
+    UndefinedType,
+    BilevelType,
+    GrayscaleType,
+    GrayscaleMatteType,
+    PaletteType, 
+    PaletteMatteType,
+    TrueColorType,
+    TrueColorMatteType,
+    ColorSeparationType,
+    ColorSeparationMatteType,
+    OptimizeType
+  } ImageType;
+
   // Global context:
   void MagickWandGenesis();
   void InitializeMagick();
@@ -175,6 +191,13 @@ ffi.cdef
    //  MagickEqualizeImage() equalizes the image histogram.
    unsigned int MagickEqualizeImage(MagickWand *wand);
 
+  // ImageType get and set. For saving Gray scale and Alpha channels
+  ImageType MagickGetImageType(MagickWand *);
+  ImageType MagickGetImageSavedType(MagickWand *);
+
+  unsigned int MagickSetImageType(MagickWand *,const ImageType);
+  unsigned int MagickSetImageSavedType(MagickWand *,const ImageType);
+  
 ]]
 
 -- Load lib:
