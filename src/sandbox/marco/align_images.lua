@@ -1,4 +1,6 @@
+path = require 'path'
 blend = projection.util.blend
+optimize = util.optimize.convex_binary_search
 
 Class()
 
@@ -25,12 +27,15 @@ cmd:text()
 params = cmd:parse(process.argv)
 
 imagesdir  = params.imagesdir
+outdir     = imagesdir 
+outfname   = params.outimage
+
 if not util.fs.is_dir(imagesdir) then
    error("Must set a valid path to directory of images to process default -imagesdir images/")
 end
 
 -- images are vertical
-vfov = (97/180) * pi
+vfov = 1.5290 -- (97/180) * pi
 hfov = (74.8/180) * pi
 
 force  = true
@@ -55,7 +60,7 @@ _G.width        = math.floor(w*scale)
 image_wand:size(width,height)
 print("image size:", image_wand:size())
 
-rad_per_pixel = hfov / (2*width)
+rad_per_pixel = hfov / (width + 1)
 
 -- load last image
 img_l = image_wand:toTensor('float',"RGB","DHW")
@@ -67,8 +72,8 @@ log.tic()
 mindist            = torch.Tensor(#image_files);
 mindist:fill(math.huge);
 precalc            = 2*pi/#image_files
-lambda_wiggle_base = hfov / 4 -- in radians (portion of precalc)
-phi_wiggle_base    = vfov / 10 -- in radians (portion of precalc)
+lambda_wiggle_base = hfov / 40 -- in radians (portion of precalc)
+phi_wiggle_base    = vfov / 40 -- in radians (portion of precalc)
 
 -- setup best first guess
 _G.best_delta = torch.Tensor(2,#image_files)
@@ -85,48 +90,21 @@ canvas_vfov   = vfov + 2 * phi_wiggle_base
 canvas_width  = width  * canvas_hfov/hfov
 canvas_height = height * canvas_vfov/vfov
 
-proj_to       = projection.SphericalProjection.new(canvas_width,canvas_height,canvas_hfov,canvas_vfov)
+canvas_proj_to = projection.SphericalProjection.new(canvas_width,canvas_height,canvas_hfov,canvas_vfov)
 
-rect_to_sphere = projection.Remap.new(proj_from,proj_to)
+canvas_rect_to_sphere = projection.Remap.new(proj_from,canvas_proj_to)
 
--- optimize <func()> with respect to <start_param>, and current best
--- result <best_result> by testing +,- <wiggle> and repeating binary
--- search by halving wiggle until wiggle is smaller that <stop>.
--- Arguments can be passed to <func()> with the args in {...}
-function optimize(wiggle,stop,start_param,best_result,func,...)
-   print("Optimizing")
-   count = 0
-   current_best_result = best_result
-   best_param          = start_param
-   while (wiggle >= stop) do 
-      log.tic()
-      for _,wig in pairs({ -wiggle,wiggle}) do
-         param = best_param + wig
-         test_val = func(param,...)
-         if test_val < current_best_result then
-            best_param          = param
-            current_best_result = test_val;
-            printf("new best found %2.4f %2.4f", best_param, current_best_result);
-         end
-      end
-      printf(" - [%d] wiggle %2.4f tested in %2.2fs param: %2.4f, score: %2.4f",
-             count,wiggle,log.toc()/1000, best_param, current_best_result)
-      wiggle = wiggle / 2
-      count = count + 1
-   end
-   return best_param, current_best_result
-end
 
 function compute_lambda_score(lambda,phi,image_right,mask_left,projected_image_left)
    proj_from:set_lambda_phi(lambda,phi)
-   _,_,mask_right = rect_to_sphere:get_offset_and_mask(force)
+   _,_,mask_right = canvas_rect_to_sphere:get_offset_and_mask(force)
             
    mask_right = mask_right:eq(0)
    overlap_mask = mask_right:cmul(mask_left)
             
    area = overlap_mask:sum();
             
-   projected_image_right = rect_to_sphere:remap(image_right)
+   projected_image_right = canvas_rect_to_sphere:remap(image_right)
             
    image_diff = projected_image_left - projected_image_right
             
@@ -148,10 +126,10 @@ function find_best_lambda(image_files,best_delta,wiggle,stop)
       collectgarbage()
       -- setup left image is at negative current best offset.
       proj_from:set_lambda_phi(-best_delta[1][i],best_delta[2][previ])
-      _,_,mask_left = rect_to_sphere:get_offset_and_mask(force)
+      _,_,mask_left = canvas_rect_to_sphere:get_offset_and_mask(force)
       mask_left = mask_left:eq(0);
 
-      projected_image_left = rect_to_sphere:remap(image_left)
+      projected_image_left = canvas_rect_to_sphere:remap(image_left)
 
       -- load right image and set size
       image_wand:load(image_files[i])
@@ -174,7 +152,7 @@ function find_best_lambda(image_files,best_delta,wiggle,stop)
 
       best_delta[1][i] = best_delta[1][i] + lambda_delta
       best_scores[i] = score;
-      printf("new best lambda found for %d: %2.4f %2.4f", i, best_delta[1][i], score);
+      printf(" - best lambda found for %d: %2.4f score: %2.4f", i, best_delta[1][i], score);
       
       image_left = image_right
       previ      = i
@@ -196,17 +174,17 @@ function compute_phi_score(current_phi, image_files, best_delta)
       lambda_left  = -best_delta[1][i]
       lambda_right = 0 
       proj_from:set_lambda_phi(lambda_left,current_phi)
-      _,_,mask_left = rect_to_sphere:get_offset_and_mask(force)
+      _,_,mask_left = canvas_rect_to_sphere:get_offset_and_mask(force)
       mask_left = mask_left:eq(0);
         
-      projected_image_left = rect_to_sphere:remap(image_left)
+      projected_image_left = canvas_rect_to_sphere:remap(image_left)
       image_wand:load(image_files[i])
       image_wand:size(width,height)
       image_right = image_wand:toTensor('float',"RGB","DHW")
             
       proj_from:set_lambda_phi(lambda_right,current_phi)
-      _,_,mask_right = rect_to_sphere:get_offset_and_mask(force)
-      projected_image_right = rect_to_sphere:remap(image_right)
+      _,_,mask_right = canvas_rect_to_sphere:get_offset_and_mask(force)
+      projected_image_right = canvas_rect_to_sphere:remap(image_right)
                         
       mask_right = mask_right:eq(0)
       overlap_mask = mask_right:cmul(mask_left)
@@ -226,7 +204,6 @@ function compute_phi_score(current_phi, image_files, best_delta)
    return score
 end
 
-
 function find_best_phi(image_files, best_delta, wiggle, stop, current_phi,current_best_score)
    wiggle      = wiggle or phi_wiggle_base
    stop        = stop or rad_per_pixel
@@ -245,14 +222,21 @@ function find_best_phi(image_files, best_delta, wiggle, stop, current_phi,curren
       current_best_score = score
    end
    best_delta[2]:fill(best_phi)
-   printf("new best phi found %2.4f %2.4f", best_phi, current_best_score);
+   printf(" - best phi found %2.4f %2.4f", best_phi, current_best_score);
    return best_phi, current_best_score
 end
 
 function compute_vfov_score(current_vfov, image_files, best_delta)
 
-   proj_from = 
+   test_proj_from = 
       projection.GnomonicProjection.new(width,height,hfov,current_vfov)
+   
+   test_rect_to_sphere = projection.Remap.new(test_proj_from,canvas_proj_to)
+
+   printf(" -     projection_from: hfov: %2.4f vfov: %2.4f",
+          test_rect_to_sphere.projection_from.hfov,
+          test_rect_to_sphere.projection_from.vfov)
+
 
    score = 0
    image_wand:load(image_files[#image_files])
@@ -266,18 +250,18 @@ function compute_vfov_score(current_vfov, image_files, best_delta)
       lambda_right = 0 
       phi_right    = best_delta[2][i]
 
-      proj_from:set_lambda_phi(lambda_left,phi_left)
-      _,_,mask_left = rect_to_sphere:get_offset_and_mask(force)
+      test_proj_from:set_lambda_phi(lambda_left,phi_left)
+      _,_,mask_left = test_rect_to_sphere:get_offset_and_mask(force)
       mask_left = mask_left:eq(0);
         
-      projected_image_left = rect_to_sphere:remap(image_left)
+      projected_image_left = test_rect_to_sphere:remap(image_left)
       image_wand:load(image_files[i])
       image_wand:size(width,height)
       image_right = image_wand:toTensor('float',"RGB","DHW")
             
-      proj_from:set_lambda_phi(lambda_right,phi_right)
-      _,_,mask_right = rect_to_sphere:get_offset_and_mask(force)
-      projected_image_right = rect_to_sphere:remap(image_right)
+      test_proj_from:set_lambda_phi(lambda_right,phi_right)
+      _,_,mask_right = test_rect_to_sphere:get_offset_and_mask(force)
+      projected_image_right = test_rect_to_sphere:remap(image_right)
                         
       mask_right   = mask_right:eq(0)
       overlap_mask = mask_right:cmul(mask_left)
@@ -320,15 +304,109 @@ function find_best_vfov(image_files, best_delta, wiggle, stop, current_vfov,curr
    printf("new best vfov found %2.4f %2.4f", best_vfov, current_best_score);
    return best_vfov, current_best_score
 end
+
+function compute_hfov_score(current_hfov, image_files, best_delta)
+
+   -- TODO this is the only difference between compute_hfov and vfov,
+   -- perhaps the projection itself should be the parameter to a
+   -- compute_projection_score ?
+   test_proj_from = 
+      projection.GnomonicProjection.new(width,height,current_hfov,vfov)
+   
+   test_rect_to_sphere = projection.Remap.new(test_proj_from,canvas_proj_to)
+
+   printf(" -     projection_from: hfov: %2.4f vfov: %2.4f",
+          test_rect_to_sphere.projection_from.hfov,
+          test_rect_to_sphere.projection_from.vfov)
+
+   score = 0
+   image_wand:load(image_files[#image_files])
+   image_wand:size(width,height)
+   image_left = image_wand:toTensor('float',"RGB","DHW")
+   previ = #image_files
+   for i = 1,#image_files do
+      collectgarbage()
+      lambda_left  = -best_delta[1][i]
+      phi_left     = best_delta[2][previ]
+      lambda_right = 0 
+      phi_right    = best_delta[2][i]
+
+      test_proj_from:set_lambda_phi(lambda_left,phi_left)
+      _,_,mask_left = test_rect_to_sphere:get_offset_and_mask(force)
+      mask_left = mask_left:eq(0);
+        
+      projected_image_left = test_rect_to_sphere:remap(image_left)
+      image_wand:load(image_files[i])
+      image_wand:size(width,height)
+      image_right = image_wand:toTensor('float',"RGB","DHW")
+            
+      test_proj_from:set_lambda_phi(lambda_right,phi_right)
+      _,_,mask_right = test_rect_to_sphere:get_offset_and_mask(force)
+      projected_image_right = test_rect_to_sphere:remap(image_right)
+                        
+      mask_right   = mask_right:eq(0)
+      overlap_mask = mask_right:cmul(mask_left)
+      area         = overlap_mask:sum()
+
+      image_diff = projected_image_left - projected_image_right
+            
+      image_dist = 
+         image_diff:abs():sum(1):squeeze():cmul(overlap_mask:float())
+      if area <= 0 then
+         print("Warning no overlap this should not happen")
+      else
+         score = score + image_dist:sum()/area;
+      end
+      image_left = image_right
+      mask_left  = mask_right
+   end
+   return score
+end
+
+function find_best_hfov(image_files, best_delta, wiggle, stop, current_hfov,current_best_score)
+   wiggle       = wiggle or phi_wiggle_base
+   stop         = stop or rad_per_pixel
+   current_hfov = current_hfov or hfov
+   best_hfov    = current_hfov
+   current_best_score = current_best_score or 
+      compute_hfov_score(current_hfov,image_files,best_delta)
+   printf("Adjusting hfov: %f",current_hfov)
+   test_hfov, score = 
+      optimize(wiggle,stop,
+               current_hfov,current_best_score,
+               compute_hfov_score,
+               image_files,best_delta)
+   
+   if score < current_best_score then
+      best_hfov = test_hfov
+      current_best_score = score
+   end
+   
+   printf("new best hfov found %2.4f %2.4f", best_hfov, current_best_score);
+   return best_hfov, current_best_score
+end
    
 find_best_lambda(image_files, best_delta, lambda_wiggle_base, rad_per_pixel)
 best_score = best_scores:sum()
-print(best_scores)
 printf("current best_score: %f", best_score)
+
 best_phi, best_score = find_best_phi(image_files, best_delta, phi_wiggle_base, rad_per_pixel, 0, best_score)
 printf("current best_score: %f", best_score)
-best_vfov, best_score = find_best_vfov(image_files, best_delta, vfov*0.05, rad_per_pixel, vfov, best_score)
-printf("current best_score: %f", best_score)
+
+-- best_vfov, best_score = find_best_vfov(image_files, best_delta, vfov*0.05, rad_per_pixel, vfov, best_score)
+-- printf("current best_score: %f", best_score)
+-- proj_from:set_vfov(best_vfov)
+-- vfov = best_vfov
+
+-- best_hfov, best_score = find_best_hfov(image_files, best_delta, hfov*0.05, rad_per_pixel, hfov, best_score)
+-- printf("current best_score: %f", best_score)
+-- proj_from:set_hfov(best_hfov)
+-- hfov = best_hfov
+
+-- find_best_lambda(image_files, best_delta, 2*rad_per_pixel, rad_per_pixel)
+-- best_score = best_scores:sum()
+-- print(best_scores)
+-- printf("current best_score: %f", best_score)
 
 -- display
 _G.mapped_image_files = {}
@@ -341,7 +419,7 @@ out_vfov   = vfov + 0.1 * vfov
 out_height = height
 out_width  = out_height * out_hfov / out_vfov
 
-proj_from = projection.GnomonicProjection.new(width,height,hfov,best_vfov)
+-- proj_from = projection.GnomonicProjection.new(width,height,hfov,best_vfov)
 proj_to   = projection.SphericalProjection.new(out_width,out_height,out_hfov,out_vfov)
 
 rect_to_sphere = projection.Remap.new(proj_from,proj_to)
@@ -384,10 +462,11 @@ allimg = blend(mapped_image_files, masks)
 
 image.display(allimg)
 
-printf("saving %s", params.outimage)
-image.save(params.outimage, allimg)
+
+printf("saving %s", outdir.."/"..outfname)
+image.save(string.format("%s/%s",outdir,outfname), allimg)
 
 if (params.enblend) then
-   os.execute(string.format("enblend %s -o enblend_%s", out_fnames, params.outimage))
+   os.execute(string.format("enblend %s -o %s/enblend_%s", out_fnames, outdir, outfname))
    os.execute(string.format("rm %s", out_fnames))
 end
