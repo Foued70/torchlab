@@ -12,9 +12,14 @@ function SphericalProjection:__init(width, height,
                    hfov, vfov, 
                    pixel_center_x, pixel_center_y)
 
-  -- How to get to normalized coordinates in this case just radians per pixel
-  self.units_per_pixel_x = self.hfov/self.width
-  self.units_per_pixel_y = self.vfov/self.height
+end
+
+function SphericalProjection:units_per_pixel_y()
+   return self.vfov/self.height
+end
+
+function SphericalProjection:units_per_pixel_x()
+   return self.hfov/self.width
 end
 
 -- override the angles_map

@@ -20,12 +20,17 @@ function StereographicProjection:__init(width, height,
                     hfov, vfov,
                     pixel_center_x, pixel_center_y)
    
-   -- How to get to normalized coordinates
-   self.units_per_pixel_x = math.tan(self.hfov*0.5)/width
-   self.units_per_pixel_y = math.tan(self.vfov*0.5)/height
       
    self:set_lambda_phi(lambda, phi)
 
+end
+
+function StereographicProjection:units_per_pixel_y()
+   return math.tan(self.vfov*0.5)/self.height
+end
+
+function StereographicProjection:units_per_pixel_x()
+   return math.tan(self.hfov*0.5)/self.width
 end
 
 function StereographicProjection:set_lambda_phi(lambda,phi)
@@ -37,8 +42,8 @@ function StereographicProjection:set_lambda_phi(lambda,phi)
    -- make sure that the tangent point is expressed betwee -pi and pi
    projection.util.recenter_angles(self.tangent_point)
    
-   self.phi1             = self.tangent_point[1]
-   self.lambda0          = self.tangent_point[2]
+   self.phi1        = self.tangent_point[1]
+   self.lambda0     = self.tangent_point[2]
 
    self.sin_lambda0 = math.sin(self.lambda0)
    self.cos_lambda0 = math.cos(self.lambda0)

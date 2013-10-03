@@ -12,10 +12,14 @@ function RectilinearProjection:__init(width, height,
                     hfov, vfov,
                     pixel_center_x, pixel_center_y)
 
-   -- How to get to normalized coordinates
-   self.units_per_pixel_y = math.tan(self.vfov*0.5)/self.center[1]
-   self.units_per_pixel_x = math.tan(self.hfov*0.5)/self.center[2]
+end
 
+function RectilinearProjection:units_per_pixel_y()
+   return math.tan(self.vfov*0.5)/self.center[1]
+end
+
+function RectilinearProjection:units_per_pixel_x()
+   return math.tan(self.hfov*0.5)/self.center[2]
 end
 
 

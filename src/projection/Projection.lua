@@ -16,15 +16,28 @@ function Projection:__init(width, height, hfov, vfov, pixel_center_x, pixel_cent
 
    self.center = {pixel_center_y, pixel_center_x}
 
-   -- every projection must implement these
-   self.units_per_pixel_x = nil
-   self.units_per_pixel_y = nil
-
 end
-   
+
+function Projection:set_hfov(hfov)
+   self.hfov = hfov
+end
+
+function Projection:set_vfov(vfov)
+   self.vfov = vfov
+end
+
 -- every projection must implement these low level functions.  they
 -- are instance functions because some projections (such as the
 -- calibrated ones) need access to instance variables
+
+function Projection:units_per_pixel_y()
+   error("Not implemented")
+end
+
+function Projection:units_per_pixel_x()
+   error("Not implemented")
+end
+
 function Projection:normalized_coords_to_angles(normalized_coords, angles)
    error("Not implemented")
 
@@ -48,8 +61,11 @@ function Projection:pixels_to_angles(pixels, angles)
    
    -- move 0,0 to the center
    -- convert to unit sphere coords
-   normalized_coords[1]:add(-self.center[1]):mul(self.units_per_pixel_y)
-   normalized_coords[2]:add(-self.center[2]):mul(self.units_per_pixel_x)
+   units_per_px_y = self:units_per_pixel_y()
+   units_per_px_x = self:units_per_pixel_x()
+
+   normalized_coords[1]:add(-self.center[1]):mul(units_per_px_y)
+   normalized_coords[2]:add(-self.center[2]):mul(units_per_px_x)
 
    -- convert unit sphere projection normalized_coords to angles
    self:normalized_coords_to_angles(normalized_coords,angles)
@@ -77,8 +93,11 @@ function Projection:angles_to_pixels(angles, pixels)
 
    -- convert from unit sphere coords to pixels
    -- move 0,0 to the upper left corner
-   pixels[1]:mul(1/self.units_per_pixel_y):add(self.center[1])
-   pixels[2]:mul(1/self.units_per_pixel_x):add(self.center[2])
+   units_per_px_y = self:units_per_pixel_y()
+   units_per_px_x = self:units_per_pixel_x()
+
+   pixels[1]:mul(1/units_per_px_y):add(self.center[1])
+   pixels[2]:mul(1/units_per_px_x):add(self.center[2])
 
    return pixels
 end

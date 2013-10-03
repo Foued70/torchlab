@@ -1,4 +1,4 @@
-local GnomonicProjection = Class(projection.Projection)
+local GnomonicProjection = Class(projection.RectilinearProjection)
 
 -- CAREFUL: The Projection class stores the indexes for x and y in the
 -- same height,width order as the underlying torch.Tensors()
@@ -23,12 +23,6 @@ function GnomonicProjection:__init(width, height,
                     width, height,
                     hfov, vfov,
                     pixel_center_x, pixel_center_y)
-
-   -- How to get to normalized coordinates
-
-   self.units_per_pixel_y = math.tan(self.vfov*0.5)/self.center[1]
-   self.units_per_pixel_x = math.tan(self.hfov*0.5)/self.center[2]
-
    
    self:set_lambda_phi(lambda,phi)
 
@@ -44,8 +38,8 @@ function GnomonicProjection:set_lambda_phi(lambda,phi)
    projection.util.recenter_angles(self.tangent_point)
 
    
-   self.phi1             = self.tangent_point[1]
-   self.lambda0          = self.tangent_point[2]
+   self.phi1        = self.tangent_point[1]
+   self.lambda0     = self.tangent_point[2]
 
    self.sin_lambda0 = math.sin(self.lambda0)
    self.cos_lambda0 = math.cos(self.lambda0)
