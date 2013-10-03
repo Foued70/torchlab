@@ -128,7 +128,7 @@ function Projection:pixels_to_offset_and_mask(pixels, offset, mask)
    
    -- make mask for out of bounds values
    mask = util.addr.mask_out_of_bounds(pixels,dims,nil,mask)
-   log.tracef("Masking %d/%d pixel locations (out of bounds)", mask:sum(),mask:nElement())
+   -- log.tracef("Masking %d/%d pixel locations (out of bounds)", mask:sum(),mask:nElement())
 
    stride    = dims
    stride[1] = self.width
