@@ -335,6 +335,7 @@ function Sweep:flattenAndCorners(global,forward)
             self.corners = corners
             self.flattenedxy = flattenedxy
             self.flattenedv = flattenedv
+            p:write(self.fod)
         end
     end
     collectgarbage()
