@@ -30,6 +30,13 @@ function _G.printf (...)
    print(string.format(...))
 end
 
+function string.split (s)
+   t = {}
+   for i in string.gmatch(s, "%S+") do
+      table.insert(t,i)
+   end
+   return t
+end
 
 local d = net.Depot
 
