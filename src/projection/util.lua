@@ -29,7 +29,6 @@ function blend (images, masks)
 
    allmask = allmask:typeAs(images[1]):add(-allmask:max()):abs()
    -- sum to 1
-   print(allmask)
    allmask = allmask:clone():fill(1):cdiv(allmask)
 
    allmask[allmask:eq(math.huge)] = 0
