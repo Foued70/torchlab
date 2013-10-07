@@ -7,6 +7,7 @@ function convex_binary_search(wiggle,stop,start_param,best_result,func,...)
    print("Optimizing")
    count = 0
    current_best_result = best_result
+   best_vals           = nil
    best_param          = start_param
    while (wiggle >= stop) do 
       printf(" - [%d] testing wiggle %2.4f (>%2.4f) window (%2.4f,%2.4f) around %2.4f",
@@ -14,10 +15,11 @@ function convex_binary_search(wiggle,stop,start_param,best_result,func,...)
       log.tic()
       for _,wig in pairs({ -wiggle,wiggle}) do
          param = best_param + wig
-         test_val = func(param,...)
+         test_val,vals = func(param,...)
          if test_val < current_best_result then
             best_param          = param
             current_best_result = test_val;
+            best_vals           = vals
             printf(" -     new best found %2.4f %2.4f", best_param, current_best_result);
          end
       end
@@ -26,5 +28,5 @@ function convex_binary_search(wiggle,stop,start_param,best_result,func,...)
       wiggle = wiggle / 2
       count = count + 1
    end
-   return best_param, current_best_result
+   return best_param, current_best_result, best_vals
 end

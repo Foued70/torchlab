@@ -38,7 +38,7 @@ function SweepImageAligner:__init(imagePathOrData)
    vfov         = 1.5290 
    hfov         = (74.8/180) * pi
 
-   scale        = 0.2
+   scale        = 0.1
    store_images = false
    image_wand   = image.Wand.new()
 
@@ -84,81 +84,9 @@ function SweepImageAligner:__init(imagePathOrData)
 
 end
 
-function SweepImageAligner:get_input_projection(force)
-   if (not self.input_projection) or force then 
-      width,height = self:get_input_width_height()
-      hfov = self.input_hfov
-      hfov = self.input_hfov
-      self.input_projection  = 
-         projection.GnomonicProjection.new(width,height,hfov,vfov)
-   end
-   return self.input_projection
-end
-
--- pair is the workspace for a pair of images
-function SweepImageAligner:get_pair_projection(force)
-   if (not self.pair_projection) or force then 
-      width, height   = self:get_input_width_height()
-      pair_hfov       = self.input_hfov + self.lambda_guess + self.lambda_wiggle_base
-      pair_vfov       = self.input_vfov + self.phi_guess + 2 * self.phi_wiggle_base
-      pair_width      = width  * pair_hfov/self.input_hfov
-      pair_height     = height * pair_vfov/self.input_vfov
-      self.pair_projection = 
-         projection.SphericalProjection.new(pair_width,pair_height,pair_hfov,pair_vfov)
-   end
-   return self.pair_projection
-end
-
--- output full equirectangular
-function SweepImageAligner:get_output_projection(force)
-   if (not self.output_projection) or force then
-      width, height = self:get_input_width_height()
-      output_hfov   = 2 * pi
-      output_vfov   = self.input_vfov + 0.1 * self.input_vfov
-      output_height = height + 0.1 * height
-      output_width  = output_height * output_hfov / output_vfov
-      self.output_projection   = 
-         projection.SphericalProjection.new(output_width,output_height,output_hfov,output_vfov)
-   end
-   return self.output_projection
-end
-
-function SweepImageAligner:get_pair_mapper(force)
-   if (not self.pair_mapper) or force then
-      input_projection = self:get_input_projection(force)
-      pair_projection  = self:get_pair_projection(force)
-   
-      self.pair_mapper = 
-         projection.Remap.new(input_projection,pair_projection)
-   end
-   return self.pair_mapper
-end
-
-function SweepImageAligner:get_output_mapper(force)
-   if (not self.output_mapper) or force then 
-      input_projection = self:get_input_projection(force)
-      output_projection = self:get_output_projection(force)
-
-      self.output_mapper = 
-         projection.Remap.new(input_projection,output_projection)
-   end
-   return self.output_mapper
-end
-
--- update projections, height and width
-function SweepImageAligner:set_scale(scale)
-   force = true
-   self.scale = scale
-   self:get_input_width_height(force)
-   self:get_input_radians_per_pixel(force)
-   -- recreate the projections
-   self:get_pair_mapper(force)
-   self:get_output_mapper(force)
-end
-
 -- get size of first image
-function SweepImageAligner:get_input_width_height(force )
-   if not (self.input_width and self.input_height) or force then 
+function SweepImageAligner:get_input_width_height(force_update)
+   if (not (self.input_width and self.input_height)) or force_update then 
       if self.images then 
          self.input_width  = images[1]:size(3)
          self.input_height = images[1]:size(2)
@@ -171,6 +99,103 @@ function SweepImageAligner:get_input_width_height(force )
       end
    end
    return self.input_width, self.input_height
+end
+
+
+function SweepImageAligner:get_global_phi()
+   return self.delta[2]:mean()
+end
+
+function SweepImageAligner:set_global_score(global_score)
+   if global_score then 
+      self.global_score = global_score
+   else
+      self.global_score = self.scores:sum()
+   end
+end
+
+function SweepImageAligner:get_global_score()
+   if not self.global_score then 
+      self:set_global_score()
+   end
+   return self.global_score
+end
+
+function SweepImageAligner:get_input_projection(force_update)
+   if (not self.input_projection) or force_update then 
+      width,height = self:get_input_width_height()
+      hfov = self.input_hfov
+      hfov = self.input_hfov
+      self.input_projection  = 
+         projection.GnomonicProjection.new(width,height,hfov,vfov)
+   end
+   return self.input_projection
+end
+
+-- pair is the workspace for a pair of images
+function SweepImageAligner:get_pair_projection(force_update)
+   if (not self.pair_projection) or force_update then 
+      width, height   = self:get_input_width_height()
+      pair_hfov       = self.input_hfov + self.lambda_guess + self.lambda_wiggle_base
+      pair_vfov       = self.input_vfov + self.phi_guess + 2 * self.phi_wiggle_base
+      pair_width      = width  * pair_hfov/self.input_hfov
+      pair_height     = height * pair_vfov/self.input_vfov
+      self.pair_projection = 
+         projection.SphericalProjection.new(pair_width,pair_height,pair_hfov,pair_vfov)
+   end
+   return self.pair_projection
+end
+
+function SweepImageAligner:get_pair_mapper(force_update)
+   if (not self.pair_mapper) or force_update then
+      -- don't cascade the updates
+      input_projection = self:get_input_projection()
+      pair_projection  = self:get_pair_projection()
+      self.pair_mapper = 
+         projection.Remap.new(input_projection,pair_projection)
+   end
+   return self.pair_mapper
+end
+
+-- output full equirectangular
+function SweepImageAligner:get_output_projection(force_update)
+   if (not self.output_projection) or force_update then
+      width, height = self:get_input_width_height()
+      output_hfov   = 2 * pi
+      output_vfov   = self.input_vfov + 0.1 * self.input_vfov
+      output_height = height + 0.1 * height
+      output_width  = output_height * output_hfov / output_vfov
+      self.output_projection   = 
+         projection.SphericalProjection.new(output_width,output_height,output_hfov,output_vfov)
+   end
+   return self.output_projection
+end
+
+function SweepImageAligner:get_output_mapper(force_update)
+   if (not self.output_mapper) or force_update then 
+      -- don't cascade updates
+      input_projection = self:get_input_projection()
+      output_projection = self:get_output_projection()
+
+      self.output_mapper = 
+         projection.Remap.new(input_projection,output_projection)
+   end
+   return self.output_mapper
+end
+
+-- update projections, height and width
+function SweepImageAligner:set_scale(scale)
+   force_update = true
+   self.scale = scale
+   -- recompute sizes
+   self:get_input_width_height(force_update)
+   self:get_input_radians_per_pixel(force_update)
+   -- recreate the projections
+   self:get_input_projection(force_update)
+   self:get_pair_projection(force_update)
+   self:get_output_projection(force_update)
+   self:get_pair_mapper(force_update)
+   self:get_output_mapper(force_update)
 end
 
 -- TODO if images are stored need to index by colorspace and size
@@ -224,7 +249,7 @@ function compute_right_projection_and_score(mapper,image_right,projected_image_l
                         projected_image_right,mask_right)
 end
 
--- TODO do with a closure (reduce number of parameters
+-- TODO do with a closure (reduce number of parameters)
 function update_input_lambda_and_score(lambda,mapper,phi,image_right,
                                        projected_image_left,mask_left)
    mapper:set_input_lambda_phi(lambda,phi)
@@ -233,13 +258,23 @@ function update_input_lambda_and_score(lambda,mapper,phi,image_right,
                                          projected_image_left,mask_left)
 end
 
--- find horizontal offsets 
+-- TODO do with a closure (reduce number of parameters)
+function update_input_phi_and_score(phi,mapper,lambda,image_right,
+                                    projected_image_left,mask_left)
+   mapper:set_input_lambda_phi(lambda,phi)
+   return 
+      compute_right_projection_and_score(mapper,image_right,
+                                         projected_image_left,mask_left)
+end
+
+-- find horizontal offsets (Pairwise)
 function SweepImageAligner:find_best_lambda()
    n_images   = self.n_images
    wiggle     = self.lambda_wiggle_base
    stop       = self:get_input_radians_per_pixel()
    delta      = self.delta
    scores     = self.scores
+
    -- go through all pairs images find lambda. Start last to first
    previ      = n_images
    image_left = self:get_image(previ)
@@ -250,11 +285,13 @@ function SweepImageAligner:find_best_lambda()
       -- setup left image is at negative current best offset.
       left_lambda = -delta[1][i]
       left_phi    =  delta[2][previ]
+ 
       mapper:set_input_lambda_phi(left_lambda,left_phi)
       mapper:update()
-      mask_left = mapper:get_alpha()
+      
       projected_image_left = mapper:remap(image_left)
-
+      mask_left            = mapper:get_alpha()
+      
       -- load right image and set size
       image_right = self:get_image(i)
 
@@ -280,268 +317,228 @@ function SweepImageAligner:find_best_lambda()
                   mapper,right_phi,image_right,
                   projected_image_left,mask_left)
 
-      delta[1][i] = delta[1][i] + lambda_delta
-      scores[i]   = score;
-      printf(" - best lambda found for %d: %2.4f score: %2.4f", i, delta[1][i], score);
-      
+      if score < scores[i] then
+         delta[1][i] = delta[1][i] + lambda_delta
+         printf(" - new lambda found for %d: %2.4f score: %2.4f < %2.4f", i, delta[1][i], score, scores[i]);
+         scores[i]   = score 
+      else
+         printf(" - keeping lambda for %d: %2.4f score: %2.4f", i, delta[1][i], scores[i]);
+      end
       image_left = image_right
       previ      = i
    end
+   self:set_global_score()
+   return delta[1], self:get_global_score(), scores
 end
 
--- function compute_phi_score(current_phi, image_files, delta)
+-- score current deltas
+function SweepImageAligner:compute_scores(update)
+   n_images   = self.n_images
+   delta      = self.delta
+   scores     = nil
+   if (update) then
+      scores = self.scores
+   else
+      -- not updating 
+      scores     = torch.Tensor(n_images)
+   end
+   -- go through all pairs images find lambda. Start last to first
+   previ      = n_images
+   image_left = self:get_image(previ)
+   
+   mapper = self:get_pair_mapper()
 
---    -- assume that phi will be the same for all images as this
---    -- represents the camera not looking exactly at the plane
---    -- of rotation, but slightly above or below.
---    score = 0
---    image_wand:load(image_files[#image_files])
---    image_wand:size(width,height)
---    image_left = image_wand:toTensor('float',"RGB","DHW")
---    previ = #image_files
---    for i = 1,#image_files do
---       collectgarbage()
---       lambda_left  = -delta[1][i]
---       lambda_right = 0 
---       input_projection:set_lambda_phi(lambda_left,current_phi)
---       _,_,mask_left = self.pair_mapper:get_offset_and_mask(force)
---       mask_left = mask_left:eq(0);
-        
---       projected_image_left = self.pair_mapper:remap(image_left)
---       image_wand:load(image_files[i])
---       image_wand:size(width,height)
---       image_right = image_wand:toTensor('float',"RGB","DHW")
+   -- make sure we are using the best settings
+   mapper:set_input_hfov_vfov(self.hfov,self.vfov)
+
+   -- do optimization for each pair
+   for i = 1,n_images do
+      -- setup left image is at negative current best offset.
+      left_lambda = -delta[1][i]
+      left_phi    =  delta[2][previ]
+      mapper:set_input_lambda_phi(left_lambda,left_phi)
+      mapper:update()
+
+      projected_image_left = mapper:remap(image_left)
+      mask_left            = mapper:get_alpha()
+
+      -- load right image and set size
+      image_right = self:get_image(i)
+
+      -- difference from current best guess lambda
+      lambda_delta  = 0
+      right_phi     = delta[2][i]
+
+      mapper:set_input_lambda_phi(lambda_delta,right_phi)
+      mapper:update()
+
+      projected_image_right = mapper:remap(image_right)
+      mask_right            = mapper:get_alpha()
+      
+      scores[i] = 
+         update_input_lambda_and_score(lambda_delta, 
+                                       mapper, right_phi, image_right,
+                                       projected_image_left,mask_left)
+
+      image_left = image_right
+      previ      = i
+   end
+   if (update) then 
+      self:set_global_score()
+   end
+   return scores:sum(), scores
+end
+
+function compute_global_phi_score(current_phi, aligner)
+
+   -- assume that phi will be the same for all images as this
+   -- represents the camera not looking exactly at the plane
+   -- of rotation, but slightly above or below.
+   n_images = aligner.n_images
+   delta    = aligner.delta
+   score    = torch.Tensor(n_images)
+   mapper   = aligner:get_pair_mapper()
+
+   image_left = aligner:get_image(n_images)
+
+   previ = n_images
+   for i = 1,n_images do
+      collectgarbage()
+      lambda_left  = -delta[1][i]
+      lambda_right = 0 
+      -- left 
+      mapper:set_input_lambda_phi(lambda_left,current_phi)
+      mapper:update()
+      mask_left = mapper:get_alpha()
+      projected_image_left = mapper:remap(image_left)
+
+      -- right
+      image_right = aligner:get_image(i)
             
---       input_projection:set_lambda_phi(lambda_right,current_phi)
---       _,_,mask_right = self.pair_mapper:get_offset_and_mask(force)
---       projected_image_right = self.pair_mapper:remap(image_right)
-                        
---       mask_right = mask_right:eq(0)
---       overlap_mask = mask_right:cmul(mask_left)
---       area = overlap_mask:sum()
+      score[i] = 
+         update_input_lambda_and_score(0,
+                                       mapper, current_phi, image_right,
+                                       projected_image_left,mask_left)
+      
+      image_left = image_right
+   end
+   return score
+end
 
---       image_diff = projected_image_left - projected_image_right
-            
---       image_dist = image_diff:abs():sum(1):squeeze():cmul(overlap_mask:float())
---       if area <= 0 then
---          print("Warning no overlap this should not happen")
---       else
---          score = score + image_dist:sum()/area;
---       end
---       image_left = image_right
---       mask_left  = mask_right
---    end
---    return score
--- end
+function SweepImageAligner:find_best_global_phi()
 
--- function find_best_phi(image_files, delta, wiggle, stop, current_phi,current_best_score)
---    wiggle      = wiggle or phi_wiggle_base
---    stop        = stop or rad_per_pixel
---    current_phi = current_phi or 0
---    best_phi    = current_phi 
---    current_best_score = current_best_score or compute_phi_score(current_phi,image_files,delta)
---    printf("Adjusting global phi: %f", current_phi)
---    test_phi, score = 
---       optimize(wiggle,stop,
---                best_phi,current_best_score,
---                compute_phi_score,
---                image_files,delta)
+   wiggle      = self.phi_wiggle_base
+   stop        = self:get_input_radians_per_pixel()
+   delta       = self.delta
+   scores      = self.scores
+
+   current_phi = self:get_global_phi()
+   best_phi    = current_phi 
+
+   current_best_score = self:get_global_score()
+
+   printf("Adjusting global phi: %f", current_phi)
+   test_phi, score, scores = 
+      optimize(wiggle,stop,
+               best_phi,current_best_score,
+               compute_global_phi_score,self)
+
+   if score < current_best_score then
+      best_phi = test_phi
+      current_best_score = score
+      self.scores = scores 
+      self:set_global_score()
+      printf(" - new phi found %2.4f %2.4f", best_phi, current_best_score);
+      delta[2]:fill(best_phi)
+   else
+      printf(" - keeping phi  %2.4f %2.4f", best_phi, current_best_score);
+   end
+   return best_phi, current_best_score, self.scores
+end
+
+function compute_hfov_score(hfov,aligner)
+   -- set hfov
+   n_images = aligner.n_images
+   delta    = aligner.delta
+   mapper   = aligner:get_pair_mapper()
+   mapper:set_input_hfov_vfov(hfov,aligner.vfov)
+   return aligner:compute_scores()
+end
+
+function SweepImageAligner:find_best_input_hfov()
+
+   wiggle       = self.hfov_wiggle_base
+   stop         = self:get_input_radians_per_pixel()
+   delta        = self.delta
+   scores       = self.scores
+
+   current_phi  = self:get_global_phi()
+   current_hfov = self.hfov
+
+   current_best_score = self:get_global_score()
+
+   printf("Adjusting hfov: %f", current_hfov)
+   test_hfov, score, scores = 
+      optimize(wiggle,stop,
+               current_hfov,current_best_score,
+               compute_hfov_score,self)
+
+   if score < current_best_score then
+      self.hfov = test_hfov
+      self.scores = scores
+      self:set_global_score()
+      current_best_score = score
+      printf(" - new hfov found %2.4f %2.4f", hfov, current_best_score);
+   else
+      printf(" - keeping hfov %2.4f %2.4f", self.hfov, current_best_score);
+   end
+
+   -- leave mapper at best setting
+   mapper:set_input_hfov_vfov(self.hfov,self.vfov)
+   return self.hfov, current_best_score, self.scores
+end
+
+function compute_vfov_score(vfov,aligner)
+   -- set vfov
+   n_images = aligner.n_images
+   delta    = aligner.delta
+   mapper   = aligner:get_pair_mapper()
+   mapper:set_input_hfov_vfov(aligner.hfov,vfov)
+   return   aligner:compute_scores()
+end
+
+function SweepImageAligner:find_best_input_vfov()
+
+   wiggle       = self.hfov_wiggle_base
+   stop         = self:get_input_radians_per_pixel()
+   delta        = self.delta
+   scores       = self.scores
+
+   current_vfov = self.vfov
+
+   current_best_score = self:get_global_score()
+
+   printf("Adjusting vfov: %f %f", current_vfov, current_best_score)
+   test_vfov, score, scores = 
+      optimize(wiggle,stop,
+               current_vfov,current_best_score,
+               compute_vfov_score,self)
    
---    if score < current_best_score then
---       best_phi = test_phi
---       current_best_score = score
---    end
---    delta[2]:fill(best_phi)
---    printf(" - best phi found %2.4f %2.4f", best_phi, current_best_score);
---    return best_phi, current_best_score
--- end
+   if score < current_best_score then
+      self.vfov = test_vfov 
+      self.scores = scores
+      current_best_score = score
+      self:set_global_score()
+      printf(" - new vfov found %2.4f %2.4f", self.vfov, current_best_score);
+   else
+      printf(" - keeping vfov %2.4f %2.4f", self.vfov, current_best_score);
+   end
 
--- function compute_vfov_score(current_vfov, image_files, delta)
+   -- leave mapper at best setting
+   mapper:set_input_hfov_vfov(self.hfov,self.vfov)
 
---    test_input_projection = 
---       projection.GnomonicProjection.new(width,height,hfov,current_vfov)
-   
---    test_rect_to_sphere = projection.Remap.new(test_input_projection,pair_proj_to)
-
---    printf(" -     projection_from: hfov: %2.4f vfov: %2.4f",
---           test_rect_to_sphere.projection_from.hfov,
---           test_rect_to_sphere.projection_from.vfov)
-
-
---    score = 0
---    image_wand:load(image_files[#image_files])
---    image_wand:size(width,height)
---    image_left = image_wand:toTensor('float',"RGB","DHW")
---    previ = #image_files
---    for i = 1,#image_files do
---       collectgarbage()
---       lambda_left  = -delta[1][i]
---       phi_left     = delta[2][previ]
---       lambda_right = 0 
---       phi_right    = delta[2][i]
-
---       test_input_projection:set_lambda_phi(lambda_left,phi_left)
---       _,_,mask_left = test_rect_to_sphere:get_offset_and_mask(force)
---       mask_left = mask_left:eq(0);
-        
---       projected_image_left = test_rect_to_sphere:remap(image_left)
---       image_wand:load(image_files[i])
---       image_wand:size(width,height)
---       image_right = image_wand:toTensor('float',"RGB","DHW")
-            
---       test_input_projection:set_lambda_phi(lambda_right,phi_right)
---       _,_,mask_right = test_rect_to_sphere:get_offset_and_mask(force)
---       projected_image_right = test_rect_to_sphere:remap(image_right)
-                        
---       mask_right   = mask_right:eq(0)
---       overlap_mask = mask_right:cmul(mask_left)
---       area         = overlap_mask:sum()
-
---       image_diff = projected_image_left - projected_image_right
-            
---       image_dist = 
---          image_diff:abs():sum(1):squeeze():cmul(overlap_mask:float())
---       if area <= 0 then
---          print("Warning no overlap this should not happen")
---       else
---          score = score + image_dist:sum()/area;
---       end
---       image_left = image_right
---       mask_left  = mask_right
---    end
---    return score
--- end
-
--- function find_best_vfov(image_files, delta, wiggle, stop, current_vfov,current_best_score)
---    wiggle       = wiggle or phi_wiggle_base
---    stop         = stop or rad_per_pixel
---    current_vfov = current_vfov or vfov
---    best_vfov    = current_vfov
---    current_best_score = current_best_score or 
---       compute_vfov_score(current_vfov,image_files,delta)
---    printf("Adjusting vfov: %f",current_vfov)
---    test_vfov, score = 
---       optimize(wiggle,stop,
---                current_vfov,current_best_score,
---                compute_vfov_score,
---                image_files,delta)
-   
---    if score < current_best_score then
---       best_vfov = test_vfov
---       current_best_score = score
---    end
-   
---    printf("new best vfov found %2.4f %2.4f", best_vfov, current_best_score);
---    return best_vfov, current_best_score
--- end
-
--- function compute_hfov_score(current_hfov, image_files, delta)
-
---    -- TODO this is the only difference between compute_hfov and vfov,
---    -- perhaps the projection itself should be the parameter to a
---    -- compute_projection_score ?
---    test_input_projection = 
---       projection.GnomonicProjection.new(width,height,current_hfov,vfov)
-   
---    test_rect_to_sphere = projection.Remap.new(test_input_projection,pair_proj_to)
-
---    printf(" -     projection_from: hfov: %2.4f vfov: %2.4f",
---           test_rect_to_sphere.projection_from.hfov,
---           test_rect_to_sphere.projection_from.vfov)
-
---    score = 0
---    image_wand:load(image_files[#image_files])
---    image_wand:size(width,height)
---    image_left = image_wand:toTensor('float',"RGB","DHW")
---    previ = #image_files
---    for i = 1,#image_files do
---       collectgarbage()
---       lambda_left  = -delta[1][i]
---       phi_left     = delta[2][previ]
---       lambda_right = 0 
---       phi_right    = delta[2][i]
-
---       test_input_projection:set_lambda_phi(lambda_left,phi_left)
---       _,_,mask_left = test_rect_to_sphere:get_offset_and_mask(force)
---       mask_left = mask_left:eq(0);
-        
---       projected_image_left = test_rect_to_sphere:remap(image_left)
---       image_wand:load(image_files[i])
---       image_wand:size(width,height)
---       image_right = image_wand:toTensor('float',"RGB","DHW")
-            
---       test_input_projection:set_lambda_phi(lambda_right,phi_right)
---       _,_,mask_right = test_rect_to_sphere:get_offset_and_mask(force)
---       projected_image_right = test_rect_to_sphere:remap(image_right)
-                        
---       mask_right   = mask_right:eq(0)
---       overlap_mask = mask_right:cmul(mask_left)
---       area         = overlap_mask:sum()
-
---       image_diff = projected_image_left - projected_image_right
-            
---       image_dist = 
---          image_diff:abs():sum(1):squeeze():cmul(overlap_mask:float())
---       if area <= 0 then
---          print("Warning no overlap this should not happen")
---       else
---          score = score + image_dist:sum()/area;
---       end
---       image_left = image_right
---       mask_left  = mask_right
---    end
---    return score
--- end
-
--- function find_best_hfov(image_files, delta, wiggle, stop, current_hfov,current_best_score)
---    wiggle       = wiggle or phi_wiggle_base
---    stop         = stop or rad_per_pixel
---    current_hfov = current_hfov or hfov
---    best_hfov    = current_hfov
---    current_best_score = current_best_score or 
---       compute_hfov_score(current_hfov,image_files,delta)
---    printf("Adjusting hfov: %f",current_hfov)
---    test_hfov, score = 
---       optimize(wiggle,stop,
---                current_hfov,current_best_score,
---                compute_hfov_score,
---                image_files,delta)
-   
---    if score < current_best_score then
---       best_hfov = test_hfov
---       current_best_score = score
---    end
-   
---    printf("new best hfov found %2.4f %2.4f", best_hfov, current_best_score);
---    return best_hfov, current_best_score
--- end
-   
--- find_best_lambda(image_files, delta, lambda_wiggle_base, rad_per_pixel)
--- best_score = scores:sum()
--- printf("current best_score: %f", best_score)
-
--- best_phi, best_score = find_best_phi(image_files, delta, phi_wiggle_base, rad_per_pixel, 0, best_score)
--- printf("current best_score: %f", best_score)
-
--- -- best_vfov, best_score = find_best_vfov(image_files, delta, vfov*0.05, rad_per_pixel, vfov, best_score)
--- -- printf("current best_score: %f", best_score)
--- -- input_projection:set_vfov(best_vfov)
--- -- vfov = best_vfov
-
--- -- best_hfov, best_score = find_best_hfov(image_files, delta, hfov*0.05, rad_per_pixel, hfov, best_score)
--- -- printf("current best_score: %f", best_score)
--- -- input_projection:set_hfov(best_hfov)
--- -- hfov = best_hfov
-
--- -- find_best_lambda(image_files, delta, 2*rad_per_pixel, rad_per_pixel)
--- -- best_score = scores:sum()
--- -- print(scores)
--- -- printf("current best_score: %f", best_score)
-
--- -- display
--- _G.mapped_image_files = {}
--- _G.masks = {}
--- _G.out_fnames = ""
+   return self.vfov, current_best_score, scores
+end
 
 function SweepImageAligner:display_and_save(enblend,outfname)
    outdir      = path.dirname(outfname)
@@ -551,20 +548,23 @@ function SweepImageAligner:display_and_save(enblend,outfname)
    n_images    = self.n_images
    delta       = self.delta
    mapper      = self:get_output_mapper()
+   -- make sure we are using the best settings
+   mapper:set_input_hfov_vfov(self.hfov,self.vfov)
 
    mapped_image_files = {}
    masks              = {}
 
-   lambda = delta[1][1];
+   lambda = 0 -- delta[1][1]
    phi    = delta[2][1]
 
    for i = 1,n_images do
 
       img = self:get_image(i,"RGBA")
 
+      printf("[%d] lambda: %2.4f phi: %2.4f",i,lambda, phi)
       mapper:set_input_lambda_phi(lambda,phi)
       mapper:update()
-      mask = mapper:get_mask()
+      mask  = mapper:get_mask()
       alpha = mapper:get_alpha()
 
       img_out = mapper:remap(img)
@@ -574,10 +574,10 @@ function SweepImageAligner:display_and_save(enblend,outfname)
       table.insert(masks,mask)
 
       if enblend then
-         tmp_name = string.format("tmp_%02d.png", i)
+         tmp_name = string.format("%s_tmp_%02d.png", outfname:gsub(".png",""), i)
          self.image_wand:fromTensor(img_out,"RGBA","DHW")
          printf(" - saving %s %s",tmp_name, image_wand:imagetype())
-        image_wand:save(tmp_name)
+         image_wand:save(tmp_name)
          tmp_fnames = tmp_fnames .. " " .. tmp_name
       end
       
@@ -595,7 +595,8 @@ function SweepImageAligner:display_and_save(enblend,outfname)
    image.save(string.format("%s",outfname), allimg)
 
    if (enblend) then
+
       os.execute(string.format("enblend %s -o %s/enblend_%s", tmp_fnames, outdir, outbasename))
-      os.execute(string.format("rm %s", tmp_fnames))
+      -- os.execute(string.format("rm %s", tmp_fnames))
    end
 end

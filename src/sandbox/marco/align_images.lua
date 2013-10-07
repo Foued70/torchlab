@@ -31,9 +31,33 @@ scale      = params.scale
 enblend    = params.enblend
 outimage   = params.outimage
 
-aligner = model.SweepImageAligner.new(imagedir.."/"..imageglob)
--- aligner:set_scale(0.2)
+_G.aligner = model.SweepImageAligner.new(imagedir.."/"..imageglob)
 
-aligner:find_best_lambda()
-aligner:display_and_save(enblend,outimage)
 
+wiggle_mult = 2^3 -- 2^<number of iterations>
+current_phi = 0
+update = true
+for _,s in pairs({0.125,0.25,0.5}) do
+
+   aligner:set_scale(s)
+
+   -- update current best scores
+   score, scores = aligner:compute_scores(update)
+
+   adjusted = ""
+   outfname = string.format("%s%s_%.2f.png",outimage:gsub(".png",""),adjusted,s)
+   aligner:display_and_save(enblend,outfname)
+   
+   rad_ppx = aligner:get_input_radians_per_pixel()
+   printf(" - rad %f", rad_ppx)
+   aligner.lambda_wiggle_base = rad_ppx * wiggle_mult
+
+   printf(" - wiggle %f",aligner.lambda_wiggle_base)
+   lmbd,scr,scrs = aligner:find_best_lambda()
+
+   adjusted = adjusted .. "_lambda"
+   outfname = string.format("%s%s_%.2f.png",outimage:gsub(".png",""),adjusted,s)
+   aligner:display_and_save(enblend,outfname)
+
+   wiggle_mult = wiggle_mult / 2
+end
