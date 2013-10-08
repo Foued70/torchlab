@@ -27,9 +27,9 @@ function blend (images, masks)
    end
    allmask:add(-(allmask:min()-1))
 
-   allmask = allmask:double():add(-allmask:max()):abs()
+   allmask = allmask:typeAs(images[1]):add(-allmask:max()):abs()
    -- sum to 1
-   allmask = torch.cdiv(torch.ones(allmask:size()),allmask)
+   allmask = allmask:clone():fill(1):cdiv(allmask)
 
    allmask[allmask:eq(math.huge)] = 0
 
