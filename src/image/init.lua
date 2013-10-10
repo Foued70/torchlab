@@ -689,4 +689,28 @@ function image.thresholdReturnCoordinates(squareMatrix,threshold, le)
    return goodLocationsX, goodLocationsY, squareMatrix[thresholded]
 end
 
+function image.median_filter(img,h,w)
+   nchan = img:size(1)
+   if nchan > 4 then 
+      print("assuming single channel image")
+      nchan = 1
+      img:resize(util.util.add_slices(1,img:size()))
+   end
+   h = h or 3
+   h2 = h/2
+   w = w or 3
+   w2 = w/2
+   med = h*w/2
+
+   imguf = img:unfold(2,h,1):unfold(3,w,1)
+   ufh   = imguf:size(2)
+   ufw   = imguf:size(3)
+   imguf = imguf:reshape(nchan,ufh*ufw,h*w)
+   s     = imguf:sort(3)
+   s     = s[{{},{},med}]:reshape(nchan,ufh,ufw)
+
+   img[{{},{h2,ufh+h2-1},{w2,ufw+w2-1}}]:copy(s)
+
+end
+
 return image
