@@ -148,7 +148,13 @@ function pixel_coords_to_offset(pixel_coords,stride,mask,offset)
    -- the size original image in which we index this function will
    -- return all the wrong values.
    stride = stride or error("must pass stride")
-   dim_offset = stride:size() - pixel_coords:nDimension() + 1
+   n_stride = 0
+   if torch.typename(stride):match("Storage") then
+      n_stride = stride:size()
+   else
+      n_stride = stride:size(1)
+   end
+   dim_offset = n_stride - pixel_coords:nDimension() + 1
    -- CAREFUL must floor before multiplying by stride or does not make
    -- sense.  -0.5 then floor is equivalient to adding 0.5 -> floor ->
    -- -1 before multiply by stride. -1 is because C is 0 indexed where

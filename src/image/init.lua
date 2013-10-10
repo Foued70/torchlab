@@ -550,20 +550,49 @@ function image.lcn(im,ker)
    local lvar = lmn:clone():cmul(lmn)
    lvar:add(-1,lmnsq):mul(-1)
    -- avoid numerical errors
-   lvar:apply(function(x) if x < 0 then return 0 end end)
-              -- standard deviation
-              local lstd  = lvar:sqrt()
-              lstd:apply(function(x) if x < 1 then return 1 end end)
+   lvar:apply(function(x) 
+                 if x < 0 then 
+                    return 0 end 
+              end)
+   -- standard deviation
+   local lstd  = lvar:sqrt()
+   lstd:apply(function(x) 
+                 if x < 1 then 
+                    return 1 
+                 end 
+              end)
+              
+   -- apply normalization
+   local shifti = math.floor(ker:size(1)/2)+1
+   local shiftj = math.floor(ker:size(2)/2)+1
+   --print(shifti,shiftj,lstd:size(),im:size())
+   local dim = im:narrow(1,shifti,lstd:size(1)):narrow(2,shiftj,lstd:size(2)):clone()
+   dim:add(-1,lmn)
+   dim:cdiv(lstd)
+   return dim:clone()
+end
 
-                         -- apply normalization
-                         local shifti = math.floor(ker:size(1)/2)+1
-                         local shiftj = math.floor(ker:size(2)/2)+1
-                         --print(shifti,shiftj,lstd:size(),im:size())
-                         local dim = im:narrow(1,shifti,lstd:size(1)):narrow(2,shiftj,lstd:size(2)):clone()
-                         dim:add(-1,lmn)
-                         dim:cdiv(lstd)
-                         return dim:clone()
+function image.median_filter(img,h,w)
+   nchan = img:size(1)
+   img = img:clone()
+   if nchan > 4 then 
+      print("assuming single channel image")
+      nchan = 1
+      img:resize(util.util.add_slices(1,img:size()))
+   end
+   h = h or 3
+   h2 = h/2
+   w = w or 3
+   w2 = w/2
+   med = h*w/2
 
+   imguf = img:unfold(2,h,1):unfold(3,w,1)
+   ufh   = imguf:size(2)
+   ufw   = imguf:size(3)
+   imguf = imguf:reshape(nchan,ufh*ufw,h*w)
+   s     = imguf:sort(3)
+   s     = s[{{},{},med}]:reshape(nchan,ufh,ufw) 
+   return s:clone()
 end
 
 ----- DISPLAY FUNCTIONS -------
@@ -687,30 +716,6 @@ function image.thresholdReturnCoordinates(squareMatrix,threshold, le)
    goodLocationsY:apply(function(val) return (val -1)%w+1 end) 
 
    return goodLocationsX, goodLocationsY, squareMatrix[thresholded]
-end
-
-function image.median_filter(img,h,w)
-   nchan = img:size(1)
-   if nchan > 4 then 
-      print("assuming single channel image")
-      nchan = 1
-      img:resize(util.util.add_slices(1,img:size()))
-   end
-   h = h or 3
-   h2 = h/2
-   w = w or 3
-   w2 = w/2
-   med = h*w/2
-
-   imguf = img:unfold(2,h,1):unfold(3,w,1)
-   ufh   = imguf:size(2)
-   ufw   = imguf:size(3)
-   imguf = imguf:reshape(nchan,ufh*ufw,h*w)
-   s     = imguf:sort(3)
-   s     = s[{{},{},med}]:reshape(nchan,ufh,ufw)
-
-   img[{{},{h2,ufh+h2-1},{w2,ufw+w2-1}}]:copy(s)
-
 end
 
 return image
