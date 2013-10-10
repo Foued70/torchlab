@@ -48,6 +48,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
    self.hwindices = nil;
    self.height = 0;
    self.width = 0;
+   self.have_hw_data = nil
    self.points = nil;
    self.rgb = nil;
    self.count = 0;
@@ -82,7 +83,8 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
             if self.format == 1 then
                self.hwindices = loaded[2]
                self.height = self.hwindices:max(1)[1][1]
-               self.width = self.hwindices:max(1)[1][2]
+               self.width  = self.hwindices:max(1)[1][2]
+               self.have_hw_data = true
             else
                self.height = 0
                self.width = 0
@@ -129,6 +131,19 @@ function PointCloud:reset_point_stats()
    self.count = self.points:size(1)
 end
 
+function PointCloud:make_hw_indices()
+   local height  = self.height
+   local width   = self.width
+   local indices = torch.ShortTensor(2,height,width)
+   
+   local x = torch.range(1,width):resize(1,width):expand(height,width)
+   local y = torch.range(1,height):resize(1,height):expand(width,height)
+   
+   indices[1]:copy(y:t())
+   indices[2]:copy(x)
+   return indices:resize(2,height*width):transpose(1,2):clone()
+end
+
 function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 
    --first pass to see what type of file it is, whether it has 3, 6 columns, or 8 (h/w first)
@@ -140,13 +155,31 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    if line == nil or line:len() < 5 then
       error("file did not have enough stuff in it")
    end
+   local po_cloud_file = false
+   -- find first line which starts with a number
+   local countHeader = 0
+   local key,val = line:match("^([^0-9-]): ([^%s]*)")
+   while (key) do 
+      -- this is inverted on purpose. Gets switched later [See: switcheroo]
+      if (key == "h") then 
+         self.width = tonumber(val)
+      elseif (key == "w") then
+         self.height = tonumber(val)
+      end
+      line = file:read()
+      key,val = line:match("^([^0-9-]): ([^%s]*)")
+      countHeader = countHeader + 1
+   end
+   -- this is only for the po_scans
+   if ((self.width > 0) and (self.height > 0)) then 
+      po_cloud_file = true
+   end
    file:close()
    -- on first pass determine format
    local countColumns = 0
    for token in string.gmatch(line, "[^%s]+") do
       countColumns = countColumns + 1
    end
-   print(countColumns)
 
    if (countColumns == 6) then
       -- x y z r g b 
@@ -166,11 +199,15 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 
    local totalLines = util.fs.exec("wc -l " .. pcfilename)
    for token in string.gmatch(totalLines, "[^%s]+") do
-      count = tonumber(token)
+      count = tonumber(token) - countHeader
       break
    end
-
    local file = torch.DiskFile(pcfilename, 'r', false)
+   -- remove header
+   while (countHeader>0) do 
+      file:readString("*l")
+      countHeader = countHeader - 1
+   end
    local xyzrgbTensor =torch.Tensor(torch.File.readDouble(file,countColumns*count)):reshape(count, countColumns)
    file:close()
    local offset = 0
@@ -190,16 +227,35 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       b = xyzrgbTensor:select(2,6+offset)
    end
 
-   local radius2d  = torch.cmul(x,x):add(torch.cmul(y,y)):sqrt()
-   local indexGood = torch.lt(radius2d, radius[2]):mul(torch.gt(radius2d, radius[1]))
-
-   if(self.format==1) then
-      self.height = h[indexGood]:max()
-      self.width = w[indexGood]:max()
+   if (po_cloud_file) then 
+      -- do points row col switcheroo
+      local pts    = xyzrgbTensor[{{},{1+offset,3+offset}}] -- Nx3
+      pts    = pts:transpose(1,2):contiguous():resize(3,self.height,self.width)
+      
+      local pointsT = util.addr.switch_column_to_row_major(pts)
+      local new_height   = self.width
+      self.width   = self.height
+      self.height  = new_height
+      pointsT:resize(3,self.width*self.height)
+      x            = pointsT[1]
+      y            = pointsT[2]
+      z            = pointsT[3]
+      xyzrgbTensor[{{},1+offset}] = x
+      xyzrgbTensor[{{},2+offset}] = y
+      xyzrgbTensor[{{},3+offset}] = z
    end
-   self.points = torch.cat(torch.cat(x[indexGood],y[indexGood],2),z[indexGood],2)
-   self.count = self.points:size(1)
-   local meanz = z[indexGood]:sum()/(z[indexGood]:size(1)+.000001)
+
+   local radius2d  = torch.cmul(x,x):add(torch.cmul(y,y)):sqrt()
+   local indexGood = torch.lt(radius2d, radius[2]):cmul(torch.gt(radius2d, radius[1]))
+   
+   if (self.format==1) then
+      self.height = h[indexGood]:max()
+      self.width  = w[indexGood]:max()
+   end
+   
+   self.points   = torch.cat(torch.cat(x[indexGood],y[indexGood],2),z[indexGood],2)
+   self.count    = self.points:size(1)
+   local meanz   = z[indexGood]:sum()/(self.count+.000001)
    self.centroid = torch.Tensor({{0, 0, meanz}})
 
    local stdrd = math.sqrt((self.points-self.centroid:repeatTensor(self.count,1)):pow(2):sum(2):mean())
@@ -214,17 +270,18 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       radius[2] = stdrd * numstd
       print("make second pass with new radius: "..radius[2])
       
-      local allXYZ = xyzrgbTensor[{{},{1+offset,3+offset}}]
+      local allXYZ         = xyzrgbTensor[{{},{1+offset,3+offset}}]
       local distanceTensor = (allXYZ-self.centroid:repeatTensor(allXYZ:size(1),1)):pow(2):sum(2):sqrt()     
-      indexGood = torch.lt(distanceTensor, radius[2]):mul(torch.gt(distanceTensor, radius[1]))
+      indexGood            = torch.lt(distanceTensor, radius[2]):cmul(torch.gt(distanceTensor, radius[1]))
       
       if (self.format==1) then
          self.height = h[indexGood]:max()
-         self.width = w[indexGood]:max()
+         self.width  = w[indexGood]:max()
       end
-      self.points = torch.cat(torch.cat(x[indexGood],y[indexGood],2),z[indexGood],2)
-      self.count = self.points:size(1)
-      local meanz = z[indexGood]:sum()/(z[indexGood]:size(1)+.000001)
+      self.points   = torch.cat(torch.cat(x[indexGood],y[indexGood],2),z[indexGood],2)
+      self.count    = self.points:size(1)
+      local meanz   = z[indexGood]:sum()/(self.count+.000001)
+      -- TODO this centroid only makes sense for faro
       self.centroid = torch.Tensor({{0, 0, meanz}})
    end
 
@@ -235,7 +292,11 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    if(self.format==1) then
       self.hwindices = torch.cat(h[indexGood],w[indexGood],2):short()
    end
-
+   if (po_cloud_file) then 
+      fullgrid = self:make_hw_indices() -- full grid
+      self.hwindices = torch.cat(fullgrid[{{},1}][indexGood],fullgrid[{{},2}][indexGood],2)
+      self.have_hw_data = true
+   end
    collectgarbage()
    
    -- drop insignificant digits.
@@ -246,8 +307,10 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    print("pass 2: count: "..self.count..", height: "..self.height..", width: "..self.width);
 end
 
+   
+
 function PointCloud:get_normal_image(recompute)
-   if self.format == 1 then
+   if self.have_hw_data then
      local pmap = self:get_normal_map(recompute):clone()
      local pmap = pmap:add(1):div(2)
      return pmap
@@ -544,7 +607,7 @@ function PointCloud:get_flattened_images(scale,mask,numCorners)
 end
 
 function PointCloud:get_connections_and_corners()
-    if self.format == 1 then
+    if self.have_hw_data then
         self:get_normal_map(false)
         
         local pts = self:get_xyz_map_no_mask()
@@ -641,7 +704,7 @@ end
 
 --[[
 function PointCloud:get_normal_map(recompute)
-    if self.format == 1 then
+    if self.have_hw_data then
         if (not self.normal_map) or recompute then
             local img = self:get_xyz_map_no_mask()
             
@@ -845,7 +908,7 @@ function PointCloud:downsample_without_panorama(leafsize)
 end
 
 function PointCloud:downsample(leafsize)
-  if self.format == 1 then
+  if self.have_hw_data then
     return self:downsample_with_panorama(leafsize)
   else
     return self:downsample_without_panorama(leafsize)
@@ -854,7 +917,7 @@ end
 
 --[[]]
 function PointCloud:get_normal_map(force)
-  if self.format == 1 and ((not self.normal_map) or force) then
+  if self.have_hw_data and ((not self.normal_map) or force) then
     local xyz = self:get_xyz_map_no_mask()
     local height = self.height
     local width = self.width
@@ -888,9 +951,9 @@ function PointCloud:get_normal_map(force)
     shift:sub(1,3,height,height,1,width):add(xyz:sub(1,3,height,height,1,width):clone())
     
     local minus_d = torch.zeros(xyz:size()):copy(xyz:clone())
-	minus_d:add(shift:clone():mul(-1))
+    minus_d:add(shift:clone():mul(-1))
 	
-	local minus_1_x = minus_l:select(1,1):clone()
+    local minus_1_x = minus_l:select(1,1):clone()
     local minus_1_y = minus_l:select(1,2):clone()
     local minus_1_z = minus_l:select(1,3):clone()
             
@@ -958,7 +1021,7 @@ function PointCloud:get_normal_map(force)
     minus_2_y = minus_l:select(1,2):clone()
     minus_2_z = minus_l:select(1,3):clone()
 	
-	local crossprod_4 = torch.Tensor(3,height,width)
+    local crossprod_4 = torch.Tensor(3,height,width)
         
     crossprod_4[1] = minus_1_y:clone():cmul(minus_2_z):add(
                      minus_1_z:clone():cmul(minus_2_y):mul(-1))
@@ -1337,7 +1400,7 @@ function PointCloud:write(filename)
       tmpt:apply(function(i)
                     local pt = points[i]
                     local rgbx = rgb[i]
-                    if self.format == 1 then
+                    if self.have_hw_data then
                        local ind = self.hwindices[i]:clone()
                        local ih = ind[1]
                        local iw = ind[2]
