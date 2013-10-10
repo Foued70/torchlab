@@ -111,6 +111,31 @@ function mask_out_of_bounds(pixel_coords,max_dims,min_dims,mask)
    return mask
 end
 
+function column_to_row_major_pixel_coords(height,width,pixel_coords)
+   new_width  = height
+   new_height = width
+   
+   pixel_coords = pixel_coords or torch.Tensor()
+   pixel_coords:resize(2,new_height,new_width)
+   
+   new_y = torch.range(1,height):resize(1,height):expand(new_height,new_width)
+   new_x = torch.range(width,1,-1):resize(1,width):expand(new_width,new_height)
+   
+   pixel_coords[1]:copy(new_y)
+   pixel_coords[2]:copy(new_x:t())
+
+   return pixel_coords
+end
+
+-- uses indexing to swap column and row major
+function switch_column_to_row_major(img)
+   ndim   = img:nDimension()
+   width  = img:size(ndim)
+   height = img:size(ndim-1)
+   offset = pixel_coords_to_offset(column_to_row_major_pixel_coords(height,width),img:stride())
+   return remap(img,offset)
+end
+
 -- offsets are torch style starting at 1
 -- convert the x and y index into a single 1D offset (y * stride + x)
 function pixel_coords_to_offset(pixel_coords,stride,mask,offset)
@@ -123,15 +148,14 @@ function pixel_coords_to_offset(pixel_coords,stride,mask,offset)
    -- the size original image in which we index this function will
    -- return all the wrong values.
    stride = stride or error("must pass stride")
-
+   dim_offset = stride:size() - pixel_coords:nDimension() + 1
    -- CAREFUL must floor before multiplying by stride or does not make
    -- sense.  -0.5 then floor is equivalient to adding 0.5 -> floor ->
    -- -1 before multiply by stride. -1 is because C is 0 indexed where
    -- torch is 1 indexed.
-   local output_map = pixel_coords[1]:clone():add(-0.5):floor():mul(stride[1])
-
+   local output_map = pixel_coords[1]:clone():add(-0.5):floor():mul(stride[dim_offset+1])
    for d = 2,pixel_coords:size(1)-1 do 
-      output_map:add(pixel_coords[d]:clone():add(-0.5):floor():mul(stride[d]))
+      output_map:add(pixel_coords[d]:clone():add(-0.5):floor():mul(stride[dim_offset+d]))
    end
    -- Last dimension is indexed starting at 1 (so no -0.5)
    output_map:add(pixel_coords[-1]):floor()
