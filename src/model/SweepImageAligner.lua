@@ -23,7 +23,7 @@ function SweepImageAligner:__init(imagePathOrData)
          error("don't understand type of elements in table")
       end
    else
-      error("don't understand type of arguement")
+      error("don't understand type of argument")
    end
 
    -- ** Input images **
@@ -540,11 +540,8 @@ function SweepImageAligner:find_best_input_vfov()
    return self.vfov, current_best_score, scores
 end
 
-function SweepImageAligner:display_and_save(enblend,outfname)
-   outdir      = path.dirname(outfname)
-   outbasename = path.basename(outfname)
+function SweepImageAligner:generate_panorama(lambda,enblend,outfname)
    tmp_fnames  = ""
-
    n_images    = self.n_images
    delta       = self.delta
    mapper      = self:get_output_mapper()
@@ -554,7 +551,7 @@ function SweepImageAligner:display_and_save(enblend,outfname)
    mapped_image_files = {}
    masks              = {}
 
-   lambda = 0 -- delta[1][1]
+   lambda = lambda or -pi
    phi    = delta[2][1]
 
    for i = 1,n_images do
@@ -586,17 +583,21 @@ function SweepImageAligner:display_and_save(enblend,outfname)
          phi = delta[2][i+1]
       end
    end
-   allimg = blend(mapped_image_files, masks)
+   return blend(mapped_image_files, masks),tmp_fnames
+end
 
-   image.display(allimg)
+function SweepImageAligner:display_and_save(enblend,outfname)
+   outdir      = path.dirname(outfname)
+   outbasename = path.basename(outfname)
 
-
+   img,tmp_fnames = self:generate_panorama(enblend,outfname)
+   image.display(img)
+   
    printf("saving %s", outfname)
-   image.save(string.format("%s",outfname), allimg)
+   image.save(string.format("%s",outfname), img)
 
-   if (enblend) then
-
+   if (enblend) then 
       os.execute(string.format("enblend %s -o %s/enblend_%s", tmp_fnames, outdir, outbasename))
-      -- os.execute(string.format("rm %s", tmp_fnames))
+      os.execute(string.format("rm %s", tmp_fnames))
    end
 end

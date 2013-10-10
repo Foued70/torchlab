@@ -22,7 +22,7 @@ end
 
 function Remap:get_offset_and_mask (force)
    if force or (not self.offset) then
-      self.update()
+      self:update()
    end
    return self.offset, self.stride, self.mask
 end
@@ -30,7 +30,7 @@ end
 -- mask is 1 in the areas which need to be masked
 function Remap:get_mask (force)
    if force or (not self.offset) then
-      self.update()
+      self:update()
    end
    return self.mask
 end
