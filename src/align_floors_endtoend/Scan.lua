@@ -34,6 +34,8 @@ function Scan:load_and_save_all_sweeps()
             local bname = path.basename(fname,'.xyz')
             local aSweep = Sweep.new(self.base_dir,bname)
             local pc = aSweep:getPC()
+            pc = nil
+            aSweep = nil
         end
         collectgarbage()
     end
@@ -104,13 +106,24 @@ function Scan:find_forward_and_backward_transformations()
                 	print('create new sweep pair')
 	                sweepPair_curr_to_nex = SweepPair.new(self.base_dir, sweepcur, sweepnex, i, forward)
     	            sweepPair_curr_to_nex :getAllTransformations()
-        	        sweepPair_curr_to_nex:setInlierTransformation(1)
+        	        --sweepPair_curr_to_nex:setInlierTransformation(1)
+        	        sweepPair_curr_to_nex:setBestTransformation()
         	        
         	        print('saving stuff')
         	        sweepcur:getPC():write(sweepcur.fod)
         	        sweepnex:getPC():write(sweepnex.fod)
                 
             	    print()
+            	    
+            	    numcur = nil
+                    numnex = nil
+                    fnamecur = nil
+                    bnamecur = nil
+                    sweepcur = nil
+                    fnamenex = nil
+                    bnamenex = nil
+                    sweepnex = nil
+                    sweepPair_curr_to_nex = nil
                 
 	            end
     	        collectgarbage()
@@ -163,18 +176,3 @@ function Scan:find_forward_and_backward_transformations()
         
     end
 end
-
---[[
-function Scan:downsample_all(scale,savexyz,saveod)
-    if util.fs.is_dir(self.xyz_dir) then
-        local all_files = util.fs.files_only(self.xyz_dir,'.xyz')
-        for i = 1,#all_files do
-            local fname = all_files[i]
-            local bname = path.basename(fname,'.xyz')
-            local aSweep = Sweep.new(self.base_dir,bname)
-            aSweep:downsample()
-        end
-        collectgarbage()
-    end
-end
-]]

@@ -174,14 +174,6 @@ function Hough:getMainDirections(img)
 	local linesP = opencv.imgproc.HoughLinesProbabilistic(img, Hough.houghRo, Hough.houghTheta, Hough.defaultThreshold, Hough.houghMinLineLength, Hough.houghMaxLineGap);
 	--local linesP = opencv.imgproc.HoughLinesRegular(img, Hough.houghRo, Hough.houghTheta, Hough.defaultThreshold, 1,1);
 	
-	if linesP:size(1) == 0 then
-		print('getMainDirections 2')
-		print(img:size())
-		print(imgorig:size())
-		print(linesP:size())
-		--image.display(imgorig:toTensor())
-	end
-	
 	local slopes, intersects = Hough.getSlopeIntersectFromHoughP(linesP)
 	--find the corners! split into two perpendicular "clusters", corners are intersections of any point in one cluster with points in the other
 	local angles = torch.atan(slopes)

@@ -10,24 +10,42 @@ local colors = require '../opencv/types/Colors.lua'
 
 ffi.cdef
 [[
+    int get_index_and_mask(long* index_map, short* mask_map, double* points, short* hwindices,
+                       long length, int height, int width);
+                       
     int compute_normal_helper_pick(double *normals, double *cand_1, double *cand_2, 
                                                 double *cand_3, double *cand_4, 
                                                 int height, int width, double thresh);
                                                 
-    int compute_normal_help_blend(double* output_normal, double * output_d, 
-                              double * output_xyz, double* input_normal, 
+    int compute_normal_help_blend(double* output_normal, double* input_normal, 
                               double* xyz, int height, int width, 
                               int window, double dist_thresh, double norm_thresh);
                               
-    int downsample_with_panorama(double* downsampled_points, double* downsampled_rgb, 
+    int downsample_with_widthheightinfo(double* downsampled_points, double* downsampled_rgb, 
                              int* downsampled_count, double* coord_map, 
                              double* points_map, double* rgb_map, 
                              int height, int width);
     
-    int downsample_without_panorama(double* downsampled_points, double* downsampled_rgb, 
+    int downsample_without_widthheightinfo(double* downsampled_points, double* downsampled_rgb, 
                                 int* downsampled_count, int* coord_list, 
                                 double* points_list, double* rgb_list, 
                                 int length, int binx, int biny, int binz);
+    
+    int make_normal_list(double* normal_list, double* normal_map,
+                     int* hwindices, int length, int height, int width);
+    
+    int flatten_image_without_widthheightinfo(double* imagez, int* coords, double* dists,
+                                              int length, int height, int width);
+    
+    int connect_lines_in_image(double* img, double y1, double x1, double y2, double x2, 
+                           int height, int width, double incr);
+    
+    int flatten_image_with_widthheightinfo(double* imagez, double* image_corner,
+                                          double* coord_map, double *points,
+                                          char* connection_map, char* corners_map,
+                                          double* corners_map_filled,
+                                          int pan_hght, int pan_wdth,
+                                          int img_hght, int img_wdth);
 ]]
 
 local libpc   = util.ffi.load('libpointcloud')
@@ -45,6 +63,8 @@ PointCloud.fudge_number = 10000
 PointCloud.very_small_number = 0.00000000000000001
 
 function PointCloud:__init(pcfilename, radius, numstd, option)
+
+   log.tic()
    self.hwindices = nil;
    self.height = 0;
    self.width = 0;
@@ -319,456 +339,344 @@ function PointCloud:get_normal_image(recompute)
    end
 end
 
-local function connect_lines(img,x1,y1,x2,y2,height,width,dst)
-    
-    local minx = math.min(x1,x2)
-    local maxx = math.max(x1,x2)
-    local miny = math.min(y1,y2)
-    local maxy = math.max(y1,y2)
-    
-    local dffx = x1-x2
-    local dffy = y1-y2
-    
-    if math.abs(dffx) >= math.abs(dffy) then
-        local slp = dffy / dffx
-        if minx < maxx then
-            local prev = 0
-            torch.range(minx, maxx):apply(
-                function(xx)
-                    local yy = y2 + (xx-x2)*slp
-                    if xx <= width and yy <=height and xx >=1 and yy >=1 then
-                        img[yy][xx] = img[yy][xx] + dst
-                        if prev > 0 and yy ~= prev then
-                            img[prev][xx] = img[prev][xx] + dst/2
-                            img[yy][xx-1] = img[yy][xx-1] + dst/2
-                        end
-                    end
-                    prev = yy
-                end)
-        else
-            img[y1][x1] = img[y1][x1] + dst/2
-        end
-    else
-        local slp = dffx / dffy
-        if miny < maxy then
-            local prev = 0
-            torch.range(miny, maxy):apply(
-                function(yy)
-                    local xx = x2 + (yy-y2)*slp
-                    if xx <= width and yy <=height and xx >=1 and yy >=1 then
-                        img[yy][xx] = img[yy][xx] + dst
-                        if prev > 0 and xx ~= prev then
-                            img[yy][prev] = img[yy][prev] + dst/2
-                            img[yy-1][xx] = img[yy-1][xx] + dst/2
-                        end
-                    end
-                    prev = xx
-                end)
-        else
-            img[y1][x1] = img[y1][x1] + dst/2
-        end 
+function PointCloud:get_flattened_images_without_widthheightinfo(scale)
+
+  local tic = log.toc()
+  local toc = 0
+  
+  scale = scale+PointCloud.very_small_number
+  local ranges = self.radius:clone():mul(2)
+  local minv = self.radius:clone():mul(-1)
+  local maxv = self.radius:clone()
+  local pix = ranges:clone():div(scale):floor()
+  local height = pix[1]
+  local width = pix[2]
+  local elim_dist = 0.25
+  
+  local imagez = torch.zeros(height,width)
+  
+  local points = self.points[{{},{1,2}}]:clone()
+  
+  local coords = torch.Tensor(points:size()):copy(points)
+  coords:add(minv:sub(1,2):repeatTensor(self.count,1):mul(-1)):div(scale):floor()
+  coords = coords:type('torch.IntTensor')
+  
+  local z_val = self.points[{{},{3}}]:clone()
+  local z_big = z_val:lt(self.maxval[3]-2*elim_dist)
+  local z_sma = z_val:gt(self.minval[3]+1*elim_dist)
+  local filtr = z_big:clone():cmul(z_sma):type('torch.DoubleTensor')
+  
+  local dists = torch.Tensor(points:size()):copy(points):pow(2):sum(2):squeeze():clone()
+  dists:cmul(filtr)
+  
+  points = nil
+  collectgarbage()
+  
+  
+  libpc.flatten_image_without_widthheightinfo(torch.data(imagez), 
+                                              torch.data(coords:clone():contiguous()), 
+                                              torch.data(dists:clone():contiguous()), 
+                                              self.count, height, width);                                     
+
+  imagez:div(imagez:max()+PointCloud.very_small_number)
+  imagez = imagez:clone():resize(height,width):repeatTensor(3,1,1)
+  
+  toc = log.toc()-tic
+  tic = tic + toc
+  print('flatten_image_0: finish: '..toc)
+  
+  collectgarbage()
+
+  return imagez
+  
+end
+
+function PointCloud:get_flattened_images_with_widthheightinfo(scale,mask,numCorners)
+
+  local tic = log.toc()
+  local toc = 0
+  
+  scale = scale+PointCloud.very_small_number
+  local ranges = self.radius:clone():mul(2)
+  local minv = self.radius:clone():mul(-1)
+  local maxv = self.radius:clone()
+  local pix = ranges:clone():div(scale):floor()
+  local height = pix[1]
+  local width = pix[2]
+  local hght = self.height
+  local wdth = self.width
+  
+  local elim_dist = 0.25      
+  
+  local corners  
+  if numCorners and numCorners > 0 then
+      corners = torch.zeros(numCorners,2)
+  end
+  
+  local connections,corners_map = self:get_connections_and_corners()
+  if mask then
+    connections:cmul(mask)
+  end
+  
+  local imagez = torch.zeros(height,width)
+  local image_corners = imagez:clone()
+  
+  local pts = self:get_xyz_map_no_mask():sub(1,2):clone()
+  local crds = torch.Tensor(pts:size()):copy(pts)
+  local mnv = minv:sub(1,2):repeatTensor(hght,wdth,1):transpose(2,3):transpose(1,2)
+  crds:add(mnv:mul(-1)):div(scale):floor()
+  pts = self:get_xyz_map_no_mask():clone()
+  local corners_map_filled = torch.zeros(hght,wdth)
+  
+  --cfunc
+  
+  libpc.flatten_image_with_widthheightinfo(torch.data(imagez), torch.data(image_corners),
+                                              torch.data(crds:clone():contiguous()), torch.data(pts:clone():contiguous()),
+                                              torch.data(connections:clone():contiguous()), 
+                                              torch.data(corners_map:clone():contiguous()),
+                                              torch.data(corners_map_filled),
+                                              hght, wdth, height, width)
+  
+  local mean_height = (imagez:clone():sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum())
+  local stdv_height = math.sqrt((imagez:clone():add(-mean_height):pow(2):sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum()))
+  local max_height = mean_height+stdv_height
+  local show_thresh = 0.01*max_height
+        
+  imagez = imagez:clone():gt(max_height):type('torch.DoubleTensor'):mul(max_height):add(
+  imagez:clone():le(max_height):type('torch.DoubleTensor'):cmul(imagez)):cmul(
+  imagez:clone():gt(show_thresh):type('torch.DoubleTensor'))
+  
+  mean_height = nil
+  stdv_height = nil
+  max_height = nil
+  shor_thresh = nil
+                 
+  imagez:div(imagez:max()+PointCloud.very_small_number)
+  imagez:cmul(imagez:gt(0.05):type('torch.DoubleTensor'))
+
+  image_corners:div(image_corners:max()+PointCloud.very_small_number):cmul(image_corners:gt(0.05):type('torch.DoubleTensor'))
+  
+  if numCorners and numCorners > 0 then
+    local ps = math.ceil(0.10/scale)
+    local bs = math.ceil(0.05/scale)
+    local ds =  3
+    local cc = 0
+    local image_corners_orig = image_corners:clone()
+        
+    while cc < numCorners and image_corners:max() > 0 do
+      local maxmap,maxord = image_corners:max(1)
+      local mmmap,mmord = maxmap:max(2)
+      local x = mmord[1][1]
+      local y = maxord[1][x]
+      local patch = image_corners_orig:sub(math.max(1,y-ps),
+                                           math.min(height,y+ps),
+                                           math.max(1,x-ps),
+                                           math.min(width,x+ps))
+      if patch:max() == image_corners[y][x] then
+        cc = cc+1
+        corners[cc] = torch.Tensor({y,x})
+        image_corners:sub(math.max(1,y-bs),
+        math.min(height,y+bs),
+        math.max(1,x-bs),
+        math.min(width,x+bs)):mul(0)
+      else
+        image_corners[y][x] = 0
+      end
     end
+    if cc < numCorners then
+      if cc == 0 then
+        corners = nil
+      else
+        corners = corners:sub(1,cc):clone()
+      end
+    end
+    image_corners = image_corners_orig
+  end
+  
+  --image.displayPoints(imagez:clone():gt(0):type('torch.ByteTensor'):mul(255), corners, colors.MAGENTA, 2)
+  --image.display(corners_map_filled)
+  imagez = imagez:clone():repeatTensor(3,1,1)
+  
+  ranges = nil
+  minv = nil
+  maxv = nil
+  pix = nil
+  connections = nil
+  corners_map = nil
+  mask = nil
+  pts = nil
+  crds = nil
+  mnv = nil
+  
+  toc = log.toc()-tic
+  tic = tic + toc
+  print('flatten_image_1: finish: '..toc)
+  
+  collectgarbage()
+  
+  return imagez,corners,image_corners
 end
 
 function PointCloud:get_flattened_images(scale,mask,numCorners)
-
-    scale = scale+PointCloud.very_small_number
-    local ranges = self.radius:clone():mul(2)
-    local minv = self.radius:clone():mul(-1)
-    local maxv = self.radius:clone()
-    local pix = ranges:clone():div(scale):floor()
-    local height = pix[1]+1
-    local width = pix[2]+1
-    local imagez = torch.zeros(height,width)
-    local corners
-    
-    if numCorners and numCorners > 0 then
-        corners = torch.zeros(numCorners,2)
-    end
-    
-    if self.format == 0 then
-        
-        imagez = imagez:resize(height*width)
-        --sort points
-        local points = self.points:clone()[{{},{1,2}}]
-    
-        local coords = torch.Tensor(points:size()):copy(points)
-        coords:add(minv:sub(1,2):repeatTensor(self.count,1):mul(-1)):div(scale):floor():add(1)
-    
-        local ys = torch.LongTensor(self.count):copy(coords[{{},1}])
-        local xs = torch.LongTensor(self.count):copy(coords[{{},2}])
-        local index = ys:add(-1):mul(width):add(xs)
-        local dists = torch.Tensor(points:size()):copy(points)
-        dists:add(self.centroid:squeeze():sub(1,2):repeatTensor(self.count,1):mul(-1)):pow(2)
-        dists = dists:sum(2):squeeze()
-    
-        local i=1
-        index:apply(function(x)
-                        imagez[x]=imagez[x]+dists[i]
-                        i=i+1
-                        return x
-                    end)
-        
-        imagez=imagez:pow(2)
-        
-        imagez=(imagez:div(imagez:max()+PointCloud.very_small_number):mul(256)):floor()
-        imagez = imagez:clone():resize(height,width):repeatTensor(3,1,1)
-    else
-        local connections,corners_map = self:get_connections_and_corners()
-        if mask then
-            connections:cmul(mask)
-        end
-        local image_corners = imagez:clone()
-        
-        local imgpts = self:get_xyz_map_no_mask():transpose(1,2):transpose(2,3):clone()
-        local hght = self.height
-        local wdth = self.width
-        local points = imgpts:clone():sub(1,hght,1,wdth,1,2)
-        local coords = torch.Tensor(points:size()):copy(points)
-        coords:add(minv:sub(1,2):repeatTensor(hght,wdth,1):mul(-1)):div(scale):floor():add(1)
-        
-        centerpt = self.centroid:squeeze():sub(1,2)
-        
-        local udind = torch.range(1,hght)
-        local lrind = torch.range(1,wdth)
-        
-        local inline_tol = 0.25
-        --local orig_tol = 0.1
-        
-        local points = imgpts:clone()
-        
-        local coords_f = coords:transpose(1,2)
-        local points_f = points:transpose(1,2)
-        local connec_f = connections:transpose(1,2)
-        local corner_f = corners_map:transpose(1,2)
-        
-        local coords_cw = coords_f[wdth]
-        local points_cw = points_f[wdth]
-        local connec_cw = connec_f[wdth]
-        local corner_cw = corner_f[wdth]
-        
-        local coords_pw
-        local points_pw
-        local connec_pw
-        local corner_pw
-        
-        lrind:apply(function(w)
-            coords_pw = coords_cw:clone()
-            points_pw = points_cw:clone()
-            connec_pw = connec_cw:clone()
-            corner_pw = corner_cw:clone()
-            
-            coords_cw = coords_f[w]
-            points_cw = points_f[w]
-            connec_cw = connec_f[w]
-            corner_cw = corner_f[w]
-            
-            local coords_cw_ch = coords_cw[1]
-            local points_cw_ch = points_cw[1]
-            local connec_cw_ch = connec_cw[1]
-            local corner_cw_ch = corner_cw[1]
-            
-            local coords_cw_ph
-            local points_cw_ph
-            local connec_cw_ph
-            local corner_cw_ph
-            
-            local dst_corn = 0
-            local dst_conn = 0
-            
-            local make_connec_left = false
-            local connec_left_coord = torch.ones(2)
-            local connec_left_point = torch.zeros(2)
-            
-            udind:apply(function(h)
-            
-                coords_cw_ph = coords_cw_ch
-                points_cw_ph = points_cw_ch
-                connec_cw_ph = connec_cw_ch
-                corner_cw_ph = corner_cw_ch
-            
-                coords_cw_ch = coords_cw[h]
-                points_cw_ch = points_cw[h]
-                connec_cw_ch = connec_cw[h]
-                corner_cw_ch = corner_cw[h]
-                
-                local dst = math.abs(points_cw_ph[3]-points_cw_ch[3])
-                
-                if corner_cw_ph == 1 then
-                    if corner_cw_ch == 1 then
-                        dst_corn = dst_corn + dst
-                        if h == hght or corner_cw[h+1] ~= 1 then
-                            local y = coords_cw_ch[1]
-                            local x = coords_cw_ch[2]
-        
-                            dst_corn = dst_corn
-                            image_corners:sub(y,y,x,x):add(dst_corn)
-                            dst_corn = 0
-                        end
-                    else
-                        dst_corn = 0
-                    end
-                end
-                
-                if connec_cw_ph == 1 then
-                    if connec_cw_ch == 1 then
-                        dst_conn = dst_conn + dst
-                        
-                        if (not make_connec_left) and connec_pw[h] == 1 then
-                            make_connec_left = true
-                            connec_left_coord = coords_pw[h]
-                            connec_left_point = points_pw[h]
-                        end
-                        if h == hght or connec_cw[h+1] ~= 1 then
-                            local y1 = coords_cw_ch[1]
-                            local x1 = coords_cw_ch[2]
-                            dst_conn = dst_conn
-
-                            if make_connec_left then
-                              local y2 = connec_left_coord[1]
-                              local x2 = connec_left_coord[2]
-                                  
-                              if geom.util.normalize(points_cw_ch:sub(1,2) - connec_left_point:sub(1,2)):dist(
-                                 geom.util.normalize(points_cw_ch:sub(1,2) - self.centroid:squeeze():sub(1,2))) > inline_tol and
-                                 geom.util.normalize(connec_left_point:sub(1,2) - points_cw_ch:sub(1,2)):dist(
-                                 geom.util.normalize(points_cw_ch:sub(1,2) - self.centroid:squeeze():sub(1,2))) > inline_tol then                                
-                                  connect_lines(imagez,x1,y1,x2,y2,height,width,dst_conn)
-                              end
-                            else
-                              imagez:sub(y1,y1,x1,x1):add(dst_conn)
-                            end
-
-                            dst_conn = 0
-                            make_connec_left = false
-                            connec_left_coord = torch.ones(2)
-                            connec_left_point = torch.zeros(2)
-                        end
-                    else
-                        dst_conn = 0
-                        if make_connec_left then
-                            make_connec_left = false
-                            connec_left_coord = torch.ones(2)
-                            connec_left_point = torch.zeros(2)
-                        end
-                    end
-                end
-            end)
-            collectgarbage()
-        end)    
-        
-        local mean_height = (imagez:clone():sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum())
-        local stdv_height = math.sqrt((imagez:clone():add(-mean_height):pow(2):sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum()))
-        local max_height = mean_height+stdv_height
-        local show_thresh = 0.01*max_height
-        
-        imagez = imagez:clone():gt(max_height):type('torch.DoubleTensor'):mul(max_height):add(
-                 imagez:clone():le(max_height):type('torch.DoubleTensor'):cmul(imagez)):cmul(
-                 imagez:clone():gt(show_thresh):type('torch.DoubleTensor'))
-                 
-        imagez:div(imagez:max()+PointCloud.very_small_number)
-        
-        image_corners:div(image_corners:max()+PointCloud.very_small_number)
-        if numCorners and numCorners > 0 then
-            local ps = math.ceil(0.10/scale)
-            local bs = math.ceil(0.05/scale)
-            local ds =  3
-            local cc = 0
-            local image_corners_orig = image_corners:clone()
-        
-            while cc < numCorners and image_corners:max() > 0 do
-                local maxmap,maxord = image_corners:max(1)
-                local mmmap,mmord = maxmap:max(2)
-                local x = mmord[1][1]
-                local y = maxord[1][x]
-                local patch = image_corners_orig:sub(math.max(1,y-ps),
-                                                 math.min(height,y+ps),
-                                                 math.max(1,x-ps),
-                                                 math.min(width,x+ps))
-                if patch:max() == image_corners[y][x] then
-                    cc = cc+1
-                    corners[cc] = torch.Tensor({y,x})
-                    image_corners:sub(math.max(1,y-bs),
-                                  math.min(height,y+bs),
-                                  math.max(1,x-bs),
-                                  math.min(width,x+bs)):mul(0)
-                else
-                    image_corners[y][x] = 0
-                end
-            end
-         end
-         
-         --image.displayPoints(imagez:clone():gt(0):type('torch.ByteTensor'):mul(255), corners, colors.MAGENTA, 2)
-         imagez = imagez:clone():repeatTensor(3,1,1)
-        
-    end
-    collectgarbage()
-    return imagez,corners
-    
+  if self.format == 0 then
+    return self:get_flattened_images_without_widthheightinfo(scale)
+  else
+    return self:get_flattened_images_with_widthheightinfo(scale,mask,numCorners)
+  end
 end
 
 function PointCloud:get_connections_and_corners()
-    if self.have_hw_data then
-        self:get_normal_map(false)
+    if self.format == 1 then
+    
+        local tic = log.toc()
+        local toc = 0
         
-        local pts = self:get_xyz_map_no_mask()
+        self:get_normal_map()
+        
+        local pts = self:get_xyz_map_no_mask():clone()
+        
         local height = self.height
         local width = self.width
         local normal_map = self.normal_map:clone()
+        local smooth_normal_map = self:get_smooth_normal(5):clone()--normal_map:clone()--
         
         local plane_const = torch.zeros(height,width)
-        plane_const:add(pts:clone():cmul(normal_map):sum(1):squeeze())
+        plane_const:add(pts:clone():cmul(smooth_normal_map):sum(1):squeeze())
+
+        local shift_normal_map = torch.zeros(3,height,width)
+        local shift_plane_const = torch.zeros(height,width)
         
-        local plane_const_norm = normal_map:clone():pow(2):sum(1):squeeze():sqrt()
+        shift_normal_map:sub(1,3,1,height,2,width):add(smooth_normal_map:clone():sub(1,3,1,height,1,width-1))
+        shift_normal_map:sub(1,3,1,height,1,1):add(smooth_normal_map:clone():sub(1,3,1,height,width,width))
+        shift_plane_const:sub(1,height,2,width):add(plane_const:clone():sub(1,height,1,width-1))
+        shift_plane_const:sub(1,height,1,1):add(plane_const:clone():sub(1,height,width,width))
         
-        local compare_plane_lr = torch.zeros(height,width)
-        local compare_plane_ud = torch.zeros(height,width)
+        local dist_from_plane_l1 = shift_normal_map:clone():cmul(pts):sum(1):squeeze():add(shift_plane_const:clone():mul(-1)):abs():clone()
         
-        local compare_normal_lr = torch.zeros(height,width)
-        local compare_normal_ud = torch.zeros(height,width)
+        shift_normal_map = torch.zeros(3,height,width)
+        shift_plane_const = torch.zeros(height,width)
         
-        compare_plane_lr:sub(1,height,2,width-1):add(
-                    plane_const:clone():sub(1,height,1,width-2):mul(-1):add(
-                    normal_map:clone():sub(1,3,1,height,1,width-2):cmul(
-                    pts:sub(1,3,1,height,3,width)):sum(1):squeeze()):abs():cdiv(
-                    plane_const_norm:sub(1,height,1,width-2)))
-        compare_plane_lr:sub(1,height,1,1):add(
-                    plane_const:clone():sub(1,height,width,width):mul(-1):add(
-                    normal_map:clone():sub(1,3,1,height,width,width):cmul(
-                    pts:sub(1,3,1,height,2,2)):sum(1):squeeze()):abs():cdiv(
-                    plane_const_norm:sub(1,height,width,width)))
-        compare_plane_lr:sub(1,height,width,width):add(
-                    plane_const:clone():sub(1,height,width-1,width-1):mul(-1):add(
-                    normal_map:clone():sub(1,3,1,height,width-1,width-1):cmul(
-                    pts:sub(1,3,1,height,1,1)):sum(1):squeeze()):abs():cdiv(
-                    plane_const_norm:sub(1,height,width-1,width-1)))
-                    
-        compare_plane_ud:sub(2,height-1):add(
-                    plane_const:clone():sub(1,height-2):mul(-1):add(
-                    normal_map:clone():sub(1,3,1,height-2):cmul(
-                    pts:sub(1,3,3,height)):sum(1):squeeze()):abs():cdiv(
-                    plane_const_norm:sub(1,height-2)))
-        compare_plane_ud:sub(1,1):add(
-                    plane_const:clone():sub(1,1):mul(-1):add(
-                    normal_map:clone():sub(1,3,1,1):cmul(
-                    pts:sub(1,3,2,2)):sum(1):squeeze()):abs():cdiv(
-                    plane_const_norm:sub(1,1)))
-        compare_plane_ud:sub(height,height):add(
-                    plane_const:clone():sub(height-1,height-1):mul(-1):add(
-                    normal_map:clone():sub(1,3,height-1,height-1):cmul(
-                    pts:sub(1,3,height,height)):sum(1):squeeze()):abs():cdiv(
-                    plane_const_norm:sub(height-1,height-1)))
+        shift_normal_map:sub(1,3,1,height,3,width):add(smooth_normal_map:clone():sub(1,3,1,height,1,width-2))
+        shift_normal_map:sub(1,3,1,height,1,2):add(smooth_normal_map:clone():sub(1,3,1,height,width-1,width))
+        shift_plane_const:sub(1,height,3,width):add(plane_const:clone():sub(1,height,1,width-2))
+        shift_plane_const:sub(1,height,1,2):add(plane_const:clone():sub(1,height,width-1,width))
         
-        compare_normal_lr:sub(1,height,2,width-1):add(
-                    normal_map:clone():sub(1,3,1,height,3,width):mul(-1):add(
-                    normal_map:sub(1,3,1,height,1,width-2)):pow(2):sum(1):squeeze())
-        compare_normal_lr:sub(1,height,1,1):add(
-                    normal_map:clone():sub(1,3,1,height,2,2):mul(-1):add(
-                    normal_map:sub(1,3,1,height,width,width)):pow(2):sum(1):squeeze())
-        compare_normal_lr:sub(1,height,width,width):add(
-                    normal_map:clone():sub(1,3,1,height,1,1):mul(-1):add(
-                    normal_map:sub(1,3,1,height,width-1,width-1)):pow(2):sum(1):squeeze())
+        local dist_from_plane_l2 = shift_normal_map:clone():cmul(pts):sum(1):squeeze():add(shift_plane_const:clone():mul(-1)):abs():clone()
         
+        shift_plane_const = nil
         
-        compare_normal_ud:sub(2,height-1):add(
-                    normal_map:clone():sub(1,3,3,height):mul(-1):add(
-                    normal_map:sub(1,3,1,height-2)):pow(2):sum(1):squeeze())
-        compare_normal_ud:sub(1,1):add(
-                    normal_map:clone():sub(1,3,2,2):mul(-1):add(
-                    normal_map:sub(1,3,1,1)):pow(2):sum(1):squeeze())
-        compare_normal_ud:sub(height,height):add(
-                    normal_map:clone():sub(1,3,height,height):mul(-1):add(
-                    normal_map:sub(1,3,height-1,height-1)):pow(2):sum(1):squeeze())
+        --[[
+        shift_normal_map = torch.zeros(3,height,width)
         
-        --local nm_tol_conn = 0.01
-        local pc_tol_conn = 0.05
-        local nm_tol_corn = 0.5
+        shift_normal_map:sub(1,3,1,height,2,width):add(smooth_normal_map:clone():sub(1,3,1,height,1,width-1))
+        shift_normal_map:sub(1,3,1,height,1,1):add(smooth_normal_map:clone():sub(1,3,1,height,width,width))
+        
+        local diff_from_normal_l = shift_normal_map:clone():add(smooth_normal_map:clone():mul(-1)):pow(2):sum(1):squeeze():sqrt():clone()
+
+        shift_normal_map = torch.zeros(3,height,width)
+        
+        shift_normal_map:sub(1,3,1,height,1,width-1):add(smooth_normal_map:clone():sub(1,3,1,height,2,width))
+        shift_normal_map:sub(1,3,1,height,width,width):add(smooth_normal_map:clone():sub(1,3,1,height,1,1))
+        
+        local diff_from_normal_r = shift_normal_map:clone():add(smooth_normal_map:clone():mul(-1)):pow(2):sum(1):squeeze():sqrt():clone()
+        --[[]]
+        
+        --[[]]
+        smnmp = smooth_normal_map:sub(1,2):clone()
+        
+        shift_normal_map = torch.zeros(2,height,width)
+        
+        shift_normal_map:sub(1,2,1,height,2,width):add(smnmp:clone():sub(1,2,1,height,1,width-1))
+        shift_normal_map:sub(1,2,1,height,1,1):add(smnmp:clone():sub(1,2,1,height,width,width))
+        
+        local diff_from_normal_l = shift_normal_map:clone():cmul(smnmp:clone()):sum(1):squeeze():cdiv(
+                                   shift_normal_map:clone():pow(2):sum(1):sqrt():add(
+                                   smnmp:clone():pow(2):sum(1):sqrt()):squeeze()):acos()
+
+        shift_normal_map = torch.zeros(2,height,width)
+        
+        shift_normal_map:sub(1,2,1,height,1,width-1):add(smnmp:clone():sub(1,2,1,height,2,width))
+        shift_normal_map:sub(1,2,1,height,width,width):add(smnmp:clone():sub(1,2,1,height,1,1))
+        
+        local diff_from_normal_r = shift_normal_map:clone():cmul(smnmp:clone()):sum(1):squeeze():cdiv(
+                                   shift_normal_map:clone():pow(2):sum(1):sqrt():add(
+                                   smnmp:clone():pow(2):sum(1):sqrt()):squeeze()):acos()
+        
+        --[[]]
+        
+        shift_normal_map = nil
+         
+        local pc_tol_conn = 0.01
+        local nm_tol_corn = 0.25
         local pc_tol_corn = 0.25
-        local z_tol = 0.1
+        local z_tol = 0.25
         
-        local zconstraint = normal_map:select(1,3):clone():abs():lt(z_tol)
+        local zconstraint = smooth_normal_map:select(1,3):clone():abs():lt(z_tol)
         local extantpts = pts:clone():pow(2):sum(1):squeeze():gt(0):cmul(pts:clone():pow(2):sum(1):squeeze():lt(math.huge))
         
-        --local corners = compare_normal_lr:gt(nm_tol2):add(compare_normal_ud:gt(nm_tol2)):add(compare_plane_lr:gt(pc_tol2)):add(compare_plane_ud:gt(pc_tol2)):gt(0)
-        --local connections = compare_normal_lr:gt(nm_tol2):add(compare_normal_ud:gt(nm_tol2)):add(compare_plane_lr:gt(pc_tol2)):add(compare_plane_ud:gt(pc_tol2)):eq(0)
+        local ptdiff = pts:clone():add(self.centroid:repeatTensor(1,1,1):transpose(1,3):repeatTensor(1,height,width):mul(-1))
+        local ptnm = ptdiff:clone():pow(2):sum(1):sqrt():squeeze()
+        local ptz = ptdiff:select(1,3):clone():squeeze():cdiv(ptnm:clone():add(PointCloud.very_small_number)):abs():lt(0.9)
+        local ptd = ptnm:gt(0.05)
+        zconstraint:cmul(ptz):cmul(ptd)
         
-        local connections = compare_plane_lr:gt(pc_tol_conn):add(compare_plane_ud:gt(pc_tol_conn)):eq(0)
-        local corners = compare_normal_lr:gt(nm_tol_corn):add(compare_plane_lr:gt(pc_tol_corn)):gt(0)
+        ptnm = nil
+        ptdiff = nil
+        ptz = nil
+        
+        local connections = dist_from_plane_l1:clone():gt(pc_tol_conn):add(dist_from_plane_l1:clone():gt(pc_tol_conn)):eq(0)
+        --local corners = diff_from_normal_l:gt(nm_tol_corn):add(diff_from_normal_r:gt(nm_tol_corn)):gt(0)
+        local corners = (diff_from_normal_l - diff_from_normal_r):abs():gt(nm_tol_corn):add(
+                         dist_from_plane_l1:clone():gt(pc_tol_corn):add(dist_from_plane_l1:clone():gt(pc_tol_corn))):gt(0)
+        --corners = corners:add(connections:clone():mul(-1):add(1)):gt(0)
         
         corners:cmul(zconstraint):cmul(extantpts)
         connections:cmul(zconstraint):cmul(extantpts)
+        
+        --[[
+        local extra = 1
+        local conv_corner = torch.ones(extra*2+1,1):type('torch.ByteTensor')
+        local res_corner = torch.conv2(corners,conv_corner,'F')
+        corners = res_corner:sub(extra+1,res_corner:size(1)-extra):ge(extra*2)
+        ]]
+        
+        normal_map = nil
+        smooth_normal_map = nil
+        pts = nil
+        plane_const = nil
+        plane_const_norm = nil
+        zconstraint = nil
+        extantpts = nil
+        compare_plane_lr = nil
+        compare_plane_ud = nil
+        compare_normal_lr = nil
+        compare_normal_ud = nil
+        dist_from_plane_l1 = nil
+        dist_from_plane_l2 = nil
+        diff_normal_l = nil
+        diff_normal_r = nil
+        collectgarbage()
+        
+        toc = log.toc()-tic
+        tic = tic + toc
+        print('get_connections_and_corners: '..toc)
         
         return connections,corners
 
     end
 end
 
---[[
-function PointCloud:get_normal_map(recompute)
-    if self.have_hw_data then
-        if (not self.normal_map) or recompute then
-            local img = self:get_xyz_map_no_mask()
-            
-            local height = self.height
-            local width = self.width
-        
-            local minus_lr = torch.zeros(3,height,width)
-            local minus_ud = torch.zeros(3,height,width)
-            minus_lr:sub(1,3,1,height,1,width-1):add(
-                     img:sub(1,3,1,height,1,width-1):clone():mul(-1):add(
-                     img:sub(1,3,1,height,2,width)))
-            minus_lr:sub(1,3,1,height,width,width):add(
-                     img:sub(1,3,1,height,width,width):clone():mul(-1):add(
-                     img:sub(1,3,1,height,1,1)))
-            
-            minus_ud:sub(1,3,1,height-1,1,width):add(
-                     img:sub(1,3,1,height-1,1,width):clone():mul(-1):add(
-                     img:sub(1,3,2,height,1,width)))
-            minus_ud:sub(1,3,height,height,1,width):add(
-                     img:sub(1,3,height-1,height-1,1,width):clone())
-        
-            local minus_lr_tx = minus_lr:select(1,1)
-            local minus_lr_ty = minus_lr:select(1,2)
-            local minus_lr_tz = minus_lr:select(1,3)
-            
-            local minus_ud_tx = minus_ud:select(1,1)
-            local minus_ud_ty = minus_ud:select(1,2)
-            local minus_ud_tz = minus_ud:select(1,3)
-        
-            local crossprod = torch.Tensor(3,height,width)
-        
-            crossprod[1] = minus_lr_ty:clone():cmul(minus_ud_tz):add(
-                           minus_lr_tz:clone():cmul(minus_ud_ty):mul(-1))
-            crossprod[2] = minus_lr_tz:clone():cmul(minus_ud_tx):add(
-                           minus_lr_tx:clone():cmul(minus_ud_tz):mul(-1))
-            crossprod[3] = minus_lr_tx:clone():cmul(minus_ud_ty):add(
-                           minus_lr_ty:clone():cmul(minus_ud_tx):mul(-1))
-                       
-            local crossprodnorm = crossprod:clone():pow(2):sum(1):sqrt():squeeze():repeatTensor(3,1,1):add(PointCloud.very_small_number)
-                
-            crossprod = crossprod:clone():cdiv(crossprodnorm:clone())
-            
-            crossprod:mul(PointCloud.fudge_number):floor():div(PointCloud.fudge_number)
-            
-            self.normal_map=crossprod:clone()
-            
-        else
-            print('normal map exists')
-            self:get_xyz_map_no_mask()
-        end
-        return self.normal_map
-    end
-end
---[[]]
+function PointCloud:downsample_with_widthheightinfo(leafsize)
 
-function PointCloud:downsample_with_panorama(leafsize)
+   local tic = log.toc()
+   local toc = 0
+   
    local scale = leafsize + PointCloud.very_small_number
    local ranges = self.maxval:clone():squeeze():add(self.minval:clone():squeeze():mul(-1))
    local pts = self:get_xyz_map_no_mask():clone()
    local crd = pts:clone():add(self.minval:clone():mul(-1):squeeze():repeatTensor(self.width,self.height,1):transpose(1,3)):div(scale):floor():add(1)
    local rgb = self:get_rgb_map_no_mask():type('torch.DoubleTensor')
    pts = crd:clone():add(-1):mul(scale):add(self.minval:squeeze():repeatTensor(self.height,self.width,1):transpose(1,3))
-   
-   print('pts,crd,rgb found')
    
    local downsampled = PointCloud.new()
    downsampled.height = 0;
@@ -782,15 +690,20 @@ function PointCloud:downsample_with_panorama(leafsize)
    local downsampled_points = torch.data(points)
    local downsampled_rgb = torch.data(dsrgb)
    local downsampled_count = torch.data(count)
-   local coord_map = torch.data(crd)
-   local points_map = torch.data(pts)
-   local rgb_map = torch.data(rgb)
+   local coord_map = torch.data(crd:clone():contiguous())
+   local points_map = torch.data(pts:clone():contiguous())
+   local rgb_map = torch.data(rgb:clone():contiguous())
 
-   print('looping')
-   libpc.downsample_with_panorama(downsampled_points, downsampled_rgb, downsampled_count, 
+   toc = log.toc()-tic
+   tic = tic + toc 
+   print('downsample_0: setup: '..toc)
+   
+   libpc.downsample_with_widthheightinfo(downsampled_points, downsampled_rgb, downsampled_count, 
                                   coord_map, points_map, rgb_map, self.height, self.width)
-                                  
-   print('finish loop')
+   
+   toc = log.toc()-tic
+   tic = tic + toc                                
+   print('downsampled_0: loop '..toc)
    
    count = count:clone()[1]
    if count == 0 then
@@ -805,8 +718,6 @@ function PointCloud:downsample_with_panorama(leafsize)
    downsampled:set_local_to_global_pose(self:get_local_to_global_pose())
    downsampled:set_local_to_global_rotation(self:get_local_to_global_rotation())
    downsampled:reset_point_stats()
-   
-   print('downsampled reset')
    
    count = nil
    points = nil
@@ -824,20 +735,26 @@ function PointCloud:downsample_with_panorama(leafsize)
    points_map = nil
    rgb_map = nil
    
+   toc = log.toc()-tic
+   tic = tic + toc 
+   print('downsampled_0: finish: '..toc)
+   
    collectgarbage()
    return downsampled;
    
 end
 
-function PointCloud:downsample_without_panorama(leafsize)
+function PointCloud:downsample_without_widthheightinfo(leafsize)
+
+   local tic = log.toc()
+   local toc = 0
+   
    local scale = leafsize + PointCloud.very_small_number
    local ranges = self.maxval:clone():squeeze():add(self.minval:clone():squeeze():mul(-1))
    local pts = self.points:clone()
    local crd = pts:clone():add(self.minval:clone():mul(-1):squeeze():repeatTensor(self.count,1)):div(scale):floor()
    local rgb = self.rgb:clone():type('torch.DoubleTensor')
    pts = crd:clone():mul(scale):add(self.minval:squeeze():repeatTensor(self.count,1))
-   
-   print('pts,crd,rgb found')
    
    local downsampled = PointCloud.new()
    downsampled.height = 0;
@@ -851,20 +768,25 @@ function PointCloud:downsample_without_panorama(leafsize)
    local downsampled_points = torch.data(points)
    local downsampled_rgb = torch.data(dsrgb)
    local downsampled_count = torch.data(count)
-   local coord_list = torch.data(crd:type('torch.IntTensor'))
-   local points_list = torch.data(pts)
-   local rgb_list = torch.data(rgb)
+   local coord_list = torch.data(crd:type('torch.IntTensor'):clone():contiguous())
+   local points_list = torch.data(pts:clone():contiguous())
+   local rgb_list = torch.data(rgb:clone():contiguous())
    local binsizes = crd:max(1):add(1):squeeze()
    local binx = binsizes[1]
    local biny = binsizes[2]
    local binz = binsizes[3]
 
-   print('looping')
-   libpc.downsample_without_panorama(downsampled_points, downsampled_rgb, downsampled_count, 
+   toc = log.toc()-tic
+   tic = tic + toc 
+   print('downsample_1: setup: '..toc)
+   
+   libpc.downsample_without_widthheightinfo(downsampled_points, downsampled_rgb, downsampled_count, 
                                      coord_list, points_list, rgb_list, self.count,
                                      binx, biny, binz)
-                                  
-   print('finish loop')
+   
+   toc = log.toc()-tic
+   tic = tic + toc                                
+   print('downsample_1: loop: '..toc)
    
    count = count[1]
    if count == 0 then
@@ -879,8 +801,6 @@ function PointCloud:downsample_without_panorama(leafsize)
    downsampled:set_local_to_global_pose(self:get_local_to_global_pose())
    downsampled:set_local_to_global_rotation(self:get_local_to_global_rotation())
    downsampled:reset_point_stats()
-   
-   print('downsampled reset')
    
    count = nil
    points = nil
@@ -902,6 +822,10 @@ function PointCloud:downsample_without_panorama(leafsize)
    biny = nil
    binz = nil
    
+   toc = log.toc()-tic
+   tic = tic + toc 
+   print('downsampled_1: finish: '..toc)
+   
    collectgarbage()
    return downsampled;
    
@@ -909,22 +833,22 @@ end
 
 function PointCloud:downsample(leafsize)
   if self.have_hw_data then
-    return self:downsample_with_panorama(leafsize)
+    return self:downsample_with_widthheightinfo(leafsize)
   else
-    return self:downsample_without_panorama(leafsize)
+    return self:downsample_without_widthheightinfo(leafsize)
   end
 end
 
---[[]]
 function PointCloud:get_normal_map(force)
   if self.have_hw_data and ((not self.normal_map) or force) then
+    
+    local tic = log.toc()
+    local toc = 0
+
     local xyz = self:get_xyz_map_no_mask()
     local height = self.height
     local width = self.width
     local shift = torch.zeros(xyz:size())
-    
-    print('make candidates')
-    log.tic()
     
     shift:sub(1,3,1,height,2,width):add(xyz:sub(1,3,1,height,1,width-1):clone())
     shift:sub(1,3,1,height,1,1):add(xyz:sub(1,3,1,height,width,width):clone())
@@ -1049,19 +973,12 @@ function PointCloud:get_normal_map(force)
     
     collectgarbage()
     
-    print(log.toc())
-    print()
-    
-    print('picker')
-    
-    log.tic()
-    
     local crossprod = torch.zeros(3,height,width)
     
-    local c1 = torch.data(crossprod_1:clone())
-    local c2 = torch.data(crossprod_2:clone())
-    local c3 = torch.data(crossprod_3:clone())
-    local c4 = torch.data(crossprod_4:clone())
+    local c1 = torch.data(crossprod_1:clone():contiguous())
+    local c2 = torch.data(crossprod_2:clone():contiguous())
+    local c3 = torch.data(crossprod_3:clone():contiguous())
+    local c4 = torch.data(crossprod_4:clone():contiguous())
     local cc = torch.data(crossprod)
     
     local thresh = 0.1
@@ -1083,50 +1000,86 @@ function PointCloud:get_normal_map(force)
     
     collectgarbage()
     
-    print(log.toc())
-    print()
-    
-    --[[
-    print('smooth normals')
-    
-    log.tic()
-    
-    dist_thresh = 0.005
-    norm_thresh = 2.5
-    local win = 10
-  
-    local nmp = crossprod:clone()
-    
-    local nmp_image = nmp:clone():add(1):div(2)
-    
-    crossprod = torch.zeros(nmp:size())
-    local d = torch.zeros(height,width)
-    local xyznew = torch.zeros(xyz:size())
-    
-    local cc = torch.data(crossprod)
-    local dd = torch.data(d)
-    local xx = torch.data(xyznew)
-    local nn = torch.data(nmp:clone())
-    local pp = torch.data(xyz:clone())
-    
-    libpc.compute_normal_help_blend(cc, dd, xx, nn, pp, height, width, win, dist_thresh, norm_thresh)
-    crossprod_norm = crossprod:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
-    crossprod = crossprod:cdiv(crossprod_norm:add(PointCloud.very_small_number))
-    
-    print(log.toc())
-    print()
-    
-    --[[]]
-    
     self.normal_map =  crossprod:clone()
     
+    toc = log.toc()-tic
+    tic = tic + toc 
+    print('normal_map: '..toc)
     
     collectgarbage()
     
   end
   return self.normal_map
 end
---[[]]
+
+function PointCloud:get_smooth_normal(win, dist_thresh, norm_thresh)
+    
+    local tic = log.toc()
+    local toc = 0
+    
+    if not win then
+      win = 10
+    end
+    if not dist_thresh then
+      dist_thresh = 0.005
+    end
+    if not norm_thresh then
+      norm_thresh = 2.5
+    end
+    
+    local height = self.height
+    local width = self.width
+  
+    local nmp = self:get_normal_map()
+    local xyz = self:get_xyz_map()
+    
+    crossprod = torch.zeros(nmp:size())
+    local d = torch.zeros(height,width)
+    local xyznew = torch.zeros(xyz:size())
+    
+    local cc = torch.data(crossprod)
+    local nn = torch.data(nmp:clone():contiguous())
+    local pp = torch.data(xyz:clone():contiguous())
+    
+    libpc.compute_normal_help_blend(cc, nn, pp, height, width, win, dist_thresh, norm_thresh)
+    crossprod_norm = crossprod:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
+    crossprod = crossprod:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    toc = log.toc()-tic
+    tic = tic + toc 
+    print('smooth_normal: '..toc)
+    
+    collectgarbage()
+    
+    return crossprod
+    
+end
+
+function PointCloud:get_normal_list()
+
+  local tic = log.toc()
+  local toc = 0
+  
+  local nmp = self:get_normal_map()
+  local nmlist = torch.zeros(self.count,3)
+  
+  local normal_list = torch.data(nmlist)
+  local normal_map = torch.data(nmp:clone():contiguous())
+  local hwindices = torch.data(self.hwindices:clone():type('torch.IntTensor'):contiguous())
+ 
+  libpc.make_normal_list(normal_list, normal_map, 
+                     hwindices, self.count, self.height, self.width)
+
+  normal_list = nil
+  normal_map = nil
+  hwindices = nil
+  
+  toc = log.toc()-tic
+  tic = tic + toc 
+  print('get_normal_list: all: '..toc)
+  
+  return nmlist
+end
 
 function PointCloud:get_3dtree()
    self.k3dtree = kdtree.new(self.points)
@@ -1134,93 +1087,6 @@ function PointCloud:get_3dtree()
 end
 
 -- I made these [MS]
-function PointCloud:get_points(force)
-   if (not self.pointsT) or force then
-      -- we should do index like this and store data the opposite way around
-      self.pointsT = self.points:transpose(1,2):contiguous()
-   end
-   return self.pointsT
-end
-
-function PointCloud:get_index_and_mask(force)
-   local points = self:get_points()
-   if (not self.index_map) or force then
-      local index_map = torch.LongTensor(self.height,self.width):fill(1)
-      local mask_map  = torch.ByteTensor(self.height,self.width):fill(1)
-      -- make sure we get the reverse index
-      for i = 1,self.count do
-         if not self.hwindices then
-            error("this pointcloud has no hwindices. can't make maps")
-         end
-         local hw = self.hwindices[i]
-         index_map[{hw[1],hw[2]}] = i
-         mask_map[{hw[1],hw[2]}] = 0
-      end
-      self.index_map = index_map
-      self.mask_map  = mask_map
-   end
-   return self.index_map, self.mask_map
-end
-
-function PointCloud:get_xyz_map()
-
-   if not self.xyz_map then
-      local points      = self:get_points()
-      local index, mask = self:get_index_and_mask()
-
-      self.xyz_map = util.addr.remap(points,index,mask)
-   end
-
-   return self.xyz_map
-
-end
-
-function PointCloud:get_xyz_map_no_mask()
-    if not self.xyz_map_no_mask then
-        local points      = self:get_points()
-        local index,mask = self:get_index_and_mask()
-        self.xyz_map_no_mask = util.addr.remap(points,index,mask,torch.Tensor(3,self.height,self.width))
-        local dpth = self.xyz_map_no_mask:clone():pow(2):sum(1):squeeze()
-        
-        torch.range(1,self.height):apply(function(h)
-            local d = dpth[h]
-            torch.range(1,self.width):apply(function(w)
-                if d[w] == 0 then
-                    self.xyz_map_no_mask:sub(1,3,h,h,w,w):fill(math.huge)
-                end
-            end)
-        end)
-    end
-    return self.xyz_map_no_mask
-end
-
-function PointCloud:get_depth_image()
-
-    local xyz_map = self:get_xyz_map_no_mask():clone()
-    local center = self.centroid:squeeze()
-    for i = 1,3 do
-      xyz_map[i]:add(-center[i])
-    end
-    local depth_map = xyz_map:norm(2,1):squeeze()
-    return depth_map
-end
-
-function PointCloud:get_depth_map()
-
-   if not self.depth_map then
-      local xyz_map = self:get_xyz_map():clone()
-      local center = self.centroid:squeeze()
-      for i = 1,3 do
-         xyz_map[i]:add(-center[i])
-      end
-
-      self.depth_map = xyz_map:norm(2,1):squeeze()
-      self.depth_map[self.mask_map] = 0
-   end
-
-   return self.depth_map
-
-end
 
 -- ugly to get z position of faro scans
 function PointCloud:estimate_faro_pose(degree_above, degree_below)
@@ -1291,6 +1157,89 @@ end
 
 function PointCloud:get_max_radius()
    return torch.max(self.radius)
+end
+
+function PointCloud:get_points(force)
+   if (not self.pointsT) or force then
+      -- we should do index like this and store data the opposite way around
+      self.pointsT = self.points:transpose(1,2):contiguous()
+   end
+   return self.pointsT
+end
+
+function PointCloud:get_index_and_mask(force)
+   if (not self.index_map) or force then
+      
+      if not self.hwindices then
+        error("this pointcloud has no hwindices. can't make maps")
+      end
+      
+      local height = self.height
+      local width = self.width
+      local index_map = torch.ones(height,width):type('torch.LongTensor'):clone()
+      local mask_map  = torch.ones(height,width):type('torch.ShortTensor'):clone()
+      
+      libpc.get_index_and_mask(torch.data(index_map), torch.data(mask_map), torch.data(self.points:clone():contiguous()), 
+                               torch.data(self.hwindices:clone():contiguous()), self.count, height, width)
+      
+      self.index_map = index_map:clone()
+      self.mask_map  = mask_map:clone():type('torch.ByteTensor')
+
+      collectgarbage()
+    
+   end
+   return self.index_map, self.mask_map
+end
+
+function PointCloud:get_xyz_map()
+
+   if not self.xyz_map then
+      local points      = self:get_points()
+      local index, mask = self:get_index_and_mask()
+
+      self.xyz_map = util.addr.remap(points,index,mask)
+   end
+
+   return self.xyz_map
+
+end
+
+function PointCloud:get_xyz_map_no_mask()
+    if not self.xyz_map_no_mask then
+        local points      = self:get_points()
+        local index,mask = self:get_index_and_mask()
+        self.xyz_map_no_mask = util.addr.remap(points,index,mask,torch.Tensor(3,self.height,self.width))
+        local dpth = self.xyz_map_no_mask:clone():pow(2):sum(1):squeeze()
+    end
+    return self.xyz_map_no_mask
+end
+
+function PointCloud:get_depth_image()
+
+    local xyz_map = self:get_xyz_map_no_mask():clone()
+    local center = self.centroid:squeeze()
+    for i = 1,3 do
+      xyz_map[i]:add(-center[i])
+    end
+    local depth_map = xyz_map:norm(2,1):squeeze()
+    return depth_map
+end
+
+function PointCloud:get_depth_map()
+
+   if not self.depth_map then
+      local xyz_map = self:get_xyz_map():clone()
+      local center = self.centroid:squeeze()
+      for i = 1,3 do
+         xyz_map[i]:add(-center[i])
+      end
+
+      self.depth_map = xyz_map:norm(2,1):squeeze()
+      self.depth_map[self.mask_map] = 0
+   end
+
+   return self.depth_map
+
 end
 
 -- rgb_map is a 2D equirectangular grid of rgb values which corresponds to xyz_map

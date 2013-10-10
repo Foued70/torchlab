@@ -11,6 +11,7 @@
 #include <math.h>
 #include <limits.h>
 #define DIST_MAX 9999
+#define DIST_MIN 1
 
 double distance(double nx1, double ny1, double nz1,
                 double nx2, double ny2, double nz2)
@@ -31,6 +32,24 @@ double find_d_of_plane(double x, double y, double z, double nx, double ny, doubl
 double distance_to_plane(double x, double y, double z, double nx, double ny, double nz, double d)
 {
   return (fabs(x*nx + y*ny + z*nz + d) / sqrt(pow(nx,2)+pow(ny,2)+pow(nz,2)));
+}
+
+int get_index_and_mask(long* index_map, short* mask_map, double* points, short* hwindices,
+                       long length, int height, int width)
+{
+  long i,k;
+  int h,w,ind;
+  i =0;
+  for (i = 0; i < length; i++)
+  {
+    h = (int)(*(hwindices+2*i+0)-1);
+    w = (int)(*(hwindices+2*i+1)-1);
+    ind = (int)(h*width + w);
+    *(index_map+ind) = (long)(i+1);
+    *(mask_map+ind) = (int)(0);
+  }
+  
+  return 0;
 }
 
 int compute_normal_helper_pick(double *normals, double *cand_1, double *cand_2, 
@@ -211,8 +230,7 @@ int compute_normal_helper_pick(double *normals, double *cand_1, double *cand_2,
   return 0;
 }
 
-int compute_normal_help_blend(double* output_normal, double * output_d, 
-                              double * output_xyz, double* input_normal, 
+int compute_normal_help_blend(double* output_normal, double* input_normal, 
                               double* xyz, int height, int width, 
                               int window, double dist_thresh, double norm_thresh)
 {
@@ -230,7 +248,7 @@ int compute_normal_help_blend(double* output_normal, double * output_d,
   {
     for (inw = 0; inw < width; inw++)
     {
-      double oupnx, oupny, oupnz, oupd, oupx, oupy,oupz;
+      double oupnx, oupny, oupnz;
       int div = 0;
       double factor = 0;
       
@@ -251,12 +269,6 @@ int compute_normal_help_blend(double* output_normal, double * output_d,
       oupnx = 0;
       oupny = 0;
       oupnz = 0;
-      
-      oupx = 0;
-      oupy = 0;
-      oupz = 0;
-      
-      oupd = 0;
       
       if (norm(nx,ny,nz) > 0.9)
       {
@@ -298,8 +310,6 @@ int compute_normal_help_blend(double* output_normal, double * output_d,
                 oupnx = oupnx + shnx;
                 oupny = oupny + shny;
                 oupnz = oupnz + shnz;
-                
-                oupd = oupd + shd;
               
                 div = div + 1;
               }
@@ -314,28 +324,6 @@ int compute_normal_help_blend(double* output_normal, double * output_d,
           oupny = oupny/div;
           oupnz = oupnz/div;
           
-          oupd = oupd/div;
-          
-          factor = oupnx * x + oupny * y + oupnz * z;
-          if (factor != 0)
-          {
-            factor = -oupd / (factor);
-          }
-          else
-          {
-            factor = 1;
-          }
-          
-          oupx = x * factor;
-          oupy = y * factor;
-          oupz = z * factor;
-          
-          if (distance(x,y,z,oupx,oupy,oupz) > dist_thresh)
-          {
-            oupx = x;
-            oupy = y;
-            oupz = z;
-          }
         }
       }
       
@@ -343,19 +331,13 @@ int compute_normal_help_blend(double* output_normal, double * output_d,
       output_normal[indy] = oupny;
       output_normal[indz] = oupnz;
       
-      output_d[indx] = oupd;
-      
-      output_xyz[indx] = oupx;
-      output_xyz[indy] = oupy;
-      output_xyz[indz] = oupz;
-      
     }
   }
   
   return 0;
 }
 
-int downsample_with_panorama(double* downsampled_points, double* downsampled_rgb, 
+int downsample_with_widthheightinfo(double* downsampled_points, double* downsampled_rgb, 
                              int* downsampled_count, double* coord_map, 
                              double* points_map, double* rgb_map, 
                              int height, int width)
@@ -422,7 +404,7 @@ int downsample_with_panorama(double* downsampled_points, double* downsampled_rgb
         pty = *(points_map +indy); 
         ptz = *(points_map +indz); 
         
-        if ((norm(ptx,pty,ptz) > 0) && (norm(ptx,pty,ptz) < DIST_MAX))
+        if ((norm(ptx,pty,ptz) > DIST_MIN) && (norm(ptx,pty,ptz) < DIST_MAX))
         {
         
           *(downsampled_points+3*dcount+0) = ptx; 
@@ -443,10 +425,11 @@ int downsample_with_panorama(double* downsampled_points, double* downsampled_rgb
   }
   
   (*downsampled_count) = dcount;
+  
   return 0;
 }
 
-int downsample_without_panorama(double* downsampled_points, double* downsampled_rgb, 
+int downsample_without_widthheightinfo(double* downsampled_points, double* downsampled_rgb, 
                                 int* downsampled_count, int* coord_list, 
                                 double* points_list, double* rgb_list, 
                                 int length, int binx, int biny, int binz)
@@ -489,4 +472,421 @@ int downsample_without_panorama(double* downsampled_points, double* downsampled_
   
   return 0;
   
+}
+
+int make_normal_list(double* normal_list, double* normal_map, 
+                     int* hwindices, int length, int height, int width)
+{
+  int i;
+  int h, w;
+  int indx, indy, indz;
+  double nx, ny, nz;
+  
+  for (i = 0; i < length; i++)
+  {
+    h = *(hwindices+2*i+0)-1;
+    w = *(hwindices+2*i+1)-1;
+    
+    indx = 0*height*width + h*width + w;
+    indy = 1*height*width + h*width + w;
+    indz = 2*height*width + h*width + w;
+    
+    nx = *(normal_map+indx);
+    ny = *(normal_map+indy);
+    nz = *(normal_map+indz);
+    
+    *(normal_list+3*i+0) = nx;
+    *(normal_list+3*i+1) = ny;
+    *(normal_list+3*i+2) = nz;
+  }
+  
+  return 0;
+}
+
+int flatten_image_without_widthheightinfo(double* imagez, int* coords, double* dists,
+                                              int length, int height, int width)
+{
+
+  int h,w,i,ind;
+  
+  for (i = 0; i<length; i++)
+  {
+    h = *(coords + 2*i + 0);
+    w = *(coords + 2*i + 1);
+    ind = h*width + w;
+    *(imagez+ind) = *(imagez+ind) + *(dists+i);
+  } 
+  
+  return 0;
+}
+
+int increment_pixel_in_image(double* img, double h, double w, int height, int width, double incr)
+{
+  int hh = (int)(round(h));
+  int ww = (int)(round(w));
+  
+  if ( (hh < height) && (ww < width) &&
+       (hh >= 0) && (ww >= 0) )
+  {
+    *(img+hh*width+ww) = *(img+hh*width+ww) + incr;
+  }
+  return 0;
+}
+
+int connect_lines_in_image(double* img, double y1, double x1, double y2, double x2, 
+                           int height, int width, double incr)
+{
+
+  double minx,maxx,miny,maxy,x,y;
+  double xx,yy,prev;
+  double dffx,dffy,slp;
+  
+  minx = fmin(x1,x2);
+  maxx = fmax(x1,x2);
+  miny = fmin(y1,y2);
+  maxy = fmax(y1,y2);
+    
+  dffx = x1-x2;
+  dffy = y1-y2;
+  
+  if (minx == maxx)
+  {
+    increment_pixel_in_image(img, (int)y1, (int)x1, height, width, incr/2);
+  }
+  else
+  { 
+    prev = 0;
+    if (fabs(dffx) >= fabs(dffy))
+    {
+      slp = dffy/dffx;
+      for (x = minx; x <= maxx; x++)
+      {
+        xx = round(x);
+        yy = round(y2 + (x-x2)*slp);
+        
+        increment_pixel_in_image(img, yy, xx, height, width, incr);
+        if ((prev > 0) && (yy != prev))
+        {
+          increment_pixel_in_image(img, prev, xx, height, width, incr/2);
+          increment_pixel_in_image(img, yy, xx-1, height, width, incr/2);
+        }
+        prev = yy;
+      }
+    
+    }
+    else
+    {
+      slp = dffx/dffy;
+      for (y = miny; y <= maxy; y++)
+      {
+        yy = round(y);
+        xx = round(x2 + (y-y2)*slp);
+        increment_pixel_in_image(img, yy, xx, height, width, incr);
+        if ((prev > 0) && (xx != prev))
+        {
+          increment_pixel_in_image(img, yy, prev, height, width, incr/2);
+          increment_pixel_in_image(img, yy-1, xx, height, width, incr/2);
+        }
+        prev = xx;
+      }
+    }
+  }
+  return 0;
+}
+
+
+int flatten_image_with_widthheightinfo_old(double* imagez, double* image_corner,
+                                          double* coord_map, double *points,
+                                          char* connection_map, char* corners_map,
+                                          double* corners_map_filled,
+                                          int pan_hght, int pan_wdth,
+                                          int img_hght, int img_wdth)
+{
+
+  int h,w, ph,pw,nh;
+  double crdx,crdy, pcrdx,pcrdy, ncrdx,ncrdy;
+  double ptxn, ptyn, ptzn, ptxp, ptyp, ptzp;
+  char conn_hw, conn_hpw;
+  char corn_hw, corn_phw, corn_nhw;
+  double dst;
+  double slp1,slp2;
+  double nz;
+  double thresh = 0.1;
+  
+  for(h = 0; h < pan_hght; h++)
+  {
+    for(w = 0; w < pan_wdth; w++)
+    {
+    
+      /* find it on connection_map and corner_map */
+      conn_hw = *(connection_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      corn_hw = *(corners_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      
+      if ((conn_hw == 1) || (corn_hw == 1))
+      {
+        ph = (int)fmax(0,h-1);
+        nh = (int)fmin(pan_hght-1,h+1);
+        pw = (w - 1 + pan_wdth) % pan_wdth;
+        
+        crdy = *(coord_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+        crdx = *(coord_map + 1*pan_hght*pan_wdth + h*pan_wdth + w);
+        
+        ptxp = *(points + 0*pan_hght*pan_wdth + ph*pan_wdth + w);
+        ptyp = *(points + 1*pan_hght*pan_wdth + ph*pan_wdth + w);
+        ptzp = *(points + 2*pan_hght*pan_wdth + ph*pan_wdth + w);
+        
+        ptxn = *(points + 0*pan_hght*pan_wdth + nh*pan_wdth + w);
+        ptyn = *(points + 1*pan_hght*pan_wdth + nh*pan_wdth + w);
+        ptzn = *(points + 2*pan_hght*pan_wdth + nh*pan_wdth + w);
+        
+        if (norm(ptxp,ptyp,ptzp) > 0 && norm(ptxn,ptyn,ptzn) > 0)
+        {
+          dst = fabs( ptzp - ptzn) + sqrt(pow(ptxp,2) + pow(ptyp,2)) + sqrt(pow(ptxn,2) + pow(ptyn,2));
+          
+          ptxp = round(*(points + 0*pan_hght*pan_wdth + h*pan_wdth + pw)*1000);
+          ptyp = round(*(points + 1*pan_hght*pan_wdth + h*pan_wdth + pw)*1000);
+          ptzp = round(*(points + 2*pan_hght*pan_wdth + h*pan_wdth + pw)*1000);
+        
+          ptxn = round(*(points + 0*pan_hght*pan_wdth + h*pan_wdth + w)*1000);
+          ptyn = round(*(points + 1*pan_hght*pan_wdth + h*pan_wdth + w)*1000);
+                      
+          /* fill corner */
+          if (corn_hw == 1)
+          {
+            corn_phw = *(corners_map + 0*pan_hght*pan_wdth + ph*pan_wdth + w);
+            corn_nhw = *(corners_map + 0*pan_hght*pan_wdth + nh*pan_wdth + w);
+          
+            if (corn_phw == 1 && corn_nhw)
+            {
+              pcrdy = *(coord_map + 0*pan_hght*pan_wdth + ph*pan_wdth + w);
+              pcrdx = *(coord_map + 1*pan_hght*pan_wdth + ph*pan_wdth + w);
+              ncrdy = *(coord_map + 0*pan_hght*pan_wdth + nh*pan_wdth + w);
+              ncrdx = *(coord_map + 1*pan_hght*pan_wdth + nh*pan_wdth + w);
+              
+              if (pcrdx == crdx && pcrdy == crdy && ncrdx == crdx && ncrdy == crdy)
+              {
+                
+                
+                if(norm(ptxp,ptyp,ptzp) > 0.1)
+                {
+                  
+                  if (ptxn-ptxp != 0 && ptxp != 0)
+                  {
+                    slp1 = (ptyn-ptyp)/(ptxn-ptxp);
+                    slp2 = (ptyp)/(ptxp);
+                  }
+                  else if (ptyn-ptyp != 0 && ptyp != 0)
+                  {
+                    slp1 = (ptxn-ptxp)/(ptyn-ptyp);
+                    slp2 = (ptxp)/(ptyp);
+                  }
+                  else
+                  {
+                    slp1 = 0;
+                    slp2 = 0;
+                  }
+                
+                  if (slp1 < slp2 - thresh || slp1 > slp2 + thresh)
+                  {
+                    
+                    increment_pixel_in_image(image_corner, crdy, crdx, img_hght, img_wdth, dst);
+                    *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
+                  }
+                }
+                else
+                {
+                  increment_pixel_in_image(image_corner, crdy, crdx, img_hght, img_wdth, dst);
+                  *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
+                }
+              }
+            }
+          }
+      
+          /* fill connections */
+          if (conn_hw == 1)
+          {
+            conn_hpw = *(connection_map + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+          
+            if (conn_hpw == 1)
+            {       
+              pcrdy = *(coord_map + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+              pcrdx = *(coord_map + 1*pan_hght*pan_wdth + h*pan_wdth + pw);
+              
+              if (ptxn-ptxp > 0 && ptxn != 0)
+              {
+                slp1 = (ptyn-ptyp)/(ptxn-ptxp);
+                slp2 = (ptyn)/(ptxn);
+              }
+              else if (ptyn-ptyp > 0 && ptyn != 0)
+              {
+                slp1 = (ptxn-ptxp)/(ptyn-ptyp);
+                slp2 = (ptxn)/(ptyn);
+              }
+              else if (ptxp-ptxn > 0 && ptxp != 0)
+              {
+                slp1 = (ptyp-ptyn)/(ptxp-ptxn);
+                slp2 = (ptyp)/(ptxp);
+              }
+              else if (ptyp-ptyn > 0 && ptyp != 0)
+              {
+                slp1 = (ptxp-ptxn)/(ptyp-ptyn);
+                slp2 = (ptxp)/(ptyp);
+              }
+              else
+              {
+                slp1 = 0;
+                slp2 = 0;
+              }
+          
+              if (slp1 < slp2 - thresh || slp1 > slp2 + thresh)
+              {
+                connect_lines_in_image(imagez, crdy, crdx, pcrdy, pcrdx, img_hght, img_wdth, dst);
+              }
+            }
+            else
+            {
+              increment_pixel_in_image(imagez, crdy, crdx, img_hght, img_wdth, dst);
+            }
+          }
+        
+        }
+      
+      }
+      
+    }
+  }
+  
+  return 0;
+}
+
+int flatten_image_with_widthheightinfo(double* imagez, double* image_corner,
+                                          double* coord_map, double *points,
+                                          char* connection_map, char* corners_map,
+                                          double* corners_map_filled,
+                                          int pan_hght, int pan_wdth,
+                                          int img_hght, int img_wdth)
+{
+
+  int h,w, pw;
+  double crdx,crdy, pcrdx,pcrdy;
+  double cor_x,cor_y;
+  double ptx,pty,ptz, ptxp,ptyp,ptzp;
+  
+  char conn_hw, conn_hpw;
+  char corn_hw;
+  
+  char on_corner;
+  
+  double dst_con, dst_cor;
+  double cor_stt, cor_end;
+  
+  double slp1,slp2;
+  double thresh = 0.1;
+  
+  for(w = 0; w < pan_wdth; w++)
+  {
+  
+    pw = (w - 1 + pan_wdth) % pan_wdth;
+    
+    dst_con = 0;
+    dst_cor = 0;
+
+    cor_stt = 0;
+    cor_end = 0;    
+    cor_x = 0;
+    cor_y = 0;
+    on_corner = 0;
+    
+    for (h = 0; h < pan_hght; h++)
+    {
+      /* find it on connection_map and corner_map */
+      conn_hw = *(connection_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      conn_hpw = *(connection_map + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+      
+      corn_hw = *(corners_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      
+      crdy = *(coord_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      crdx = *(coord_map + 1*pan_hght*pan_wdth + h*pan_wdth + w);
+      
+      pcrdy = *(coord_map + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+      pcrdx = *(coord_map + 1*pan_hght*pan_wdth + h*pan_wdth + pw);
+      
+      ptx = *(points + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      pty = *(points + 1*pan_hght*pan_wdth + h*pan_wdth + w);
+      ptz = *(points + 2*pan_hght*pan_wdth + h*pan_wdth + w);
+      
+      ptxp = *(points + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+      ptyp = *(points + 1*pan_hght*pan_wdth + h*pan_wdth + pw);
+      ptzp = *(points + 2*pan_hght*pan_wdth + h*pan_wdth + pw);
+      
+      /* check corner */
+      if (on_corner == 0)
+      {
+        /* starting new corner column */
+        if (corn_hw == 1)
+        {
+          cor_stt = ptz;
+          cor_end = ptz;
+          cor_y = crdy;
+          cor_x = crdx;
+          on_corner = 1;
+          *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
+        }
+      }
+      else
+      {
+        /* continue existing column */
+        if ((corn_hw == 1) && (crdx == cor_x) && (crdy == cor_y))
+        {
+          cor_end = ptz;
+          on_corner = 1;
+          *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
+        }
+        else
+        {
+          /* stop and draw */
+          dst_cor = 1 + 100*fabs(cor_stt - cor_end);
+          increment_pixel_in_image(image_corner, cor_y, cor_x, img_hght, img_wdth, dst_cor);
+        
+          /* maybe start new column, otherwise refresh */
+          if (corn_hw == 1)
+          {
+            cor_stt = ptz;
+            cor_end = ptz;
+            cor_y = crdy;
+            cor_x = crdx;
+            on_corner = 1;
+            *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
+          }
+          else
+          {
+            cor_stt = 0;
+            cor_end = 0;
+            cor_y = 0;
+            cor_x = 0;
+            on_corner = 0;
+          }
+          
+        }
+      }
+      
+      /* check connection */
+      if (conn_hw == 1)
+      {
+        dst_con = norm(ptx,pty,0)*100 + 1;
+        
+        if (conn_hpw == 1)
+        {
+          connect_lines_in_image(imagez, crdy, crdx, pcrdy, pcrdx, img_hght, img_wdth, dst_con);
+        }
+        else
+        {
+          increment_pixel_in_image(imagez, crdy, crdx, img_hght, img_wdth, dst_con);
+        }
+      }
+      
+    }
+  }
+  
+  return 0;
 }

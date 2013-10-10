@@ -4,6 +4,7 @@ SweepPair.TRANSFORM = "TRANSFORM_ALL"
 SweepPair.VALIDATION = "VALIDATION"
 SweepPair.ICP = "ICP"
 SweepPair.ALIGNED = "ALIGNED"
+local colors = require '../opencv/types/Colors.lua'
 
 local path = require 'path'
 function SweepPair:__init(base_dir, sweep1, sweep2, steps_from_orig, forward)
@@ -40,7 +41,7 @@ function SweepPair:__init(base_dir, sweep1, sweep2, steps_from_orig, forward)
     local parameters = {}
     parameters.corr_thresh = 2
     parameters.minInliersForMatch =2
-    parameters.maxNumCompute = 50
+    parameters.maxNumCompute = 100
     parameters.cornerDistanceLimit =1
     self.fTParameters = path.join(self.base_dir, SweepPair.TRANSFORM, self.name .. '_' .. 'properties.dat')
     torch.save(self.fTParameters, parameters)
@@ -141,39 +142,146 @@ function SweepPair:setBestDiffTransformation(i)
         
 end
 
+--[[]]
 function SweepPair:setBestTransformation()
 	
-	local parameters = torch.load(self.fVParameters)
-	local anglediff = parameters.rotation_thresh
-	local valid = self:doValidation()
-	local transformations = valid.transformations
-	local scores_metric = valid.scores_metrics.anglediff
-	local ct = 1
-	while scores_metric[ct] > anglediff do
-		ct = ct + 1
-		if ct > scores_metric:size(1) then
-			self:setBestDiffTransformation(1)
-			print('NO GOOD CANDIDATE FOUND!!!')
-			print(scores_metric[1])
-			return
-		end
+	local anglediff = 5/180*math.pi
+	local vinliers, sinliers = torch.sort((self:getAllTransformations()).inliers)
+	local transformations = self:getAllTransformations().transformations
+	
+	local nmlist1 = self.sweep1:getPC():get_normal_list()
+	local nmlist2 = self.sweep2:getPC():get_normal_list()
+	local H1 = self.sweep1:getAlignmentTransformation(self.forward).H
+	
+	local satisfy = false
+	local diff = 0
+	
+	local ct = #transformations
+	local mindiff = 100
+	local minct = 0
+	local minsat = false
+	
+	--print(vinliers)
+	
+	while (true) do
+	
+	  if ct <= 0 then
+		self:setInlierTransformation(#transformations-minct+1)
+		print('NO GOOD CANDIDATE FOUND!!!')
+		print(vinliers[minct],sinliers[minct])
+		print(transformations[sinliers[minct] ].H)
+		return
+	  end
+	
+	  local H2 = transformations[sinliers[ct] ].H
+	    
+	  diff = align_floors_endtoend.TransformationValidation.findAngDiff(nmlist1:clone(),nmlist2:clone(),H1:clone(),H2)
+	  print(diff,ct, sinliers[ct],vinliers[ct])
+	  
+	  if (diff < anglediff) then
+    	satisfy = true
+  	  else
+  	    satisfy = false
+  	  end
+	  
+	  if mindiff > diff then
+	    print('mindiff > diff')
+	    mindiff = diff
+	    minct = ct
+	    minsat = satisfy
+	  end
+	  
+	  if minsat then
+	    if ct == 1 or vinliers[ct-1] < vinliers[ct] then
+	      print('next vinlier changes')
+  	      break
+  	    end
+  	  end
+  	  
+	  if satisfy then
+	    if vinliers[minct] > vinliers[ct] then
+  	      print('minct was a different level')
+  	      mindiff = diff
+  	      minct = ct
+  	    end
+	  end
+	  
+	  ct = ct - 1
+		
 	end
+	
+	print('GOOD CANDIDATE FOUND!!!')
+	print(mindiff, minct, sinliers[minct],vinliers[minct])
+	print(transformations[sinliers[minct] ].H)
+	self:setInlierTransformation(#transformations-minct+1)
+	
+end
+--[[]]
+
+--[[
+function SweepPair:setBestTransformation()
+	
+	local anglediff = 5/180*math.pi
+	local transformations = self:getAllTransformations().transformations
+	
+	local nmlist1 = self.sweep1:getPC():get_normal_list()
+	local nmlist2 = self.sweep2:getPC():get_normal_list()
+	local H1 = self.sweep1:getAlignmentTransformation(self.forward).H
+	
+	local satisfy = false
+	local diff = 0
+	
+	local ct = 1
+	local mindiff = 100
+	local minct = 0
+	
+	while (not satisfy) do
+	
+	  if ct >#transformations then
+		self:setBestDiffTransformation(minct)
+		print('NO GOOD CANDIDATE FOUND!!!')
+        print(minct)
+		print(transformations[minct].H)
+		return
+	  end
+	
+	  local H2 = transformations[ct].H
+	    
+	  satisfy,diff = align_floors_endtoend.TransformationValidation.satisfyAngDiff(nmlist1:clone(),nmlist2:clone(),H1:clone(),H2,anglediff)
+	  
+	  if mindiff > diff then
+	    mindiff = diff
+	    minct = ct
+	  end
+	  
+	  if satisfy then
+	    break
+	  end
+	  
+	  ct = ct + 1
+		
+	end
+	
+	print('GOOD CANDIDATE FOUND!!!')
+	print(ct)
+	print(transformations[ct].H)
 	self:setBestDiffTransformation(ct)
 	
 end
+]]
 
 function SweepPair:setInlierTransformation(i)
 
     local vinliers, sinliers = torch.sort((self:getAllTransformations()).inliers)
     local i = sinliers[sinliers:size(1)-i+1]
     local bestTransformation = (self:getAllTransformations()).transformations[i]
+    print(bestTransformation.H)
     
     if self.forward then
         self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, true)
     else
         self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, false)
     end
-
 end
 
 function SweepPair:setBestTransformationH(H)

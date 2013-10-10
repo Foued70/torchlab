@@ -268,7 +268,7 @@ function Sweep:getICPTransformation(forward)
         if not(self.icpH_F) then
             if util.fs.is_file(self.ftransform_f) then
                 temp =  torch.load(self.ftransform_f)
-                self.alignmentH_F = temp[1]
+                --self.alignmentH_F = temp[1]
                 self.icpH_F = temp[2]
                 self.floor = temp[3]
                 self.steps_F = temp[4]
@@ -282,7 +282,7 @@ function Sweep:getICPTransformation(forward)
         if not(self.icpH_B) then
             if util.fs.is_file(self.ftransform_b) then
                 temp =  torch.load(self.ftransform_b)
-                self.alignmentH_B = temp[1]
+                --self.alignmentH_B = temp[1]
                 self.icpH_B = temp[2]
                 self.floor = temp[3]
                 self.steps_B = temp[4]
@@ -296,7 +296,7 @@ function Sweep:getICPTransformation(forward)
         if not(self.icpH) then
             if util.fs.is_file(self.ftransform) then
                 temp =  torch.load(self.ftransform)
-                self.alignmentH = temp[1]
+                --self.alignmentH = temp[1]
                 self.icpH = temp[2]
                 self.floor = temp[3]
             else
@@ -455,8 +455,7 @@ function Sweep.flattened2Image(flattenedxy,corners)
 	    	combined:sub(3,3,math.max(1,corners[i][1]-3),math.min(size_us[1],corners[i][1]+3),math.max(1,corners[i][2]-3),math.min(size_us[2],corners[i][2]+3)):fill(0)
 	    end
 	end
-	print('flattened2Image')
-	print(combined:size())
+	
     return combined
 end
 

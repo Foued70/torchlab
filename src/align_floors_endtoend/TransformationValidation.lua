@@ -23,7 +23,6 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
       image_properties_tmp[i].tgt_centers_w = center2[1]
 
       combined_tmp[i] = combined_i
-      --the closer to zero the better
       
       scores_metrics_temp.anglediff_tmp[i] = TransformationValidation.findAngleDifference(opencv.Mat.new(torch.gt(combined_tmp[i][1],0)), opencv.Mat.new(torch.gt(combined_tmp[i][2],0)))
 
@@ -32,8 +31,6 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
 
 
       structElement = opencv.imgproc.getDefaultStructuringMat(2) 
-      --opencv.imgproc.dilate(srci_mat, structElement);
-      --opencv.imgproc.dilate(desi_mat, structElement);
 
       local srci = srci_mat:toTensor()
       srci:cdiv(srci:clone():add(0.0000000001)):ceil()
@@ -48,7 +45,6 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
    local image_properties = {}
    local scores_metrics = {}
    local numRet = math.min(table.getn(best_transformations),parameters.maxNumReturn)
-
 
    scores_metrics.anglediff = torch.zeros(numRet)
    scores_metrics.inliers = torch.zeros(numRet)
@@ -111,6 +107,43 @@ function TransformationValidation.findAngleDifference(img_src, img_dest)
    angle_options_real = TransformationValidation.findMainDirections(img_src, img_dest)
 
    return math.min(angle_options_real[1], math.pi/2-angle_options_real[1])
+end
+
+function TransformationValidation.findDirections(normalList)
+  local nmp = normalList:sub(1,2):clone():cmul(normalList[3]:clone():abs():lt(0.25):type('torch.DoubleTensor'):repeatTensor(2,1,1))
+  nmp:cmul(normalList:clone():pow(2):sum(1):squeeze():gt(0.25):type('torch.DoubleTensor'):repeatTensor(2,1,1))
+  local nmp_norm = nmp:clone():pow(2):sum(1):sqrt():squeeze()
+  nmp:cdiv(nmp_norm:repeatTensor(2,1,1))
+  
+  local acos = nmp[1]:clone():acos()
+  local asin = nmp[2]:clone():asin()
+  local thetas = acos:clone():cmul(asin:ge(0):type('torch.DoubleTensor')):add(
+                 acos:clone():mul(-1):add(2*math.pi):cmul(asin:lt(0):type('torch.DoubleTensor')))
+  
+  dirMap = torch.histc(thetas,360,0,2*math.pi)
+  
+  return dirMap
+  
+end
+
+function TransformationValidation.findAngDiff(nlist1,nlist2,trans1,trans2)
+
+  local t1 = trans1:clone()
+  t1:sub(1,2,3,3):fill(0)
+  local t2 = trans2:clone()
+  t2:sub(1,2,3,3):fill(0)
+  
+  local nl1 = t1:clone()*nlist1:transpose(1,2)
+  local nl2 = t2:clone()*nlist2:transpose(1,2)
+  
+  local d,d1 = TransformationValidation.findDirections(nl1):max(1)
+  local d,d2 = TransformationValidation.findDirections(nl2):max(1)
+  
+  diff = math.abs(d2[1]-d1[1])
+  diff = math.min(diff, math.abs(90-diff), math.abs(180-diff), math.abs(270-diff), math.abs(360-diff))*math.pi/180
+
+  return diff
+   
 end
 
 function TransformationValidation.findMainDirections(img_src, img_dest)
