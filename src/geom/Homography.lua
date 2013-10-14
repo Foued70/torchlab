@@ -15,7 +15,7 @@ function Homography:__init(arg1, arg2)
       local translation = arg2
       local cosA = math.cos(angle)
       local sinA = math.sin(angle)
-      self.H = torch.Tensor({{cosA, sinA, translation[1]},{-sinA, cosA, translation[2]},{0, 0, 1}})
+      self.H = torch.Tensor({{cosA, -sinA, translation[1]},{sinA, cosA, translation[2]},{0, 0, 1}})
 end
    -- origin starting point of the ray
 end
@@ -65,6 +65,14 @@ end
 --T is 3x3 transformation matrix, mat_src is 2xn matrix
 function Homography:applyToPointsReturn2d(mat_src)
    return self:applyToPoints(mat_src)[{{1,2},{}}]
+end
+
+function Homography.applyToPointsReturn2d(H, mat_src)
+   if (mat_src:size(1) == 2) then
+      return torch.mm(H, torch.cat(mat_src, torch.ones(1,mat_src:size(2)),1))[{{1,2},{}}]
+   elseif (mat_src:size(1) == 3) then
+      return torch.mm(H, mat_src)[{{1,2},{}}]
+   end   
 end
 
 --returns new Homography ( self.H*homography2.H)

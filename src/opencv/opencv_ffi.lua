@@ -160,6 +160,8 @@ Mat* findBestTransformation(const Mat* goodLocationsX_src, const Mat* goodLocati
   double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, double minx, double maxx, double miny, double maxy);
 void flann_knn(Mat* m_object, Mat* m_destinations, int knn, Mat* m_indices, Mat* m_dists);
 void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresults, Mat* m_indices, Mat* m_dists);
+void get_orientation(Mat* src, int ksize, Mat* mag, Mat* orientaiton);
+Mat* phaseCorrelate(Mat *src, Mat *dst);
 ]]
 
 -- utils.lua

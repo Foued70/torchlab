@@ -122,7 +122,6 @@ end
 
 function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_src, pairwise_dis_src, goodLocationsX_dest, goodLocationsY_dest, scores_dest, pairwise_dis_dest, corr_thresh,
       minInliers, numInliersMax, cornerComparisonThreshold, minx, maxx, miny, maxy)
-
    if ((not goodLocationsX_src.mat) or (type(goodLocationsX_src.mat) ~= "cdata")) then 
       error("problem with source locations Mat - first argument")
    end
@@ -181,7 +180,7 @@ function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_s
       best_pts = torch.zeros(matOfStuff:toTensor():size()[1])
 
       for i =1,matOfStuff:toTensor():size()[1] do
-         best_transformations[i] = geom.Homography.new(matOfStuff:toTensor()[{i,{2,10}}]:reshape(3,3))
+         best_transformations[i] = matOfStuff:toTensor()[{i,{2,10}}]:reshape(3,3)
          best_pts[{i}] = matOfStuff:toTensor()[{i,1}]
       end
    else
@@ -239,4 +238,31 @@ function erode(img, structuringElement)
       error("problem with structuring element images")
    end
    opencv_ffi.erode(img.mat, structuringElement.mat);
+end
+
+--erode the img 
+function getOrientation(img, ksize)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   if (not ksize) then 
+      ksize = 3
+   end
+   ori = opencv.Mat.new()
+   mag = opencv.Mat.new()
+   opencv_ffi.get_orientation(img.mat, ksize, ori.mat, mag.mat);
+   return ori, mag
+end
+
+
+--erode the img 
+function phaseCorrelate(img, dest)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   if ((not dest.mat) or (type(dest.mat) ~= "cdata")) then 
+      error("problem with dest image")
+   end
+
+   return opencv.Mat.new(opencv_ffi.phaseCorrelate(img.mat, dest.mat));
 end
