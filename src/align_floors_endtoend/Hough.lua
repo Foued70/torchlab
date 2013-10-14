@@ -172,13 +172,20 @@ function Hough:getMainDirections(img)
 	local imgorig = img:clone()
 	
 	local linesP = opencv.imgproc.HoughLinesProbabilistic(img, Hough.houghRo, Hough.houghTheta, Hough.defaultThreshold, Hough.houghMinLineLength, Hough.houghMaxLineGap);
-	--local linesP = opencv.imgproc.HoughLinesRegular(img, Hough.houghRo, Hough.houghTheta, Hough.defaultThreshold, 1,1);
-	
+
 	local slopes, intersects = Hough.getSlopeIntersectFromHoughP(linesP)
 	--find the corners! split into two perpendicular "clusters", corners are intersections of any point in one cluster with points in the other
 	local angles = torch.atan(slopes)
 	 angles:apply(function(val) if val<0 then return math.pi + val end end)
 	local vals, order = torch.sort(angles)
+	local changed
+	if(math.pi - vals[vals:size(1)] < 3*math.pi/180 and vals[1] < 3*math.pi/180) then
+		angles = (angles-math.pi/4)
+		angles:apply(function(val) if val<0 then return math.pi + val end end)
+		vals, order = torch.sort(angles)
+		changed = true
+
+	end
 	local absoluted = torch.abs(vals[{{1,vals:size()[1]-1},1}]-vals[{{2,vals:size()[1]},1}])
 	local maxV, locV = torch.max(absoluted,1)
 	--vals[locV] and vals[locV+1] is the boundary
@@ -186,8 +193,16 @@ function Hough:getMainDirections(img)
 
 	local firstGroup = vals[{{1,locV[1]},1}]
 	local secondGroup = vals[{{locV[1]+1, vals:size()[1]},1}]
-
-	return torch.mean(firstGroup), torch.mean(secondGroup)
+	local first_angle = torch.mean(firstGroup)
+	local second_angle = torch.mean(secondGroup)
+	if(changed) then
+		first_angle = first_angle + math.pi/4
+		second_angle = second_angle +math.pi/4
+	end
+	if torch.abs(torch.abs(first_angle-second_angle)-math.pi/2)>math.rad(5) then
+		error("could not find two perpendicular directions, found: " .. first_angle .. " and " .. second_angle)
+	end
+	return first_angle, second_angle
 end
 function Hough.drawLine(img, smb, value)
 	local startY = 1

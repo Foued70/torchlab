@@ -1,157 +1,175 @@
 SweepPair = Class()
-SweepPair.COMBINED = "COMBINED"
-SweepPair.TRANSFORM = "TRANSFORM_ALL"
-SweepPair.VALIDATION = "VALIDATION"
-SweepPair.ICP = "ICP"
-SweepPair.ALIGNED = "ALIGNED"
+SweepPair.SWEEPPAIR = "SWEEPPAIR"
 local colors = require '../opencv/types/Colors.lua'
-
 local path = require 'path'
-function SweepPair:__init(base_dir, sweep1, sweep2, steps_from_orig, forward)
-    if not(sweep1.type == "Sweep") or not(sweep2.type == "Sweep") then
-        error("Expected to be given a sweep for a sweep pair!")
-    end
-    if not(util.fs.is_dir(base_dir)) then
-        error("expected base_dir to be directory in initializer for SweepPair")
-    end
-    self.sweep1 = sweep1
-    self.sweep2 = sweep2
-    if forward then
-        self.forward = true
+FindTransformation = align_floors_endtoend.FindTransformation
+TransformationValidation = align_floors_endtoend.TransformationValidation
+Sweep = align_floors_endtoend.Sweep
+
+--transformation from sweep2 to sweep1
+function SweepPair:__init(base_dir, sweep1, sweep2)
+  if not(sweep1.__classname__ == Sweep.__classname__) or 
+    not(sweep2.__classname__ == Sweep.__classname__) then
+    error("Expected to be given a sweep for a sweep pair!")
+  end
+  if not(util.fs.is_dir(base_dir)) then
+    error("expected base_dir to be directory in initializer for SweepPair")
+  end
+  self.sweep1 = sweep1
+  self.sweep2 = sweep2
+  self.need_recalculating_icp = true
+  self.threed_validation_score  = -1
+  self.euc_validation_score  = -1
+  self.name = sweep1:getName() .. "_" .. sweep2:getName()
+  self.base_dir = base_dir
+  self:mkdirs()
+  self:init_variables()
+  self:saveMe()
+end
+
+function SweepPair.newOrLoad(base_dir, sweep1, sweep2)
+    if util.fs.is_file(path.join(base_dir, SweepPair.SWEEPPAIR, sweep1:getName() .. "_" .. sweep2:getName()..".dat")) then
+      print("loading sweep pair from file " .. sweep1:getName() .. "_" .. sweep2:getName()..".dat")
+      return torch.load(path.join(base_dir, SweepPair.SWEEPPAIR, sweep1:getName() .. "_" .. sweep2:getName()..".dat"))
     else
-        self.forward = false
+      return SweepPair.new(base_dir, sweep1, sweep2)
     end
+  end
+  function SweepPair:__write_keys()
+    return {'parameters', 'transformationInfo', 'ValidationInfo', 'name', 'base_dir', 'fsave_me', 'sweep1_loc', 'sweep2_loc', 'ValidationInfoSimple',
+    'alignmentH_F', 'icpH_F', 'floor_transformation_F', 'need_recalculating_icp', 'threed_validation_score', 'euc_validation_score'}
+  end
+
+  function SweepPair:init_variables()
+    self.parameters = {}
+    --for transformation
+    self.parameters.corr_thresh = 2
+    self.parameters.minInliersForMatch =2
+    self.parameters.maxNumCompute = 100
+    self.parameters.cornerDistanceLimit =1
+
+    --validation
+    self.parameters.maxNumReturn = 25
+    self.parameters.rotation_thresh = 2*math.pi * (10/360)
+
+    --icp
+    self.parameters.icp_correspondence = .2
+    self.parameters.icp_max_iterations = 100
+    self.parameters.icp_ransac_iterations = 10000
+    self.parameters.icp_transform_eps = 1e-6
+
+    --euclidean validation score
+    self.parameters.euc_valid_max_range = .2
+    self.fsave_me = path.join(self.base_dir, SweepPair.SWEEPPAIR, self.name ..".dat")
+    self.sweep1_loc = self:getSweep1():getSaveLocation()
+    self.sweep2_loc = self:getSweep2():getSaveLocation()
     
-    self.steps_from_orig = steps_from_orig
-    
-    self.name = sweep1:getName() .. "_" .. sweep2:getName()
-    self.base_dir = base_dir
-    self.ftransformation = path.join(self.base_dir, SweepPair.TRANSFORM, self.name .. ".dat")
-    self.fvalidation = path.join(self.base_dir, SweepPair.VALIDATION, self.name .. ".dat")
-    self.faligned_pcd = path.join(self.base_dir, SweepPair.ALIGNED, self.name .. ".pcd")
-    self.faligned_h = path.join(self.base_dir, SweepPair.ALIGNED, self.name .. ".txt")
-    self.ficp_pcd = path.join(self.base_dir, SweepPair.ICP, self.name .. ".pcd")
-    self.ficp_h = path.join(self.base_dir, SweepPair.ICP, self.name .. ".txt")
-
-    util.fs.mkdir_p(path.join(self.base_dir, SweepPair.TRANSFORM))
-    util.fs.mkdir_p(path.join(self.base_dir, SweepPair.VALIDATION))
-    util.fs.mkdir_p(path.join(self.base_dir, SweepPair.ICP))
-    util.fs.mkdir_p(path.join(self.base_dir, SweepPair.ALIGNED))
-
-    local parameters = {}
-    parameters.corr_thresh = 2
-    parameters.minInliersForMatch =2
-    parameters.maxNumCompute = 100
-    parameters.cornerDistanceLimit =1
-    self.fTParameters = path.join(self.base_dir, SweepPair.TRANSFORM, self.name .. '_' .. 'properties.dat')
-    torch.save(self.fTParameters, parameters)
-
-    local parameters = {}
-    parameters.warpWithBorders = false
-    parameters.maxNumReturn = 25
-    parameters.rotation_thresh = 2*math.pi * (4.5/360)
-    self.fVParameters = path.join(self.base_dir, SweepPair.VALIDATION, self.name .. '_' .. 'properties.dat')
-    torch.save(self.fVParameters, parameters)
-
-
-    local parameters = {}
-    parameters.scale = .01
-    parameters.icp_correspondence = .2
-    parameters.icp_max_iterations = 100
-    parameters.icp_ransac_iterations = 10000
-    parameters.icp_transform_eps = 1e-6
-    self.fIParameters = path.join(self.base_dir, SweepPair.ICP, self.name .. '_' .. 'properties.dat')
-    torch.save(self.fIParameters, parameters)
-
+    self.alignmentH_F = torch.eye(3)
+    self.icpH_F = torch.eye(4)
+    self.floor = 0
+    self.floor_transformation_F = 0;
+    self.parameters.scale = .01
 end
 
-function SweepPair:getAllTransformations()
-    if not(self.transformationInfo) then
-        if util.fs.is_file(self.ftransformation) then
-            self.transformationInfo = torch.load(self.ftransformation)
-        else                
-            local corners1, flattenedxy1, flattenedv1
-            if self.forward then
-                corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,true)
-            else
-                corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,false)
-            end
-            
-            local corners2, flattenedxy2, flattenedv2 = self.sweep2:flattenAndCorners()
-            local parameters = torch.load(self.fTParameters)
-            
-            local minT =torch.min(flattenedxy2,1):reshape(2)
-            local maxT = torch.max(flattenedxy2,1):reshape(2)
-            local inliers, transformations = align_floors_endtoend.FindTransformation.findTransformation(minT[1], maxT[1], minT[2], maxT[2], corners2, corners1, parameters)
-            
-            local transformationInfo = {}
-            
-            transformationInfo["inliers"] = inliers
-            transformationInfo["transformations"] = transformations
-            
-            transformationInfo["parameters"] = parameters
-            torch.save(self.ftransformation,transformationInfo)
-            self.transformationInfo = transformationInfo
-        end
-    end
-    return self.transformationInfo
+function SweepPair:getSweep1()
+  if not(self.sweep1) then
+        self.sweep1 = torch.load(self.sweep1_loc)
+  end
+  return self.sweep1
 end
 
-function SweepPair:doValidation()
-    if true then --not(self.ValidationInfo) then
-        if false then -- util.fs.is_file(self.fvalidation) then
-            self.ValidationInfo = torch.load(self.fvalidation)
-        else
-            local transformationInfo = self:getAllTransformations()
-            local corners1, flattenedxy1, flattenedv1
-            if self.forward then
-                corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,true)
-            else
-                corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,false)
-            end
-            local corners2, flattenedxy2, flattenedv2 = self.sweep2:flattenAndCorners()
-            local parameters = torch.load(self.fVParameters)
-            
-            local transformations, combined, image_properties, scores_metrics = 
-                align_floors_endtoend.TransformationValidation.validate(transformationInfo.inliers, 
-                transformationInfo.transformations, flattenedxy2, flattenedxy1, parameters)
-                
-            local ValidationInfo = {}
+function SweepPair:getSweep2()
+  if not(self.sweep2) then
+        self.sweep2 = torch.load(self.sweep2_loc)
+  end
+  return self.sweep2
+end
 
-            ValidationInfo["transformations"] = transformations
-            ValidationInfo["combined"] = combined
-            ValidationInfo["image_properties"] = image_properties
-            ValidationInfo["scores_metrics"] = scores_metrics
-            
-            ValidationInfo["parameters"] = parameters
-            --torch.save(self.fvalidation, ValidationInfo)
-            self.ValidationInfo = ValidationInfo
-        end
-    end
-    return self.ValidationInfo
+function SweepPair:mkdirs()
+  util.fs.mkdir_p(path.join(self.base_dir, SweepPair.SWEEPPAIR))
+end
+
+function SweepPair:getAllTransformations(recalc)
+  if not(self.transformationInfo) or recalc then
+    local corners1, flattenedxy1, flattenedv1 = self:getSweep1():getFlattenedAndCorners()
+    local corners2, flattenedxy2, flattenedv2 = self:getSweep2():getFlattenedAndCorners()
+
+    local minT =torch.min(flattenedxy2,1):reshape(2)
+    local maxT = torch.max(flattenedxy2,1):reshape(2)
+    local inliers, transformations = FindTransformation.findTransformation(minT[1], maxT[1], minT[2], maxT[2], corners2, corners1, self.parameters)
+
+    local transformationInfo = {}
+
+    transformationInfo["inliers"] = inliers
+    transformationInfo["transformations"] = transformations
+    self.transformationInfo = transformationInfo
+    self:saveMe()
+  end
+  return self.transformationInfo
+end
+
+--not returning combined,don't want ot keep track of dozens of images in memory...
+function SweepPair:getValidationDiff(recalc)
+  if not(self.ValidationInfoSimple) or recalc then
+    local transformationInfo = self:getAllTransformations()
+    local corners1, flattenedxy1, flattenedv1 = self:getSweep1():getFlattenedAndCorners()
+    local corners2, flattenedxy2, flattenedv2 = self:getSweep2():getFlattenedAndCorners()
+    local transformations, image_properties, scores_metrics
+    transformations, imgdiff = 
+    TransformationValidation.validate_simple(transformationInfo.inliers, 
+      transformationInfo.transformations, flattenedxy1, flattenedxy2, self.parameters)
+
+    local ValidationInfoSimple = {}
+
+    ValidationInfoSimple["transformations"] = transformations
+    ValidationInfoSimple["imgdiff"] = imgdiff
+    self.ValidationInfoSimple = ValidationInfoSimple
+    self:saveMe()
+  end
+  return self.ValidationInfoSimple
+end
+
+--not returning combined,don't want ot keep track of dozens of images in memory...
+function SweepPair:getValidation(recalc)
+  local combined
+  if not(self.ValidationInfo) or recalc then
+    local transformationInfo = self:getAllTransformations()
+    local corners1, flattenedxy1, flattenedv1 = self:getSweep1():getFlattenedAndCorners()
+    local corners2, flattenedxy2, flattenedv2 = self:getSweep2():getFlattenedAndCorners()
+    local transformations, image_properties, scores_metrics
+    transformations, combined, image_properties, scores_metrics = 
+    TransformationValidation.validate(transformationInfo.inliers, 
+      transformationInfo.transformations, flattenedxy1, flattenedxy2, self.parameters)
+
+    local ValidationInfo = {}
+
+    ValidationInfo["transformations"] = transformations
+    ValidationInfo["image_properties"] = image_properties
+    ValidationInfo["scores_metrics"] = scores_metrics
+    self.ValidationInfo = ValidationInfo
+    self:saveMe()
+  end
+  return self.ValidationInfo, combined
 end
 
 function SweepPair:setBestDiffTransformation(i)
-
-	local bestTransformation = (self:doValidation()).transformations[i]
-    if self.forward then
-       	self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, true)
-    else    
-    	self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, false)
-	end
-        
+  if not(self:getValidationDiff().transformations) then
+    self:setBestTransformationH(torch.eye(3))
+  else
+    self:setBestTransformationH((self:getValidationDiff()).transformations[i])
+  end
 end
 
 --[[]]
-function SweepPair:setBestTransformation()
+--gets the transformation in the highest inlier category with best angle diff
+function SweepPair:setBestInlierAndAngle()
 	
 	local anglediff = 5/180*math.pi
-	local vinliers, sinliers = torch.sort((self:getAllTransformations()).inliers)
+	local vinliers, sinliers = torch.sort((self:getAllTransformations()).inliers,true)
 	local transformations = self:getAllTransformations().transformations
 	
-	local nmlist1 = self.sweep1:getPC():get_normal_list()
-	local nmlist2 = self.sweep2:getPC():get_normal_list()
-	local H1 = self.sweep1:getAlignmentTransformation(self.forward).H
+	local nmlist1 = self:getSweep1():getPC():get_normal_list()
+	local nmlist2 = self:getSweep2():getPC():get_normal_list()
 	
 	local satisfy = false
 	local diff = 0
@@ -169,13 +187,13 @@ function SweepPair:setBestTransformation()
 		self:setInlierTransformation(#transformations-minct+1)
 		print('NO GOOD CANDIDATE FOUND!!!')
 		print(vinliers[minct],sinliers[minct])
-		print(transformations[sinliers[minct] ].H)
+		print(transformations[sinliers[minct] ])
 		return
 	  end
 	
-	  local H2 = transformations[sinliers[ct] ].H
+	  local H2 = transformations[sinliers[ct] ]
 	    
-	  diff = align_floors_endtoend.TransformationValidation.findAngDiff(nmlist1:clone(),nmlist2:clone(),H1:clone(),H2)
+	  diff = align_floors_endtoend.TransformationValidation.findAngDiff(nmlist1:clone(),nmlist2:clone(),torch.eye(3),H2)
 	  print(diff,ct, sinliers[ct],vinliers[ct])
 	  
 	  if (diff < anglediff) then
@@ -212,240 +230,372 @@ function SweepPair:setBestTransformation()
 	
 	print('GOOD CANDIDATE FOUND!!!')
 	print(mindiff, minct, sinliers[minct],vinliers[minct])
-	print(transformations[sinliers[minct] ].H)
+	print(transformations[sinliers[minct] ])
 	self:setInlierTransformation(#transformations-minct+1)
 	
 end
---[[]]
 
---[[
-function SweepPair:setBestTransformation()
-	
-	local anglediff = 5/180*math.pi
-	local transformations = self:getAllTransformations().transformations
-	
-	local nmlist1 = self.sweep1:getPC():get_normal_list()
-	local nmlist2 = self.sweep2:getPC():get_normal_list()
-	local H1 = self.sweep1:getAlignmentTransformation(self.forward).H
-	
-	local satisfy = false
-	local diff = 0
-	
+
+function SweepPair:setBestTransformationOld()
+	local anglediff = self.parameters.rotation_thresh
+	local valid = self:getValidation()
+	local transformations = valid.transformations
+	local scores_metric = valid.scores_metrics.anglediff
 	local ct = 1
-	local mindiff = 100
-	local minct = 0
-	
-	while (not satisfy) do
-	
-	  if ct >#transformations then
-		self:setBestDiffTransformation(minct)
-		print('NO GOOD CANDIDATE FOUND!!!')
-        print(minct)
-		print(transformations[minct].H)
-		return
-	  end
-	
-	  local H2 = transformations[ct].H
-	    
-	  satisfy,diff = align_floors_endtoend.TransformationValidation.satisfyAngDiff(nmlist1:clone(),nmlist2:clone(),H1:clone(),H2,anglediff)
-	  
-	  if mindiff > diff then
-	    mindiff = diff
-	    minct = ct
-	  end
-	  
-	  if satisfy then
-	    break
-	  end
-	  
-	  ct = ct + 1
-		
+	while scores_metric[ct] > anglediff do
+		ct = ct + 1
+		if ct > scores_metric:size(1) then
+			self:setBestDiffTransformation(1)
+			print('NO GOOD CANDIDATE FOUND!!!')
+			print(scores_metric[1])
+			return
+		end
 	end
-	
-	print('GOOD CANDIDATE FOUND!!!')
-	print(ct)
-	print(transformations[ct].H)
 	self:setBestDiffTransformation(ct)
 	
 end
-]]
 
 function SweepPair:setInlierTransformation(i)
-
-    local vinliers, sinliers = torch.sort((self:getAllTransformations()).inliers)
-    local i = sinliers[sinliers:size(1)-i+1]
-    local bestTransformation = (self:getAllTransformations()).transformations[i]
-    print(bestTransformation.H)
-    
-    if self.forward then
-        self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, true)
-    else
-        self.sweep2:setAlignmentTransformation(bestTransformation, self.steps_from_orig, false)
-    end
+  local vinliers, sinliers = torch.sort((self:getAllTransformations()).inliers)
+  local i = sinliers[sinliers:size(1)-i+1]
+  local bestTransformation = (self:getAllTransformations()).transformations[i]
+  self:setBestTransformationH(bestTransformation)
 end
 
+--transformation from sweep2 to sweep1
 function SweepPair:setBestTransformationH(H)
+  if(torch.gt(torch.abs(H-self:getAlignmentTransformation()), 10^-5):sum()>1) or 
+    (torch.abs(self:getSweep1():getFloor()-self:getSweep2():getFloor() - self:getZTransformation()) > 10^-5) then 
+    self:setAlignmentTransformation(H)
+    self:setZTransformation(self:getSweep1():getFloor()-self:getSweep2():getFloor()) 
+    self:setICPTransformation(torch.eye(4))      
+    self.need_recalculating_icp = true
+    self.threed_validation_score  = -1
+    self.euc_validation_score = -1
+    self:saveMe()     
+  end
+end
 
-    if self.forward then
-    	print('setting forward trans')
-    	print(H)
-        self.sweep2:setAlignmentTransformation(H, self.steps_from_orig, true)
+function SweepPair:getEuclideanValidationScore(recalc)
+  if(self.euc_validation_score ==-1) or not(self.euc_validation_score) or recalc then
+    local t = self:getTransformation(true,false, false)
+    local t2 = self:getTransformation(false, false, false)
+    local pc1_o =       self:getSweep1():getPC(t)
+    local pc1 = pcl.PCLPointCloud.fromPointCloud(pc1_o)
+    local pc2_o =self:getSweep2():getPC(t*t2)
+    local pc2 = pcl.PCLPointCloud.fromPointCloud(pc2_o)
+    self.parameters.euc_valid_max_range = .3
+    self.euc_validation_score = pcl.PCLPointCloud.getEuclideanValidationScore(pc1,pc2,self.parameters.euc_valid_max_range)
+  end
+  return self.euc_validation_score
+end
+
+function SweepPair:getIcp(recalc)
+  if(self.need_recalculating_icp) or recalc then
+    local t = self:getTransformation(true,false, false)
+    local t2 = self:getTransformation(false, true, false)
+    local pc1_o =       self:getSweep1():getPC(t)
+    local pc1 = pcl.PCLPointCloud.fromPointCloud(pc1_o)
+    local pc2_o =self:getSweep2():getPC(t*t2)
+    local pc2 = pcl.PCLPointCloud.fromPointCloud(pc2_o)
+
+    self.parameters.icp_correspondence = .1
+    self.parameters.icp_max_iterations = 100
+    self.parameters.icp_ransac_iterations = 100000
+    self.parameters.icp_transform_eps = 1e-6
+    print("Starting icp algorithm")
+    log.tic()
+    local transf, converged = pcl.PCLPointCloud.doICP(pc2, pc1, 
+      self.parameters.icp_transform_eps, 
+      self.parameters.icp_max_iterations, 
+      self.parameters.icp_ransac_iterations,
+      self.parameters.icp_correspondence)
+    --converged = converged and not((torch.abs(transf[3][1]) > .05) or (torch.abs(transf[3][2]) > .05))
+    if(converged) then
+      transf[{3,{1,2}}]:fill(0)
+      transf[{{1,2},3}]:fill(0)
+
+      print("icp converged in time " .. log.toc() .. " with transformation:")
+      print(transf)
+      self:setICPTransformation(transf)      
     else
-	    print('setting backward trans')
-	    print(H)
-        self.sweep2:setAlignmentTransformation(H, self.steps_from_orig, false)
+      print("icp did not converge in time " .. log.toc())
     end
-
+    self.need_recalculating_icp = false
+    self:saveMe()
+  end
 end
 
-function SweepPair:doIcp2d()
-    
-    local corners1, flattenedxy1, flattenedv1
-    if self.forward then
-        self.sweep2:setICPTransformation(geom.Homography.new(torch.eye(3)),self.steps_from_orig,true)
-        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,true)
-    else
-        self.sweep2:setICPTransformation(geom.Homography.new(torch.eye(3)),self.steps_from_orig,false)
-        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,false)
-    end
-        
-    local corners2, flattenedxy2, flattenedv2  = self.sweep2:flattenAndCorners()
-    _G.flattenedxy1 = flattenedxy1
-    _G.flattenedxy2 = flattenedxy2
-    H_icp= align_floors_endtoend.ICP2D.align(flattenedxy2, flattenedxy1)
-    
-    if self.forward then
-        self.sweep2:setICPTransformation(H_icp, self.steps_from_orig, true)
-    else
-        self.sweep2:setICPTransformation(H_icp, self.steps_from_orig, false)
-    end
-
+--note: could make this more accurate by seeing if there is a closest neighbor closer than the one shot alone the ray..
+--(e.g. if we are close to a wall, distance along ray will be very long even if the two walls are close in 3d space)
+--this would involve some sort of kdtree or octtree, which if we are making anyway, we should use, but otherwise is 
+--too slow if just for this
+function SweepPair.findScore(f1, f2, n1, n2)
+  local thresh_1 = .05
+  local mask = torch.ne(f2,0):cmul(torch.ne(f1,0))
+  local f1_zeroed = f1:clone():cmul(mask:double())
+  local close_pts = (torch.le(torch.abs(f1_zeroed-f2),thresh_1):sum()- (torch.eq(torch.eq(f1_zeroed,0) + torch.eq(f2,0),2):sum()))
+  local dot = n1:clone():cmul(n2):sum(2):squeeze()
+  local deg = (torch.acos(dot):squeeze():reshape(f1:size(1),f1:size(2))*180/math.pi)
+  deg:cmul(mask:double())  
+  local close_pts_normals = ((torch.le(torch.abs(f1_zeroed-f2),thresh_1):cmul(torch.lt(deg,45))):sum()- (torch.eq(torch.eq(f1_zeroed,0) + torch.eq(f2,0),2):sum()))
+  return (torch.le(f1_zeroed-f2,thresh_1):sum()-torch.eq(f1_zeroed,0):sum())/(torch.gt(f1_zeroed,0):sum()), 
+          torch.gt(f1_zeroed,0):sum()/torch.gt(f1,0):sum(), 
+          close_pts/torch.gt(f1_zeroed,0):sum(),
+          close_pts_normals/torch.gt(f1_zeroed,0):sum()
 end
 
---[[
-function SweepPair:doIcp()
-    points1= self.sweep1:transformIn3D()
-    points2= self.sweep2:transformIn3D()
-    H_icp= align_floors_endtoend.ICP2D.align(points1, points2)
+--sweep1's pc and sweep2's pc should already be in correct place
+function SweepPair:get3dValidationScore()
+  if self.threed_validation_score  == -1 then
+    local H =self:getTransformation(false, false, false)
+    local f1,c1,pts1,norm1 = self:getSweep1():getDepthImage(nil, nil, 3)
+    local f2,c2, pts2, norm2 = self:getSweep2():getDepthImage(H, c1, 3)
+    local numRight1, portionSeen1, closePts1, nclosePts1 = SweepPair.findScore(f1, f2, norm1, norm2)
 
+    local f2,c2,pts2, norm2 = self:getSweep2():getDepthImage(H, nil, 3)
+    local f1,c1,pts1,norm1 = self:getSweep1():getDepthImage(nil, c2, 3)
 
---  self.sweep1:setICPTransformation(geom.Homography.new(torch.eye(3)))
+    local numRight2, portionSeen2, closePts2, nclosePts2= SweepPair.findScore(f2, f1, norm2, norm1)
 
---
-    homography = self:getBestTransformation()
-    local parameters = torch.load(self.fIParameters)
-    local sweep_1_pcd =self.sweep1:getPCDLocation()
-    local sweep_2_pcd = self.sweep2:getPCDLocation()
+    print("first score: " .. numRight1 .. " second score: " .. numRight2)
+    print("portion seen first  " .. portionSeen1 .. " and second : " .. portionSeen2)
+    print("closet pts first  " .. closePts1 .. " and second : " .. closePts2)
+    print("normal closet pts first  " .. nclosePts1 .. " and second : " .. nclosePts2)
 
-    local zShift = self.sweep2:getFloor()-self.sweep1:getFloor()
-    self.sweep1:savePCD()
-    self.sweep2:savePCD()
-    align_floors_endtoend.Icp.alignAndICP(sweep_1_pcd, sweep_2_pcd, homography, self.faligned_pcd, 
-        self.faligned_h, self.ficp_pcd, self.ficp_h, zShift, parameters)
---
-end
---[[]]
-
-function SweepPair:displayTransformation(i)
-    --sweep1 and sweep2 will already have incorporated the best transformation, no need to save
-    self:displayResultH((self:getAllTransformations()).transformations[i])
-end
-
-function SweepPair:displayResultH(H)
-    local corners1, flattenedxy1, flattenedv1
-    if self.forward then
-        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,true)
-    else
-        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,false)
-    end
-    local corners2, flattenedxy2, flattenedv2  = self.sweep2:flattenAndCorners()
-    local temp, temp, combined = SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
-    image.display(combined)
+    self.threed_validation_score = torch.Tensor({(numRight1+numRight2)/2,  (portionSeen1+portionSeen2)/2, 
+      (closePts1 + closePts2)/2, (nclosePts1+nclosePts2)/2})
+    self:saveMe()
+  else 
+    print("calculated score in the past ".. self.threed_validation_score[1] .. " " .. 
+      self.threed_validation_score[2] .. " " .. self.threed_validation_score[3] .. " " ..
+      self.threed_validation_score[4])
+  end
+  return self.threed_validation_score
 end
 
-function SweepPair:displayResult()
-    local corners1, flattenedxy1, flattenedv1
-    local corners2, flattenedxy2, flattenedv2
-    if self.forward then
-        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,true)
-        corners2, flattenedxy2, flattenedv2 = self.sweep2:flattenAndCorners(true,true)
-    else
-        corners1, flattenedxy1, flattenedv1 = self.sweep1:flattenAndCorners(true,false)
-        corners2, flattenedxy2, flattenedv2 = self.sweep2:flattenAndCorners(true,false)
-    end
-    local H = geom.Homography.new(0,torch.Tensor({0,0}))
-    local temp, temp, combined = SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
-    image.display(combined)
+function SweepPair:saveMe()
+  torch.save(self.fsave_me, self)
 end
 
+--GET AND SET TRANSFORMATIONS
+function SweepPair:setAlignmentTransformation(H)
+  self.alignmentH_F =H
+  self:saveMe()
+  collectgarbage()
+end
+
+function SweepPair:getAlignmentTransformation()
+  return self.alignmentH_F 
+end
+
+function SweepPair:setICPTransformation(H)
+  self.icpH_F =H
+  self:saveMe()
+  collectgarbage()
+end
+
+function SweepPair:getICPTransformation()
+  return self.icpH_F
+end
+
+function SweepPair:setZTransformation(transf) 
+  self.floor_transformation_F = transf
+  self:saveMe()
+end
+
+function SweepPair:getZTransformation() 
+  return self.floor_transformation_F
+end
+
+--first is whether we want sweep 1 or sweep 2
+--dontUseICP is true if don't want to add icp
+function SweepPair:getTransformation(first, dontUseICP, inverse) 
+  collectgarbage()
+  local myTransformation
+  if(first) then
+    local sweepToUse = self:getSweep1()
+    if(inverse) then
+      sweepToUse = self:getSweep2()
+    end  
+    myTransformation = Sweep.get2DTo3DTransformation(self.parameters.scale, 
+      sweepToUse:getInitialTransformation(), 
+      -sweepToUse:getFloor()) 
+    return myTransformation
+  end
+  if(dontUseICP) then
+    myTransformation= Sweep.get2DTo3DTransformation(self.parameters.scale, self:getAlignmentTransformation(), self:getZTransformation())
+  else
+    myTransformation= self:getICPTransformation()*Sweep.get2DTo3DTransformation(self.parameters.scale, self:getAlignmentTransformation(), self:getZTransformation())
+  end
+  if(inverse) then
+    myTransformation = torch.inverse(myTransformation)
+  end
+  return myTransformation
+end
+
+
+--display helper methods
+function SweepPair:displayDiffTransformationI(i)
+  --sweep1 and sweep2 will already have incorporated the best transformation, no need to save
+  self:displayTransformationH((self:getValidationDiff()).transformations[i])
+  return self:getAllTransformations().transformations[i]
+end
+
+
+function SweepPair:displayInlierTransformationI(i)
+  --sweep1 and sweep2 will already have incorporated the best transformation, no need to save
+  local vinliers, sinliers = torch.sort((self:getAllTransformations()).inliers)
+  local i = sinliers[sinliers:size(1)-i+1]
+  local bestTransformation = (self:getAllTransformations()).transformations[i]
+  self:displayTransformationH((self:getAllTransformations()).transformations[i])
+  return self:getAllTransformations().transformations[i]
+end
+
+function SweepPair:displayTransformationH(H)
+  local corners1, flattenedxy1, flattenedv1 = self:getSweep1():getFlattenedAndCorners()
+  local corners2, flattenedxy2, flattenedv2  = self:getSweep2():getFlattenedAndCorners()
+  local temp, temp, combined = SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
+  image.display(combined)
+end
+
+function SweepPair:displayCurrent(icp)
+  if(icp) then
+    self:displayTransformationH(Sweep.get3Dto2DTransformation(self.parameters.scale, self:getTransformation()))
+  else
+    self:displayTransformationH(self:getAlignmentTransformation())
+  end
+end
+
+--SAVE HELPERS
+function SweepPair:saveCurrent(fname)
+  self:saveCombinedTransformationH(fname, Sweep.get3Dto2DTransformation(self.parameters.scale, self:getTransformation()))
+end
+
+function SweepPair:saveCombinedTransformationH(fname, H)
+  local corners1, flattenedxy1, flattenedv1 = self:getSweep1():getFlattenedAndCorners()
+  local corners2, flattenedxy2, flattenedv2  = self:getSweep2():getFlattenedAndCorners()
+  local temp, temp, combined = SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
+  image.save(fname, combined)
+end
+
+--warps 2 into 1 using H
 function SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
-   flattenedxy2 = H:applyToPointsReturn2d(flattenedxy2:t()):t()
-   local src_center =    H:applyToPointsReturn2d(torch.zeros(2,1))
-   local dest_center = torch.zeros(2,1)
-   local combinedMin = torch.cat(torch.min(flattenedxy1,1), torch.min(flattenedxy2,1), 1)
-   local minT = torch.min(combinedMin, 1):reshape(2)
+ flattenedxy2 = Sweep.applyToPointsReturn2d(H,flattenedxy2:t()):t()
+ local src_center =    Sweep.applyToPointsReturn2d(H,torch.zeros(2,1))
+ local dest_center = torch.zeros(2,1)
+ local combinedMin = torch.cat(torch.min(flattenedxy1,1), torch.min(flattenedxy2,1), 1)
+ local minT = torch.min(combinedMin, 1):reshape(2)
 
-   local combinedMax = torch.cat(torch.max(flattenedxy1,1), torch.max(flattenedxy2,1), 1)
-   local maxT = torch.max(combinedMax, 1):reshape(2)
+ local combinedMax = torch.cat(torch.max(flattenedxy1,1), torch.max(flattenedxy2,1), 1)
+ local maxT = torch.max(combinedMax, 1):reshape(2)
 
-   local H_translation = geom.Homography.new(0,torch.Tensor({-minT[1]+1, -minT[2]+1}))
+ local H_translation = Sweep.getRotationMatrix(0,torch.Tensor({-minT[1]+1, -minT[2]+1}))
 
-   flattenedxy1 = H_translation:applyToPointsReturn2d(flattenedxy1:t()):t()
-   flattenedxy2 = H_translation:applyToPointsReturn2d(flattenedxy2:t()):t()
-   
-   local size_us = (maxT-minT+1):ceil():reshape(2)
-   local su1 = size_us[1]
-   local su2 = size_us[2]
-   local combined = torch.zeros(3, su1, su2)
-   
-   
-   for i = 1, flattenedxy2:size(1) do
-      local f = flattenedxy2[i]
-      local hh = f[1]
-      local ww = f[2]
-      local hh_l = math.max(1,math.floor(hh))
-      local ww_l = math.max(1,math.floor(ww))
-      local hh_h = math.min(su1,math.ceil(hh))
-      local ww_h = math.min(su2,math.ceil(ww))
-      
-      if hh_h - hh < hh - hh_l then
-        hh = hh_l
-      else
-        hh = hh_h
-      end
-      
-      if ww_h - ww < ww - hh_l then
-        ww = ww_l
-      else
-        ww = ww_h
-      end
-      
-      combined[1][hh][ww]=255
-   end
-   for i = 1, flattenedxy1:size(1) do
-      local f = flattenedxy1[i]
-      local hh = f[1]
-      local ww = f[2]
-      local hh_l = math.max(1,math.floor(hh))
-      local ww_l = math.max(1,math.floor(ww))
-      local hh_h = math.min(su1,math.ceil(hh))
-      local ww_h = math.min(su2,math.ceil(ww))
-      
-      if hh_h - hh < hh - hh_l then
-        hh = hh_l
-      else
-        hh = hh_h
-      end
-      
-      if ww_h - ww < ww - hh_l then
-        ww = ww_l
-      else
-        ww = ww_h
-      end
-      
-      combined[2][hh][ww]=255
-   end
-   src_center = H_translation:applyToPointsReturn2d(src_center):reshape(2)
-   dest_center = H_translation:applyToPointsReturn2d(dest_center):reshape(2)
-   return src_center, dest_center, combined
+ flattenedxy1 = Sweep.applyToPointsReturn2d(H_translation, flattenedxy1:t()):t()
+ flattenedxy2 = Sweep.applyToPointsReturn2d(H_translation,flattenedxy2:t()):t()
+
+ local size_us = (maxT-minT+1):ceil():reshape(2)
+ local su1 = size_us[1]
+ local su2 = size_us[2]
+ local combined = torch.zeros(3, su1, su2)
+
+
+ for i = 1, flattenedxy2:size(1) do
+  local f = flattenedxy2[i]
+  local hh = f[1]
+  local ww = f[2]
+  local hh_l = math.max(1,math.floor(hh))
+  local ww_l = math.max(1,math.floor(ww))
+  local hh_h = math.min(su1,math.ceil(hh))
+  local ww_h = math.min(su2,math.ceil(ww))
+
+  if hh_h - hh < hh - hh_l then
+    hh = hh_l
+  else
+    hh = hh_h
+  end
+
+  if ww_h - ww < ww - hh_l then
+    ww = ww_l
+  else
+    ww = ww_h
+  end
+
+  combined[2][hh][ww]=255
 end
+for i = 1, flattenedxy1:size(1) do
+  local f = flattenedxy1[i]
+  local hh = f[1]
+  local ww = f[2]
+  local hh_l = math.max(1,math.floor(hh))
+  local ww_l = math.max(1,math.floor(ww))
+  local hh_h = math.min(su1,math.ceil(hh))
+  local ww_h = math.min(su2,math.ceil(ww))
+
+  if hh_h - hh < hh - hh_l then
+    hh = hh_l
+  else
+    hh = hh_h
+  end
+
+  if ww_h - ww < ww - hh_l then
+    ww = ww_l
+  else
+    ww = ww_h
+  end
+
+  combined[1][hh][ww]=255
+end
+src_center = Sweep.applyToPointsReturn2d(H_translation,src_center):reshape(2)
+dest_center = Sweep.applyToPointsReturn2d(H_translation,dest_center):reshape(2)
+return src_center, dest_center, combined
+end
+
+
+---old methods
+--[[
+function SweepPair.findScoreOld(f1, f2, pose1, sweep1, t)
+  local mask = torch.eq(f2:sum(1):squeeze(),0)*-1+1
+  f1:cmul(mask:repeatTensor(3,1,1):double())
+    --f2:cmul(mask:repeatTensor(3,1,1):double())
+    local dis1 = (f1-pose1:repeatTensor(f1:size(2)*f1:size(3),1)):pow(2):sum(1):pow(.5):squeeze()
+    local dis2 = (f2-pose1:repeatTensor(f2:size(2)*f2:size(3),1)):pow(2):sum(1):pow(.5):squeeze()
+
+    local close_count = 0
+    if(torch.gt(dis1-dis2,.1):sum() > 0) then
+      local  x, y, temp = image.thresholdReturnCoordinates(dis1-dis2,.1)
+      close_count = 0
+      for i =1,x:size(1) do
+        local center = f2[{{},x[i],y[i]}]
+        local f_tmp = sweep1:shootRay(nil,center,.1, t, 40, 20)
+        local non_zero = torch.ne(f_tmp:sum(1):squeeze(),0):sum()
+        if(non_zero > 0) then
+          close_count = close_count+1
+        end
+      end
+    end
+    return (torch.le(dis1-dis2,.1):sum()+close_count-(mask:size(1)*mask:size(2)-mask:sum()))/(mask:sum())
+  end
+
+--sweep1's pc and sweep2's pc should already be in correct place
+function SweepPair:get3dValidationScoreTrees()
+  local H =self:getTransformation(false, false, false)
+  local pc2, pose2 = self:getSweep2():getPC(H)
+  local pc1, pose1 = self:getSweep1():getPC()
+
+  local f1,t1,c1,r1 = self:getSweep1():shootRay()
+  local f2,t2,c2,r2 = self:getSweep2():shootRay(H, pose1)
+
+  numRight1 = SweepPair.findScoreOld(f1, f2, pose1, self:getSweep1(), t1)
+
+  local f3 = self:getSweep1():shootRay(nil, pose2, nil, t1)
+  local f4 = self:getSweep2():shootRay(H, pose2, r2, t2)
+  numRight2 = SweepPair.findScoreOld(f4, f3, pose2, self:getSweep2(), t2)
+
+  print("first score: " .. numRight1 .. " second score: " .. numRight2)
+  --self.threed_validation_score = (numRight1+numRight2)/2
+  self:saveMe()
+  return (numRight1+numRight2)/2 
+end
+--]]
