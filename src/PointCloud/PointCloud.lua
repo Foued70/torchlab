@@ -607,7 +607,7 @@ function PointCloud:get_connections_and_corners()
         shift_normal_map = nil
          
         local pc_tol_conn = 0.01
-        local nm_tol_corn = 0.25
+        local nm_tol_corn = .1 --0.25
         local pc_tol_corn = 0.25
         local z_tol = 0.25
         
@@ -629,7 +629,6 @@ function PointCloud:get_connections_and_corners()
         local corners = (diff_from_normal_l - diff_from_normal_r):abs():gt(nm_tol_corn):add(
                          dist_from_plane_l1:clone():gt(pc_tol_corn):add(dist_from_plane_l1:clone():gt(pc_tol_corn))):gt(0)
         --corners = corners:add(connections:clone():mul(-1):add(1)):gt(0)
-        
         corners:cmul(zconstraint):cmul(extantpts)
         connections:cmul(zconstraint):cmul(extantpts)
         
@@ -1155,6 +1154,31 @@ function PointCloud:get_global_points()
    return rotate_translate(rot,pose,self.points)
 end
 
+function PointCloud:get_global_points_as_pc()
+   local pose = self:get_local_to_global_pose()
+   local rot  = self:get_local_to_global_rotation()
+   pc = PointCloud.new()
+   pc.points=rotate_translate(rot,pose,self.points)
+   pc.rgb = self.rgb
+   pc.count = self.count
+   pc:reset_point_stats()
+   pc.format = 0
+  return pc
+end
+function PointCloud:get_global_normal_map(recompute)
+  local norm = self:get_normal_map(recompute)
+  local pose = self:get_local_to_global_pose()
+  local rot  = self:get_local_to_global_rotation()
+  return rotate_translate(rot, pose,norm:reshape(3,norm:size(2)*norm:size(3)):t():clone()):t():reshape(3,norm:size(2),norm:size(3))
+end
+
+function PointCloud:estimate_global_faro_pose(degree_above, degree_below)
+  local poseFaro = self:estimate_faro_pose(degree_above, degree_below)
+  local pose = self:get_local_to_global_pose()
+  local rot  = self:get_local_to_global_rotation()
+  return rotate_translate(rot,pose,poseFaro:reshape(1,3))
+end
+
 function PointCloud:get_max_radius()
    return torch.max(self.radius)
 end
@@ -1366,9 +1390,13 @@ local function saveHelper_xyz(points, rgb, fname)
    local file = io.open(fname, 'w')
    local tmpt = torch.range(1,points:size(1))                                                                                                                                  
    tmpt:apply(function(i) 
-      pt = points[i] 
-      rgbx = rgb[i]
-      file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+      pt = points[i]
+      if(rgb) then 
+        rgbx = rgb[i]
+        file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+      else
+        file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..'\n')        
+      end
    end)
    file:close()
 end
