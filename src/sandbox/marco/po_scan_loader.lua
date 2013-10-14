@@ -1,3 +1,5 @@
+pi = math.pi
+pi2 = pi/2
 io = require 'io'
 src_dir = 'arcs/temporary-circle-6132/source/po_scan/a/001/'
 wrk_dir = src_dir:gsub("source","work")
@@ -82,3 +84,16 @@ if nil then
       tree:writePointsXYZ(output_filename)
    end
 end
+
+-- simple classifier
+nangle = geom.util.unit_cartesian_to_spherical_angles(normals)
+elevation = nangle[2]
+eps = pi/6
+rgb = torch.Tensor(3,elevation:size(1),elevation:size(2))
+
+-- floor
+rgb[1] = elevation:gt(-pi2-eps):cmul(elevation:lt(-pi2+eps))
+-- walls
+rgb[2] = elevation:gt(-eps):cmul(elevation:lt(eps))
+-- ceiling
+rgb[3] = elevation:gt(pi2-eps):cmul(elevation:lt(pi2+eps))
