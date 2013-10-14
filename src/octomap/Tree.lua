@@ -61,6 +61,18 @@ end
 function Tree:info()
    octomap_ffi.OcTree_getInfo(self.tree)
 end
+function Tree:ray_trace(origin, directions, max_range, output_xyz)
+   origin     = origin:contiguous()
+   directions = directions:contiguous()
+   max_range  = max_range or -1
+   output_xyz = output_xyz or torch.DoubleTensor()
+   -- TODO check types and sizes before calling the c++, can be flaky with wrong input.
+   octomap_ffi.OcTree_castRays(self.tree,
+                                    torch.cdata(origin), torch.cdata(directions),
+                                    max_range,
+                                    torch.cdata(output_xyz))
+   return output_xyz
+end
 
 function Tree:bbx()
    size = torch.Tensor()
