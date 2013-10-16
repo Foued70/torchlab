@@ -317,7 +317,8 @@ function SweepPair:getIcp(recalc)
 
       print("icp converged in time " .. log.toc() .. " with transformation:")
       print(transf)
-      self:setICPTransformation(transf)      
+      self:setICPTransformation(transf)        
+      
     else
       print("icp did not converge in time " .. log.toc())
     end
@@ -350,6 +351,7 @@ function SweepPair:get3dValidationScore()
   if self.threed_validation_score  == -1 then
     local H =self:getTransformation(false, false, false)
     local f1,c1,pts1,norm1 = self:getSweep1():getDepthImage(nil, nil, 3)
+
     local f2,c2, pts2, norm2 = self:getSweep2():getDepthImage(H, c1, 3)
     local numRight1, portionSeen1, closePts1, nclosePts1 = SweepPair.findScore(f1, f2, norm1, norm2)
 
@@ -391,6 +393,7 @@ end
 
 function SweepPair:setICPTransformation(H)
   self.icpH_F =H
+  self.threed_validation_score  = -1 
   self:saveMe()
   collectgarbage()
 end
