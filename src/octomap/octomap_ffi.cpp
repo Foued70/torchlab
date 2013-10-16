@@ -156,10 +156,11 @@ extern "C"
     return result;
   }
 
-  bool OcTree_read(OcTree* tree, const char* filename)
+  OcTree* OcTree_read(const char* filename) 
   {
-    bool result = tree->read(filename);
-    return result;
+    AbstractOcTree* readTreeAbstract = AbstractOcTree::read(filename);
+
+    return dynamic_cast<OcTree*>(readTreeAbstract);
   }
 
   void OcTree_add_sweep(OcTree* tree, THDoubleTensor* points, THDoubleTensor* origin, double max_range)

@@ -1,5 +1,6 @@
 ffi          = require 'ffi'
 octomap_ffi  = require './octomap_ffi'
+local path = require 'path'
 
 Tree = Class()
 
@@ -9,20 +10,23 @@ local function destructor ()
    end
 end
 
-function Tree:__init(resolution)
+function Tree:__init(resolution, tree)
    self.name = "octomap.Tree"
    self.resolution = resolution or 0.05 -- 5 cm
-   
+   if not(tree) then
    -- initialize an empty tree*
-   self.tree = ffi.gc(octomap_ffi.OcTree_new(self.resolution), destructor())
+      self.tree = ffi.gc(octomap_ffi.OcTree_new(self.resolution), destructor())
+   else
+      self.tree = ffi.gc(tree, destructor())
+   end
 end
 
 function Tree:save(filename)
    return octomap_ffi.OcTree_write(self.tree,filename)
 end
 
-function Tree:load(filename)
-   return octomap_ffi.OcTree_read(self.tree,filename)
+function Tree.load(filename)
+   return Tree.new(nil, octomap_ffi.OcTree_read(filename))
 end
 
 -- points in Nx3 (x,y,z) points you want to add to Octree.
