@@ -12,15 +12,7 @@ ffi.cdef
 [[
     int get_index_and_mask(long* index_map, short* mask_map, double* points, short* hwindices,
                        long length, int height, int width);
-                       
-    int compute_normal_helper_pick(double *normals, double *cand_1, double *cand_2, 
-                                                double *cand_3, double *cand_4, 
-                                                int height, int width, double thresh);
-                                                
-    int compute_normal_help_blend(double* output_normal, double* input_normal, 
-                              double* xyz, int height, int width, 
-                              int window, double dist_thresh, double norm_thresh);
-                              
+                                                 
     int downsample_with_widthheightinfo(double* downsampled_points, double* downsampled_rgb, 
                              int* downsampled_count, double* coord_map, 
                              double* points_map, double* rgb_map, 
@@ -46,6 +38,13 @@ ffi.cdef
                                           double* corners_map_filled,
                                           int pan_hght, int pan_wdth,
                                           int img_hght, int img_wdth);
+    
+   int theta_map(double* theta_map, double* centered_point_map, int height, int width);
+   int phi_map(double* phi_map, double* centered_point_map, int height, int width);
+   int theta_map_smooth(double* smoothed_theta_map, double* theta_map, char * extant_map, 
+                     int height, int width, int max_win, double max_theta_diff);
+   int phi_map_smooth(double* smoothed_phi_map, double* phi_map, char * extant_map, 
+                     int height, int width, int max_win, double max_phi_diff); 
 ]]
 
 local libpc   = util.ffi.load('libpointcloud')
@@ -133,6 +132,9 @@ end
 
 function PointCloud:reset_point_stats()
    self.centroid=torch.Tensor({{0,0,self.points:mean(1)[1][3]}})
+   if self.format == 2 then
+     self.centroid[1][3] = 0
+   end
    minval,minind = self.points:min(1)
    maxval,maxind = self.points:max(1)
 
@@ -265,7 +267,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       xyzrgbTensor[{{},3+offset}] = z
    end
 
-   local radius2d  = torch.cmul(x,x):add(torch.cmul(y,y)):sqrt()
+   local radius2d  = torch.cmul(x:clone(),x:clone()):add(torch.cmul(y:clone(),y:clone())):sqrt()
    local indexGood = torch.lt(radius2d, radius[2]):cmul(torch.gt(radius2d, radius[1]))
    
    if (self.format==1) then
@@ -290,9 +292,8 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       radius[2] = stdrd * numstd
       print("make second pass with new radius: "..radius[2])
       
-      local allXYZ         = xyzrgbTensor[{{},{1+offset,3+offset}}]
-      local distanceTensor = (allXYZ-self.centroid:repeatTensor(allXYZ:size(1),1)):pow(2):sum(2):sqrt()     
-      indexGood            = torch.lt(distanceTensor, radius[2]):cmul(torch.gt(distanceTensor, radius[1]))
+      local radius3d  = torch.cmul(x:clone(),x:clone()):add(torch.cmul(y:clone(),y:clone())):add(torch.cmul(z:clone(),z:clone())):sqrt()
+      indexGood = torch.lt(radius3d, radius[2]):cmul(torch.gt(radius3d, radius[1]))
       
       if (self.format==1) then
          self.height = h[indexGood]:max()
@@ -301,7 +302,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
       self.points   = torch.cat(torch.cat(x[indexGood],y[indexGood],2),z[indexGood],2)
       self.count    = self.points:size(1)
       local meanz   = z[indexGood]:sum()/(self.count+.000001)
-      -- TODO this centroid only makes sense for faro
+      
       self.centroid = torch.Tensor({{0, 0, meanz}})
    end
 
@@ -325,9 +326,7 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    self:reset_point_stats()
 
    print("pass 2: count: "..self.count..", height: "..self.height..", width: "..self.width);
-end
-
-   
+end   
 
 function PointCloud:get_normal_image(recompute)
    if self.have_hw_data then
@@ -397,6 +396,10 @@ function PointCloud:get_flattened_images_with_widthheightinfo(scale,mask,numCorn
   local toc = 0
   
   scale = scale+PointCloud.very_small_number
+  if self.format == 2 then
+    scale = scale*1000
+  end
+  print(scale)
   local ranges = self.radius:clone():mul(2)
   local minv = self.radius:clone():mul(-1)
   local maxv = self.radius:clone()
@@ -518,16 +521,106 @@ function PointCloud:get_flattened_images_with_widthheightinfo(scale,mask,numCorn
 end
 
 function PointCloud:get_flattened_images(scale,mask,numCorners)
-  if self.format == 0 then
+   if not(self.have_hw_data) then
     return self:get_flattened_images_without_widthheightinfo(scale)
   else
     return self:get_flattened_images_with_widthheightinfo(scale,mask,numCorners)
   end
 end
 
-function PointCloud:get_connections_and_corners()
-    if self.format == 1 then
+function PointCloud:get_connections_and_corners_2()
+  if self.have_hw_data then
+    local height = self.height
+    local width = self.width
+    local normal = self:get_normal_map()
+    local phi,theta = self:get_normal_phi_theta()
+    local snormal,sphi,stheta = self:get_smooth_normal()
+    local xyz = self:get_centered_xyz_map_no_mask()
     
+    local theta_thresh = math.pi/2
+    local plane_thresh_conn = 0.01
+    local plane_thresh_corn = 0.25
+    local z_thresh = 0.75
+    if self.format == 2 then
+      plane_thresh_conn = 5000
+      plane_thresh_corn = 6000
+    end
+    
+    local kl = torch.Tensor({{0,0,0},{-1,1,0},{0,0,0}})
+    local kr = torch.Tensor({{0,0,0},{0,1,-1},{0,0,0}})
+    
+    local C
+    
+    local function adjust_dtheta(dtheta)
+      local mid = dtheta:gt(-math.pi):cmul(dtheta:le(math.pi)):type('torch.DoubleTensor')
+      local top = dtheta:gt(math.pi):type('torch.DoubleTensor')
+      local bot = dtheta:le(-math.pi):type('torch.DoubleTensor')
+      mid:cmul(dtheta:clone())
+      top:cmul(dtheta:clone():add(-math.pi*2))
+      bot:cmul(dtheta:clone():add(math.pi*2))
+      dtheta = mid+top+bot
+      return dtheta
+    end
+    
+    C = torch.conv2(stheta:clone(),kl,'F')
+    local dtheta_l = C:sub(2,height+1,2,width+1):clone()
+    dtheta_l = adjust_dtheta(dtheta_l)
+    
+    C = torch.conv2(stheta:clone(),kr,'F')
+    local dtheta_r = C:sub(2,height+1,2,width+1):clone()
+    dtheta_r = adjust_dtheta(dtheta_r)
+    
+    local d2theta = (dtheta_l+dtheta_r):clone()
+    
+    local smooth_d = snormal:clone():cmul(xyz):norm(2,1):squeeze():mul(-1)
+    
+    kl = torch.Tensor({{0,0,0},{1,0,0},{0,0,0}})
+    kr = torch.Tensor({{0,0,0},{0,0,1},{0,0,0}})
+    
+    C = torch.Tensor(3,height+2,width+2)
+    
+    for i = 1,3 do
+      C[i] = torch.conv2(xyz[i],kl,'F')
+    end
+    local xyz_l = C:sub(1,3,2,height+1,2,width+1):clone()
+    local dd_l = xyz_l:clone():cmul(snormal):sum(1):squeeze():add(smooth_d)
+    
+    for i = 1,3 do
+      C[i] = torch.conv2(xyz[i],kr,'F')
+    end
+    local xyz_r = C:sub(1,3,2,height+1,2,width+1):clone()
+    local dd_r = xyz_r:clone():cmul(snormal):sum(1):squeeze():add(smooth_d)
+    
+    local d2d = (dd_l:clone():abs() + dd_r:clone():abs())
+    
+    local kk = torch.Tensor({{-1,-1,-1},{-1,8,-1},{-1,-1,-1}})
+    C = torch.conv2(d2d:clone(),kk,'F')
+    local d2d = C:sub(2,height+1,2,width+1):clone():abs()
+    
+    local conn = d2d:lt(plane_thresh_conn)
+    local corn = d2d:gt(plane_thresh_corn):add(d2theta:gt(theta_thresh)):gt(0)
+    
+    conn[self.mask_map] = 0
+    corn[self.mask_map] = 0
+    
+    z_filt = snormal[3]:clone():abs():gt(z_thresh)
+    
+    conn[z_filt] = 0
+    corn[z_filt] = 0
+    
+    --image.display(conn)
+    --image.display(corn)
+    return conn,corn
+    
+  end
+end
+--[[]]
+function PointCloud:get_connections_and_corners()
+    if self.have_hw_data then
+    
+        if self.format == 2 then
+          return self:get_connections_and_corners_2()
+        else
         local tic = log.toc()
         local toc = 0
         
@@ -538,10 +631,12 @@ function PointCloud:get_connections_and_corners()
         local height = self.height
         local width = self.width
         local normal_map = self.normal_map:clone()
-        local smooth_normal_map = self:get_smooth_normal(5):clone()--normal_map:clone()--
+        local smooth_normal_map = self:get_smooth_normal():clone()--normal_map:clone()--
         
         local plane_const = torch.zeros(height,width)
         plane_const:add(pts:clone():cmul(smooth_normal_map):sum(1):squeeze())
+        
+        image.display(plane_const)
 
         local shift_normal_map = torch.zeros(3,height,width)
         local shift_plane_const = torch.zeros(height,width)
@@ -565,23 +660,6 @@ function PointCloud:get_connections_and_corners()
         
         shift_plane_const = nil
         
-        --[[
-        shift_normal_map = torch.zeros(3,height,width)
-        
-        shift_normal_map:sub(1,3,1,height,2,width):add(smooth_normal_map:clone():sub(1,3,1,height,1,width-1))
-        shift_normal_map:sub(1,3,1,height,1,1):add(smooth_normal_map:clone():sub(1,3,1,height,width,width))
-        
-        local diff_from_normal_l = shift_normal_map:clone():add(smooth_normal_map:clone():mul(-1)):pow(2):sum(1):squeeze():sqrt():clone()
-
-        shift_normal_map = torch.zeros(3,height,width)
-        
-        shift_normal_map:sub(1,3,1,height,1,width-1):add(smooth_normal_map:clone():sub(1,3,1,height,2,width))
-        shift_normal_map:sub(1,3,1,height,width,width):add(smooth_normal_map:clone():sub(1,3,1,height,1,1))
-        
-        local diff_from_normal_r = shift_normal_map:clone():add(smooth_normal_map:clone():mul(-1)):pow(2):sum(1):squeeze():sqrt():clone()
-        --[[]]
-        
-        --[[]]
         smnmp = smooth_normal_map:sub(1,2):clone()
         
         shift_normal_map = torch.zeros(2,height,width)
@@ -602,14 +680,16 @@ function PointCloud:get_connections_and_corners()
                                    shift_normal_map:clone():pow(2):sum(1):sqrt():add(
                                    smnmp:clone():pow(2):sum(1):sqrt()):squeeze()):acos()
         
-        --[[]]
-        
         shift_normal_map = nil
          
         local pc_tol_conn = 0.01
         local nm_tol_corn = 0.25
         local pc_tol_corn = 0.25
         local z_tol = 0.25
+        if format == 2 then
+          pc_tol_conn = 1000
+          pc_tol_corn = pc_tol_corn * 1000
+        end
         
         local zconstraint = smooth_normal_map:select(1,3):clone():abs():lt(z_tol)
         local extantpts = pts:clone():pow(2):sum(1):squeeze():gt(0):cmul(pts:clone():pow(2):sum(1):squeeze():lt(math.huge))
@@ -624,21 +704,17 @@ function PointCloud:get_connections_and_corners()
         ptdiff = nil
         ptz = nil
         
+        --image.display(dist_from_plane_l1)
+        --image.display(dist_from_plane_l2)
+        --image.display(diff_from_normal_l)
+        --image.display(diff_from_normal_r)
+        
         local connections = dist_from_plane_l1:clone():gt(pc_tol_conn):add(dist_from_plane_l1:clone():gt(pc_tol_conn)):eq(0)
-        --local corners = diff_from_normal_l:gt(nm_tol_corn):add(diff_from_normal_r:gt(nm_tol_corn)):gt(0)
         local corners = (diff_from_normal_l - diff_from_normal_r):abs():gt(nm_tol_corn):add(
                          dist_from_plane_l1:clone():gt(pc_tol_corn):add(dist_from_plane_l1:clone():gt(pc_tol_corn))):gt(0)
-        --corners = corners:add(connections:clone():mul(-1):add(1)):gt(0)
         
         corners:cmul(zconstraint):cmul(extantpts)
         connections:cmul(zconstraint):cmul(extantpts)
-        
-        --[[
-        local extra = 1
-        local conv_corner = torch.ones(extra*2+1,1):type('torch.ByteTensor')
-        local res_corner = torch.conv2(corners,conv_corner,'F')
-        corners = res_corner:sub(extra+1,res_corner:size(1)-extra):ge(extra*2)
-        ]]
         
         normal_map = nil
         smooth_normal_map = nil
@@ -662,9 +738,10 @@ function PointCloud:get_connections_and_corners()
         print('get_connections_and_corners: '..toc)
         
         return connections,corners
-
+      end
     end
 end
+--[[]]
 
 function PointCloud:downsample_with_widthheightinfo(leafsize)
 
@@ -839,224 +916,96 @@ function PointCloud:downsample(leafsize)
   end
 end
 
-function PointCloud:get_normal_map(force)
-  if self.have_hw_data and ((not self.normal_map) or force) then
-    
+function PointCloud:get_normal_phi_theta()
+  if self.have_hw_data then
     local tic = log.toc()
-    local toc = 0
-
-    local xyz = self:get_xyz_map_no_mask()
+    local point_map = self:get_centered_xyz_map_no_mask()
     local height = self.height
     local width = self.width
-    local shift = torch.zeros(xyz:size())
+    local phi = torch.zeros(height,width):clone():contiguous()
+    local theta = torch.zeros(height,width):clone():contiguous()
+  
+    libpc.phi_map(torch.data(phi),torch.data(point_map:clone():contiguous()),height,width)
+    libpc.theta_map(torch.data(theta),torch.data(point_map:clone():contiguous()),height,width)
+  
+    local filter = phi:lt(-10):add(theta:lt(-10)):gt(0)
+    phi[filter] = 0
+    theta[filter] = 0
+
+    print('get_normal_phi_theta: '..(log.toc()-tic))
+    return phi, theta, filter
+  end
+end
+
+function PointCloud:get_normal_map(force)
+  if self.have_hw_data and ((not self.normal_map) or force) then
+    local tic = log.toc()
+    local phi,theta,filter = self:get_normal_phi_theta()
+    local height = self.height
+    local width = self.width
+    local nmp = torch.zeros(3,height,width)
+  
+    nmp[3] = phi:clone():sin()
+    nmp[2] = phi:clone():cos():cmul(theta:clone():sin())
+    nmp[1] = phi:clone():cos():cmul(theta:clone():cos())
+  
+    nmp[1][filter] = 0
+    nmp[2][filter] = 0
+    nmp[3][filter] = 0
     
-    shift:sub(1,3,1,height,2,width):add(xyz:sub(1,3,1,height,1,width-1):clone())
-    shift:sub(1,3,1,height,1,1):add(xyz:sub(1,3,1,height,width,width):clone())
-    
-    local minus_l = torch.Tensor(xyz:size()):copy(xyz:clone())
-	minus_l:add(shift:clone():mul(-1))  
-	
-	shift:fill(0)
-	shift:sub(1,3,1,height,1,width-1):add(xyz:sub(1,3,1,height,2,width):clone())
-    shift:sub(1,3,1,height,width,width):add(xyz:sub(1,3,1,height,1,1):clone())
-    
-    local minus_r = torch.zeros(xyz:size()):copy(xyz:clone())
-	minus_r:add(shift:clone():mul(-1))  
-    
-    shift:fill(0)
-    shift:sub(1,3,2,height,1,width):add(xyz:sub(1,3,1,height-1,1,width):clone())
-    shift:sub(1,3,1,1,1,width):add(xyz:sub(1,3,1,1,1,width):clone())
-    
-    local minus_u = torch.zeros(xyz:size()):copy(xyz:clone())
-	minus_u:add(shift:clone():mul(-1))  
-	
-	shift:fill(0)
-	shift:sub(1,3,1,height-1,1,width):add(xyz:sub(1,3,2,height,1,width):clone())
-    shift:sub(1,3,height,height,1,width):add(xyz:sub(1,3,height,height,1,width):clone())
-    
-    local minus_d = torch.zeros(xyz:size()):copy(xyz:clone())
-    minus_d:add(shift:clone():mul(-1))
-	
-    local minus_1_x = minus_l:select(1,1):clone()
-    local minus_1_y = minus_l:select(1,2):clone()
-    local minus_1_z = minus_l:select(1,3):clone()
-            
-    local minus_2_x = minus_u:select(1,1):clone()
-    local minus_2_y = minus_u:select(1,2):clone()
-    local minus_2_z = minus_u:select(1,3):clone()
-        
-    local crossprod_1 = torch.Tensor(3,height,width)
-        
-    crossprod_1[1] = minus_1_y:clone():cmul(minus_2_z):add(
-                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
-    crossprod_1[2] = minus_1_z:clone():cmul(minus_2_x):add(
-                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
-    crossprod_1[3] = minus_1_x:clone():cmul(minus_2_y):add(
-                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
-    
-    local crossprod_norm = crossprod_1:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
-    crossprod_1:cdiv(crossprod_norm:add(PointCloud.very_small_number))
-                     
-    minus_1_x = minus_u:select(1,1):clone()
-    minus_1_y = minus_u:select(1,2):clone()
-    minus_1_z = minus_u:select(1,3):clone()
-            
-    minus_2_x = minus_r:select(1,1):clone()
-    minus_2_y = minus_r:select(1,2):clone()
-    minus_2_z = minus_r:select(1,3):clone()
-	
-	local crossprod_2 = torch.Tensor(3,height,width)
-	
-	crossprod_norm = crossprod_2:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
-    crossprod_2:cdiv(crossprod_norm:add(PointCloud.very_small_number))
-        
-    crossprod_2[1] = minus_1_y:clone():cmul(minus_2_z):add(
-                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
-    crossprod_2[2] = minus_1_z:clone():cmul(minus_2_x):add(
-                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
-    crossprod_2[3] = minus_1_x:clone():cmul(minus_2_y):add(
-                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
-    
-    minus_1_x = minus_r:select(1,1):clone()
-    minus_1_y = minus_r:select(1,2):clone()
-    minus_1_z = minus_r:select(1,3):clone()
-            
-    minus_2_x = minus_d:select(1,1):clone()
-    minus_2_y = minus_d:select(1,2):clone()
-    minus_2_z = minus_d:select(1,3):clone()
-	
-	local crossprod_3 = torch.Tensor(3,height,width)
-        
-    crossprod_3[1] = minus_1_y:clone():cmul(minus_2_z):add(
-                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
-    crossprod_3[2] = minus_1_z:clone():cmul(minus_2_x):add(
-                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
-    crossprod_3[3] = minus_1_x:clone():cmul(minus_2_y):add(
-                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
-                     
-    crossprod_norm = crossprod_3:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
-    crossprod_3:cdiv(crossprod_norm:add(PointCloud.very_small_number))
-                     
-    minus_1_x = minus_d:select(1,1):clone()
-    minus_1_y = minus_d:select(1,2):clone()
-    minus_1_z = minus_d:select(1,3):clone()
-            
-    minus_2_x = minus_l:select(1,1):clone()
-    minus_2_y = minus_l:select(1,2):clone()
-    minus_2_z = minus_l:select(1,3):clone()
-	
-    local crossprod_4 = torch.Tensor(3,height,width)
-        
-    crossprod_4[1] = minus_1_y:clone():cmul(minus_2_z):add(
-                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
-    crossprod_4[2] = minus_1_z:clone():cmul(minus_2_x):add(
-                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
-    crossprod_4[3] = minus_1_x:clone():cmul(minus_2_y):add(
-                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
-    
-    crossprod_norm = crossprod_4:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
-    crossprod_4:cdiv(crossprod_norm:add(PointCloud.very_small_number))
-    
-    minus_l = nil
-    minus_r = nil
-    minus_u = nil
-    minus_d = nil
-    
-    minus_1_x = nil
-    minus_1_y = nil
-    minus_1_z = nil
-            
-    minus_2_x = nil
-    minus_2_y = nil
-    minus_2_z = nil
-    shift = nil
-    
-    collectgarbage()
-    
-    local crossprod = torch.zeros(3,height,width)
-    
-    local c1 = torch.data(crossprod_1:clone():contiguous())
-    local c2 = torch.data(crossprod_2:clone():contiguous())
-    local c3 = torch.data(crossprod_3:clone():contiguous())
-    local c4 = torch.data(crossprod_4:clone():contiguous())
-    local cc = torch.data(crossprod)
-    
-    local thresh = 0.1
-    
-    libpc.compute_normal_helper_pick(cc,c1,c2,c3,c4,height,width,thresh)
-    crossprod_norm = crossprod:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
-    crossprod = crossprod:cdiv(crossprod_norm:add(PointCloud.very_small_number))
-    
-    cc = nil
-    c1 = nil
-    c2 = nil
-    c3 = nil
-    c4 = nil
-    
-    crossprod_1 = nil
-    crossprod_2 = nil
-    crossprod_3 = nil
-    crossprod_4 = nil
-    
-    collectgarbage()
-    
-    self.normal_map =  crossprod:clone()
-    
-    toc = log.toc()-tic
-    tic = tic + toc 
-    print('normal_map: '..toc)
-    
-    collectgarbage()
-    
+    print('get_normal_map: '..(log.toc()-tic))
+    self.normal_map = nmp
   end
   return self.normal_map
 end
 
-function PointCloud:get_smooth_normal(win, dist_thresh, norm_thresh)
-    
+function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
+
+  if self.have_hw_data then
     local tic = log.toc()
-    local toc = 0
-    
     if not win then
-      win = 10
+      max_win = 10
     end
-    if not dist_thresh then
-      dist_thresh = 0.005
+    if not phi_diff then
+      phi_diff = math.pi/6
     end
-    if not norm_thresh then
-      norm_thresh = 2.5
+    if not theta_diff then
+      theta_diff = math.pi/6
     end
-    
+  
     local height = self.height
     local width = self.width
   
-    local nmp = self:get_normal_map()
-    local xyz = self:get_xyz_map()
+    local phi,theta,filter = self:get_normal_phi_theta()
+    local extant_map = filter:clone():eq(0)
+    local smooth_phi = phi:clone():contiguous():fill(0)
+    local smooth_theta = theta:clone():contiguous():fill(0)
+  
+    libpc.phi_map_smooth(torch.data(smooth_phi),torch.data(phi:clone():contiguous()),torch.data(extant_map:clone():contiguous()),height,width,max_win,phi_diff)
+    libpc.theta_map_smooth(torch.data(smooth_theta),torch.data(theta:clone():contiguous()),torch.data(extant_map:clone():contiguous()),height,width,max_win,theta_diff)
+  
+    smooth_phi[filter] = 0
+    smooth_theta[filter] = 0
     
-    crossprod = torch.zeros(nmp:size())
-    local d = torch.zeros(height,width)
-    local xyznew = torch.zeros(xyz:size())
-    
-    local cc = torch.data(crossprod)
-    local nn = torch.data(nmp:clone():contiguous())
-    local pp = torch.data(xyz:clone():contiguous())
-    
-    libpc.compute_normal_help_blend(cc, nn, pp, height, width, win, dist_thresh, norm_thresh)
-    crossprod_norm = crossprod:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
-    crossprod = crossprod:cdiv(crossprod_norm:add(PointCloud.very_small_number))
-    
-    toc = log.toc()-tic
-    tic = tic + toc 
-    print('smooth_normal: '..toc)
-    
-    collectgarbage()
-    
-    return crossprod
-    
+    local smooth_nmp = torch.zeros(3,height,width)
+  
+    smooth_nmp[3] = smooth_phi:clone():sin()
+    smooth_nmp[2] = smooth_phi:clone():cos():cmul(smooth_theta:clone():sin())
+    smooth_nmp[1] = smooth_phi:clone():cos():cmul(smooth_theta:clone():cos())
+  
+    smooth_nmp[1][filter] = 0
+    smooth_nmp[2][filter] = 0
+    smooth_nmp[3][filter] = 0
+  
+    print('get_smooth_normal_map: '..(log.toc()-tic))
+  
+    return smooth_nmp, smooth_phi, smooth_theta
+  end
 end
 
 function PointCloud:get_normal_list()
 
+  if self.have_hw_data then
   local tic = log.toc()
   local toc = 0
   
@@ -1077,7 +1026,7 @@ function PointCloud:get_normal_list()
   toc = log.toc()-tic
   tic = tic + toc 
   print('get_normal_list: all: '..toc)
-  
+  end
   return nmlist
 end
 
@@ -1214,14 +1163,24 @@ function PointCloud:get_xyz_map_no_mask()
     return self.xyz_map_no_mask
 end
 
+function PointCloud:get_centered_xyz_map_no_mask()
+
+  local pts = self:get_xyz_map_no_mask():clone()
+  local center = self.centroid:squeeze()
+  
+  for i=1,3 do
+    pts:select(1,i):add(-center[i])
+  end
+  return pts
+end
+
 function PointCloud:get_depth_image()
 
-    local xyz_map = self:get_xyz_map_no_mask():clone()
-    local center = self.centroid:squeeze()
-    for i = 1,3 do
-      xyz_map[i]:add(-center[i])
-    end
+    local xyz_map = self:get_centered_xyz_map_no_mask()
+    
     local depth_map = xyz_map:norm(2,1):squeeze()
+    depth_map[self.mask_map] = 0
+    
     return depth_map
 end
 
@@ -1389,3 +1348,396 @@ function PointCloud:save_downsampled_global_to_xyz(leafsize, fname)
    downsampled.points = rotate_translate(rot,pose,downsampled.points)
    saveHelper_xyz(downsampled.points, downsampled.rgb, fname)
 end
+
+-- old functions
+--[[
+function PointCloud:get_normal_map(force)
+  if self.have_hw_data and ((not self.normal_map) or force) then
+  
+    local snum = 1
+    
+    local tic = log.toc()
+    local toc = 0
+
+    local xyz = self:get_xyz_map_no_mask():clone()
+    local height = self.height
+    local width = self.width
+    local shift = torch.zeros(xyz:size())
+    
+    local pts = self:get_centered_xyz_map_no_mask():clone()
+    
+    shift:sub(1,3,1,height,1+snum,width):add(xyz:sub(1,3,1,height,1,width-snum):clone())
+    shift:sub(1,3,1,height,1,snum):add(xyz:sub(1,3,1,height,width-snum+1,width):clone())
+    
+    local minus_l = torch.Tensor(xyz:size()):copy(xyz:clone())
+	minus_l:add(shift:clone():mul(-1))  
+	
+	shift:fill(0)
+	shift:sub(1,3,1,height,1,width-snum):add(xyz:sub(1,3,1,height,1+snum,width):clone())
+    shift:sub(1,3,1,height,width-snum+1,width):add(xyz:sub(1,3,1,height,1,snum):clone())
+    
+    local minus_r = torch.zeros(xyz:size()):copy(xyz:clone())
+	minus_r:add(shift:clone():mul(-1))
+    
+    shift:fill(0)
+    shift:sub(1,3,1+snum,height):add(xyz:sub(1,3,1,height-snum):clone())
+    shift:sub(1,3,1,snum):add(xyz:sub(1,3,1,snum):clone())
+    
+    local minus_u = torch.zeros(xyz:size()):copy(xyz:clone())
+	minus_u:add(shift:clone():mul(-1))
+	
+	shift:fill(0)
+	shift:sub(1,3,1,height-snum):add(xyz:sub(1,3,1+snum,height):clone())
+    shift:sub(1,3,height-snum+1,height):add(xyz:sub(1,3,height-snum+1,height):clone())
+    
+    local minus_d = torch.zeros(xyz:size()):copy(xyz:clone())
+    minus_d:add(shift:clone():mul(-1))
+	
+    local minus_1_x = minus_l:select(1,1):clone()
+    local minus_1_y = minus_l:select(1,2):clone()
+    local minus_1_z = minus_l:select(1,3):clone()
+            
+    local minus_2_x = minus_u:select(1,1):clone()
+    local minus_2_y = minus_u:select(1,2):clone()
+    local minus_2_z = minus_u:select(1,3):clone()
+        
+    local crossprod_1 = torch.Tensor(3,height,width)
+        
+    crossprod_1[1] = minus_1_y:clone():cmul(minus_2_z):add(
+                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
+    crossprod_1[2] = minus_1_z:clone():cmul(minus_2_x):add(
+                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
+    crossprod_1[3] = minus_1_x:clone():cmul(minus_2_y):add(
+                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
+    
+    local crossprod_norm = crossprod_1:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
+    crossprod_1:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    local d = pts:clone():cmul(crossprod_1):sum(1):repeatTensor(3,1,1)
+    crossprod_1 = crossprod_1:clone():cmul(d:clone():ge(0):type('torch.DoubleTensor')):add(
+                crossprod_1:clone():mul(-1):cmul(d:clone():lt(0):type('torch.DoubleTensor')))
+                     
+    minus_1_x = minus_u:select(1,1):clone()
+    minus_1_y = minus_u:select(1,2):clone()
+    minus_1_z = minus_u:select(1,3):clone()
+            
+    minus_2_x = minus_r:select(1,1):clone()
+    minus_2_y = minus_r:select(1,2):clone()
+    minus_2_z = minus_r:select(1,3):clone()
+	
+	local crossprod_2 = torch.Tensor(3,height,width)
+        
+    crossprod_2[1] = minus_1_y:clone():cmul(minus_2_z):add(
+                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
+    crossprod_2[2] = minus_1_z:clone():cmul(minus_2_x):add(
+                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
+    crossprod_2[3] = minus_1_x:clone():cmul(minus_2_y):add(
+                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
+    
+    crossprod_norm = crossprod_2:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
+    crossprod_2:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    d = pts:clone():cmul(crossprod_2):sum(1):repeatTensor(3,1,1)
+    crossprod_2 = crossprod_2:clone():cmul(d:clone():ge(0):type('torch.DoubleTensor')):add(
+                crossprod_2:clone():mul(-1):cmul(d:clone():lt(0):type('torch.DoubleTensor')))
+    
+    minus_1_x = minus_r:select(1,1):clone()
+    minus_1_y = minus_r:select(1,2):clone()
+    minus_1_z = minus_r:select(1,3):clone()
+            
+    minus_2_x = minus_d:select(1,1):clone()
+    minus_2_y = minus_d:select(1,2):clone()
+    minus_2_z = minus_d:select(1,3):clone()
+	
+	local crossprod_3 = torch.Tensor(3,height,width)
+        
+    crossprod_3[1] = minus_1_y:clone():cmul(minus_2_z):add(
+                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
+    crossprod_3[2] = minus_1_z:clone():cmul(minus_2_x):add(
+                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
+    crossprod_3[3] = minus_1_x:clone():cmul(minus_2_y):add(
+                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
+                     
+    crossprod_norm = crossprod_3:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
+    crossprod_3:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    d = pts:clone():cmul(crossprod_3):sum(1):repeatTensor(3,1,1)
+    crossprod_3 = crossprod_3:clone():cmul(d:clone():ge(0):type('torch.DoubleTensor')):add(
+                crossprod_3:clone():mul(-1):cmul(d:clone():lt(0):type('torch.DoubleTensor')))
+                     
+    minus_1_x = minus_d:select(1,1):clone()
+    minus_1_y = minus_d:select(1,2):clone()
+    minus_1_z = minus_d:select(1,3):clone()
+            
+    minus_2_x = minus_l:select(1,1):clone()
+    minus_2_y = minus_l:select(1,2):clone()
+    minus_2_z = minus_l:select(1,3):clone()
+	
+    local crossprod_4 = torch.Tensor(3,height,width)
+        
+    crossprod_4[1] = minus_1_y:clone():cmul(minus_2_z):add(
+                     minus_1_z:clone():cmul(minus_2_y):mul(-1))
+    crossprod_4[2] = minus_1_z:clone():cmul(minus_2_x):add(
+                     minus_1_x:clone():cmul(minus_2_z):mul(-1))
+    crossprod_4[3] = minus_1_x:clone():cmul(minus_2_y):add(
+                     minus_1_y:clone():cmul(minus_2_x):mul(-1))
+    
+    crossprod_norm = crossprod_4:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
+    crossprod_4:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    d = pts:clone():cmul(crossprod_4):sum(1):repeatTensor(3,1,1)
+    crossprod_14= crossprod_4:clone():cmul(d:clone():ge(0):type('torch.DoubleTensor')):add(
+                crossprod_4:clone():mul(-1):cmul(d:clone():lt(0):type('torch.DoubleTensor')))
+    
+    minus_l = nil
+    minus_r = nil
+    minus_u = nil
+    minus_d = nil
+    
+    minus_1_x = nil
+    minus_1_y = nil
+    minus_1_z = nil
+            
+    minus_2_x = nil
+    minus_2_y = nil
+    minus_2_z = nil
+    shift = nil
+    
+    collectgarbage()
+    
+    local crossprod = torch.zeros(3,height,width)
+    
+    local c1 = torch.data(crossprod_1:clone():contiguous())
+    local c2 = torch.data(crossprod_2:clone():contiguous())
+    local c3 = torch.data(crossprod_3:clone():contiguous())
+    local c4 = torch.data(crossprod_4:clone():contiguous())
+    local cc = torch.data(crossprod)
+    
+    local thresh = 0.1
+    
+    libpc.compute_normal_helper_pick(cc,c1,c2,c3,c4,height,width,thresh)
+    crossprod_norm = crossprod:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
+    crossprod = crossprod:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    d = pts:clone():cmul(crossprod):sum(1):repeatTensor(3,1,1)
+    crossprod = crossprod:clone():cmul(d:clone():ge(0):type('torch.DoubleTensor')):add(
+                crossprod:clone():mul(-1):cmul(d:clone():lt(0):type('torch.DoubleTensor')))
+    
+    cc = nil
+    c1 = nil
+    c2 = nil
+    c3 = nil
+    c4 = nil
+    
+    crossprod_1 = nil
+    crossprod_2 = nil
+    crossprod_3 = nil
+    crossprod_4 = nil
+    
+    pts = nil
+    d = nil
+    
+    collectgarbage()
+    
+    self.normal_map =  crossprod:clone()
+    
+    toc = log.toc()-tic
+    tic = tic + toc 
+    print('normal_map: '..toc)
+    
+    collectgarbage()
+    
+  end
+  return self.normal_map
+end
+
+function PointCloud:get_phi_and_theta_map()
+  local nmp = self:get_normal_map():clone()
+  
+  local phi = nmp[3]:clone():asin()
+  local theta = nmp[1]:clone():cdiv(phi:clone():cos()):acos()
+  local theta = theta:clone():cmul(nmp[2]:clone():ge(0):type('torch.DoubleTensor')):add(
+                theta:clone():mul(-1):cmul(nmp[2]:clone():lt(0):type('torch.DoubleTensor')))
+                
+  phi:apply(function(ph)
+    if not(math.abs(ph) >= 0) then
+      return 0
+    elseif math.abs(ph) == math.huge then
+      return 0
+    end
+  end)
+  
+  theta:apply(function(th)
+    if not(math.abs(th) >= 0) then
+      return 0
+    elseif math.abs(th) == math.huge then
+      return 0
+    end
+  end)
+  
+  local d = nmp:clone():cmul(self:get_xyz_map_no_mask()):norm(2,1):squeeze()
+  collectgarbage()
+  
+  local img = torch.Tensor(3,self.height,self.width)
+  img[1] = phi
+  img[2] = theta
+  img[3] = d
+  
+  return phi,theta,img
+end
+
+function PointCloud:get_normal_map_nine_neighbors()
+  
+  local tic = log.toc()
+  local toc = 0
+  
+  local nmp = torch.zeros(3,self.height,self.width)
+  local pts = self:get_centered_xyz_map_no_mask()
+  local xyznorm = pts:norm(2,1):squeeze()
+  
+  local abnorm = pts:sub(1,2):clone():norm(2,1):squeeze()
+  local factormax = abnorm:max()
+    
+  torch.range(1,self.height):apply(function(ch)
+    
+    local xyznorm_ch = xyznorm[ch]
+    
+    local abnorm_ch = abnorm[ch]
+    
+    local xyznorm_hh
+    
+    torch.range(1,self.width):apply(function(cw)
+      
+      local dist = xyznorm_ch[cw]
+      local factor = factormax/abnorm_ch[cw]
+      local win = math.min(3,math.ceil(factor))
+      local win = 1
+      local numv = math.pow(2*win+1,2)
+      
+      if dist > PointCloud.very_small_number then
+      
+        local xyz_c = pts:sub(1,3,ch,ch,cw,cw):squeeze()
+        local tab = torch.zeros(numv,3)
+        local count = 0
+      
+        for hh = ch-win,ch+win do
+          if hh > 0 and hh < self.height then
+          
+            if hh == ch then
+              xyznorm_hh = xyznorm_ch
+            else
+              xyznorm_hh = xyznorm[hh]
+            end
+      
+            for w = cw-win,cw+win do
+              
+              local ww = (w - 1) % self.width + 1
+              
+              if xyznorm_hh[ww] > 0 then
+                local xyz = pts:sub(1,3,hh,hh,ww,ww):squeeze()
+                local dist = xyz_c:dist(xyz)
+                count = count + 1
+                tab[count]=(xyz-xyz_c)
+              end
+              
+              ww = nil
+              
+            end
+      
+          end
+      
+        end
+        
+        if count > 2 then
+          --tab = tab:sub(1,count):clone():t():clone()
+          tab = tab:t():clone()
+          local u,s,v = torch.svd(tab)
+          local mins, minsi = s:min(1)
+          local nm = u:select(2,minsi[1]):clone()
+          nm = nm:squeeze():clone()
+          
+          nmp:sub(1,3,ch,ch,cw,cw):copy(nm:clone())
+          if cw == 1 and ch % 100 == 0 then
+            print(ch,cw,count,log.toc()-tic)
+          end
+          xyzn = nil
+          nm = nil
+          mins = nil
+          minsi = nil
+          u = nil
+          s = nil
+          v = nil
+        end
+        
+        xyz_c = nil
+        tab = nil
+        count = nil
+      end
+      
+    end)
+    
+  end)
+  
+  local d = nmp:clone():cmul(pts):sum(1):repeatTensor(3,1,1)
+  nmp = nmp:clone():cmul(d:ge(0):type('torch.DoubleTensor')):add(
+        nmp:clone():mul(-1):cmul(d:lt(0):type('torch.DoubleTensor')))
+  
+  pts = nil
+  xyznorm = nil
+  d = nil
+  
+  collectgarbage()
+  toc = log.toc()-tic
+  tic = tic + toc
+  print('nine_neighbor_normal: '..toc)
+  return nmp
+  
+end
+
+function PointCloud:get_smooth_normal(win, dist_thresh, norm_thresh, point_thresh)
+    
+    local tic = log.toc()
+    local toc = 0
+    
+    if not win then
+      win = 5
+    end
+    if not dist_thresh then
+      dist_thresh = 0.005
+    end
+    if not norm_thresh then
+      norm_thresh = 2.5
+    end
+    if not point_thresh then
+      point_thresh = 0.1
+    end
+    
+    local height = self.height
+    local width = self.width
+  
+    local nmp = self:get_normal_map()
+    local xyz = self:get_xyz_map()
+    
+    crossprod = torch.zeros(nmp:size())
+    local d = torch.zeros(height,width)
+    local xyznew = torch.zeros(xyz:size())
+    
+    local cc = torch.data(crossprod)
+    local nn = torch.data(nmp:clone():contiguous())
+    local pp = torch.data(xyz:clone():contiguous())
+    
+    libpc.compute_normal_help_blend(cc, nn, pp, height, width, win, dist_thresh, norm_thresh, point_thresh)
+    crossprod_norm = crossprod:clone():pow(2):sum(1):sqrt():repeatTensor(3,1,1)
+    crossprod = crossprod:cdiv(crossprod_norm:add(PointCloud.very_small_number))
+    
+    toc = log.toc()-tic
+    tic = tic + toc 
+    print('smooth_normal: '..toc)
+    
+    collectgarbage()
+    
+    return crossprod
+    
+end
+
+--[[]]
