@@ -1,9 +1,75 @@
 TransformationValidation = Class()
 
+function TransformationValidation.validate_simple(best_pts, best_transformations, img_src_points, img_dest_points, parameters)
+   local best_overlap = torch.Tensor(best_pts:size())
+      local best_pts_temp = torch.Tensor(best_pts:size())
+
+   local transformations_tmp = {}
+
+   local center1, center2, combined_i = align_floors_endtoend.SweepPair.warpAndCombine(torch.eye(3), img_src_points, img_dest_points)
+   local angle_diff_orig = TransformationValidation.findMainDirections(opencv.Mat.new(torch.gt(combined_i[2],0):byte()), opencv.Mat.new(torch.gt(combined_i[1],0):byte()))
+   local good_counter = 1
+   for i=1,table.getn(best_transformations) do
+      local center1, center2, combined_i = align_floors_endtoend.SweepPair.warpAndCombine(best_transformations[i], img_src_points, img_dest_points)
+      _G.com = combined_i[2]
+      local angle_between
+      acos = torch.acos(best_transformations[i][1][1])
+      asin = -torch.asin(best_transformations[i][1][2])
+      local angle_between
+      if(acos>=0 and asin>=0) then
+         angle_between = acos
+      elseif(acos>=0 and asin<0) then
+         angle_between = math.pi*2-acos
+      elseif(acos<0 and asin>=0) then
+         angle_between = acos
+      elseif(acos<0 and asin<0) then
+         angle_between = math.pi*2-acos
+      end
+      --the closer to zero the better
+      if(torch.abs(angle_diff_orig-angle_between):min() < math.rad(5)) then
+         local srci_mat =opencv.Mat.new(combined_i:clone():select(1,1))
+         local desi_mat =opencv.Mat.new(combined_i:clone():select(1,2))
+
+         local srci = srci_mat:toTensor()
+         local desi = desi_mat:toTensor()
+         best_overlap[good_counter]=torch.eq(torch.gt(srci,0)+torch.gt(desi,0),2):sum()
+
+         transformations_tmp[good_counter] = best_transformations[i]
+         best_pts_temp[good_counter] = best_pts[i]
+         good_counter = good_counter +1
+
+      else
+--         print("skipping "  .. i)
+         --[[
+         print("we didn't make it" .. i)
+         if(i==20) then
+            print(angle_diff_orig-angle_between)
+            image.display(combined_i)
+         end]]--
+          --     print(best_transformations[i].H)
+         --print(math.deg((torch.abs(torch.acos(best_transformations[i].H[1][1])-angle_diff_orig))))
+      end
+      collectgarbage()
+
+   end
+   if(good_counter == 1) then
+      print("no transformations found!!!")
+      return nil,nil
+   end
+   best_overlap = best_overlap:sub(1,good_counter-1)
+   best_pts_temp = best_pts_temp:sub(1,good_counter-1)
+   --best_overlap = best_overlap*2/(best_overlap:max()+0.0000001) + best_pts_temp
+
+   sorted,ordering = torch.sort(best_overlap, true)
+   transformations = {}
+   for i=1,sorted:size(1) do
+      transformations[i] = transformations_tmp[ordering[i]];
+   end
+   return transformations, sorted
+end
+
 function TransformationValidation.validate(best_pts, best_transformations, img_src_points, img_dest_points, parameters)
 
-   local trans1_tmp = {}
-   local trans2_tmp = {}
    local combined_tmp = {}
    local image_properties_tmp = {}
    local scores_metrics_temp = {}
@@ -26,14 +92,16 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
       
       scores_metrics_temp.anglediff_tmp[i] = TransformationValidation.findAngleDifference(opencv.Mat.new(torch.gt(combined_tmp[i][1],0)), opencv.Mat.new(torch.gt(combined_tmp[i][2],0)))
 
-      srci_mat =opencv.Mat.new(combined_i:clone():select(1,1))
-      desi_mat =opencv.Mat.new(combined_i:clone():select(1,2))
+      local srci_mat =opencv.Mat.new(combined_i:clone():select(1,1))
+      local desi_mat =opencv.Mat.new(combined_i:clone():select(1,2))
 
+      --scores_metrics_temp.normaloverlap_tmp[i] = TransformationValidation.getNormalOverlap(srci_mat,desi_mat)
 
-      structElement = opencv.imgproc.getDefaultStructuringMat(2) 
 
       local srci = srci_mat:toTensor()
       srci:cdiv(srci:clone():add(0.0000000001)):ceil()
+
+      desi_mat =opencv.Mat.new(combined_i:clone():select(1,2))
       local desi = desi_mat:toTensor()
       desi:cdiv(desi:clone():add(0.0000000001)):ceil()
       best_overlap[i]=srci:clone():cmul(desi):sum()
@@ -48,8 +116,9 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
 
    scores_metrics.anglediff = torch.zeros(numRet)
    scores_metrics.inliers = torch.zeros(numRet)
-   scores_metrics.imgdiff = torch.Tensor(numRet)
-   scores_metrics.ray = torch.Tensor(numRet,9)
+   scores_metrics.imgdiff = torch.zeros(numRet)
+   scores_metrics.ray = torch.zeros(numRet,9)
+
    sorted,ordering = torch.sort(best_overlap)
 
    local i = table.getn(best_transformations)
@@ -59,6 +128,7 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
 
       local o = ordering[i]
       
+      --if scores_metrics_temp.anglediff_tmp[o] <  parameters.rotation_thresh then
          k = k+1
          scores_metrics.inliers[k] = best_pts[o]
          scores_metrics.imgdiff[k] = 2*sorted[i]/(sorted:max()+0.0000001) + scores_metrics.inliers[k]
@@ -81,7 +151,10 @@ function TransformationValidation.validate(best_pts, best_transformations, img_s
                return x
             end
             end)
+         --local validation_scores = align_floors_endtoend.validation.compute_score(combcpy,sch,scw,tch,tcw)
 
+         --scores_metrics.ray[k] = (validation_scores * 10000):ceil()
+      --end
       i = i-1
       collectgarbage()
 
@@ -147,19 +220,15 @@ function TransformationValidation.findAngDiff(nlist1,nlist2,trans1,trans2)
 end
 
 function TransformationValidation.findMainDirections(img_src, img_dest)
+   _G.img_src = img_src
    local HoughParameters = {}
    HoughParameters.houghRo = 1
    HoughParameters.houghTheta = math.pi/360
-   HoughParameters.houghMinLineLength = 25
-   HoughParameters.houghMaxLineGap = 80
-   HoughParameters.minThreshold = 10
-   HoughParameters.maxThreshold = 150
+   HoughParameters.houghMinLineLength = 5
+   HoughParameters.houghMaxLineGap = 1
    HoughParameters.defaultThreshold = 75
-   HoughParameters.numLinesDesired = 15
    parameterizedHough = align_floors_endtoend.Hough.new(HoughParameters)
 
-   Hough = align_floors_endtoend.Hough
-   
    local domAngle1_src,domAngle2_src = parameterizedHough:getMainDirections(img_src)
    local domAngle1_dest,domAngle2_dest = parameterizedHough:getMainDirections(img_dest)
 

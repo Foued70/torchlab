@@ -156,10 +156,11 @@ extern "C"
     return result;
   }
 
-  bool OcTree_read(OcTree* tree, const char* filename)
+  OcTree* OcTree_read(const char* filename) 
   {
-    bool result = tree->read(filename);
-    return result;
+    AbstractOcTree* readTreeAbstract = AbstractOcTree::read(filename);
+
+    return dynamic_cast<OcTree*>(readTreeAbstract);
   }
 
   void OcTree_add_sweep(OcTree* tree, THDoubleTensor* points, THDoubleTensor* origin, double max_range)
@@ -499,6 +500,65 @@ extern "C"
   } // castrays
 
 
+  // WARNING origin and directions has channels first 3xN where and
+  // returns DxHxW which is consistent with the projections. Other
+  // functions use Nx3.
+  void OcTree_castRays(OcTree* tree, 
+                            THDoubleTensor* origin, THDoubleTensor* directions, 
+                            double max_range, 
+                            THDoubleTensor* xyz)
+  {
+    // all in global coordinates
+    // origin (x,y,z)
+    // endpoints 3xHxW (x, y, z)
+    // resize RGB to directions
+
+    long height = directions->size[1];
+    long width  = directions->size[2];
+
+    THDoubleTensor_resize3d(xyz, 3, height, width);
+    THDoubleTensor_fill(xyz,0);
+
+    double * origin_d     = THDoubleTensor_data(origin);
+    double * dirs_d       = THDoubleTensor_data(directions);
+    double * xyz_d = THDoubleTensor_data(xyz);
+
+    point3d origin_3d = point3d(float(origin_d[0]),float(origin_d[1]),float(origin_d[2]));
+
+    double * x = dirs_d;
+    double * y = x + directions->stride[0];
+    double * z = y + directions->stride[0];
+
+
+    double * x_new = xyz_d;
+    double * y_new = x_new + xyz->stride[0];
+    double * z_new = y_new + xyz->stride[0];
+
+    long count_ray = 0, count_occ = 0;
+    long h,w;
+    for (h=0;h<height;h++){
+      for (w=0;w<width;w++){
+        point3d dir_3d = point3d(float(*x),float(*y),float(*z));
+        point3d end_3d = point3d(100,100,100);
+        if (tree->castRay(origin_3d, dir_3d, end_3d, true, max_range)){
+          // cout << "end3d x:" << end_3d(0) << " y: " << end_3d(1) << " z: " << end_3d(2) << endl;
+          OcTreeNode* node = tree->search(end_3d);
+          count_ray++;
+          if (node && (tree->isNodeOccupied(node))) {
+            // cout << "node at: " << node->depth << endl;
+            *x_new = end_3d.x();
+            *y_new = end_3d.y();
+            *z_new = end_3d.z();
+            count_occ++;
+          }
+        } 
+        x++ ; y++ ; z++;
+        x_new++ ; y_new++ ; z_new++;
+
+      }
+    }
+    cout << "found " << count_occ << " occupied nodes in " << count_ray << " rays cast" << endl; 
+  } // castrays
   void ColorOcTree_get_color_for_xyz(ColorOcTree* tree, 
                                      THDoubleTensor* points,
                                      THByteTensor* rgb)

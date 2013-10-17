@@ -1,5 +1,6 @@
 ffi          = require 'ffi'
 octomap_ffi  = require './octomap_ffi'
+local path = require 'path'
 
 Tree = Class()
 
@@ -9,20 +10,23 @@ local function destructor ()
    end
 end
 
-function Tree:__init(resolution)
+function Tree:__init(resolution, tree)
    self.name = "octomap.Tree"
    self.resolution = resolution or 0.05 -- 5 cm
-   
+   if not(tree) then
    -- initialize an empty tree*
-   self.tree = ffi.gc(octomap_ffi.OcTree_new(self.resolution), destructor())
+      self.tree = ffi.gc(octomap_ffi.OcTree_new(self.resolution), destructor())
+   else
+      self.tree = ffi.gc(tree, destructor())
+   end
 end
 
 function Tree:save(filename)
    return octomap_ffi.OcTree_write(self.tree,filename)
 end
 
-function Tree:load(filename)
-   return octomap_ffi.OcTree_read(self.tree,filename)
+function Tree.load(filename)
+   return Tree.new(nil, octomap_ffi.OcTree_read(filename))
 end
 
 -- points in Nx3 (x,y,z) points you want to add to Octree.
@@ -60,6 +64,18 @@ end
 
 function Tree:info()
    octomap_ffi.OcTree_getInfo(self.tree)
+end
+function Tree:ray_trace(origin, directions, max_range, output_xyz)
+   origin     = origin:contiguous()
+   directions = directions:contiguous()
+   max_range  = max_range or -1
+   output_xyz = output_xyz or torch.DoubleTensor()
+   -- TODO check types and sizes before calling the c++, can be flaky with wrong input.
+   octomap_ffi.OcTree_castRays(self.tree,
+                                    torch.cdata(origin), torch.cdata(directions),
+                                    max_range,
+                                    torch.cdata(output_xyz))
+   return output_xyz
 end
 
 function Tree:bbx()

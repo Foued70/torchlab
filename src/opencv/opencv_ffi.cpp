@@ -562,65 +562,70 @@ extern "C" {
       {
         getMatrixFromDestination(&dest_pt1, &dest_pt2, &b);
         getHomographyFromAb(&A_inv, &b, &H);
-        
+        //ignore if scaled!
+        double scale = H.at<double>(0,0)* H.at<double>(0,0)+H.at<double>(0,1)*H.at<double>(0,1);
+        if(scale>.98 && scale<=1.00001) 
+        {
+          vconcat((*scores_src).t(),Mat::ones(1,scores_src->rows, scores_src->type()), concatWithOnes);
+          transformed_src = H*concatWithOnes;
+          transformed_src = (transformed_src.rowRange(0,2)).t();
+            //When the comparison result is true, the corresponding element of output array is set to 255.
+          getPairwiseDistances(&transformed_src, scores_dest, &temp);
+          compareResult = temp <= corr_thresh;
+          long num_inliers = sum(compareResult)[0]/255;
 
-        vconcat((*scores_src).t(),Mat::ones(1,scores_src->rows, scores_src->type()), concatWithOnes);
-        transformed_src = H*concatWithOnes;
-        transformed_src = (transformed_src.rowRange(0,2)).t();
-          //When the comparison result is true, the corresponding element of output array is set to 255.
-        getPairwiseDistances(&transformed_src, scores_dest, &temp);
-        compareResult = temp <= corr_thresh;
-        long num_inliers = sum(compareResult)[0]/255;
-
-        /*
-          bool onetoone = (temp.at<double>(pt1_src, pt1_dest) < corr_thresh/2) && (temp.at<double>(pt2_src, pt2_dest) < corr_thresh/2);
-          double num_inliers = 0;
-          for(int i = 0; i < temp.rows; i++) {
-              for(int j=0; j < temp.cols; j++) {
-                  if (temp.at<double>(i,j) < corr_thresh) {
-                      double d_dest1 = (*pairwise_dis_dest).at<double>(pt1_dest, j);
-                      double d_dest2 = (*pairwise_dis_dest).at<double>(pt2_dest, j);
-                      double d_src1 = (*pairwise_dis_src).at<double>(pt1_src, i);
-                      double d_src2 = (*pairwise_dis_src).at<double>(pt2_src, i);
-                      
-                      if (onetoone && (abs(d_dest1-d_src1)<corr_thresh) && (abs(d_dest2-d_src2)<corr_thresh)) {
-                          num_inliers++;
-                      } else if ((~onetoone) && (abs(d_dest1-d_src2)<corr_thresh) && (abs(d_dest2-d_src1)<corr_thresh)) {
-                          num_inliers++;
-                      }
-                  }
-              }
-          }
-  */
-        double minVal; double maxVal; 
-        minMaxLoc( bestHMatrix->colRange(0,1), &minVal, &maxVal, &minLoc, &maxLoc);
-       
-        if(num_inliers > minVal && num_inliers >= minInliers) {
-          bool shouldUse = true;
-          reshaped = H.reshape(1,1);
-
-          for (int tn = 0; tn < numTransfSoFar; tn++) 
-          {
-            reshapedTransformation = (*bestHMatrix)(Range(tn,tn+1), Range(1,10)).reshape(1,3);
-            if (isSameTransformation(&reshapedTransformation, &H, minx, maxx, miny, maxy, cornerComparisonThreshold))
-            {
-              if(num_inliers > bestHMatrix->at<double>(tn,0)) 
-              {
-                (*bestHMatrix)(Range(tn,tn+1), Range(1,10)) = reshaped;
-                bestHMatrix->at<double>(tn,0) = num_inliers;
-              }
-              shouldUse = false;
-              break;
+          /*
+            bool onetoone = (temp.at<double>(pt1_src, pt1_dest) < corr_thresh/2) && (temp.at<double>(pt2_src, pt2_dest) < corr_thresh/2);
+            double num_inliers = 0;
+            for(int i = 0; i < temp.rows; i++) {
+                for(int j=0; j < temp.cols; j++) {
+                    if (temp.at<double>(i,j) < corr_thresh) {
+                        double d_dest1 = (*pairwise_dis_dest).at<double>(pt1_dest, j);
+                        double d_dest2 = (*pairwise_dis_dest).at<double>(pt2_dest, j);
+                        double d_src1 = (*pairwise_dis_src).at<double>(pt1_src, i);
+                        double d_src2 = (*pairwise_dis_src).at<double>(pt2_src, i);
+                        
+                        if (onetoone && (abs(d_dest1-d_src1)<corr_thresh) && (abs(d_dest2-d_src2)<corr_thresh)) {
+                            num_inliers++;
+                        } else if ((~onetoone) && (abs(d_dest1-d_src2)<corr_thresh) && (abs(d_dest2-d_src1)<corr_thresh)) {
+                            num_inliers++;
+                        }
+                    }
+                }
             }
-          }
+    */
+          double minVal; double maxVal; 
+          minMaxLoc( bestHMatrix->colRange(0,1), &minVal, &maxVal, &minLoc, &maxLoc);
+         
+          if(num_inliers > minVal && num_inliers >= minInliers) {
+            bool shouldUse = true;
+            reshaped = H.reshape(1,1);
 
-          if(shouldUse) {
-            subSelected = (*bestHMatrix)(Range(minLoc.y,minLoc.y+1), Range(1,10));
+            for (int tn = 0; tn < numTransfSoFar; tn++) 
+            {
+              reshapedTransformation = (*bestHMatrix)(Range(tn,tn+1), Range(1,10)).reshape(1,3);
+              if (isSameTransformation(&reshapedTransformation, &H, minx, maxx, miny, maxy, cornerComparisonThreshold))
+              {
+                if(num_inliers > bestHMatrix->at<double>(tn,0)) 
+                {
+                  (*bestHMatrix)(Range(tn,tn+1), Range(1,10)) = reshaped;
+                  bestHMatrix->at<double>(tn,0) = num_inliers;
 
-             reshaped.copyTo(subSelected);
-             bestHMatrix->at<double>(minLoc.y,0) = num_inliers;
-             numTransfSoFar++;
-             numTransfSoFar = std::min(numTransfSoFar,bestHMatrix->rows);
+                }
+                shouldUse = false;
+                break;
+              }
+            }
+
+            if(shouldUse) {
+              subSelected = (*bestHMatrix)(Range(minLoc.y,minLoc.y+1), Range(1,10));
+
+               reshaped.copyTo(subSelected);
+               bestHMatrix->at<double>(minLoc.y,0) = num_inliers;
+               numTransfSoFar++;
+               numTransfSoFar = std::min(numTransfSoFar,bestHMatrix->rows);
+
+           }
          }
          
        }
@@ -661,6 +666,33 @@ void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresu
     cv::flann::Index flann_index(dest_32f, cv::flann::KDTreeIndexParams(2));  // using 2 randomized kdtrees
     flann_index.radiusSearch(obj_32f, *m_indices, *m_dists, radius, maxresults, cv::flann::SearchParams(64) ); 
  
-  }
+}
+
+
+void get_orientation(Mat* src, int ksize, Mat* mag, Mat* orientaiton)
+{
+
+    Mat Sx;
+    Sobel(*src, Sx, src->type(), 1, 0, ksize);
+
+    Mat Sy;
+    Sobel(*src, Sy, src->type(), 0, 1, ksize);
+
+    magnitude(Sx, Sy, *mag);
+    phase(Sx, Sy, *orientaiton, true);
+
+}
+
+Mat* phaseCorrelate(Mat *src, Mat *dst) 
+{
+  double score;
+  Point2d result= phaseCorrelateRes(*src, *dst, noArray(), &score);
+  Mat* ret = new Mat(3,1, src->type());
+  ret->at<double>(0,0) = result.x;
+  ret->at<double>(1,0) = result.y;
+  ret->at<double>(2,0) = score;
+  
+  return ret;
+}
 
 } // extern "C"

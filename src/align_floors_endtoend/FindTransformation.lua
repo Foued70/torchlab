@@ -20,7 +20,11 @@ function FindTransformation.findTransformation(min_x, max_x, min_y, max_y, score
       goodLocationsX_dest, goodLocationsY_dest, cloneAndReturnMat(scores_dest_torch), cloneAndReturnMat(pairwise_dis_dest),
       parameters.corr_thresh, parameters.minInliersForMatch, parameters.maxNumCompute, 
       parameters.cornerDistanceLimit, min_x, max_x, min_y, max_y)
-
 	inliers = inliers/math.min(scores_src_torch:size(1),scores_dest_torch:size(1))
-   return inliers, best_transformations;
+   sort, order = torch.sort(inliers,true)
+   transformations = {}
+   for i =1, sort:size(1) do
+      transformations[i] = best_transformations[order[i]]
+   end
+   return sort, transformations;
 end

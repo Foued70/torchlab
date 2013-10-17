@@ -15,10 +15,13 @@ typedef struct OcTree OcTree;
 OcTree*        OcTree_new (double resolution);
 void           OcTree_destroy(OcTree* tree);
 bool           OcTree_write(OcTree* tree, const char* filename);
-bool           OcTree_read(OcTree* tree, const char* filename);
-
+OcTree*        OcTree_read(const char* filename);
 void           OcTree_add_sweep(OcTree* tree, 
                                  THDoubleTensor* points, THDoubleTensor* origin, double max_range);
+void OcTree_castRays(OcTree* tree, 
+                            THDoubleTensor* origin, THDoubleTensor* directions, 
+                            double max_range, 
+                            THDoubleTensor* xyz);
 
 long           OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points);
 long           OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points);
