@@ -94,7 +94,7 @@ function Scan:final_registration()
         print(transavg)
         local pc = pair:getSweep2():getPC()
         pc:set_pose_from_rotation_matrix(transavg)
-        pc:write(pair:getSweep2().fod)
+        pc:save_to_od(pair:getSweep2().fod)
         pc:save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",pair:getSweep2():getName()..'.xyz'))
 
     end

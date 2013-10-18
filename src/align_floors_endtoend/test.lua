@@ -3,13 +3,13 @@ local pcl = PointCloud.PointCloud
 local scan = align_floors_endtoend.Scan
 local leafsize = 0.01
 
---[[
-local base_dir = '/Users/lihui815/cloudlab/build/usr/local/tmp/arcs/virtuous-walk-1066/work/a_03'
+--[[]]
+local base_dir = '/Users/lihui815/cloudlab/build/usr/local/tmp/arcs/virtuous-walk-1066/work/a_04'
 local complete_loop = false
 local start = 70
 local total = 90
 --[[]]
---[[]]
+--[[
 local base_dir = '/Users/lihui815/tmp2/Office'
 local complete_loop = true
 local start = 1000
@@ -40,7 +40,7 @@ end
 
 function do_loop()
   local aScan = scan.new(base_dir,complete_loop)
-  aScan:find_forward_and_backward_transformations()
+  aScan:find_forward_and_backward()
 end
 
 

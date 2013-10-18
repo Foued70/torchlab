@@ -518,7 +518,7 @@ int flatten_image_with_widthheightinfo(double* imagez, double* image_corner,
       /* check connection */
       if (conn_hw == 1)
       {
-        dst_con = norm(ptx,pty,0)*100 + 1;
+        dst_con = norm(ptx,pty,0) + 1;
         
         if (conn_hpw == 1)
         {

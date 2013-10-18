@@ -41,8 +41,8 @@ end
 
 function Sweep:init_variables()
     self.parameters = {}
-    self.parameters.scale = .01
-    self.parameters.numCorners = 50
+    self.parameters.scale = 10 -- in milimeters
+    self.parameters.numCorners = 30
     self.parameters.octTreeRes = .02
     self.initial = torch.eye(3)
     self.fod = path.join(self.base_dir, Sweep.OD, self.name.. ".od")
@@ -78,9 +78,8 @@ function Sweep:getPC(H)
         pc = pcl.new(self.fxyz)
         if util.fs.is_dir(path.join(self.base_dir,Sweep.PNG)) and util.fs.is_file(self.fpng) then
             pc:load_rgb_map(self.fpng)
-            --pc:write(self.fxyz)
         end
-        pc:write(self.fod)
+        pc:save_to_od(self.fod)
         pc = pc
     end
     collectgarbage()
@@ -242,7 +241,7 @@ end
 function Sweep:getFlattenedAndCorners(recalc, numCorners)
     if not(self.flattenedxy and self.flattenedv and self.corners) or recalc then
         local p = self:getPC()
-        local flattened, corners = p:get_flattened_images(self.parameters.scale, nil, numCorners or self.parameters.numCorners) --self.parameters.numCorners)
+        local flattened, corners = p:get_flattened_images(self.parameters.scale, numCorners or self.parameters.numCorners)
         corners = applyToPointsReturn2d(Sweep.get2DTransformationToZero(flattened[1]),corners:t()):t()
         local flattenedx, flattenedy, flattenedv = image.thresholdReturnCoordinates(flattened[1],0)
         local flattenedxy = torch.cat(flattenedx, flattenedy,2)         
