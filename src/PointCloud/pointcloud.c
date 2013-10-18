@@ -583,11 +583,10 @@ int theta_map(double* theta_map, double* centered_point_map, int height, int wid
       
         theta_p = pt_p[1]-PI/2;
         theta_n = pt_n[1]-PI/2;
-        theta_c = pt_c[1]-PI/2;
-                
+        
         if (norm3(xyz_nhw) > 0.01 && norm3(xyz_phw) && dist_c > 0.01)
         {
-          theta_c = theta_c;
+          theta_c = pt_c[1]-PI/2;
         }
         else if (norm3(xyz_nhw) > 0.01 && dist_n > 0.01)
         {
@@ -598,7 +597,7 @@ int theta_map(double* theta_map, double* centered_point_map, int height, int wid
           theta_c = theta_p;
         }
         
-        if (theta_c <= -PI)
+        if (theta_c <= -PI && theta_c != -1000)
         {
           theta_c = theta_c + 2*PI;
         }
@@ -624,6 +623,7 @@ int phi_map(double* phi_map, double* centered_point_map, int height, int width)
   double phi_p, phi_n, phi_c;
   double dia_p, dia_c, dia_n;
   double dz_p, dz_n, dz_c, dd_p, dd_n, dd_c;
+  double rad_p,rad_n,rad_c;
   double dist_p, dist_n, dist_c;
   int k;
   
@@ -665,20 +665,23 @@ int phi_map(double* phi_map, double* centered_point_map, int height, int width)
         dz_p = xyz_phw[2]-xyz_hw[2];
         dz_n = xyz_hw[2]-xyz_nhw[2];
         dz_c = xyz_phw[2]-xyz_nhw[2];
+        
+        rad_p = sqrt(pow(dd_p,2)+pow(dz_p,2));
+        rad_n = sqrt(pow(dd_n,2)+pow(dz_n,2));
+        rad_c = sqrt(pow(dd_c,2)+pow(dz_c,2));
       
-        phi_p = asin(dd_p/sqrt(pow(dd_p,2)+pow(dz_p,2)));
-        phi_n = asin(dd_n/sqrt(pow(dd_n,2)+pow(dz_n,2)));
-        phi_c = asin(dd_c/sqrt(pow(dd_c,2)+pow(dz_c,2)));
+        phi_p = -asin(dd_p/rad_p);
+        phi_n = -asin(dd_n/rad_n);
       
-        if (norm3(xyz_nhw) > 0.01 && norm3(xyz_phw) && h > 0 && nh < height && dist_c > 0.01)
+        if (norm3(xyz_nhw) > 0.01 && norm3(xyz_phw) && h > 0 && nh < height && dist_c > 0.01 && rad_c > 0)
         {
-          phi_c = -phi_c;
+          phi_c = -asin(dd_c/rad_c);
         }
-        else if (norm3(xyz_nhw) > 0.01 && nh < height && dist_n > 0.01)
+        else if (norm3(xyz_nhw) > 0.01 && nh < height && dist_n > 0.01 && rad_n > 0)
         {
           phi_c = -phi_n;
         }
-        else if (norm3(xyz_phw) > 0.01 && h > 0 && dist_p > 0.01)
+        else if (norm3(xyz_phw) > 0.01 && h > 0 && dist_p > 0.01 && rad_p > 0)
         {
           phi_c = -phi_p;
         }
@@ -708,9 +711,9 @@ int theta_map_smooth(double* smoothed_theta_map, double* theta_map, char * extan
   double theta_sum, theta_count, theta_mean;
   char extant_curr, extant_query;
   
-  for (h = 0; h < height-1; h++)
+  for (h = 0; h < height; h++)
   {
-    for (w = 0; w < width-1; w++)
+    for (w = 0; w < width; w++)
     {
     
       index_curr = h*width + w;
@@ -837,9 +840,9 @@ int phi_map_smooth(double* smoothed_phi_map, double* phi_map, char * extant_map,
   double phi_sum, phi_count, phi_mean;
   char extant_curr, extant_query;
   
-  for (h = 0; h < height-1; h++)
+  for (h = 0; h < height; h++)
   {
-    for (w = 0; w < width-1; w++)
+    for (w = 0; w < width; w++)
     {
     
       index_curr = h*width + w;
