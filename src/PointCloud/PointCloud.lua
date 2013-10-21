@@ -638,7 +638,9 @@ function PointCloud:set_pc_od_file(pcfilename)
   if self.theta_map then 
     self.theta_map = self.theta_map:type('torch.DoubleTensor'):div(PointCloud.fudge_number)
   end
-  self.normal_mask = loaded[7]:type('torch.ByteTensor')
+  if(self.normal_mask) then
+    self.normal_mask = loaded[7]:type('torch.ByteTensor')
+  end
   self.local_to_global_pose = loaded[8]
   self.local_to_global_rotation = loaded[9]
   self:reset_point_stats()
@@ -814,6 +816,7 @@ function PointCloud:get_connections_and_corners()
   
   local xyz = self:get_xyz_map_no_mask()  
   local depth = self:get_depth_map_no_mask()
+  local index,mask_extant = self:get_index_and_mask()
   
   local toprow = xyz[3][1]:clone()
   local topsum = toprow:sum()
@@ -838,7 +841,6 @@ function PointCloud:get_connections_and_corners()
   
   local mask_corner = get_corners(xyz:clone(),depth:clone(),snormal:clone(),stheta:clone(),sdd:clone(),mask_extant,thresh_theta,thresh_plane_corn,height,width)
   local mask_connct = get_connections(xyz:clone(),snormal:clone(),sdd:clone(),thresh_plane_conn,height,width)
-  
   mask_corner[mask_extant]=0
   mask_corner[mask_phi]=0
   mask_corner[mask_height]=0

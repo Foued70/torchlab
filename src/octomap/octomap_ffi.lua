@@ -22,11 +22,16 @@ void OcTree_castRays(OcTree* tree,
                             THDoubleTensor* origin, THDoubleTensor* directions, 
                             double max_range, 
                             THDoubleTensor* xyz);
-
+void OcTree_castRaysNormals(OcTree* tree, 
+                            THDoubleTensor* origin, THDoubleTensor* directions, 
+                            double max_range, 
+                            THDoubleTensor* xyz);
 long           OcTree_OccupiedCellstoTensor(OcTree* tree, THDoubleTensor* points);
 long           OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points);
+long           OcTree_NormalsToTensor(OcTree* tree, THDoubleTensor* normals);
 long           OcTree_getThresholds(OcTree* tree, THDoubleTensor* occupancy);
-
+long OcTree_GetEmptyBoundaryCellstoTensor(OcTree* tree, THDoubleTensor* points);
+long OcTree_GetEmptyBoundaryCellstoTensor2(OcTree* tree, THDoubleTensor* points);
 void           OcTree_outputStatistics(const OcTree* tree);
 void           OcTree_getInfo(const OcTree* tree);
 void           OcTree_getBBX(const OcTree* tree, THDoubleTensor* size);

@@ -150,8 +150,8 @@ function Scan:organize_in_trees()
     local s_1 = self:get_ith_sweep(1, true)
     local tree_root = SweepTreeNode.new(s_11:getSweep1():getName(), s_1, s_11, false, nil, 1)
     local tree = SweepTree.new(tree_root)
-    local tree_forest = SweepForest.new()
-    tree_forest:add(tree)
+    local forest = SweepForest.new()
+    forest:add(tree)
     local i_list = torch.range(1,self.numfiles-1) --self.numfiles-1
     local j_list = i_list+1
     local used_list = {}
@@ -163,9 +163,9 @@ function Scan:organize_in_trees()
         local prevName = self:get_ith_sweep(i, true):getName()
         local curName = self:get_ith_sweep(j, true):getName()
         local curSweep = self:get_ith_sweep(j, true)
-        local tree_containing_previous = tree_forest:findTreeWithNode(prevName)      
+        local tree_containing_previous = forest:findTreeWithNode(prevName)      
         local node = tree_containing_previous:getNode(prevName)
-        local successTree = self:alignWithForest(tree_forest, curSweep, curSweepId)
+        local successTree = self:alignWithForest(forest, curSweep, curSweepId)
         if successTree then
             used_list[curSweepId] = curSweepId
         else 
@@ -175,19 +175,64 @@ function Scan:organize_in_trees()
             
             local new_root = SweepTreeNode.new(s_jj:getSweep1():getName(), s_j, s_jj, false, nil, curSweepId)
             local new_tree = SweepTree.new(new_root)
-            tree_forest:add(new_tree)
+            forest:add(new_tree)
 
             --attempt to match forwards!
         end
         collectgarbage()
     end
-    for k,v in pairs(tree_forest:getTrees()) do
-        while(self:mergeForestWithTree(tree_forest, v)) do end --while this tree can be merged with others...
+    for k,v in pairs(forest:getTrees()) do
+        while(self:mergeForestWithTree(forest, v)) do end --while this tree can be merged with others...
     end
-    torch.save("test.dat",tree_forest)
-    return tree_forest
+    torch.save("test.dat",forest)
+    return forest
 end
 
+function Scan:getOctTreeForTree(tree)
+    local nodes = tree:getAllNodes()
+    local tree = octomap.Tree.new(res)
+    for k,v in pairs(nodes) do
+        local transf = v:getTransformationToRoot()
+        local pc = v:getSweep():getPC()
+        pc:set_pose_from_rotation_matrix(transf)
+        pc:set_local_scan_center(pc:estimate_faro_pose())
+        local pc_points     = pc:get_global_points()
+        local pc_pose       = pc:get_global_scan_center()
+        local pc_max_radius = pc:get_max_radius()
+        tree:add_points(pc_points,pc_pose,pc_max_radius)
+        pc:write(v:getSweep().fod)
+        pc:save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",v:getSweep():getName()..'.xyz'))
+        collectgarbage()
+    end
+    return tree
+end
+function Scan:findTransformationsForTree(tree)
+ local nodes = tree:getAllNodes()
+ for k,v in pairs(nodes) do
+    local transf = v:getTransformationToRoot()
+    print(k)
+    print(transf)
+
+    pc = v:getSweep():getPC()
+    pc:set_pose_from_rotation_matrix(transf)
+    pc:write(v:getSweep().fod)
+    pc:save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",v:getSweep():getName()..'.xyz'))
+ end
+--[[
+tree = forest.tree_list["sweep_001"]
+pair = scan:get_sweeppair(1,30)
+trans1= pair:getTransformation(false,true,true)
+pc1 = pair:getSweep1():getPC()
+pc2 = pair:getSweep2():getPC()
+pc1:set_pose_from_rotation_matrix(torch.eye(4))
+pc1:write(pair:getSweep1().fod)
+pc1:save_downsampled_global_to_xyz(0.01, "my1.xyz")
+pc2:set_pose_from_rotation_matrix(trans1)
+pc2:write(pair:getSweep2().fod)
+pc2:save_downsampled_global_to_xyz(0.01, "my30.xyz")
+
+]]--
+end
 function Scan:mergeForestWithTree(forest, tree_orig)
     local foundMatch = false
     local maxDepth = 15
@@ -209,7 +254,13 @@ function Scan:mergeForestWithTree(forest, tree_orig)
                 foundMatch = true
                 winningTree = tree
                 winningTree:changeRoot(node)
-                curtreenode:addChild(node:getName(), pair, inverse, node:getId(), node.children)                 
+                
+                curtreenode.children[node:getName()] = node
+                node.from = curtreenode
+                node.inverse = inverse
+                node.pair = pair
+
+                --curtreenode:addChild(node:getName(), pair, inverse, node:getId(), node.children)                 
             end
         end
     end
@@ -262,7 +313,7 @@ function Scan:attemptToAlignPair(s_ij)
     s_ij:getSweep2():getPC(t*t2):write(path.join(self.base_dir,"DOWNSAMPLEDXYZ","noicpsecond"..s_ij:getSweep2():getName()..'.xyz'))
     --]]
     score =  s_ij:get3dValidationScore()
-    if(score[1]<.85 or score[4]<.3) then
+    if(score[1]<.8 or score[4]<.3) then
         print("BAD ALIGNMENT---------" .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
         return false, s_ij
     else
