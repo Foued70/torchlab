@@ -44,12 +44,31 @@ function Tree:get_occupied()
    return nil
 end
 
+function Tree:get_normals()
+   normals = torch.Tensor()
+   if (octomap_ffi.OcTree_NormalsToTensor(self.tree,torch.cdata(normals))) then 
+      return normals
+   end
+   return nil
+end
+
 function Tree:get_empty()
    points = torch.Tensor()
    octomap_ffi.OcTree_EmptyCellstoTensor(self.tree,torch.cdata(points))
    return points
 end
 
+function Tree:get_empty_boundary()
+   points = torch.Tensor()
+   octomap_ffi.OcTree_GetEmptyBoundaryCellstoTensor(self.tree,torch.cdata(points))
+   return points
+end
+
+function Tree:get_empty_boundary2()
+   points = torch.Tensor()
+   octomap_ffi.OcTree_GetEmptyBoundaryCellstoTensor2(self.tree,torch.cdata(points))
+   return points
+end
 function Tree:get_thresholds()
    thresholds = torch.Tensor()
    octomap_ffi.OcTree_getThresholds(self.tree,torch.cdata(thresholds))
@@ -78,6 +97,19 @@ function Tree:ray_trace(origin, directions, max_range, output_xyz)
    return output_xyz
 end
 
+function Tree:ray_trace_normals(origin, directions, max_range, output_xyz)
+   origin     = origin:contiguous()
+   directions = directions:contiguous()
+   max_range  = max_range or -1
+   output_xyz = output_xyz or torch.DoubleTensor()
+   -- TODO check types and sizes before calling the c++, can be flaky with wrong input.
+   octomap_ffi.OcTree_castRaysNormals(self.tree,
+                                    torch.cdata(origin), torch.cdata(directions),
+                                    max_range,
+                                    torch.cdata(output_xyz))
+   return output_xyz
+end
+
 function Tree:bbx()
    size = torch.Tensor()
    octomap_ffi.OcTree_getBBX(self.tree, torch.cdata(size))
@@ -85,7 +117,9 @@ function Tree:bbx()
 end
 
 function Tree:writePointsXYZ(filename)
-   pts  = self:get_occupied()
+   pts  = self:get_empty_boundary2() --self:get_occupied()
+   --pts = pts:index(1,torch.range(1,pts:size(1))[torch.eq(pts:select(2,4),0)]:long())  
+
    if not (pts:nDimension() == 2) then 
       print("error: no occupied points")
    else
@@ -95,7 +129,27 @@ function Tree:writePointsXYZ(filename)
       
       for i = 1,pts:size(1) do 
          pt = pts[i]      
-         objf:write(string.format("%4.4f %4.4f %4.4f\n",pt[1],pt[2],pt[3]))
+         --objf:write(string.format("%4.4f %4.4f %4.4f\n",pt[1],pt[2],pt[3]))
+         objf:write(string.format("%4.4f %4.4f %4.4f %4.4f\n",pt[1],pt[2],pt[3], pt[4]))
+      end
+      objf:close()
+   end
+end
+
+function Tree:writePointsNormalsXYZ(filename)
+   pts  = self:get_occupied()
+   norms  = self:get_normals()
+   if not (pts:nDimension() == 2) then 
+      print("error: no occupied points")
+   else
+      io = require 'io'
+      objf = assert(io.open(filename, "w"))  
+      pid = 1
+      
+      for i = 1,pts:size(1) do 
+         pt = pts[i]
+         norm = norms[i]*255      
+         objf:write(string.format("%4.4f %4.4f %4.4f %4.4f %4.4f %4.4f\n",pt[1],pt[2],pt[3], norm[1], norm[2], norm[3]))
       end
       objf:close()
    end

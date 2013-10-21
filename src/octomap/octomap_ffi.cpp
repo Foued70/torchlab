@@ -236,16 +236,62 @@ extern "C"
     return count;
   }
 
+  long OcTree_NormalsToTensor(OcTree* tree, THDoubleTensor* normals)
+  {
+    unsigned int numOccupied, numOther;
+    calcOccupiedNodes(tree, numOccupied, numOther);
+
+    long count = 0;
+    point3d query;
+    vector<point3d> normal_test;
+    if (numOccupied > 0) {
+      THDoubleTensor_resize2d(normals,numOccupied,3);
+      THDoubleTensor_fill(normals,0);
+      double* normals_d = THDoubleTensor_data(normals);
+      for(OcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
+        if(tree->isNodeOccupied(*it)){
+          double x=0;
+          double y=0;
+          double z=0;
+          query = point3d(it.getX(), it.getY(), it.getZ());  
+          if (tree->getNormals(query, normal_test)){
+            for(unsigned i = 0; i < normal_test.size(); ++i) {
+              x +=  normal_test[i].x();
+              y+= normal_test[i].y();
+              z+= normal_test[i].z();
+            }
+            if (normal_test.size()>0) {
+              x = x/normal_test.size();
+              y = y/normal_test.size();
+              z = z/normal_test.size();
+            }
+          } else{
+            cout << "query point unknown (no normals)\n";
+          }
+          normals_d[0] = x;
+          normals_d[1] = y;
+          normals_d[2] = z;
+          count++;
+          normals_d += 3;
+
+        }
+      }
+      THDoubleTensor_narrow(normals,NULL,0,0,count);
+    }
+    return count;
+  }
 
   long OcTree_EmptyCellstoTensor(OcTree* tree, THDoubleTensor* points)
   {
+    tree->expand();
     unsigned int numOccupied, numOther;
     calcOccupiedNodes(tree, numOccupied, numOther);
 
     THDoubleTensor_resize2d(points,numOther,3);
     double * pts_d = THDoubleTensor_data(points);
     long count = 0;
-    for(OcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
+
+    for(OcTree::leaf_iterator it = tree->begin_leafs(), end=tree->end_leafs(); it!= end; ++it) {
       if(!tree->isNodeOccupied(*it)){
         pts_d[0] = it.getX();
         pts_d[1] = it.getY();
@@ -254,10 +300,150 @@ extern "C"
         pts_d += 3;
       }
     }
+    tree->prune();
     THDoubleTensor_narrow(points,NULL,0,0,count);
     return count;
   }
 
+
+  long OcTree_GetEmptyBoundaryCellstoTensor(OcTree* tree, THDoubleTensor* points)
+  {
+    tree->expand();
+    unsigned int numOccupied, numOther;
+    calcOccupiedNodes(tree, numOccupied, numOther);
+
+    THDoubleTensor_resize2d(points,numOther,4);
+    double * pts_d = THDoubleTensor_data(points);
+    long count = 0;
+    point3d point;
+    for(OcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
+      //if(!tree->isNodeOccupied(*it)){
+        OcTreeKey init_key;
+        point = point3d(it.getX(),it.getY(),it.getZ());
+        tree->coordToKeyChecked(point, init_key);
+        int vertex_values[8];
+
+        OcTreeKey current_key;
+        OcTreeNode* current_node;
+
+        int x_index[4] = {-1, 1, 1, -1};
+        int y_index[4] = {1, 1, -1, -1};
+        int z_index[2] = {-1, 1};
+
+        int k = 0;
+        bool success = false;
+        for(int j = 0; j < 2; ++j){
+          for(int i = 0; i < 4; ++i){
+            if(!success) {
+              current_key[0] = init_key[0] + x_index[i];
+              current_key[1] = init_key[1] + y_index[i];
+              current_key[2] = init_key[2] + z_index[j];
+              current_node = tree->search(current_key);
+
+              if (!current_node){
+                pts_d[0] = it.getX();
+                pts_d[1] = it.getY();
+                pts_d[2] = it.getZ();
+                if(!tree->isNodeOccupied(*it)){
+                  pts_d[3] = 1;
+                } else {
+                  pts_d[3] = 0;
+                }
+
+                count++;
+                pts_d += 4;
+                success = true;
+              }
+            }
+          }
+        }
+      //}
+    }
+    tree->prune();
+    THDoubleTensor_narrow(points,NULL,0,0,count);
+    return count;
+  }
+
+  long OcTree_GetEmptyBoundaryCellstoTensor2(OcTree* tree, THDoubleTensor* points)
+  {
+    tree->expand();
+    unsigned int numOccupied, numOther;
+    calcOccupiedNodes(tree, numOccupied, numOther);
+
+    THDoubleTensor_resize2d(points,numOther,4);
+    double * pts_d = THDoubleTensor_data(points);
+    long count = 0;
+    point3d point;
+    for(OcTree::leaf_iterator it = tree->begin(), end=tree->end(); it!= end; ++it) {
+      if(!tree->isNodeOccupied(*it)){
+
+        OcTreeKey init_key;
+        point = point3d(it.getX(),it.getY(),it.getZ());
+        tree->coordToKeyChecked(point, init_key);
+        int vertex_values[8];
+
+        OcTreeKey current_key;
+        OcTreeNode* current_node;
+
+
+
+        int x_index[4] = {-1, 1, 1, -1};
+        int y_index[4] = {1, 1, -1, -1};
+        int z_index[2] = {-1, 1};
+
+        int k = 0;
+        bool success = false;
+        for(int j = 0; j < 2; ++j){
+          for(int i = 0; i < 4; ++i){
+            if(!success) {
+              current_key[0] = init_key[0] + x_index[i];
+              current_key[1] = init_key[1] + y_index[i];
+              current_key[2] = init_key[2] + z_index[j];
+              current_node = tree->search(current_key);
+              if (!current_node){
+                success = true;
+              }
+            }
+          }
+        }
+
+        if(success) {
+          int unknownsInNeighborhood = 0;
+          int k = 0;
+          success = false;
+          for(int k = -5; k < 6; ++k){
+            for(int j = -5; j < 6; ++j){
+              for(int i = -5; i < 6; ++i){
+                  current_key[0] = init_key[0] + i;
+                  current_key[1] = init_key[1] + j;
+                  current_key[2] = init_key[2] + k;
+                  current_node = tree->search(current_key);
+
+                if (!current_node){
+                  //unknown in this spot
+                  success = true;
+                  unknownsInNeighborhood++;
+                }
+              }
+            }
+          }
+          if(success) {
+            count++;
+            pts_d[0] = it.getX();
+            pts_d[1] = it.getY();
+            pts_d[2] = it.getZ();
+            pts_d[3] = unknownsInNeighborhood;
+            pts_d += 4;
+          }
+        }
+                
+      }
+      //}
+    }
+    tree->prune();
+    THDoubleTensor_narrow(points,NULL,0,0,count);
+    return count;
+  }
   long ColorOcTree_getThresholds(ColorOcTree* tree, THDoubleTensor* thresholds)
   {
     unsigned int numLeafNodes = tree->getNumLeafNodes();
@@ -500,6 +686,7 @@ extern "C"
   } // castrays
 
 
+
   // WARNING origin and directions has channels first 3xN where and
   // returns DxHxW which is consistent with the projections. Other
   // functions use Nx3.
@@ -555,6 +742,91 @@ extern "C"
         x++ ; y++ ; z++;
         x_new++ ; y_new++ ; z_new++;
 
+      }
+    }
+    cout << "found " << count_occ << " occupied nodes in " << count_ray << " rays cast" << endl; 
+  } // castrays
+
+
+  void OcTree_castRaysNormals(OcTree* tree, 
+                            THDoubleTensor* origin, THDoubleTensor* directions, 
+                            double max_range, 
+                            THDoubleTensor* xyz)
+  {
+    // all in global coordinates
+    // origin (x,y,z)
+    // endpoints 3xHxW (x, y, z)
+    // resize RGB to directions
+
+    long height = directions->size[1];
+    long width  = directions->size[2];
+
+    THDoubleTensor_resize3d(xyz, 6, height, width);
+    THDoubleTensor_fill(xyz,0);
+
+    double * origin_d     = THDoubleTensor_data(origin);
+    double * dirs_d       = THDoubleTensor_data(directions);
+    double * xyz_d = THDoubleTensor_data(xyz);
+
+    point3d origin_3d = point3d(float(origin_d[0]),float(origin_d[1]),float(origin_d[2]));
+
+    double * x = dirs_d;
+    double * y = x + directions->stride[0];
+    double * z = y + directions->stride[0];
+
+
+    double * x_new = xyz_d;
+    double * y_new = x_new + xyz->stride[0];
+    double * z_new = y_new + xyz->stride[0];
+    double * nx_new = z_new + xyz->stride[0];
+    double * ny_new = nx_new + xyz->stride[0];
+    double * nz_new = ny_new + xyz->stride[0];
+
+    long count_ray = 0, count_occ = 0;
+    long h,w;
+    point3d query;
+    vector<point3d> normal_test;
+
+    for (h=0;h<height;h++){
+      for (w=0;w<width;w++){
+        point3d dir_3d = point3d(float(*x),float(*y),float(*z));
+        point3d end_3d = point3d(100,100,100);
+        if (tree->castRay(origin_3d, dir_3d, end_3d, true, max_range)){
+          // cout << "end3d x:" << end_3d(0) << " y: " << end_3d(1) << " z: " << end_3d(2) << endl;
+          OcTreeNode* node = tree->search(end_3d);
+          count_ray++;
+          if (node && (tree->isNodeOccupied(node))) {
+            // cout << "node at: " << node->depth << endl;
+            *x_new = end_3d.x();
+            *y_new = end_3d.y();
+            *z_new = end_3d.z();
+            double nx=0;
+            double ny=0;
+            double nz=0;
+            query = point3d(end_3d.x(), end_3d.y(), end_3d.z());  
+            if (tree->getNormals(query, normal_test)){
+              for(unsigned i = 0; i < normal_test.size(); ++i) {
+                nx +=  normal_test[i].x();
+                ny+= normal_test[i].y();
+                nz+= normal_test[i].z();
+              }
+              if (normal_test.size()>0) {
+                nx = normal_test[0].x(); //nx/normal_test.size();
+                ny = normal_test[0].y(); //ny/normal_test.size();
+                nz = normal_test[0].z(); //nz/normal_test.size();
+              }
+            } else{
+              cout << "query point unknown (no normals)\n";
+            }
+            *nx_new = nx;
+            *ny_new = ny;
+            *nz_new = nz;
+            count_occ++;
+          }
+        } 
+        x++ ; y++ ; z++;
+        x_new++ ; y_new++ ; z_new++;
+        nx_new++ ; ny_new++ ; nz_new++;
       }
     }
     cout << "found " << count_occ << " occupied nodes in " << count_ray << " rays cast" << endl; 

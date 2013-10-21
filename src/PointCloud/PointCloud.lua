@@ -638,7 +638,9 @@ function PointCloud:set_pc_od_file(pcfilename)
   if self.theta_map then 
     self.theta_map = self.theta_map:type('torch.DoubleTensor'):div(PointCloud.fudge_number)
   end
-  self.normal_mask = loaded[7]:type('torch.ByteTensor')
+  if(self.normal_mask) then
+    self.normal_mask = loaded[7]:type('torch.ByteTensor')
+  end
   self.local_to_global_pose = loaded[8]
   self.local_to_global_rotation = loaded[9]
   self:reset_point_stats()
@@ -813,8 +815,15 @@ function PointCloud:get_connections_and_corners()
   
   local xyz = self:get_xyz_map_no_mask()  
   local depth = self:get_depth_map_no_mask()
+  local index,mask_extant = self:get_index_and_mask()
   
-  local noise = xyz:select(1,3):select(1,1):std()
+
+  local toprow = xyz[3][1]:clone()
+  local sum = toprow:sum()
+  local sumnum = mask_extant[1]:clone():type('torch.DoubleTensor'):sum()
+  local mean = sum/sumnum
+  local noise = math.sqrt(toprow:clone():add(-mean):pow(2):sum())/(sumnum)
+  --local noise = self:get_xyz_map():select(1,3):select(1,1):std()
   local winsize = 10+noise
   local angdiff = math.pi/6 + math.pi*noise/20
   local thresh_theta = math.pi/4
@@ -825,13 +834,11 @@ function PointCloud:get_connections_and_corners()
   
   local snormal,sphi,stheta,sdd = self:get_smooth_normal(winsize,angdiff,angdiff)
   
-  local index,mask_extant = self:get_index_and_mask()
   local mask_phi = sphi:clone():abs():ge(thresh_phi)
   local mask_height = {{1,thresh_height},{}}
   
   local mask_corner = get_corners(xyz:clone(),depth:clone(),snormal:clone(),stheta:clone(),sdd:clone(),mask_extant,thresh_theta,thresh_plane_corn,height,width)
   local mask_connct = get_connections(xyz:clone(),snormal:clone(),sdd:clone(),thresh_plane_conn,height,width)
-  
   mask_corner[mask_extant]=0
   mask_corner[mask_phi]=0
   mask_corner[mask_height]=0

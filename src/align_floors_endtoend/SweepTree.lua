@@ -82,7 +82,10 @@ function SweepTree.swapParentAndChild(par, child)
 		error("wrong input type to swapParentAndChild")
 	end
 	local childNode = par:removeChild(child:getName())
-	child:addChild(par:getName(), childNode.pair, not(childNode:getInverse()), par:getId(), par:getChildren())
+	child.children[par:getName()] = par
+	par.from = childNode
+	par.inverse = not(childNode:getInverse())
+	par.pair = childNode.pair
 	return child:getChild(par:getName())
 end
 

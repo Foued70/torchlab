@@ -72,6 +72,7 @@ end
 function Sweep:getPC(H)
     local pc
     local rgb
+    print(self.fod)
     if (util.fs.is_file(self.fod)) then
         pc = pcl.new(self.fod)
     else
@@ -142,7 +143,7 @@ function Sweep:getDepthImage(H, center, res, res2)
     
     local dis = pts:clone():pow(2):sum(2):pow(.5)
 
-    local azimuth = torch.atan2(pts:select(2,2):clone(), pts:select(2,1):clone()) +math.pi --range 0 to 2*math.pi                   
+    local azimuth = (torch.atan2(pts:select(2,2):clone(), pts:select(2,1):clone()) +math.pi)*-1+2*math.pi--range 0 to 2*math.pi                   
     local elevation = torch.acos(pts:select(2,3):clone():cdiv(dis))  -- 0 to math.pi*150/180
 
     local size_x = 360
@@ -242,6 +243,8 @@ function Sweep:getFlattenedAndCorners(recalc, numCorners)
     if not(self.flattenedxy and self.flattenedv and self.corners) or recalc then
         local p = self:getPC()
         local flattened, corners = p:get_flattened_images(self.parameters.scale, numCorners or self.parameters.numCorners)
+        image.display(flattened)
+        print(corners)
         corners = applyToPointsReturn2d(Sweep.get2DTransformationToZero(flattened[1]),corners:t()):t()
         local flattenedx, flattenedy, flattenedv = image.thresholdReturnCoordinates(flattened[1],0)
         local flattenedxy = torch.cat(flattenedx, flattenedy,2)         
@@ -382,20 +385,57 @@ function Sweep.getRotationMatrix(angle, translation)
 end
 
 --old 
---[[
+
 function Sweep:getTree(H)
     local p, scanner_pose = self:getPC(H)
     log.trace("building tree ...")log.tic()
-    local t = octomap.Tree.new(self.parameters.octTreeRes)
-    max_radius = p:get_max_radius()
-    t:add_points(p.points,scanner_pose, max_radius)
+    local t = octomap.Tree.new(self.parameters.octTreeRes*2.5)
+    local max_radius = p:get_max_radius()
+    t:add_points(p.points,torch.zeros(3), max_radius)
+    t:add_points(self:getZeroAzimuthAndElevation():contiguous(),torch.zeros(3), max_radius)
+    
     log.trace(" - in ".. log.toc())
 
     t:stats()
     t:info()
-    return {t, scanner_pose, p:get_max_radius()}
+    return {t, scanner_pose, max_radius}
 end
+function Sweep:getZeroAzimuthAndElevation()
+    local p, center_n= self:getPC(H)
+    local pts = p:get_centered_map_no_mask()
 
+    local normals,mask = self:getNormalMap(H)
+    local dis = p:get_depth_image()
+    pts[3][mask*-1+1] =0
+    local azimuth = torch.atan2(pts:select(1,2):clone(), pts:select(1,1):clone())+math.pi--range 0 to 2*math.pi                   
+    local elevation = torch.acos(pts:select(1,3):clone():cdiv(dis+10^-6))  -- 0 to math.pi*150/180
+    elevation[mask*-1+1]=  0
+
+    azimuth[mask*-1+1] = math.huge   
+    local minaz = azimuth:min(1):squeeze()
+    azimuth[mask*-1+1] = -math.huge   
+    local maxaz = azimuth:max(1):squeeze()
+    azimuth[mask*-1+1] = 0 
+
+    local shouldShift = torch.gt((maxaz-minaz), 2*math.pi*.9):repeatTensor(azimuth:size(1),1)
+    local azimuthShifted = (azimuth + (shouldShift:double()*math.pi))
+    azimuthShifted:apply(function(x) return (x%(2*math.pi)) end)
+    azimuthShifted = (azimuthShifted:sum(1):cdiv(torch.eq(mask,1):double():sum(1)):squeeze())
+    local predictedAzimuth = azimuthShifted:repeatTensor(azimuth:size(1),1)- (shouldShift:double()*math.pi)
+
+    local predictedElevation = (elevation:sum(2):cdiv(torch.eq(mask,1):double():sum(2)):squeeze()):repeatTensor(elevation:size(2),1):t()
+
+    local dis = p:get_max_radius()*.95
+    local zs = torch.cos(predictedElevation)*dis
+    local xs = ((zs:clone():pow(2)*-1+dis^2):cdiv(torch.tan(predictedAzimuth):pow(2)+1)):pow(.5) --x^2+y^2 = 1-z^2, y/x=torch.tan(azimuth)
+    local posX = torch.eq(torch.gt(predictedAzimuth,math.pi/2)+torch.lt(predictedAzimuth,3*math.pi/2),2)
+    local negX = posX*-1+1
+    xs[negX] = xs[negX]*-1
+    local negY = torch.gt(predictedAzimuth,math.pi)
+    ys = torch.abs(xs:clone():cmul(torch.tan(predictedAzimuth))) --positive if azimuth is 0,pi
+    ys[negY] = ys[negY]*-1
+    return torch.cat(torch.cat(xs[mask*-1+1], ys[mask*-1+1],2), zs[mask*-1+1],2)
+end
 --this is for faro, that goes -60 to 90 degrees
 function Sweep:shootRay(H, center_n, max_range_in, tree_in, size_1, size_2)
     local tree, center, max_range
@@ -422,10 +462,9 @@ function Sweep:shootRay(H, center_n, max_range_in, tree_in, size_1, size_2)
     --do negative 60 to positive 90
     local proj = projection.SphericalProjection.new(size_1,size_2,150/180*math.pi, 2*math.pi)
     local angles = proj:angles_map(nil, nil, nil, 15*math.pi/180, nil)
-
+    angles = angles:transpose(2,3)
     local dirs = geom.util.spherical_angles_to_unit_cartesian(angles)
     local frame = tree:ray_trace(camera_pose, dirs, max_range)
     collectgarbage()
     return frame, tree, camera_pose, max_range
 end
-]]--

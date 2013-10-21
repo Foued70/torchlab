@@ -3,7 +3,7 @@ hough = require '../image/hough'
 
 scale = 0.01
 pc = PointCloud.PointCloud;
-_G.faro_points = pc.new('/Users/aditya/Work/code/Floored/data/pc/scans0/sweep_001.xyz')
+_G.faro_points = pc.new('/Users/stavbraun/Desktop/play/motor-unicorn-0776/source/faro/sweep_001.xyz')
 --_G.faro_points = pc.new('/Users/aditya/Work/code/Floored/data/pc/scans0/clean/92_93_94.xyz')
 --_G.faro_points = pc.new('/Users/aditya/Work/code/Floored/data/pc/forAditya/scan_naproom_03.xyz')
 

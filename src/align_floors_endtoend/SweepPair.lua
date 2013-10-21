@@ -332,7 +332,8 @@ end
 --this would involve some sort of kdtree or octtree, which if we are making anyway, we should use, but otherwise is 
 --too slow if just for this
 function SweepPair.findScore(f1, f2, n1, n2)
-  local thresh_1 = .05
+  local thresh_1 = .02
+  local thresh_2 = .02
   local mask = torch.ne(f2,0):cmul(torch.ne(f1,0))
   local f1_zeroed = f1:clone():cmul(mask:double())
   local close_pts = (torch.le(torch.abs(f1_zeroed-f2),thresh_1):sum()- (torch.eq(torch.eq(f1_zeroed,0) + torch.eq(f2,0),2):sum()))
@@ -432,7 +433,17 @@ function SweepPair:getTransformation(first, dontUseICP, inverse)
     myTransformation= self:getICPTransformation()*Sweep.get2DTo3DTransformation(self.parameters.scale, self:getAlignmentTransformation(), self:getZTransformation())
   end
   if(inverse) then
-    myTransformation = torch.inverse(myTransformation)
+    local t_rot = myTransformation:sub(1,3,1,3)
+    local new_t = torch.eye(4)
+    new_t[{{1,3},{4}}]=myTransformation:sub(1,3,4,4)*-1
+
+    local new_rot = torch.eye(4)
+    new_rot[2][1]=-myTransformation[2][1]
+    new_rot[1][2]=-myTransformation[1][2]
+    new_rot[1][1]=myTransformation[1][1]
+    new_rot[2][2]=myTransformation[2][2]
+
+    myTransformation = torch.inverse(myTransformation)--(new_t*new_rot):contiguous()
   end
   return myTransformation
 end
