@@ -810,22 +810,29 @@ function PointCloud:get_connections_and_corners()
   
   local height = self.height
   local width = self.width
+  local index,mask_extant = self:get_index_and_mask()
   
   local xyz = self:get_xyz_map_no_mask()  
   local depth = self:get_depth_map_no_mask()
   
-  local noise = xyz:select(1,3):select(1,1):std()
-  local winsize = 10+noise
-  local angdiff = math.pi/6 + math.pi*noise/20
+  local toprow = xyz[3][1]:clone()
+  local topsum = toprow:sum()
+  local topnum = mask_extant[1]:double():sum()
+  local topavg = topsum/topnum
+  local noise = math.sqrt(toprow:clone():add(-topavg):pow(2):sum())/topnum
+  --local noise = self:get_xyz_map():select(1,3):select(1,1):std()
+  local winsize = 10+math.min(10,noise)
+  local angdiff = math.min(math.pi/4,math.pi/6 + math.pi*noise/20)
   local thresh_theta = math.pi/4
-  local thresh_plane_conn = 0.01*self.meter+3*noise
-  local thresh_plane_corn = 0.10*self.meter + 3*noise
-  local thresh_phi = math.pi/2-math.pi/8 - noise*math.pi/20
+  local thresh_plane_conn = math.min(0.25*self.meter,0.01*self.meter+3*noise)
+  local thresh_plane_corn = math.min(0.50*self.meter,0.10*self.meter + 3*noise)
+  local thresh_phi = math.max(3*math.pi/8, math.pi/2-math.pi/8 - noise*math.pi/20)
   local thresh_height = 0.1*height
+  
+  print(noise)
   
   local snormal,sphi,stheta,sdd = self:get_smooth_normal(winsize,angdiff,angdiff)
   
-  local index,mask_extant = self:get_index_and_mask()
   local mask_phi = sphi:clone():abs():ge(thresh_phi)
   local mask_height = {{1,thresh_height},{}}
   
