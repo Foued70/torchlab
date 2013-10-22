@@ -261,7 +261,7 @@ function pf.add_planes(points, planes, candidate_planes, threshold, erode_dilate
       if not_merged then
          -- add candidate
          table.insert(output_planes, candidate_planes[i])
-         printf("  - adding candidate as new plane %d",#planes)
+         printf("  - adding candidate as new plane %d",#output_planes)
       end
    end
    return output_planes
@@ -282,7 +282,7 @@ local colors = torch.rand(1000,3)
 function pf.visualize_planes(planes, rgb)
    rgb = rgb or torch.Tensor(3,planes[1].mask:size(1),planes[1].mask:size(2)):fill(0)
 
-   for i = 1,#planes do
+   for i = #planes,1,-1 do
       pl = planes[i]
       m = pl.mask
       rgb[1][m] = colors[i][1]

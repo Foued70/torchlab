@@ -55,7 +55,7 @@ else
    erodeDilate = plane_finder.newErode(erosion_amount,imgh,imgw)
 end
 
-for scale = nscale,1,-1 do
+for scale = nscale,nscale-4,-1 do
 
    -- find patches for initial candidate_planes
    -- whack areas which are masked these should not have low salience.
@@ -170,16 +170,6 @@ for scale = nscale,1,-1 do
             end
             printf(" - Total %d planes so far (winsize: %d)", #planes, final_win)
 
-            -- combine post adding
-            n_planes = #planes
-            if (n_planes > 1) then 
-               _G.planes = plane_finder.combine_planes(allpts, planes, threshold, erodeDilate)
-               changed = n_planes - #planes
-               if (changed > 0) then
-                  printf(" - Combined %d pairs of %d leaving %d", changed, n_planes, #planes)
-                  _G.valid = plane_finder.recompute_valid_points(initial_valid, planes)
-               end
-            end
             -- recompute mask
             _G.valid = plane_finder.recompute_valid_points(initial_valid, planes)
          end
@@ -188,6 +178,19 @@ for scale = nscale,1,-1 do
       collectgarbage()
    end -- while mx > 0
 
+   -- combine at end of scale
+   n_planes = #planes
+   if (n_planes > 1) then 
+      _G.planes = plane_finder.combine_planes(allpts, planes, threshold, erodeDilate)
+      changed = n_planes - #planes
+      if (changed > 0) then
+         printf(" - Combined %d pairs of %d leaving %d", changed, n_planes, #planes)
+         _G.valid = plane_finder.recompute_valid_points(initial_valid, planes)
+      end
+   end
+
    image.save(string.format("scale_%dx%d.png",final_win,final_win),plane_finder.visualize_planes(planes))
 
 end
+
+torch.save("planes.t7", planes)
