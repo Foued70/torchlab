@@ -26,7 +26,9 @@ end
 function SweepTreeNode:getName()
 	return self.name
 end
-
+function SweepTreeNode:getSweep()
+	return self.sweep
+end
 function SweepTreeNode:getPair()
 	return self.pair
 end
@@ -112,6 +114,6 @@ function SweepTreeNode:getTransformationToRoot(icp)
 	if(self:isRoot()) then
 		return torch.eye(4)
 	else
-		return self.from:getTransformationToRoot()*self.pair:getTransformation(false,icp,self.inverse)
+		return self.from:getTransformationToRoot(icp)*self.pair:getTransformation(false,icp,self.inverse)
 	end
 end

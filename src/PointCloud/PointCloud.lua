@@ -638,7 +638,9 @@ function PointCloud:set_pc_od_file(pcfilename)
   if self.theta_map then 
     self.theta_map = self.theta_map:type('torch.DoubleTensor'):div(PointCloud.fudge_number)
   end
-  self.normal_mask = loaded[7]:type('torch.ByteTensor')
+  if(self.normal_mask) then
+    self.normal_mask = loaded[7]:type('torch.ByteTensor')
+  end
   self.local_to_global_pose = loaded[8]
   self.local_to_global_rotation = loaded[9]
   self:reset_point_stats()
@@ -658,74 +660,199 @@ local function adjust_dtheta(dtheta)
   dtheta = mid+top+bot
   return dtheta
 end
-    
-function PointCloud:get_connections_and_corners()
 
-  local noise = self:get_xyz_map_no_mask():select(1,3):select(1,1):std()
-  local winsize = 10+noise
-  local angdiff = math.pi/6 + math.pi*noise/20
-  local thresh_theta_changed = math.pi/4
-  local thresh_plane_conn = 0.01*self.meter+3*noise
-  local thresh_plane_corn = 0.10*self.meter + 3*noise
-  local thresh_phi = math.pi/2-math.pi/8 - noise*math.pi/20
+local function get_theta_corners(thresh,xyz,depth,stheta,height,width)
+  for i=1,3 do
+    xyz[i]:cdiv(depth)
+  end
   
-  local height = self.height
-  local width = self.width
-  --local phi,theta,mask = self:get_normal_phi_theta()
-  local snormal,sphi,stheta,sdd = self:get_smooth_normal(winsize,angdiff,angdiff)
-  local mask
-  local depth_shift
-  local xyz = self:get_xyz_map_no_mask()
-  local kernel_left3 = torch.Tensor({{0,0,0},{-1,1,0},{0,0,0}})
-  local kernel_comp = torch.Tensor({{0,0,0},{-1,2,-1},{0,0,0}})
-  local kernel_left5 = torch.zeros(5,5)
-  kernel_left5[3][1] = 1
+  local phi_xyz = torch.asin(xyz[3]:clone())
   
+  local theta_xyz = torch.acos(xyz[1]:clone():cdiv(phi_xyz:clone():cos()))
+  theta_xyz[phi_xyz:clone():cos():eq(0)] = 0
+  theta_xyz[xyz[2]:clone():lt(0)] = theta_xyz[xyz[2]:clone():lt(0)]:mul(-1)
+  
+  local kernel = torch.Tensor({{0,0,0},{-1,0,1},{0,0,0}})
+  local conv = torch.conv2(theta_xyz:clone(), kernel, 'F')
+  local dtheta = adjust_dtheta(conv:sub(2,height+1,2,width+1):clone())
+  mask1 = dtheta:le(0)
+
+  kernel = torch.Tensor({{0,0,0},{-1,0,1},{0,0,0}})
+  conv = torch.conv2(stheta:clone(), kernel, 'F')
+  dtheta = adjust_dtheta(conv:sub(2,height+1,2,width+1):clone())
+  
+  kernel = torch.Tensor({{0,0,0},{-1,2,-1},{0,0,0}})
+  conv = torch.conv2(dtheta:clone():abs(), kernel, 'F')
+  local localmaxdtheta = conv:sub(2,height+1,2,width+1):clone()
+  local mask_theta = localmaxdtheta:gt(0):type('torch.DoubleTensor'):cmul(dtheta:clone():abs()):gt(thresh)
+  
+  return mask_theta
+  
+end
+
+local function get_plane_corners(thresh,xyz,depth,snormal,sdd,mask0,height,width)
+  local kernel
   local conv
+  local mask1
+  local mask2
+  local mask3
+  local mask4
+  local mask5
+  local mask6
+  local mask7
+  local mask8
   
-  local dtheta
-  local dplane
+  local dplane_ll
+  local dplane_rr
+  local dplane_l
+  local dplane_r
   
-  -- find the change of theta_normal from curr pixel to previous pixel
-  conv = torch.conv2(stheta:clone(), kernel_left3, 'F')
-  dtheta = conv:sub(2,height+1,2,width+1):clone()
-  dtheta = adjust_dtheta(dtheta):abs()
-  conv = torch.conv2(dtheta:clone(), kernel_comp, 'F')
-  dtheta = conv:sub(2,height+1,2,width+1):clone()
+  kernel = torch.Tensor({{0,0,0},{1,0,0},{0,0,0}})
+  conv = torch.conv2(depth:clone(),kernel,'F')
+  mask1 = conv:sub(2,height+1,2,width+1):clone():eq(0)
+  mask1 = (mask1-mask0):eq(1)
   
-  -- find the points that do not line on the plane 2-adjacent-left
+  kernel = torch.Tensor({{0,0,0},{0,0,1},{0,0,0}})
+  conv = torch.conv2(depth:clone(),kernel,'F')
+  mask2 = conv:sub(2,height+1,2,width+1):clone():eq(0)
+  mask2 = (mask2-mask0):eq(1)
+  
+  mask1 = (mask1+mask2):gt(0)
+  mask2 = mask1:clone()
+  
+  torch.range(1,height):apply(function(h)
+    local m1 = mask1:select(1,h)
+    local m2 = mask2:select(1,h)
+    torch.range(1,width):apply(function(w)
+      if w == 1 or w == width then
+        m2[w]=0
+      elseif m1[w-1] == 1 and m1[w+1] == 1 and m1[w] == 0 then
+        m2:sub(w-1,w+1):fill(0)
+        m1[w]=1
+      end
+    end)
+  end)
+  
+  kernel = torch.zeros(5,5)
+  kernel[3][1] = 1
   
   conv = torch.Tensor(3,height+4,width+4)
   for i = 1,3 do
-    conv[i] = torch.conv2(xyz[i]:clone(), kernel_left5, 'F')
+    conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
   end
-  dplane = conv:sub(1,3,3,height+2,3,width+2):clone()
-  dplane = dplane:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  dplane_ll = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dplane_ll = dplane_ll:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  mask3 = dplane_ll:gt(thresh):type('torch.DoubleTensor')
   
-  conv = torch.Tensor(3,height+2,width+2)
+  kernel = torch.zeros(5,5)
+  kernel[3][5] = 1
+  
+  conv = torch.Tensor(3,height+4,width+4)
   for i = 1,3 do
-    conv[i] = torch.conv2(xyz[i]:clone(), kernel_left3, 'F')
+    conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
   end
-  depth_shift = conv:sub(1,3,2,height+1,2,width+1):clone():norm(2,1):squeeze()
-  mask = (depth_shift:eq(0)-self.mask_map):gt(0)
+  local dplane_rr = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dplane_rr = dplane_rr:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  mask4 = dplane_rr:gt(thresh):type('torch.DoubleTensor')
   
-  dplane[mask] = 15*self.meter
+  local mask7 = (mask3+mask4):gt(0)
+  mask7[mask2]=1
+  mask7[mask0]=0
+  mask7:select(2,1):fill(0)
+  mask7:select(2,width):fill(0)
+
+  local mask8 = mask7:clone():mul(-1):add(1)
   
-  local connection = dplane:clone():abs():lt(thresh_plane_conn)
-  local corners = dplane:clone():abs():gt(thresh_plane_corn):add(dtheta:clone():gt(thresh_theta_changed)):gt(0)
+  mask8[mask1]=0
+  
+  return mask7,mask8
+  
+end
+
+local function get_corners(xyz,depth,snormal,stheta,sdd,mask0,theta_thresh,plane_thresh,height,width)
+  local tic = log.toc()
+  
+  local mask_theta = get_theta_corners(theta_thresh, xyz:clone(), depth:clone(), stheta:clone(), height, width)
+  local mask_plane,mask_same_plane = get_plane_corners(plane_thresh, xyz:clone(), depth:clone(), snormal:clone(), sdd:clone(), mask0, height, width)
+  mask_theta:cmul(mask_same_plane)
+  local mask_corner = (mask_theta+mask_plane):gt(0)
+  
+  print("get_corners: "..log.toc()-tic)
+  
+  return mask_corner
+end
+
+local function get_connections(xyz,snormal,sdd,plane_thresh,height,width)
+  local tic = log.toc()
+  
+  local kernel
+  local conv
+  local dplane_l
+  
+  kernel = torch.zeros(5,5)
+  kernel[3][1] = 1
+  
+  conv = torch.Tensor(3,height+4,width+4)
+  for i = 1,3 do
+    conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
+  end
+  dplane_l = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dplane_l = dplane_l:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  local mask_con = dplane_l:clone():abs():lt(plane_thresh)
+  
+  print("get_planes: "..log.toc()-tic)
+  
+  return mask_con
+  
+end
+
+function PointCloud:get_connections_and_corners()
+  
+  local tic = log.toc()
+  
+  local height = self.height
+  local width = self.width
+  local index,mask_extant = self:get_index_and_mask()
+  
+  local xyz = self:get_xyz_map_no_mask()  
+  local depth = self:get_depth_map_no_mask()
+  local index,mask_extant = self:get_index_and_mask()
+  
+  local toprow = xyz[3][1]:clone()
+  local topsum = toprow:sum()
+  local topnum = mask_extant[1]:double():sum()
+  local topavg = topsum/topnum
+  local noise = math.sqrt(toprow:clone():add(-topavg):pow(2):sum())/topnum
+  --local noise = self:get_xyz_map():select(1,3):select(1,1):std()
+  local winsize = 10+math.min(10,noise)
+  local angdiff = math.min(math.pi/4,math.pi/6 + math.pi*noise/20)
+  local thresh_theta = math.pi/4
+  local thresh_plane_conn = math.min(0.25*self.meter,0.01*self.meter+3*noise)
+  local thresh_plane_corn = math.min(0.50*self.meter,0.10*self.meter + 3*noise)
+  local thresh_phi = math.max(3*math.pi/8, math.pi/2-math.pi/8 - noise*math.pi/20)
+  local thresh_height = 0.1*height
+  
+  print(noise)
+  
+  local snormal,sphi,stheta,sdd = self:get_smooth_normal(winsize,angdiff,angdiff)
   
   local mask_phi = sphi:clone():abs():ge(thresh_phi)
+  local mask_height = {{1,thresh_height},{}}
+  
+  local mask_corner = get_corners(xyz:clone(),depth:clone(),snormal:clone(),stheta:clone(),sdd:clone(),mask_extant,thresh_theta,thresh_plane_corn,height,width)
+  local mask_connct = get_connections(xyz:clone(),snormal:clone(),sdd:clone(),thresh_plane_conn,height,width)
+  mask_corner[mask_extant]=0
+  mask_corner[mask_phi]=0
+  mask_corner[mask_height]=0
+  
+  mask_connct[mask_extant]=0
+  mask_connct[mask_phi]=0
+  mask_connct[mask_height]=0
+  
+  print("get_connections_and_corners: "..log.toc()-tic)
+  
+  return mask_connct,mask_corner
 
-  
-  connection[self.mask_map] = 0
-  connection[mask_phi] = 0
-  connection[{{1,0.1*height},{}}] = 0
-  corners[self.mask_map] = 0
-  corners[mask_phi] = 0
-  corners[{{1,0.1*height},{}}] = 0
-  
-  return connection,corners
-  
 end
 
 function PointCloud:get_flattened_images(scale,numCorners)
@@ -837,7 +964,7 @@ function PointCloud:get_flattened_images(scale,numCorners)
     image_corners = image_corners_orig
   end
   
-  image.displayPoints(imagez:clone():gt(0):type('torch.ByteTensor'):mul(255), corners, colors.MAGENTA, 2)
+  --image.displayPoints(imagez:clone():gt(0):type('torch.ByteTensor'):mul(255), corners, colors.MAGENTA, 2)
   --image.display(corners_map_filled)
   imagez = imagez:clone():repeatTensor(3,1,1)
   
@@ -863,90 +990,7 @@ end
 
 
 
---[[
-function PointCloud:get_connections_and_corners()
-    local height = self.height
-    local width = self.width
-    local normal = self:get_normal_map()
-    local phi,theta = self:get_normal_phi_theta()
-    local snormal,sphi,stheta = self:get_smooth_normal()
-    local xyz = self:get_xyz_map_no_mask()
-    
-    local theta_thresh = math.pi/2
-    local plane_thresh_conn = 0.01 * self.meter
-    local plane_thresh_corn = 0.25 * self.meter
-    local z_thresh = 0.75
-    
-    local kl = torch.Tensor({{0,0,0},{-1,1,0},{0,0,0}})
-    local kr = torch.Tensor({{0,0,0},{0,1,-1},{0,0,0}})
-    
-    local C
-    
-    local function adjust_dtheta(dtheta)
-      local mid = dtheta:gt(-math.pi):cmul(dtheta:le(math.pi)):type('torch.DoubleTensor')
-      local top = dtheta:gt(math.pi):type('torch.DoubleTensor')
-      local bot = dtheta:le(-math.pi):type('torch.DoubleTensor')
-      mid:cmul(dtheta:clone())
-      top:cmul(dtheta:clone():add(-math.pi*2))
-      bot:cmul(dtheta:clone():add(math.pi*2))
-      dtheta = mid+top+bot
-      return dtheta
-    end
-    
-    C = torch.conv2(stheta:clone(),kl,'F')
-    local dtheta_l = C:sub(2,height+1,2,width+1):clone()
-    dtheta_l = adjust_dtheta(dtheta_l)
-    
-    C = torch.conv2(stheta:clone(),kr,'F')
-    local dtheta_r = C:sub(2,height+1,2,width+1):clone()
-    dtheta_r = adjust_dtheta(dtheta_r)
-    
-    local d2theta = (dtheta_l+dtheta_r):clone()
-    
-    local smooth_d = snormal:clone():cmul(xyz):norm(2,1):squeeze():mul(-1)
-    
-    kl = torch.Tensor({{0,0,0},{1,0,0},{0,0,0}})
-    kr = torch.Tensor({{0,0,0},{0,0,1},{0,0,0}})
-    
-    C = torch.Tensor(3,height+2,width+2)
-    
-    for i = 1,3 do
-      C[i] = torch.conv2(xyz[i],kl,'F')
-    end
-    local xyz_l = C:sub(1,3,2,height+1,2,width+1):clone()
-    local dd_l = xyz_l:clone():cmul(snormal):sum(1):squeeze():add(smooth_d)
-    
-    for i = 1,3 do
-      C[i] = torch.conv2(xyz[i],kr,'F')
-    end
-    local xyz_r = C:sub(1,3,2,height+1,2,width+1):clone()
-    local dd_r = xyz_r:clone():cmul(snormal):sum(1):squeeze():add(smooth_d)
-    
-    local d2d = (dd_l:clone():abs() + dd_r:clone():abs())
-    
-    local kk = torch.Tensor({{-1,-1,-1},{-1,8,-1},{-1,-1,-1}})
-    C = torch.conv2(d2d:clone(),kk,'F')
-    local d2d = C:sub(2,height+1,2,width+1):clone():abs()
-    
-    local conn = d2d:lt(plane_thresh_conn)
-    local corn = d2d:gt(plane_thresh_corn):add(d2theta:gt(theta_thresh)):gt(0)
-    
-    conn[self.mask_map] = 0
-    corn[self.mask_map] = 0
-    
-    z_filt = snormal[3]:clone():abs():gt(z_thresh)
-    
-    conn[z_filt] = 0
-    corn[z_filt] = 0
-    
-    --image.display(conn)
-    --image.display(corn)
-    return conn,corn
-end
---]]
-
-
---[[ POSE AND TRANSOFORMATION FUNCTIONS ]]
+--[[ POSE AND TRANSFORMATION FUNCTIONS ]]
 
 function PointCloud:get_global_scan_center()
    local pose = self:get_local_to_global_pose()
@@ -1013,7 +1057,9 @@ function PointCloud:estimate_faro_pose(degree_above, degree_below)
    return torch.Tensor({0,0,midrow[midrow:gt(0)]:mean()})
 end
 
---[[ SAVIE FUNCTIONS ]]--
+
+
+--[[ SAVE FUNCTIONS ]]--
 
 function PointCloud:downsample_points(leafsize)
 
