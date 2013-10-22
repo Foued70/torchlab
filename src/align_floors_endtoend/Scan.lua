@@ -102,7 +102,7 @@ end
 function Scan:save_all_2dcombined()
     local combined_images = path.join(self.base_dir,"combined")
     util.fs.mkdir_p(combined_images)
-    for i = 17,self.numfiles-1 do
+    for i = 1,self.numfiles-1 do
         for j=i+1,self.numfiles do
             local sweepPair_curr_to_nex = self:get_sweeppair(i,j)
             local name1 = sweepPair_curr_to_nex:getSweep1():getName()
@@ -221,14 +221,12 @@ function Scan:findTransformationsForTree(tree)
 --[[
 tree = forest.tree_list["sweep_001"]
 pair = scan:get_sweeppair(1,30)
-trans1= pair:getTransformation(false,true,true)
+trans1= pair:getTransformation(false,true,false)
 pc1 = pair:getSweep1():getPC()
 pc2 = pair:getSweep2():getPC()
 pc1:set_pose_from_rotation_matrix(torch.eye(4))
-pc1:write(pair:getSweep1().fod)
 pc1:save_downsampled_global_to_xyz(0.01, "my1.xyz")
 pc2:set_pose_from_rotation_matrix(trans1)
-pc2:write(pair:getSweep2().fod)
 pc2:save_downsampled_global_to_xyz(0.01, "my30.xyz")
 
 ]]--
@@ -300,7 +298,7 @@ function Scan:attemptToAlignPair(s_ij)
     print('Attempting to align ' .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
     s_ij:getAllTransformations()
     s_ij:setBestDiffTransformation(1)
-    score =  s_ij:get3dValidationScore()
+    score =  s_ij:get3dValidationScore(nil, 5)
     if(score[1]>.8 and score[4]>.3) then
         s_ij:getIcp()
     end
@@ -312,7 +310,7 @@ function Scan:attemptToAlignPair(s_ij)
     t2 = s_ij:getTransformation(false, true, false) 
     s_ij:getSweep2():getPC(t*t2):write(path.join(self.base_dir,"DOWNSAMPLEDXYZ","noicpsecond"..s_ij:getSweep2():getName()..'.xyz'))
     --]]
-    score =  s_ij:get3dValidationScore()
+    score =  s_ij:get3dValidationScore(nil, 2)
     if(score[1]<.8 or score[4]<.3) then
         print("BAD ALIGNMENT---------" .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
         return false, s_ij
@@ -347,7 +345,7 @@ function Scan:get_ith_sweeppair(i, forward)
     if(forward) then
         return SweepPair.newOrLoad(self.base_dir, self:get_ith_sweep(i, true), self:get_ith_sweep(i+1, true)) 
     else
-        return SweepPair.newOrLoad(self.base_dir, self:get_ith_sweep(i+1, true),self:get_ith_sweep(i, true)) 
+        return SweepPair.newOrLoad(self.base_dir, self:get_ith_sweep(i+1, false),self:get_ith_sweep(i, false)) 
     end
 
 end

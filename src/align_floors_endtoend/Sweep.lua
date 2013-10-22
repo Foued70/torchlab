@@ -55,7 +55,7 @@ function Sweep:__write_keys()
   return {'base_dir', 'name', 'parameters', 
     'initial', 'floor',
     'corners', 'flattenedxy', 'flattenedv', 
-    'fod', 'fxyz', 'fpng', 'fsave_me',
+    'fod', 'fxyz', 'fpng', 'fsave_me', 'scale'
     }
 end
 
@@ -69,10 +69,32 @@ function Sweep:getSaveLocation()
     return self.fsave_me
 end
 
-function Sweep:getPC(H)
+function Sweep:getPoints(H)
+    local pc
+    if (util.fs.is_file(self.fod)) then
+        pc = pcl.new(self.fod)
+    else
+        pc = pcl.new(self.fxyz)
+        if util.fs.is_dir(path.join(self.base_dir,Sweep.PNG)) and util.fs.is_file(self.fpng) then
+            pc:load_rgb_map(self.fpng)
+        end
+        pc:save_to_od(self.fod)
+    end
+    local points = pc.points
+    local rgb = pc.rgb
+    collectgarbage()
+    if (H) then
+        pc:set_pose_from_rotation_matrix(H)
+        collectgarbage()
+        points = pc:get_global_points()
+        pc:set_pose_from_rotation_matrix(torch.eye(4))
+    end
+    return points, rgb
+end
+
+function Sweep:getPC()
     local pc
     local rgb
-    print(self.fod)
     if (util.fs.is_file(self.fod)) then
         pc = pcl.new(self.fod)
     else
@@ -84,21 +106,16 @@ function Sweep:getPC(H)
         pc = pc
     end
     collectgarbage()
-    if (H) then
-        pc:set_pose_from_rotation_matrix(H)
-        collectgarbage()
-        pc_new, faro_estimate_new= pc:get_global_points_as_pc(), pc:estimate_global_faro_pose()
-        pc:set_pose_from_rotation_matrix(torch.eye(4))
-        return pc_new, faro_estimate_new        
-    else
-        return pc, pc:estimate_faro_pose()
-    end
+    return pc
 end
 
 function Sweep:getNormalMap(H)
     collectgarbage()
     local pc = self:getPC()
     local idx, mask = pc:get_index_and_mask()
+    local normal =  pc:get_normal_map()       
+    pc:save_to_od(self.fod)
+
     mask = mask*-1+1
     --mask = idx:cmul(mask:long()):reshape(mask:size(1)*mask:size(2))  
     --mask = mask[torch.gt(mask,0)]
@@ -109,10 +126,8 @@ function Sweep:getNormalMap(H)
         collectgarbage()
         normal = pc:get_global_normal_map()
         pc:set_pose_from_rotation_matrix(torch.eye(4))
-        return normal, mask    
-    else
-        return pc:get_normal_map(), mask
     end
+    return normal, mask
 end
 local function select3d(from, selectPts)
     local normals_n = torch.zeros(torch.gt(selectPts,0):sum(),3)
@@ -129,11 +144,15 @@ local function select3d2(from, selectPts, normals_n)
     return normals_n
 end
 --this is for faro, that goes -60 to 90 degrees
-function Sweep:getDepthImage(H, center, res, res2)
-    res = res or 1
-    local p, center_n= self:getPC(H)
-    center_n = center or center_n
-    local pts = (p.points-center_n:reshape(1,3):repeatTensor(p.points:size(1),1))
+function Sweep:getDepthImage(H, center_i, res, res2)
+    local res = res or 1
+    local center = center_i or torch.zeros(3)
+    if(H and not(center_i)) then
+        center = H:sub(1,3,4,4):squeeze()
+    end
+    local pts= self:getPoints(H) --pts should already be centered
+    
+    pts = pts-center:repeatTensor(pts:size(1),1)
     local normals,mask = self:getNormalMap(H)
     local ns1 = normals:size(2)
     local ns2 = normals:size(3)
@@ -141,7 +160,7 @@ function Sweep:getDepthImage(H, center, res, res2)
     mask = mask:reshape(1,ns1*ns2):squeeze()
     normals = select3d(normals, mask:byte())
     
-    local dis = pts:clone():pow(2):sum(2):pow(.5)
+    local dis = pts:clone():norm(2,2)
 
     local azimuth = (torch.atan2(pts:select(2,2):clone(), pts:select(2,1):clone()) +math.pi)*-1+2*math.pi--range 0 to 2*math.pi                   
     local elevation = torch.acos(pts:select(2,3):clone():cdiv(dis))  -- 0 to math.pi*150/180
@@ -186,7 +205,7 @@ function Sweep:getDepthImage(H, center, res, res2)
 
     local combined_norms = torch.zeros(size_x*res*size_y*res,3)
     combined_norms = select3d2(normals, indexVal, combined_norms)
-    return combined, center_n, combined_pts, combined_norms
+    return combined, center, combined_pts, combined_norms
 end
 
 function Sweep:getFloor(recalc)
@@ -242,17 +261,18 @@ end
 function Sweep:getFlattenedAndCorners(recalc, numCorners)
     if not(self.flattenedxy and self.flattenedv and self.corners) or recalc then
         local p = self:getPC()
-        local flattened, corners = p:get_flattened_images(self.parameters.scale, numCorners or self.parameters.numCorners)
-        image.display(flattened)
-        print(corners)
+        local flattened, corners, temp, scale = p:get_flattened_images(self.parameters.scale, numCorners or self.parameters.numCorners)
+
         corners = applyToPointsReturn2d(Sweep.get2DTransformationToZero(flattened[1]),corners:t()):t()
         local flattenedx, flattenedy, flattenedv = image.thresholdReturnCoordinates(flattened[1],0)
         local flattenedxy = torch.cat(flattenedx, flattenedy,2)         
+
         flattenedxy = applyToPointsReturn2d(Sweep.get2DTransformationToZero(flattened[1]),flattenedxy:t()):t()
         self.corners = corners
         self.flattenedxy = flattenedxy
         self.flattenedv = flattenedv
-        p:write(self.fod)
+        self.scale = scale
+        p:save_to_od(self.fod)
         self:saveMe()
     end
     collectgarbage()
@@ -387,11 +407,9 @@ end
 --old 
 
 function Sweep:getTree(H)
-    local p, scanner_pose = self:getPC(H)
     log.trace("building tree ...")log.tic()
     local t = octomap.Tree.new(self.parameters.octTreeRes*2.5)
-    local max_radius = p:get_max_radius()
-    t:add_points(p.points,torch.zeros(3), max_radius)
+    t:add_points(self:getPoints(H),torch.zeros(3), self:getPC():get_max_radius())
     t:add_points(self:getZeroAzimuthAndElevation():contiguous(),torch.zeros(3), max_radius)
     
     log.trace(" - in ".. log.toc())

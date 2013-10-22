@@ -78,6 +78,11 @@ function PCLPointCloud:toPCDFile(fname)
    pcl_ffi.PointCloud_toFile(self.cloud, ffi.string(fname))
 end
 
+function PCLPointCloud.fromPoints(points, rgb)
+   pcNew = PCLPointCloud.new(points, rgb)
+   return pcNew
+end
+
 
 function PCLPointCloud.fromPointCloud(pc, useNormals)
    if ((pc.__classname__ ~= "PointCloud/PointCloud")) then
