@@ -985,7 +985,7 @@ function PointCloud:get_flattened_images(scale,numCorners)
   
   collectgarbage()
   
-  return imagez,corners,image_corners
+  return imagez,corners,image_corners, scale
 end
 
 

@@ -1,17 +1,17 @@
 TransformationValidation = Class()
 
-function TransformationValidation.validate_simple(best_pts, best_transformations, img_src_points, img_dest_points, parameters)
-   local best_overlap = torch.Tensor(best_pts:size())
-      local best_pts_temp = torch.Tensor(best_pts:size())
+function TransformationValidation.validate_simple(best_pts, best_transformations, img_src_points, img_dest_points, nmlist1, nmlist2)
+  local best_overlap = torch.Tensor(best_pts:size())
+  local best_pts_temp = torch.Tensor(best_pts:size())
 
    local transformations_tmp = {}
 
    local center1, center2, combined_i = align_floors_endtoend.SweepPair.warpAndCombine(torch.eye(3), img_src_points, img_dest_points)
-   local angle_diff_orig = TransformationValidation.findMainDirections(opencv.Mat.new(torch.gt(combined_i[2],0):byte()), opencv.Mat.new(torch.gt(combined_i[1],0):byte()))
+   --local angle_diff_orig = TransformationValidation.findMainDirections(opencv.Mat.new(torch.gt(combined_i[2],0):byte()), opencv.Mat.new(torch.gt(combined_i[1],0):byte()))
+    local angle_diff_orig = math.pi-(TransformationValidation.findAngDiff(nmlist1:clone(),nmlist2:clone(),torch.eye(3),torch.eye(3)))
    local good_counter = 1
    for i=1,table.getn(best_transformations) do
       local center1, center2, combined_i = align_floors_endtoend.SweepPair.warpAndCombine(best_transformations[i], img_src_points, img_dest_points)
-      _G.com = combined_i[2]
       local angle_between
       acos = torch.acos(best_transformations[i][1][1])
       asin = -torch.asin(best_transformations[i][1][2])
@@ -26,7 +26,10 @@ function TransformationValidation.validate_simple(best_pts, best_transformations
          angle_between = math.pi*2-acos
       end
       --the closer to zero the better
-      if(torch.abs(angle_diff_orig-angle_between):min() < math.rad(5)) then
+      local bestdiff = torch.min(torch.Tensor({math.pi/2, math.pi, 3*math.pi/2, 2*math.pi})-torch.abs(angle_diff_orig-angle_between))
+        bestdiff = math.min(bestdiff, 2*math.pi-diff)
+
+      if(bestdiff < math.rad(3)) then
          local srci_mat =opencv.Mat.new(combined_i:clone():select(1,1))
          local desi_mat =opencv.Mat.new(combined_i:clone():select(1,2))
 
@@ -39,7 +42,7 @@ function TransformationValidation.validate_simple(best_pts, best_transformations
          good_counter = good_counter +1
 
       else
---         print("skipping "  .. i)
+        print("skipping " .. i)
          --[[
          print("we didn't make it" .. i)
          if(i==20) then
@@ -198,7 +201,6 @@ function TransformationValidation.findDirections(normalList)
   return dirMap
   
 end
-
 function TransformationValidation.findAngDiff(nlist1,nlist2,trans1,trans2)
 
   local t1 = trans1:clone()
@@ -211,16 +213,22 @@ function TransformationValidation.findAngDiff(nlist1,nlist2,trans1,trans2)
   
   local d,d1 = TransformationValidation.findDirections(nl1):max(1)
   local d,d2 = TransformationValidation.findDirections(nl2):max(1)
-  
-  diff = math.abs(d2[1]-d1[1])
-  diff = math.min(diff, math.abs(90-diff), math.abs(180-diff), math.abs(270-diff), math.abs(360-diff))*math.pi/180
+  diff = d2[1]-d1[1]
+  if(diff < 0) then
+    diff = diff + 180
+  end
+  if(diff > 180) then
+    diff = diff -180
+  end
+  return math.rad(diff)
+  --diff = math.abs(d2[1]-d1[1])
+  --diff = math.min(diff, math.abs(90-diff), math.abs(180-diff), math.abs(270-diff), math.abs(360-diff))*math.pi/180
 
-  return diff
+--  return diff
    
 end
 
 function TransformationValidation.findMainDirections(img_src, img_dest)
-   _G.img_src = img_src
    local HoughParameters = {}
    HoughParameters.houghRo = 1
    HoughParameters.houghTheta = math.pi/360
