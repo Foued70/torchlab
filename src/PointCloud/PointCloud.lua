@@ -782,12 +782,15 @@ local function get_corners(xyz,depth,snormal,stheta,sdd,mask0,theta_thresh,plane
   return mask_corner
 end
 
-local function get_connections(xyz,snormal,sdd,plane_thresh,height,width)
+local function get_connections(xyz,depth,snormal,sdd,plane_thresh,height,width)
   local tic = log.toc()
   
+  local dpt_thresh_1 = 3*2*math.pi*20*1000/width
+  local dpt_thresh_2 = 2*math.pi*15/width
   local kernel
   local conv
   local dplane_l
+  local dpoint_l
   
   kernel = torch.zeros(5,5)
   kernel[3][1] = 1
@@ -799,6 +802,15 @@ local function get_connections(xyz,snormal,sdd,plane_thresh,height,width)
   dplane_l = conv:sub(1,3,3,height+2,3,width+2):clone()
   dplane_l = dplane_l:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
   local mask_con = dplane_l:clone():abs():lt(plane_thresh)
+  
+  dpoint_l = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dpoint_l = dpoint_l:add(xyz:clone():mul(-1)):norm(2,1):squeeze()
+  local mask_point_1 = dpoint_l:gt(dpt_thresh_1)
+  dpoint_l:cdiv(depth)
+  local mask_point_2 = dpoint_l:gt(dpt_thresh_2)
+  
+  mask_con[mask_point_1] = 0
+  mask_con[mask_point_2] = 0
   
   print("get_planes: "..log.toc()-tic)
   
@@ -832,15 +844,13 @@ function PointCloud:get_connections_and_corners()
   local thresh_phi = math.max(3*math.pi/8, math.pi/2-math.pi/8 - noise*math.pi/20)
   local thresh_height = 0.1*height
   
-  print(noise)
-  
   local snormal,sphi,stheta,sdd = self:get_smooth_normal(winsize,angdiff,angdiff)
   
   local mask_phi = sphi:clone():abs():ge(thresh_phi)
   local mask_height = {{1,thresh_height},{}}
   
   local mask_corner = get_corners(xyz:clone(),depth:clone(),snormal:clone(),stheta:clone(),sdd:clone(),mask_extant,thresh_theta,thresh_plane_corn,height,width)
-  local mask_connct = get_connections(xyz:clone(),snormal:clone(),sdd:clone(),thresh_plane_conn,height,width)
+  local mask_connct = get_connections(xyz:clone(),depth:clone(),snormal:clone(),sdd:clone(),thresh_plane_conn,height,width)
   mask_corner[mask_extant]=0
   mask_corner[mask_phi]=0
   mask_corner[mask_height]=0
@@ -911,7 +921,7 @@ function PointCloud:get_flattened_images(scale,numCorners)
   local mean_height = (imagez:clone():sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum())
   local stdv_height = math.sqrt((imagez:clone():add(-mean_height):pow(2):sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum()))
   local max_height = mean_height+stdv_height
-  local show_thresh = 0.01*max_height
+  local show_thresh = 0.1*max_height
         
   imagez = imagez:clone():gt(max_height):type('torch.DoubleTensor'):mul(max_height):add(
   imagez:clone():le(max_height):type('torch.DoubleTensor'):cmul(imagez)):cmul(
