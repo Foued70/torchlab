@@ -256,7 +256,7 @@ function PointCloud:get_normal_map()
     
     print('get_normal_map: '..(log.toc()-tic))
     
-    return nmp,dd
+    return nmp,dd,mask
 end
 
 function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
@@ -304,7 +304,7 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
   
     print('get_smooth_normal_map: '..(log.toc()-tic))
   
-    return smooth_nmp, smooth_phi, smooth_theta, dd
+    return smooth_nmp, smooth_phi, smooth_theta, dd, mask
 
 end
 

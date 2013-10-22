@@ -38,6 +38,17 @@ function string.split (s)
    return t
 end
 
+function table.cat(t1,t2)
+   t = {}
+   for i,p in pairs(t1) do 
+      table.insert(t,p)
+   end
+   for i,p in pairs(t2) do 
+      table.insert(t,p)
+   end
+   return t
+end
+
 local d = net.Depot
 
 require('repl').start = shell.repl.start

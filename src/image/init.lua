@@ -718,4 +718,72 @@ function image.thresholdReturnCoordinates(squareMatrix,threshold, le)
    return goodLocationsX, goodLocationsY, squareMatrix[thresholded]
 end
 
+
+function image.newGaussianBlur(size)
+  -- kernels are created when the creator is called
+   local g  = image.gaussian1D{size=size,normalize=true}
+   local gw = torch.Tensor(1,size):copy(g)
+   local gh = torch.Tensor(size,1):copy(g)
+   return function (mask)
+             return image.convolve(
+                image.convolve(mask,gw,"same"),
+                gh,"same")
+          end
+end
+
+function image.newErosion(size)
+   size = size * 2
+   local percent = 0.5
+   local blur = image.newGaussianBlur(size)
+   return function (input)
+             local binput = blur(input)
+             binput:apply(function (x) 
+                             if (x>percent) then 
+                                return 1 
+                             else 
+                                return 0 
+                             end 
+                          end)
+             return binput
+          end
+end
+
+-- smoothing makes rounded corners on the otherwise square dilation
+function image.newDilation(size,smoothing)
+   if not smoothing then
+      smoothing = 1
+   end
+   size = size + smoothing
+   local percent
+   do -- local create and destroy 2d gaussian
+      local g  = image.gaussian{size=size,normalize=true}
+      percent = g[smoothing][smoothing]
+   end
+   local blur = image.newGaussianBlur(size)
+   return function (input)
+             local binput = blur(input)
+             binput:apply(function (x) 
+                             if (x>=percent) then 
+                                return 1 
+                             else 
+                                return 0 
+                          end 
+                       end)
+             return binput
+          end
+end
+
+-- USAGE
+-- function image.test_erosion_dilation()
+--    local m = torch.Tensor(256,256):fill(0)
+--    m[128][128] = 1
+--    local dl = image.newDilation(45,15)
+--    local mdl = dl(m)
+--    local er = image.newErosion(20)
+--    local mer = er(mdl)
+--    image.display{image={m,mdl,mer}}
+-- end
+
+
+
 return image

@@ -1,21 +1,27 @@
 Class()
 
 function fit(pts)
+   -- pts NxD (D == 3 for 3D points)
+   local d = pts:size(2)
    pts = pts:clone()
-   -- pts Nx3
    -- center
-   m = pts:mean(1)
+   local m = pts:mean(1)
    pts:add(-1,m:expandAs(pts))
-   u,s,v = torch.svd(pts)
-
-   n = v:t()[3]:clone()
-   d = - (n * m:squeeze())
-   return n,d
+   _,_,v = torch.svd(pts)
+   local model    = torch.Tensor(d+1)
+   local n        = v:t()[d]
+   model[{{1,d}}] = n
+   model[d+1]     = - ( n * m:squeeze())
+   return model 
 end
 
-function residual(pts,n,d)
+function residual(pts,model)
+   d = pts:size(2)
+   if d ~= model:size(1)-1 then 
+      error("model size "..model:size(1).." not eq pts dim "..pts:size(2))
+   end
    -- pts is Nx3
-   res = torch.mv(pts,n)
-   res:add(d):abs()
+   res = torch.mv(pts,model[{{1,d}}])
+   res:add(model[d+1])
    return res
 end
