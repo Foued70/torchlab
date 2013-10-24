@@ -224,12 +224,12 @@ function PointCloud:get_normal_phi_theta(force)
     self.phi_map = torch.zeros(height,width):clone():contiguous()
     self.theta_map = torch.zeros(height,width):clone():contiguous()
   
-    --[[
+    --[[]]
     libpc.phi_map(torch.data(self.phi_map),torch.data(point_map:clone():contiguous()),height,width)
     libpc.theta_map(torch.data(self.theta_map),torch.data(point_map:clone():contiguous()),height,width)
     --[[]]
     
-    --[[]]
+    --[[
     local mu,md,ml,mr = self:get_lookup_map()
     libpc.phi_map_var(torch.data(self.phi_map),torch.data(point_map:clone():contiguous()),
                       torch.data(mu:contiguous()), torch.data(md:contiguous()),
