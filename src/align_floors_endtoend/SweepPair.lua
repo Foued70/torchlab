@@ -272,7 +272,7 @@ function SweepPair:getIcp(recalc)
       self.parameters.icp_transform_eps, 
       self.parameters.icp_max_iterations, 
       self.parameters.icp_ransac_iterations,
-      self.parameters.icp_correspondence*self:getScale()/.01)
+      self.parameters.icp_correspondence*self:getMeter())
     --converged = converged and not((torch.abs(transf[3][1]) > .05) or (torch.abs(transf[3][2]) > .05))
     if(converged) then
       transf[{3,{1,2}}]:fill(0)
@@ -311,18 +311,18 @@ end
 --sweep1's pc and sweep2's pc should already be in correct place
 --threshold in cm
 function SweepPair:get3dValidationScore(noticp, thresh_res)
-  if self.threed_validation_score  == -1 or self.thresh_res ~=thresh_res then
+  if self.threed_validation_score  == -1 or self.noticp ~= noticp or self.thresh_res ~=thresh_res then
     self.thresh_res = thresh_res or 2
+    self.noticp = noticp
     local H =self:getTransformation(false, noticp, false)
     local thresh_1 = self:getScale()*self.thresh_res--.01 -> 10 m, .02  -- equivalent to 2cm
     local f1,c1,pts1,norm1 = self:getSweep1():getDepthImage(nil, nil, 3)
 
     local f2,c2, pts2, norm2 = self:getSweep2():getDepthImage(H, torch.zeros(3), 3)
     local numRight1, portionSeen1, closePts1, nclosePts1 = SweepPair.findScore(f1, f2, norm1, norm2, thresh_1)
-
-    local f2,c2,pts2, norm2 = self:getSweep2():getDepthImage(H, nil, 3)
-    c2 = H:sub(1,3,4,4):squeeze()
-    local f1,c1,pts1,norm1 = self:getSweep1():getDepthImage(nil, c2, 3)
+    center = H:sub(1,3,4,4):squeeze()
+    local f2,c2,pts2, norm2 = self:getSweep2():getDepthImage(H, center, 3)
+    local f1,c1,pts1,norm1 = self:getSweep1():getDepthImage(nil, center, 3)
 
     local numRight2, portionSeen2, closePts2, nclosePts2= SweepPair.findScore(f2, f1, norm2, norm1, thresh_1)
 
@@ -377,6 +377,9 @@ function SweepPair:getZTransformation()
   return self.floor_transformation_F
 end
 
+function SweepPair:getMeter()
+  return self:getSweep1():getPC().meter
+end
 function SweepPair:getScale()
   return self:getSweep1().scale
 end

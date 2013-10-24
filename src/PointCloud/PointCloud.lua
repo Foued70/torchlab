@@ -13,18 +13,12 @@ ffi.cdef
     int get_index_and_mask(long* index_map, short* mask_map, double* points, short* hwindices,
                        long length, int height, int width);
                                                  
-    int downsample_with_widthheightinfo(double* downsampled_points, double* downsampled_rgb, 
+    int downsample(double* downsampled_points, double* downsampled_rgb, 
                              int* downsampled_count, double* coord_map, 
                              double* points_map, double* rgb_map, 
                              int height, int width);
     
-    int make_normal_list(double* normal_list, double* normal_map,
-                     int* hwindices, int length, int height, int width);
-    
-    int connect_lines_in_image(double* img, double y1, double x1, double y2, double x2, 
-                           int height, int width, double incr);
-    
-    int flatten_image_with_widthheightinfo(double* imagez, double* image_corner,
+    int flatten_image(double* imagez, double* image_corner,
                                           double* coord_map, double *points,
                                           char* connection_map, char* corners_map,
                                           double* corners_map_filled,
@@ -37,6 +31,15 @@ ffi.cdef
                      int height, int width, int max_win, double max_theta_diff);
    int phi_map_smooth(double* smoothed_phi_map, double* phi_map, char * extant_map, 
                      int height, int width, int max_win, double max_phi_diff); 
+   int get_step_maps(int* step_up, int* step_down, int* step_left, int* step_right, 
+                  double* xyz, double* theta,
+                  double min_step_size, double max_step_size, int height, int width);
+   int theta_map_var(double* theta_map, double* centered_point_map, 
+                  int* step_left, int* step_right,
+                  int height, int width);
+   int phi_map_var(double* phi_map, double* centered_point_map, 
+                int* step_up, int* step_down,
+                int height, int width);
 ]]
 
 local libpc   = util.ffi.load('libpointcloud')
@@ -221,8 +224,20 @@ function PointCloud:get_normal_phi_theta(force)
     self.phi_map = torch.zeros(height,width):clone():contiguous()
     self.theta_map = torch.zeros(height,width):clone():contiguous()
   
+    --[[]]
     libpc.phi_map(torch.data(self.phi_map),torch.data(point_map:clone():contiguous()),height,width)
     libpc.theta_map(torch.data(self.theta_map),torch.data(point_map:clone():contiguous()),height,width)
+    --[[]]
+    
+    --[[
+    local mu,md,ml,mr = self:get_lookup_map()
+    libpc.phi_map_var(torch.data(self.phi_map),torch.data(point_map:clone():contiguous()),
+                      torch.data(mu:contiguous()), torch.data(md:contiguous()),
+                      height,width)
+    libpc.theta_map_var(torch.data(self.theta_map),torch.data(point_map:clone():contiguous()),
+                      torch.data(ml:contiguous()), torch.data(mr:contiguous()),
+                      height,width)
+    --[[]]
   
     self.normal_mask = self.phi_map:lt(-10):add(self.theta_map:lt(-10)):gt(0)
     self.phi_map[self.normal_mask] = 0
@@ -259,7 +274,48 @@ function PointCloud:get_normal_map()
     return nmp,dd,mask
 end
 
-function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
+function PointCloud:get_normal_map_varsize()
+    local tic = log.toc()
+    local point_map = self:get_xyz_map_no_mask()
+    local height = self.height
+    local width = self.width
+    local phi = torch.zeros(height,width):clone():contiguous()
+    local theta = torch.zeros(height,width):clone():contiguous()
+    
+    --[[]]
+    local mu,md,ml,mr = self:get_lookup_map()
+    libpc.phi_map_var(torch.data(phi),torch.data(point_map:clone():contiguous()),
+                      torch.data(mu:contiguous()), torch.data(md:contiguous()),
+                      height,width)
+    libpc.theta_map_var(torch.data(theta),torch.data(point_map:clone():contiguous()),
+                      torch.data(ml:contiguous()), torch.data(mr:contiguous()),
+                      height,width)
+    --[[]]
+  
+    local mask = phi:lt(-10):add(theta:lt(-10)):gt(0)
+    phi[mask] = 0
+    theta[mask] = 0
+    
+    local nmp = torch.zeros(3,height,width)
+  
+    nmp[3] = phi:clone():sin()
+    nmp[2] = phi:clone():cos():cmul(theta:clone():sin())
+    nmp[1] = phi:clone():cos():cmul(theta:clone():cos())
+    
+    local dd = nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
+    local neg = dd:lt(0)
+    
+    for i = 1,3 do
+      nmp[i][neg] = -nmp[i][neg]
+      nmp[i][mask] = 0
+    end
+    
+    dd = nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
+    
+    return nmp,dd,phi,theta,mask
+end
+
+function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff, phi, theta, mask)
 
     local tic = log.toc()
     if not win then
@@ -275,7 +331,9 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
     local height = self.height
     local width = self.width
   
-    local phi,theta,mask = self:get_normal_phi_theta()
+    if not (phi and theta and mask) then
+      phi,theta,mask = self:get_normal_phi_theta()
+    end
     local extant_map = mask:clone():eq(0)
     local smooth_phi = phi:clone():contiguous():fill(0)
     local smooth_theta = theta:clone():contiguous():fill(0)
@@ -308,32 +366,83 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
 
 end
 
-function PointCloud:get_normal_list()
-
-  local tic = log.toc()
-  local toc = 0
-  
-  local nmp = self:get_normal_map()
-  local nmlist = torch.zeros(self.count,3)
-  
-  local normal_list = torch.data(nmlist)
-  local normal_map = torch.data(nmp:clone():contiguous())
-  local hwindices = torch.data(self.hwindices:clone():type('torch.IntTensor'):contiguous())
- 
-  libpc.make_normal_list(normal_list, normal_map, 
-                     hwindices, self.count, self.height, self.width)
-
-  normal_list = nil
-  normal_map = nil
-  hwindices = nil
-  
-  toc = log.toc()-tic
-  tic = tic + toc 
-  print('get_normal_list: all: '..toc)
-  
-  return nmlist
-
+function PointCloud:get_xyz_unit_vectors()
+  local xyz = self:get_xyz_map_no_mask()
+  local depth = self:get_depth_map_no_mask()
+  local index,mask = self:get_index_and_mask()
+  local unitv = xyz:clone():cdiv(depth:repeatTensor(3,1,1))
+  unitv[mask:repeatTensor(3,1,1)]=0
+  return unitv
 end
+
+function PointCloud:get_xyz_phi_theta()
+  local unitv = self:get_xyz_unit_vectors()
+  local index,mask = self:get_index_and_mask()
+  local phi = unitv[3]:clone():asin()
+  local xy = phi:clone():cos()
+  local xdxy = unitv[1]:clone():cdiv(xy)
+  local theta = xdxy:clone():acos()
+  theta[xy:eq(0)]=0
+  theta[xdxy:gt(1)]=0
+  theta[xdxy:lt(-1)]=math.pi
+  theta[unitv[2]:lt(0)] = theta[unitv[2]:lt(0)]:clone():mul(-1)
+  phi[mask]=0
+  theta[mask]=0
+  return phi,theta
+end
+
+function PointCloud:get_noise()
+
+  local height = self.height
+  local width = self.width
+  
+  local index,mask=self:get_index_and_mask()
+  local phi,theta = self:get_xyz_phi_theta()
+  local xyz = self:get_xyz_map_no_mask()
+  local z = xyz[3]:clone()
+  
+  local phi_max = phi:max()
+  local phi_min = phi:min()
+  local phi_rng = phi_max-phi_min
+  local phi_stp = phi_rng/(height-1)
+  local phi_thr = phi_stp/2
+  
+  local top_row_mask = phi:le(phi_max):cmul(phi:ge(phi_max-phi_thr))
+  
+  top_row_mask[mask] = 0
+  
+  topnoise = z[top_row_mask]:std()
+  
+  return topnoise
+  
+end
+
+function PointCloud:get_lookup_map()
+  local height = self.height
+  local width = self.width
+  local xyz = self:get_xyz_map_no_mask():contiguous()
+  local phi,theta = self:get_xyz_phi_theta()
+  local depth = self.points:sub(1,self.count,1,2):clone():norm(2,2)
+  local min_depth = depth:min()
+  local max_depth = depth:max()
+  local noise = self:get_noise()
+  local mindist = math.max(5*min_depth*2*math.pi/width,10)+5*noise
+  local maxdist = 2.5*max_depth*2*math.pi/width+5*noise
+  theta = theta:contiguous()
+  
+  print(mindist,maxdist,noise,min_depth,max_depth)
+  
+  local map_u = torch.zeros(2,height,width):int():contiguous()
+  local map_d = torch.zeros(2,height,width):int():contiguous()
+  local map_l = torch.zeros(2,height,width):int():contiguous()
+  local map_r = torch.zeros(2,height,width):int():contiguous()
+  
+  
+  libpc.get_step_maps(torch.data(map_u), torch.data(map_d), torch.data(map_l), torch.data(map_r), 
+                  torch.data(xyz), torch.data(theta), mindist, maxdist, height, width)
+  return map_u,map_d,map_l,map_r
+end
+
 
 
 --[[ LOADING FUNCTIONS ]]--
@@ -672,19 +781,66 @@ local function get_theta_corners(thresh,xyz,depth,stheta,height,width)
   theta_xyz[phi_xyz:clone():cos():eq(0)] = 0
   theta_xyz[xyz[2]:clone():lt(0)] = theta_xyz[xyz[2]:clone():lt(0)]:mul(-1)
   
-  local kernel = torch.Tensor({{0,0,0},{-1,0,1},{0,0,0}})
-  local conv = torch.conv2(theta_xyz:clone(), kernel, 'F')
-  local dtheta = adjust_dtheta(conv:sub(2,height+1,2,width+1):clone())
-  mask1 = dtheta:le(0)
-
-  kernel = torch.Tensor({{0,0,0},{-1,0,1},{0,0,0}})
-  conv = torch.conv2(stheta:clone(), kernel, 'F')
-  dtheta = adjust_dtheta(conv:sub(2,height+1,2,width+1):clone())
+  local kernel_l = torch.Tensor({{0,0,0},{1,0,0},{0,0,0}})
+  local kernel_r = torch.Tensor({{0,0,0},{0,0,1},{0,0,0}})
   
-  kernel = torch.Tensor({{0,0,0},{-1,2,-1},{0,0,0}})
-  conv = torch.conv2(dtheta:clone():abs(), kernel, 'F')
-  local localmaxdtheta = conv:sub(2,height+1,2,width+1):clone()
-  local mask_theta = localmaxdtheta:gt(0):type('torch.DoubleTensor'):cmul(dtheta:clone():abs()):gt(thresh)
+  --[[
+  
+  local conv = torch.conv2(theta_xyz:clone(), kernel_l, 'F')
+  local theta_l = adjust_dtheta(conv:sub(2,height+1,2,width+1):clone())
+  
+  
+  conv = torch.conv2(theta_xyz:clone(), kernel_r, 'F')
+  theta_r = adjust_dtheta(conv:sub(2,height+1,2,width+1):clone())
+  
+  local dtheta = theta_r-theta_l
+  
+  mask1 = dtheta:le(0)
+  --[[]]
+
+  conv = torch.conv2(stheta:clone(), kernel_l, 'F')
+  theta_l = (conv:sub(2,height+1,2,width+1):clone())
+  
+  conv = torch.conv2(stheta:clone(), kernel_r, 'F')
+  theta_r = (conv:sub(2,height+1,2,width+1):clone())
+  
+  dtheta = (theta_r-theta_l):abs()
+  
+  mask_lt = dtheta:lt(2*math.pi/3)
+  mask_md = dtheta:ge(2*math.pi/3):cmul(dtheta:le(4*math.pi/3))
+  mask_gt = dtheta:gt(4*math.pi/3)
+  
+  dtheta[mask_md] = 0
+  dtheta[mask_gt] = dtheta[mask_gt]:mul(-1):add(2*math.pi)
+  
+  local localmax = torch.zeros(height,width)
+  
+  torch.range(1,height):apply(function(h)
+    local dh = dtheta[h]
+    local dwn = dh[1]
+    local dwp = 0
+    local dwc = 0
+    
+    torch.range(1,width):apply(function(w)
+      if w == 1 then
+        dwc = dwn
+        dwn = dh[w+1]
+      elseif w < width then
+        dwp = dwc
+        dwc = dwn
+        dwn = dh[w+1]
+        
+        if dwc > dwp and dwc > dwn then
+          localmax[h][w] = 1
+        end
+      end
+      
+    end)
+  end)
+  
+  dtheta:cmul(localmax)
+  
+  local mask_theta = dtheta:gt(thresh)
   
   return mask_theta
   
@@ -704,8 +860,6 @@ local function get_plane_corners(thresh,xyz,depth,snormal,sdd,mask0,height,width
   
   local dplane_ll
   local dplane_rr
-  local dplane_l
-  local dplane_r
   
   kernel = torch.Tensor({{0,0,0},{1,0,0},{0,0,0}})
   conv = torch.conv2(depth:clone(),kernel,'F')
@@ -782,12 +936,15 @@ local function get_corners(xyz,depth,snormal,stheta,sdd,mask0,theta_thresh,plane
   return mask_corner
 end
 
-local function get_connections(xyz,snormal,sdd,plane_thresh,height,width)
+local function get_connections(xyz,depth,snormal,sdd,plane_thresh,height,width)
   local tic = log.toc()
   
+  local dpt_thresh_1 = 3*2*math.pi*20*1000/width
+  local dpt_thresh_2 = 2*math.pi*15/width
   local kernel
   local conv
   local dplane_l
+  local dpoint_l
   
   kernel = torch.zeros(5,5)
   kernel[3][1] = 1
@@ -799,6 +956,15 @@ local function get_connections(xyz,snormal,sdd,plane_thresh,height,width)
   dplane_l = conv:sub(1,3,3,height+2,3,width+2):clone()
   dplane_l = dplane_l:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
   local mask_con = dplane_l:clone():abs():lt(plane_thresh)
+  
+  dpoint_l = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dpoint_l = dpoint_l:add(xyz:clone():mul(-1)):norm(2,1):squeeze()
+  local mask_point_1 = dpoint_l:gt(dpt_thresh_1)
+  dpoint_l:cdiv(depth)
+  local mask_point_2 = dpoint_l:gt(dpt_thresh_2)
+  
+  mask_con[mask_point_1] = 0
+  mask_con[mask_point_2] = 0
   
   print("get_planes: "..log.toc()-tic)
   
@@ -818,12 +984,7 @@ function PointCloud:get_connections_and_corners()
   local depth = self:get_depth_map_no_mask()
   local index,mask_extant = self:get_index_and_mask()
   
-  local toprow = xyz[3][1]:clone()
-  local topsum = toprow:sum()
-  local topnum = mask_extant[1]:double():sum()
-  local topavg = topsum/topnum
-  local noise = math.sqrt(toprow:clone():add(-topavg):pow(2):sum())/topnum
-  --local noise = self:get_xyz_map():select(1,3):select(1,1):std()
+  local noise = self:get_noise()
   local winsize = 10+math.min(10,noise)
   local angdiff = math.min(math.pi/4,math.pi/6 + math.pi*noise/20)
   local thresh_theta = math.pi/4
@@ -840,7 +1001,7 @@ function PointCloud:get_connections_and_corners()
   local mask_height = {{1,thresh_height},{}}
   
   local mask_corner = get_corners(xyz:clone(),depth:clone(),snormal:clone(),stheta:clone(),sdd:clone(),mask_extant,thresh_theta,thresh_plane_corn,height,width)
-  local mask_connct = get_connections(xyz:clone(),snormal:clone(),sdd:clone(),thresh_plane_conn,height,width)
+  local mask_connct = get_connections(xyz:clone(),depth:clone(),snormal:clone(),sdd:clone(),thresh_plane_conn,height,width)
   mask_corner[mask_extant]=0
   mask_corner[mask_phi]=0
   mask_corner[mask_height]=0
@@ -901,7 +1062,7 @@ function PointCloud:get_flattened_images(scale,numCorners)
   
   --cfunc
   
-  libpc.flatten_image_with_widthheightinfo(torch.data(imagez), torch.data(image_corners),
+  libpc.flatten_image(torch.data(imagez), torch.data(image_corners),
                                               torch.data(crds:clone():contiguous()), torch.data(pts:clone():contiguous()),
                                               torch.data(connections:clone():contiguous()), 
                                               torch.data(corners_map:clone():contiguous()),
@@ -911,7 +1072,7 @@ function PointCloud:get_flattened_images(scale,numCorners)
   local mean_height = (imagez:clone():sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum())
   local stdv_height = math.sqrt((imagez:clone():add(-mean_height):pow(2):sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum()))
   local max_height = mean_height+stdv_height
-  local show_thresh = 0.01*max_height
+  local show_thresh = 0.1*max_height
         
   imagez = imagez:clone():gt(max_height):type('torch.DoubleTensor'):mul(max_height):add(
   imagez:clone():le(max_height):type('torch.DoubleTensor'):cmul(imagez)):cmul(
@@ -964,7 +1125,7 @@ function PointCloud:get_flattened_images(scale,numCorners)
     image_corners = image_corners_orig
   end
   
-  --image.displayPoints(imagez:clone():gt(0):type('torch.ByteTensor'):mul(255), corners, colors.MAGENTA, 2)
+  image.displayPoints(imagez:clone():gt(0):type('torch.ByteTensor'):mul(255), corners, colors.MAGENTA, 2)
   --image.display(corners_map_filled)
   imagez = imagez:clone():repeatTensor(3,1,1)
   
@@ -1094,7 +1255,7 @@ function PointCloud:downsample_points(leafsize)
    tic = tic + toc 
    print('downsample: setup: '..toc)
    
-   libpc.downsample_with_widthheightinfo(downsampled_points, downsampled_rgb, downsampled_count, 
+   libpc.downsample(downsampled_points, downsampled_rgb, downsampled_count, 
                                   coord_map, points_map, rgb_map, self.height, self.width)
    
    toc = log.toc()-tic
