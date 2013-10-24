@@ -47,7 +47,8 @@ And searches for a saliency across scales.
    -- compute once for all images
    local tTotal = t:time().real
    
-   torch.Tensor.libsaliency.intHistPack(ii,img,nbins)
+   -- torch.Tensor
+   img.libsaliency.intHistPack(ii,img,nbins)
    local tintHist = t:time().real - tTotal
    local tAvg = {}
    local tEnt = {}
@@ -57,7 +58,7 @@ And searches for a saliency across scales.
       local lkr = math.floor(kr * scalefactor^(i-1))
       local lkc = math.floor(kc * scalefactor^(i-1))
       print(' - computing ('..lkr..','..lkc..')')
-      torch.Tensor.libsaliency.intAvg(rr,ii,lkr,lkc,sr,sc)
+      rr.libsaliency.intAvg(rr,ii,lkr,lkc,sr,sc)
       tAvg[i] = t:time().real - tAvg[i]
       tEnt[i] = t:time().real
       local nch = rr:size(1)
@@ -67,11 +68,11 @@ And searches for a saliency across scales.
       local outsizec = math.floor(0.5+(w-lkc+1)/sc)
       local fm  = torch.Tensor(outsizer,outsizec)
       if entropyType == 'entropy' then 
-         torch.Tensor.libsaliency.spatialEnt(fm,rr);
+         fm.libsaliency.spatialEnt(fm,rr);
       elseif entropyType == 'MeanOver' then
-         torch.Tensor.libsaliency.spatialMeanOverMax(fm,rr);
+         fm.libsaliency.spatialMeanOverMax(fm,rr);
       else 
-         torch.Tensor.libsaliency.spatialOneOverMax(fm,rr);
+         fm.libsaliency.spatialOneOverMax(fm,rr);
       end
       -- print("["..i.."] min: "..fm:min().." max: "..fm:max())
       sm:select(1,i):narrow(1,math.floor(lkr/2),outsizer):narrow(2,math.floor(lkc/2),outsizec):copy(fm)
