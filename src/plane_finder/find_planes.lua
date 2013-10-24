@@ -1,43 +1,65 @@
 pi = math.pi
 pi2 = pi/2
 io               = require 'io'
+path             = require 'path'
 imgraph          = require "../imgraph/init"
 saliency         = require "../image/saliency"
 fit_plane        = geom.linear_model.fit
 compute_residual = geom.linear_model.residual
 plane_finder     = require './plane_finder.lua'
 
-src_dir = 'arcs/temporary-circle-6132/source/po_scan/a/001/'
+cmd = torch.CmdLine()
+cmd:text()
+cmd:text()
+cmd:text('Compute image projections')
+cmd:text()
+cmd:text('Options')
+cmd:option('-src_dir','arcs/temporary-circle-6132/source/po_scan/a/001/')
+cmd:option('-out_dir','output/')
+cmd:option('-thres', 10)
+cmd:option('-graph_merge_thres', 5)
+cmd:option('-normal_filter', true)
+cmd:option('-expanded_points', false)
+cmd:option('-add_planes', true)
+cmd:option('-use_saliency', false)
+cmd:option('-normal_type', 'raw')
+cmd:text()
+
+-- parse input params
+params = cmd:parse(process.argv)
+
+
+src_dir = params.src_dir
 wrk_dir = src_dir:gsub("source","work")
-outdir = "output/"
+pcfile = src_dir .. 'sweep.xyz'
+rawfile = src_dir .. 'sweep.raw'
+out_dir = params.out_dir
 
 -- new scans are in mm which makes most default measurements 1000x off...
 max_radius      = 25000
 
-pcfile = src_dir .. 'sweep.xyz'
-rawfile = src_dir .. 'sweep.raw'
 
-threshold             = 10 -- in mm
+threshold             = tonumber(params.thres)
 normal_threshold      = math.cos(math.pi/6)
-graph_merge_threshold = 5
+graph_merge_threshold = tonumber(params.graph_merge_thres)
 
 -- saliency
-base_win    = 13
+base_win     = 13
 scale_factor = 1.4
 n_scale      = 7
-batch_size  = 1
+batch_size   = 1
 
 min_points_for_seed   = 150
 min_points_for_plane  = 900 -- 30x30 window is minimum
 
 -- flags
-normal_filter   = true
+normal_filter   = params.normal_filter
 erosion_filter  = false
-expanded_points = false
-add_planes      = true
+expanded_points = params.expanded_points
+add_planes      = params.add_planes
 combine_planes  = false
-use_saliency    = true
-
+use_saliency    = params.use_saliency
+normal_type     = params.normal_type
 
 _G.planes = {}
 _G.error_counts = {}
@@ -55,26 +77,27 @@ else
 end
 
 -- setup outfile naming
+out_dir = out_dir .. "/"..src_dir:gsub("/","_").."/"
 if use_saliency then 
-   outdir = string.format("%s/saliency_base_%d_scale_%d_n_scale_%d",
-                          outdir, base_win, scale_factor, n_scale)
+   out_dir = string.format("%s/saliency_base_%d_scale_%d_n_scale_%d",
+                          out_dir, base_win, scale_factor, n_scale)
 else
-   outdir = string.format("%s/segmentation_merge%1.0f", 
-                          outdir, graph_merge_threshold)
+   out_dir = string.format("%s/segmentation_merge%1.0f", 
+                          out_dir, graph_merge_threshold)
 end
 
-outdir = string.format("%s_thres_%d_minseed_%d_minplane_%d",
-                       outdir,
+out_dir = string.format("%s_thres_%d_minseed_%d_minplane_%d",
+                       out_dir,
                        threshold, min_points_for_seed, min_points_for_plane)
 
-if normal_filter   then outdir = outdir .. string.format("_nf_%1.2f", normal_threshold)  end
-if erosion_filter  then outdir = outdir .. string.format("_ef_%d", erosion_amount)  end
-if expanded_points then outdir = outdir .. "_exp" end
-if add_planes      then outdir = outdir .. "_add" end
-if combine_planes  then outdir = outdir .. "_cmb" end
-
-if not os.execute(string.format("mkdir -p %s", outdir)) then
-   error("error setting up  %s", outdir)
+if normal_filter   then out_dir = out_dir .. string.format("_nf_%1.2f", normal_threshold)  end
+if erosion_filter  then out_dir = out_dir .. string.format("_ef_%d", erosion_amount)  end
+if expanded_points then out_dir = out_dir .. "_exp" end
+if add_planes      then out_dir = out_dir .. "_add" end
+if combine_planes  then out_dir = out_dir .. "_cmb" end
+out_dir = out_dir .. "_normal_"..normal_type
+if not os.execute(string.format("mkdir -p %s", out_dir)) then
+   error("error setting up  %s", out_dir)
 end
 
 log.tic()
@@ -83,11 +106,17 @@ _G.pc     = PointCloud.PointCloud.new(pcfile, max_radius)
 xyz_map   = pc:get_xyz_map()
 _G.allpts = xyz_map:reshape(xyz_map:size(1),xyz_map:size(2)*xyz_map:size(3)):t():contiguous()
 
-if use_saliency then
-   normals,dd,norm_mask = pc:get_normal_map()
-else
-   normals,phi,theta,dd,norm_mask = pc:get_smooth_normal()
+normals,dd,phi,theta,norm_mask = pc:get_normal_map()
+if (normal_type == "var") then 
+   normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize() -- smooth_normal()
+elseif (normal_type == "var_smooth") then 
+   normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize() -- smooth_normal()
+   normals,phi,theta,dd,norm_mask = pc:get_smooth_normal(nil,nil,nil,phi,theta,norm_mask)
+elseif (params.normal_type == "smooth") then 
+   normals,dd,phi,theta,norm_mask = pc:get_smooth_normal()
 end
+
+image.display(normals)
 
 _G.allnrm = normals:reshape(xyz_map:size(1),xyz_map:size(2)*xyz_map:size(3)):t():contiguous()
 
@@ -207,7 +236,7 @@ if use_saliency then
             end -- for
          end -- if
       end -- while still valid in this scale
-      image.save(string.format("%s/scale_%dx%d.png",outdir,final_win,final_win),
+      image.save(string.format("%s/scale_%dx%d.png",out_dir,final_win,final_win),
                  plane_finder.visualize_planes(planes))
    end -- for scales
 else
@@ -324,12 +353,13 @@ percent_found = 100 * found_pts/total_pts
 
 rgb = plane_finder.visualize_planes(planes)
 
-_G.outname = outdir .. "/planes"
+_G.outname = out_dir .. "/planes"
 image.save(outname .. ".png", rgb)
 if not use_saliency then
-   image.save(outdir  .. "/segmentation.png", graph_rgb)
+   image.save(out_dir  .. "/segmentation.png", graph_rgb)
 end
-image.save(outdir  .. "/valid.png", valid:mul(255))
+image.save(out_dir  .. "/normals.png", image.combine(normals))
+image.save(out_dir  .. "/valid.png", valid:mul(255))
 torch.save(outname .. ".t7", planes)
 -- write score
 score_fname = outname .. "-score.txt"
