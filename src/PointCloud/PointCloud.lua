@@ -271,7 +271,7 @@ function PointCloud:get_normal_map()
     
     print('get_normal_map: '..(log.toc()-tic))
     
-    return nmp,dd,mask
+    return nmp,dd,phi,theta,mask
 end
 
 function PointCloud:get_normal_map_varsize()
