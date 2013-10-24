@@ -144,15 +144,14 @@ local function select3d2(from, selectPts, normals_n)
     return normals_n
 end
 --this is for faro, that goes -60 to 90 degrees
-function Sweep:getDepthImage(H, center_i, res, res2)
+function Sweep:getDepthImage(H, center_i, res)
     local res = res or 1
     local center = center_i or torch.zeros(3)
     if(H and not(center_i)) then
         center = H:sub(1,3,4,4):squeeze()
     end
     local pts= self:getPoints(H) --pts should already be centered
-    
-    pts = pts-center:repeatTensor(pts:size(1),1)
+    pts = pts-center:reshape(1,3):repeatTensor(pts:size(1),1)
     local normals,mask = self:getNormalMap(H)
     local ns1 = normals:size(2)
     local ns2 = normals:size(3)
@@ -163,8 +162,9 @@ function Sweep:getDepthImage(H, center_i, res, res2)
     local dis = pts:clone():norm(2,2)
 
     local azimuth = (torch.atan2(pts:select(2,2):clone(), pts:select(2,1):clone()) +math.pi)*-1+2*math.pi--range 0 to 2*math.pi                   
-    local elevation = torch.acos(pts:select(2,3):clone():cdiv(dis))  -- 0 to math.pi*150/180
 
+    local elevation = torch.acos(pts:select(2,3):clone():cdiv(dis))  -- 0 to math.pi*150/180
+    --image.display(azimuth)
     local size_x = 360
     local size_y = 150
     local min_x = 1
@@ -320,26 +320,13 @@ function Sweep.get3Dto2DTransformation(scale, transformation)
 end
 
 function Sweep:axisAlign()
-    
-    local HoughParameters = {}
-    HoughParameters.houghRo = 1
-    HoughParameters.houghTheta = math.pi/360
-    HoughParameters.houghMinLineLength = 25
-    HoughParameters.houghMaxLineGap = 80
-    HoughParameters.minThreshold = 10
-    HoughParameters.maxThreshold = 150
-    HoughParameters.defaultThreshold = 75
-    HoughParameters.numLinesDesired = 15
-
-    --initialize based on parameters
-    local parameterizedHough = Hough.new(HoughParameters)
-
-    temp, flattenedxy = self:getFlattenedAndCorners()
-    local domAngle1_src,domAngle2_src = parameterizedHough:getMainDirections(opencv.Mat.new(Sweep.flattened2Image(flattenedxy):byte()))
+    nmlist1 = self:getSweep1():getPC():get_normal_list()
+    local d,d1 = align_floors_endtoend.TransformationValidation.findDirections(nl1):max(1)
+    local angle = d1[1]
     H = torch.eye(3)
-    H[1][1] = torch.cos(domAngle1_src)
+    H[1][1] = torch.cos(angle)
     H[2][2] = H[1][1]
-    H[2][1] = -torch.sin(domAngle1_src)
+    H[2][1] = -torch.sin(angle)
     H[1][2] = -H[2][1]
     return H
 end
@@ -406,24 +393,26 @@ end
 
 --old 
 
-function Sweep:getTree(H)
+function Sweep:getTree()
     log.trace("building tree ...")log.tic()
-    local t = octomap.Tree.new(self.parameters.octTreeRes*2.5)
-    t:add_points(self:getPoints(H),torch.zeros(3), self:getPC():get_max_radius())
+    local pc = self:getPC()
+    local t = octomap.Tree.new(self.parameters.octTreeRes*pc.meter*2.5)
+    local pts, tmp = self:getPoints()
+    t:add_points(pts,torch.zeros(3), pc:get_max_radius())
     t:add_points(self:getZeroAzimuthAndElevation():contiguous(),torch.zeros(3), max_radius)
     
     log.trace(" - in ".. log.toc())
 
     t:stats()
     t:info()
-    return {t, scanner_pose, max_radius}
+    return {t, max_radius}
 end
 function Sweep:getZeroAzimuthAndElevation()
-    local p, center_n= self:getPC(H)
-    local pts = p:get_centered_map_no_mask()
+    local p = self:getPC()
+    local pts = p:get_xyz_map_no_mask()
 
-    local normals,mask = self:getNormalMap(H)
-    local dis = p:get_depth_image()
+    local normals,mask = self:getNormalMap()
+    local dis = p:get_depth_map_no_mask()
     pts[3][mask*-1+1] =0
     local azimuth = torch.atan2(pts:select(1,2):clone(), pts:select(1,1):clone())+math.pi--range 0 to 2*math.pi                   
     local elevation = torch.acos(pts:select(1,3):clone():cdiv(dis+10^-6))  -- 0 to math.pi*150/180
@@ -449,11 +438,15 @@ function Sweep:getZeroAzimuthAndElevation()
     local posX = torch.eq(torch.gt(predictedAzimuth,math.pi/2)+torch.lt(predictedAzimuth,3*math.pi/2),2)
     local negX = posX*-1+1
     xs[negX] = xs[negX]*-1
-    local negY = torch.gt(predictedAzimuth,math.pi)
+    local negY = torch.lt(predictedAzimuth,math.pi)
     ys = torch.abs(xs:clone():cmul(torch.tan(predictedAzimuth))) --positive if azimuth is 0,pi
     ys[negY] = ys[negY]*-1
+    _G.y = ys:clone()
+    _G.x = xs:clone()
+    _G.z = zs:clone()
     return torch.cat(torch.cat(xs[mask*-1+1], ys[mask*-1+1],2), zs[mask*-1+1],2)
 end
+--[[
 --this is for faro, that goes -60 to 90 degrees
 function Sweep:shootRay(H, center_n, max_range_in, tree_in, size_1, size_2)
     local tree, center, max_range
@@ -486,3 +479,4 @@ function Sweep:shootRay(H, center_n, max_range_in, tree_in, size_1, size_2)
     collectgarbage()
     return frame, tree, camera_pose, max_range
 end
+--]]
