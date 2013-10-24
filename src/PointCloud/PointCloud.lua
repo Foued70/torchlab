@@ -274,7 +274,48 @@ function PointCloud:get_normal_map()
     return nmp,dd,mask
 end
 
-function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
+function PointCloud:get_normal_map_varsize()
+    local tic = log.toc()
+    local point_map = self:get_xyz_map_no_mask()
+    local height = self.height
+    local width = self.width
+    local phi = torch.zeros(height,width):clone():contiguous()
+    local theta = torch.zeros(height,width):clone():contiguous()
+    
+    --[[]]
+    local mu,md,ml,mr = self:get_lookup_map()
+    libpc.phi_map_var(torch.data(phi),torch.data(point_map:clone():contiguous()),
+                      torch.data(mu:contiguous()), torch.data(md:contiguous()),
+                      height,width)
+    libpc.theta_map_var(torch.data(theta),torch.data(point_map:clone():contiguous()),
+                      torch.data(ml:contiguous()), torch.data(mr:contiguous()),
+                      height,width)
+    --[[]]
+  
+    local mask = phi:lt(-10):add(theta:lt(-10)):gt(0)
+    phi[mask] = 0
+    theta[mask] = 0
+    
+    local nmp = torch.zeros(3,height,width)
+  
+    nmp[3] = phi:clone():sin()
+    nmp[2] = phi:clone():cos():cmul(theta:clone():sin())
+    nmp[1] = phi:clone():cos():cmul(theta:clone():cos())
+    
+    local dd = nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
+    local neg = dd:lt(0)
+    
+    for i = 1,3 do
+      nmp[i][neg] = -nmp[i][neg]
+      nmp[i][mask] = 0
+    end
+    
+    dd = nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
+    
+    return nmp,dd,phi,theta,mask
+end
+
+function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff, phi, theta, mask)
 
     local tic = log.toc()
     if not win then
@@ -290,7 +331,9 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
     local height = self.height
     local width = self.width
   
-    local phi,theta,mask = self:get_normal_phi_theta()
+    if not (phi and theta and mask) then
+      phi,theta,mask = self:get_normal_phi_theta()
+    end
     local extant_map = mask:clone():eq(0)
     local smooth_phi = phi:clone():contiguous():fill(0)
     local smooth_theta = theta:clone():contiguous():fill(0)
