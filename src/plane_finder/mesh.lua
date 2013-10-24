@@ -15,6 +15,7 @@ if not pc then
    xyz_map = pc:get_xyz_map()
    _G.allpts  = xyz_map:reshape(xyz_map:size(1),xyz_map:size(2)*xyz_map:size(3)):t():contiguous()
 end
+
 if not planes then
    _G.planes = torch.load("planes.t7")
 end
@@ -60,18 +61,24 @@ function align_planes(planes,allpts)
    return quat, aapts
 end
 
+function dump_pts_to_xyz (planes, aapts, fname)
+   for i,p in pairs(planes) do
+      ppts = plane_finder.select_points(aapts,p.mask)
+      dump_pts(ppts,string.format("%s_%d_pts.xyz",fname,i))
+   end
+end
+
 function aligned_planes_to_obj (planes, aapts, quat, fname)
    io = require 'io'
-   fname = fname or "planes.obj"
+   fname = fname or "planes"
 
-   objf = io.open(fname,'w')
+   objf = io.open(fname..".obj",'w')
 
    -- loop through planes. rotate normals.  find bbx in plane. create rectangle.
    for i,p in pairs(planes) do
 
       ppts = plane_finder.select_points(aapts,p.mask)
-      dump_pts(ppts,string.format("plane_%d_pts.xyz",i))
-
+      
       pn = geom.quaternion.rotate(quat,p.eq)
       pcntr = ppts:mean(1):squeeze()
       pn[4] = -pn[{{1,3}}] * pcntr
@@ -126,6 +133,6 @@ function aligned_planes_to_obj (planes, aapts, quat, fname)
    end
    objf:close()
 end
-
+fname = outname or "planes.obj"
 quat, aapts = align_planes(planes,allpts)
 aligned_planes_to_obj (planes, aapts, quat, fname)
