@@ -362,7 +362,7 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff, phi, theta,
   
     print('get_smooth_normal_map: '..(log.toc()-tic))
   
-    return smooth_nmp, smooth_phi, smooth_theta, dd, mask
+    return smooth_nmp, dd, smooth_phi, smooth_theta, mask
 
 end
 
