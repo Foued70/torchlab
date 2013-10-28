@@ -17,22 +17,25 @@ cmd:text('Options')
 cmd:option('-src_dir','arcs/temporary-circle-6132/source/po_scan/a/001/')
 cmd:option('-out_dir','output/')
 cmd:option('-thres', 10)
+cmd:option('-min_pts_for_seed', 150)  -- < 20 x 20 ...
+cmd:option('-min_pts_for_plane', 900) -- 30x30 window is minimum
 cmd:option('-graph_merge_thres', 5)
 cmd:option('-normal_filter', true)
 cmd:option('-expanded_points', false)
-cmd:option('-add_planes', true)
+cmd:option('-add_planes', false)
+cmd:option('-combine_planes_every', 0)
 cmd:option('-use_saliency', false)
 cmd:option('-normal_type', 'raw')
+cmd:option('-dummy',false)
+cmd:option('-non_interactive',false)
 cmd:text()
 
 -- parse input params
 params = cmd:parse(process.argv)
 
-
-src_dir = params.src_dir
+src_dir = params.src_dir:gsub("/*$","") 
 wrk_dir = src_dir:gsub("source","work")
-pcfile = src_dir .. 'sweep.xyz'
-rawfile = src_dir .. 'sweep.raw'
+pcfile = util.fs.glob(src_dir, {"xyz$"})[1]
 out_dir = params.out_dir
 
 -- new scans are in mm which makes most default measurements 1000x off...
@@ -44,26 +47,30 @@ normal_threshold      = math.cos(math.pi/6)
 graph_merge_threshold = tonumber(params.graph_merge_thres)
 
 -- saliency
-base_win     = 13
+base_win     = 17
 scale_factor = 1.4
-n_scale      = 7
+n_scale      = 5
 batch_size   = 1
 
-min_points_for_seed   = 150
-min_points_for_plane  = 900 -- 30x30 window is minimum
+-- TODO add these to args
+min_points_for_seed   = tonumber(params.min_pts_for_seed)
+min_points_for_plane  = tonumber(params.min_pts_for_plane) 
 
 -- flags
 normal_filter   = params.normal_filter
 erosion_filter  = false
 expanded_points = params.expanded_points
 add_planes      = params.add_planes
-combine_planes  = false
+combine_planes_every  = tonumber(params.combine_planes_every)
 use_saliency    = params.use_saliency
 normal_type     = params.normal_type
 
 _G.planes = {}
 _G.error_counts = {}
-_G.count = 0
+_G.add_scores = {}
+_G.cmb_scores = {}
+_G.count    = 1
+last_tested = 1
 
 -- setup erosion operator
 erosion_amount = 3
@@ -78,23 +85,23 @@ end
 
 -- setup outfile naming
 out_dir = out_dir .. "/"..src_dir:gsub("/","_").."/"
-if use_saliency then 
+if use_saliency then
    out_dir = string.format("%s/saliency_base_%d_scale_%d_n_scale_%d",
-                          out_dir, base_win, scale_factor, n_scale)
+                           out_dir, base_win, scale_factor, n_scale)
 else
-   out_dir = string.format("%s/segmentation_merge%1.0f", 
-                          out_dir, graph_merge_threshold)
+   out_dir = string.format("%s/segmentation_merge%1.0f",
+                           out_dir, graph_merge_threshold)
 end
 
 out_dir = string.format("%s_thres_%d_minseed_%d_minplane_%d",
-                       out_dir,
-                       threshold, min_points_for_seed, min_points_for_plane)
+                        out_dir,
+                        threshold, min_points_for_seed, min_points_for_plane)
 
 if normal_filter   then out_dir = out_dir .. string.format("_nf_%1.2f", normal_threshold)  end
 if erosion_filter  then out_dir = out_dir .. string.format("_ef_%d", erosion_amount)  end
 if expanded_points then out_dir = out_dir .. "_exp" end
 if add_planes      then out_dir = out_dir .. "_add" end
-if combine_planes  then out_dir = out_dir .. "_cmb" end
+if combine_planes_every > 0  then out_dir = out_dir .. string.format("_cmb_%d", combine_planes_every) end
 out_dir = out_dir .. "_normal_"..normal_type
 if not os.execute(string.format("mkdir -p %s", out_dir)) then
    error("error setting up  %s", out_dir)
@@ -107,18 +114,22 @@ xyz_map   = pc:get_xyz_map()
 _G.allpts = xyz_map:reshape(xyz_map:size(1),xyz_map:size(2)*xyz_map:size(3)):t():contiguous()
 
 normals,dd,phi,theta,norm_mask = pc:get_normal_map()
-if (normal_type == "var") then 
+if (normal_type == "var") then
    normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize() -- smooth_normal()
-elseif (normal_type == "var_smooth") then 
+elseif (normal_type == "var_smooth") then
    normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize() -- smooth_normal()
    normals,phi,theta,dd,norm_mask = pc:get_smooth_normal(nil,nil,nil,phi,theta,norm_mask)
-elseif (params.normal_type == "smooth") then 
+elseif (params.normal_type == "smooth") then
    normals,dd,phi,theta,norm_mask = pc:get_smooth_normal()
 end
 
-image.display(normals)
+-- image.display(normals)
 
-_G.allnrm = normals:reshape(xyz_map:size(1),xyz_map:size(2)*xyz_map:size(3)):t():contiguous()
+allnrm = torch.Tensor(3,xyz_map:size(2)*xyz_map:size(3))
+allnrm[{{1,3},{}}]:copy(normals)
+-- allnrm[{4,{}}]:copy(dd)
+allnrm = allnrm:t():contiguous()
+collectgarbage()
 
 -- norm_mask == 1 where normals are bad, our mask is where pts are valid
 _G.initial_valid = norm_mask:eq(0)
@@ -126,6 +137,41 @@ _G.valid = initial_valid:clone()
 
 imgh = normals:size(2)
 imgw = normals:size(3)
+
+function add_and_combine_planes(points, planes, current_plane,
+                        threshold, normal_filter, normal_threshold, normals,
+                        last_tested, combine_planes_every, add_score, combine_score)
+   last_tested          = last_tested or 1
+   combine_planes_every = combine_planes_every or 1
+
+   if current_plane then
+      if (not planes) or (#planes == 0) then
+         planes = { current_plane }
+      elseif add_planes then
+         planes = plane_finder.add_planes(points, planes, {current_plane},
+                                          threshold,
+                                          normal_filter, normal_threshold, normals,
+                                          add_score)
+      else
+         table.insert(planes, current_plane)
+      end
+
+      -- combine
+      local n_planes = #planes
+      if (n_planes > 0) and (n_planes > last_tested) and (n_planes % combine_planes_every == 0) then
+         planes = plane_finder.combine_planes(points, planes, last_tested,
+                                              threshold,
+                                              normal_filter, normal_threshold, normals,
+                                              combine_score)
+         last_tested = n_planes -- make sure we don't keep counting because we are removing planes
+         changed = n_planes - #planes
+         if (changed > 0) then
+            printf(" - Combined %d pairs of %d leaving %d", changed, n_planes, #planes)
+         end
+      end
+   end
+   return planes,last_tested
+end
 
 if use_saliency then
 
@@ -137,14 +183,13 @@ if use_saliency then
 
    patch_mask = valid:clone():zero()
 
-   for scale = n_scale,n_scale-4,-1 do
+   for scale = n_scale,1,-1 do
 
       -- find patches for initial candidate_planes
       -- whack areas which are masked these should not have low salience.
       _G.inv_salient = sc[scale]:clone()
       max_saliency = inv_salient:max()
       inv_salient:add(-max_saliency):abs()
-
 
       -- TODO different x and y window sizes
       final_win = base_win * scale_factor ^ (scale -1)
@@ -161,6 +206,7 @@ if use_saliency then
          printf("max saliency = %f", mx:max())
          _G.bmx    = mx:gt(0)
 
+         -- speed this up for single batch
          idx,val,n_patches = plane_finder.get_vals_index(bmx[{{1,bmx_useable_h},{1,bmx_useable_w}}])
 
          printf("found %d patches",n_patches)
@@ -211,25 +257,12 @@ if use_saliency then
                   error_counts[error_string] = 1
                end
 
-               if (not planes) or (#planes == 0) and current_plane then
-                  _G.planes = {current_plane}
-               elseif add_planes then
-                  _G.planes = plane_finder.add_planes(allpts, planes, {current_plane}, threshold, erodeDilate)
-               else
-                  table.insert(planes, current_plane)
-               end
+               _G.planes,last_tested = add_and_combine_planes(allpts, planes, current_plane,
+                                                      threshold, normal_filter, normal_threshold, allnrm,
+                                                      last_tested, combine_planes_every, add_scores, cmb_scores)
+
                printf(" - Total %d planes in %d patches", #planes, count)
                count = count + 1
-
-               -- combine
-               n_planes = #planes
-               if combine_planes and (n_planes > 0) and (n_planes % 10 == 0) then
-                  _G.planes = plane_finder.combine_planes(allpts, planes, threshold, erodeDilate)
-                  changed = n_planes - #planes
-                  if (changed > 0) then
-                     printf(" - Combined %d pairs of %d leaving %d", changed, n_planes, #planes)
-                  end
-               end
 
                collectgarbage()
 
@@ -251,35 +284,36 @@ else
    d:add(1):log()
    d:mul(1/d:max())
 
-   datag = image.convolve(data, image.gaussian(7), 'same')
-   graph = imgraph.graph(datag)
+   -- datag = image.convolve(data, image.gaussian(7), 'same')
+   graph = imgraph.graph(data)
    mstsegm = imgraph.segmentmst(graph, graph_merge_threshold, min_points_for_seed)
 
-   graph_rgb = image.display(imgraph.colorize(mstsegm)):clone()
+   graph_rgb = image.combine(imgraph.colorize(mstsegm)):clone()
 
    h = {}
+   n_segm = 0
    mstsegm:apply(function (x)
                     if h[x] then
                        h[x] = h[x] + 1
                     else
-                       count = count + 1
+                       n_segm = n_segm + 1
                        h[x] = 1
                     end
                  end)
 
-   printf("Found %d segments",count)
-   _G.v = torch.LongTensor(2,count)
-   count = 1
+   printf("Found %d segments",n_segm)
+   _G.v = torch.LongTensor(2,n_segm)
+   patch_count = 1
    for id,quant in pairs(h) do
-      v[1][count] = quant
-      v[2][count] = id
-      count = count+1
+      v[1][patch_count] = quant
+      v[2][patch_count] = id
+      patch_count = patch_count+1
    end
 
    s, si = torch.sort(v[1])
 
-   for patch_count = count-1,1,-1 do
-      ii = si[patch_count]
+   for ci = n_segm,1,-1 do
+      ii = si[ci]
       segm_count = v[1][ii]
       segm_id    = v[2][ii]
 
@@ -306,6 +340,8 @@ else
                      }}
          }
 
+      collectgarbage()
+
       printf(" - error: %s", error_string)
 
       if error_counts[error_string] then
@@ -313,29 +349,25 @@ else
       else
          error_counts[error_string] = 1
       end
+      _G.planes,last_tested = add_and_combine_planes(allpts, planes, current_plane,
+                                             threshold, normal_filter, normal_threshold, allnrm,
+                                             last_tested, combine_planes_every, add_scores, cmb_scores)
+      printf(" - Total %d planes so far in %d/%d", #planes, count, n_segm)
+      count = count + 1
 
-      if (not planes) or (#planes == 0) and current_plane then
-         _G.planes = {current_plane}
-      elseif add_planes then
-         _G.planes = plane_finder.add_planes(allpts, planes, {current_plane}, threshold, erodeDilate)
-      else
-         table.insert(planes, current_plane)
-      end
-      printf(" - Total %d planes so far in %d/%d", #planes, count-patch_count + 1, count)
-
-      -- combine
-      n_planes = #planes
-      if combine_planes and (n_planes > 0) and (n_planes % 10 == 0) then
-         _G.planes = plane_finder.combine_planes(allpts, planes, threshold, erodeDilate)
-         changed = n_planes - #planes
-         if (changed > 0) then
-            printf(" - Combined %d pairs of %d leaving %d", changed, n_planes, #planes)
-         end
-      end
    end
 
    collectgarbage()
 
+end
+
+-- final combine
+n_planes = #planes
+if (n_planes > 0) and (combine_planes_every > 0) then
+   planes = plane_finder.combine_planes(points, planes, 1,
+                                        threshold,
+                                        normal_filter, normal_threshold, normals,
+                                        cmb_scores)
 end
 
 toc = log.toc()
@@ -347,9 +379,11 @@ for i,p in pairs(planes) do
    valid[p.mask] = 0
    pstd[i]       = p.score
 end
-found_pts = valid:sum()
-total_pts = initial_valid:sum()
-percent_found = 100 * found_pts/total_pts
+remain_pts     = valid:sum()
+total_pts      = initial_valid:sum()
+percent_remain = 100 * remain_pts/total_pts
+found_pts      = total_pts - remain_pts
+percent_found  = 100 - percent_remain
 
 rgb = plane_finder.visualize_planes(planes)
 
@@ -360,6 +394,12 @@ if not use_saliency then
 end
 image.save(out_dir  .. "/normals.png", image.combine(normals))
 image.save(out_dir  .. "/valid.png", valid:mul(255))
+
+-- don't save masks as they are huge and can be recreated easily
+-- for i,p in pairs(planes) do
+--    p.mask = nil
+-- end
+
 torch.save(outname .. ".t7", planes)
 -- write score
 score_fname = outname .. "-score.txt"
@@ -374,9 +414,35 @@ score_file:write(string.format("planes found %d\n",#planes))
 score_file:write(string.format("score mean %f min %f max %f \n",pstd:mean(),pstd:min(), pstd:max()))
 score_file:write(string.format("points explained %d/%d %2.1f%%\n",found_pts, total_pts, percent_found))
 score_file:write(string.format("time: %fs\n", toc*1e-3))
+score_file:write("Add Scores:\n")
+for str,tbl in pairs(add_scores) do
+   score_file:write(string.format("%s %d\n", str, tbl.cnt))
+end
+for str,tbl in pairs(cmb_scores) do
+   score_file:write(string.format("%s %d\n", str, tbl.cnt))
+end
+
 score_file:close()
+os.execute("cat "..score_fname)
+
+-- write scoreline
+score_fname = outname .. "-scoreline.txt"
+score_file = io.open(score_fname,"w")
+score_file:write("# psearched pfound scmean scmin scmax found_pts remain_pts total_pts percent_found time\n")
+score_file:write(string.format("%d ",count))
+score_file:write(string.format("%d ",#planes))
+score_file:write(string.format("%f %f %f ",pstd:mean(),pstd:min(), pstd:max()))
+score_file:write(string.format("%d %d %d %2.1f ",found_pts, remain_pts, total_pts, percent_found))
+score_file:write(string.format("%f\n", toc*1e-3))
+score_file:close()
+
 os.execute("cat "..score_fname)
 
 -- save obj
 quat, aapts = plane_finder.align_planes(planes,allpts)
 plane_finder.aligned_planes_to_obj (planes, aapts, quat, outname..".obj")
+
+-- quit out of luvit if
+if params.non_interactive then
+   process.exit()
+end
