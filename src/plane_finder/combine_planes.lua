@@ -6,7 +6,7 @@ imgraph          = require "../imgraph/init"
 saliency         = require "../image/saliency"
 fit_plane        = geom.linear_model.fit
 compute_residual = geom.linear_model.residual
-plane_combiner     = require './plane_combiner.lua'
+plane_finder     = require './plane_finder.lua'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -62,6 +62,8 @@ else
    error("can't open "..planes_file)
 end
 
+plane_basename = path.basename(path.dirname(planes_file))
+
 _G.combine_scores = {}
 _G.loser_scores = {}
 _G.count    = 1
@@ -69,14 +71,16 @@ last_tested = 1
 
 -- setup outfile naming
 out_dir = out_dir .. "/".. src_file:gsub("[/%.]","_") .."/"
-out_dir = string.format("%s/combination_", out_dir)
+out_dir = string.format("%s/combined", out_dir)
 
-out_dir = string.format("%s_thres_%d_minseed_%d_minplane_%d",
+out_dir = string.format("%s_thres_%d_minplane_%d",
                         out_dir,
                         threshold, min_points_for_seed, min_points_for_plane)
 
 if normal_filter   then out_dir = out_dir .. string.format("_nf_%1.2f", normal_threshold)  end
 out_dir = out_dir .. "_normal_"..normal_type
+out_dir = out_dir .. "_baseplanes_"..plane_basename
+
 if not os.execute(string.format("mkdir -p %s", out_dir)) then
    error("error setting up  %s", out_dir)
 end
@@ -120,7 +124,7 @@ _G.combine_scores1 = {}
 _G.loser_scores1 = {}
 
 if (n_planes > 0) then
-   combined_planes = plane_combiner.combine_planes(allpts, planes, threshold,
+   combined_planes = plane_finder.combine_planes(allpts, planes, threshold,
                                                    normal_filter, normal_threshold, allnrm,
                                                    combine_scores, loser_scores)
 end
@@ -145,7 +149,7 @@ found_pts      = total_pts - remain_pts
 percent_found  = 100 - percent_remain
 
 if (n_combined_planes > 0) then
-   rgb = plane_combiner.visualize_planes(combined_planes, map_height, map_width)
+   rgb = plane_finder.visualize_planes(combined_planes, map_height, map_width)
 end
 
 _G.outname = out_dir .. "/planes"
@@ -156,7 +160,11 @@ image.save(out_dir  .. "/valid.png", valid:mul(255))
 -- write score
 score_fname = outname .. "-score.txt"
 score_file = io.open(score_fname,"w")
-score_file:write("Scores:\n")
+score_file:write(string.format("Source Planes: %s\n", planes_file))
+prev_file = io.open(planes_file:gsub("planes.t7","planes-score.txt"),"r")
+score_file:write(prev_file:read("*a"))
+prev_file:close()
+score_file:write("Combine Scores:\n")
 score_file:write(string.format("planes combined %d from %d\n",#combined_planes, #planes))
 score_file:write(string.format("score mean %f min %f max %f \n",pstd:mean(),pstd:min(), pstd:max()))
 score_file:write(string.format("points explained %d/%d %2.1f%%\n",found_pts, total_pts, percent_found))
@@ -197,8 +205,8 @@ score_file:close()
 os.execute("cat "..score_fname)
 
 -- save obj
-quat, aapts = plane_combiner.align_planes(combined_planes,allpts)
-plane_combiner.aligned_planes_to_obj (combined_planes, aapts, quat, outname)
+quat, aapts = plane_finder.align_planes(combined_planes,allpts)
+plane_finder.aligned_planes_to_obj (combined_planes, aapts, quat, outname)
 
 -- save planes with out masks
 for _,p in pairs(combined_planes) do

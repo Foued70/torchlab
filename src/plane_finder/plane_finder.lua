@@ -167,15 +167,15 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
    p1.mask = p1.mask or get_mask(points,p1.eqn,threshold,normal_filter,normal_threshold,normals)
    p2.mask = p2.mask or get_mask(points,p2.eqn,threshold,normal_filter,normal_threshold,normals)
 
-   if (p1.mask:sum() ~= p1.n_pts) then 
-      log.trace("new thres: ", p1.mask:sum(),"old: ", p1.n_pts)
-      -- error("recreating points explained by plane")
-   end
+   -- if (p1.mask:sum() ~= p1.n_pts) then 
+   --    log.trace("new thres: ", p1.mask:sum(),"old: ", p1.n_pts)
+   --    -- error("recreating points explained by plane")
+   -- end
 
-   if (p2.mask:sum() ~= p2.n_pts) then 
-      log.trace("new thres: ", p2.mask:sum(),"old: ", p2.n_pts)
-      -- error("recreating points explained by plane")
-   end
+   -- if (p2.mask:sum() ~= p2.n_pts) then 
+   --    log.trace("new thres: ", p2.mask:sum(),"old: ", p2.n_pts)
+   --    -- error("recreating points explained by plane")
+   -- end
 
    local intersection_mask = torch.cmul(p1.mask,p2.mask)
    local n_intersection    = intersection_mask:sum()
@@ -205,8 +205,6 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
    -- test 2: total intersection return bigger (TODO: could check normal and "carve" into larger plane)
    if n_intersection > (1 - intersection_threshold) * p_smaller.n_pts then 
       combo_string = "combining larger subsumes smaller"
-      print(" ** " .. combo_string)
-      print(score_data)
       return p_bigger , combo_string, score_data
    end
 
@@ -215,8 +213,6 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
    local norm_dist = math.sqrt(norm_diff:cmul(norm_diff):sum())
    if norm_dist > normal_threshold then 
       combo_string = "not combining: normals beyond threshold"
-      print(" ** " .. combo_string)
-      print(score_data)
       return nil, combo_string, score_data 
    end
 
@@ -323,8 +319,6 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
       end
    end
 
-   print(" ** " .. combo_string)
-   print("    " , score_data)
    return p_merge, combo_string, score_data
 end
 
@@ -365,23 +359,23 @@ function pf.combine_planes (points,input_planes,threshold,
       local not_merged = true
       local j = 1
       while not_merged and (j <= n_planes) do 
-         printf(" ++ testing %d to %d",i,j)
+         -- printf(" ++ testing %d to %d",i,j)
          local p2  = output_planes[j]
          local p3,str,data = 
             merge_planes(points,threshold,p1,p2,0.1,normal_filter, normal_threshold, normals)
          if p3 then
             output_planes[j] = p3
             not_merged = false
-            print("merged "..str)
+            -- print("merged "..str)
             add_to_score(score_keeper, str, data, i, j)
          else
-            print("not merging "..str)
+            -- print("not merging "..str)
             add_to_score(loser_keeper, str, data, i, j)
          end
          j = j + 1
       end
       if not_merged then
-         print("not merged STOP")
+         -- print("not merged STOP")
          -- if not removed add p1 to output
          table.insert(output_planes, p1)
       end

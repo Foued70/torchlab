@@ -20,7 +20,8 @@ cmd:option('-thres', 10)
 cmd:option('-min_pts_for_seed', 150)  -- < 20 x 20 ...
 cmd:option('-min_pts_for_plane', 900) -- 30x30 window is minimum
 cmd:option('-graph_merge_thres', 5)
-cmd:option('-scale_factor', 1.4)
+cmd:option('-scale_factor', 1.2)
+cmd:option('-n_scale', 5)
 cmd:option('-normal_filter', true)
 cmd:option('-expanded_points', false)
 cmd:option('-use_saliency', false)
@@ -53,7 +54,7 @@ min_points_for_plane  = tonumber(params.min_pts_for_plane)
 -- saliency
 base_win      = math.floor(math.sqrt(min_points_for_seed))
 scale_factor  = tonumber(params.scale_factor)
-n_scale       = 5
+n_scale       = params.n_scale
 
 -- flags
 normal_filter     = params.normal_filter
@@ -72,7 +73,6 @@ for _,pcfile in pairs(pcfiles) do
    _G.cmb_scores = {}
    _G.count    = 1
    last_tested = 1
-
 
    -- setup outfile naming
    out_dir = base_out_dir .. "/".. pcfile:gsub("[/%.]","_")
@@ -375,7 +375,7 @@ for _,pcfile in pairs(pcfiles) do
       score_file:write("# saliency base_win scale_factor n_scale ")
       score_file:write("segmentation graphmerge ")
       score_file:write("norm_1=raw,2=smooth,3=var,4=var_smooth normal_threshold ")
-      score_file:write("minseed minplane add_points cmb_points ")
+      score_file:write("minseed minplane ")
       score_file:write("psearched pfound scmean scmin scmax found_pts remain_pts total_pts percent_found time\n")
       score_file:write(string.format("%s ", file_bname))
       score_file:write(string.format("%d %d %f %d ", use_saliency and 1 or 0, base_win, scale_factor, n_scale))
@@ -396,6 +396,7 @@ for _,pcfile in pairs(pcfiles) do
 
       os.execute("cat "..score_fname)
 
+      collectgarbage()
       -- save obj
       quat, aapts = plane_finder.align_planes(planes,allpts)
       plane_finder.aligned_planes_to_obj (planes, aapts, quat, outname..".obj")
@@ -404,6 +405,7 @@ for _,pcfile in pairs(pcfiles) do
       for _,p in pairs(planes) do
          p.mask = nil
       end
+      collectgarbage()
       torch.save(outname .. ".t7", planes)
    end
 end -- loop through all plane files
