@@ -151,70 +151,268 @@ int get_index_and_mask(long* index_map, short* mask_map, double* points, short* 
 }
 
 
-int get_same_z_in_grid(double* xyz, int col_w, double compz, int height, int width)
+
+int get_same_z_in_grid(double* xyz, int w, int h, double compz, int height, int width)
 {
 
-  int h;
-  double top_diff = 999*1000;
-  double bot_diff = -999*1000;
-  double best_z_top = 0, best_z_bot = 0;
-  int best_h_top = -1, best_h_bot = -1;
-  int xc,yc,zc;
-  double x,y,z,d;
-  double offset0 = 0*height*width+col_w;
-  double offset1 = 1*height*width+col_w;
-  double offset2 = 2*height*width+col_w;
+  int hh,i;
+  int dir;
+  double cur_x,cur_y,cur_z;
+  double cdiff,bdifft=99999, bdiffl=-99999;
+  double bht = -1,bhl = height;
+  int offset = height*width;
   
-  for (h=0; h<height;h++)
+  cur_x = xyz[0*offset+h*width+w];
+  cur_y = xyz[1*offset+h*width+w];
+  cur_z = xyz[2*offset+h*width+w];
+  
+  if (norm(cur_x,cur_y,cur_z) < 0.01)
   {
-    xc = offset0+h*width;
-    yc = offset1+h*width;
-    zc = offset2+h*width;
-    
-    x = xyz[xc];
-    y = xyz[yc];
-    z = xyz[zc];
-    
-    if (norm(x,y,z) > 0.01)
+    //find top and bottom if best z is above h
+    for(hh=h;hh>=0;hh--)
     {
-      d = z-compz;
-      if (d == 0)
-      {
-        return h;
+        cur_x = xyz[0*offset+hh*width+w];
+        cur_y = xyz[1*offset+hh*width+w];
+        cur_z = xyz[2*offset+hh*width+w];
+      
+        if (norm(cur_x,cur_y,cur_z) > 0.01)
+        {
+          cdiff = cur_z-compz;
+          
+          if (cdiff == 0)
+          {
+            return hh;
+          }
+          
+          if (cdiff < 0) // current is below comp
+          {
+            //check lower bound
+            if (cdiff >= bdiffl)
+            {
+              bhl = hh;
+              bdiffl = cdiff;
+            }
+          }
+          
+          else if (cdiff > 0) //current is above comp
+          {
+            //check top
+            if (cdiff < bdifft)
+            {
+              bht = hh;
+              bdifft = cdiff;
+              break; //stop
+            }
+          }
+         
+        }
       }
-      else if (d > 0 && d <= top_diff)
-      {
-        top_diff = d;
-        best_z_top = z;
-        best_h_top = h;
+    
+    if (bhl-bht <= 1 && bhl-bht >= 0)
+    {
+        if (bhl == bht)
+        {
+          return bht;
+        }
+        if (fabs(bdiffl) <= fabs(bdifft))
+        {
+          return bhl;
+        }
+        else
+        {
+          return bht;
+        }
       }
-      else if (d < 0 && d > bot_diff)
-      {
-        bot_diff = d;
-        best_z_bot = z;
-        best_h_bot = h;
+    
+    //find top and bottom if best z is below h
+    for(hh=h;hh<height;hh++)
+    {
+        cur_x = xyz[0*offset+hh*width+w];
+        cur_y = xyz[1*offset+hh*width+w];
+        cur_z = xyz[2*offset+hh*width+w];
+      
+        if (norm(cur_x,cur_y,cur_z) > 0.01)
+        {
+          cdiff = cur_z-compz;
+          
+          if (cdiff == 0)
+          {
+            return hh;
+          }
+          
+          if (cdiff > 0) // current above desired
+          {
+            //check upper bound
+            if (cdiff <= bdifft)
+            {
+              bht = hh;
+              bdifft = cdiff;
+            }
+          }
+          else if (cdiff < 0) // current below desired
+          {
+            //check lower bound
+            if ((cdiff > bdiffl))
+            {
+              bhl = hh;
+              bdiffl = cdiff;
+              break; //stop
+            }
+          }
+            
+        }
       }
-    }
-  }
-  
-  if (best_h_top-best_h_bot > 2)
-  {
+    
+    if (bhl-bht <= 1 && bhl-bht >= 0)
+    {
+        if (bhl == bht)
+        {
+          return bht;
+        }
+        if (fabs(bdifft) <= fabs(bdiffl))
+        {
+          return bht;
+        }
+        else
+        {
+          return bhl;
+        }
+      }
+    
     return -1;
-  }
-  
-  if (top_diff <= fabs(bot_diff))
-  {
-    return best_h_top;
+    
   }
   else
   {
-    return best_h_bot;
-  }
-  
+    if(cur_z < compz)
+    {
+      //need to go higher
+      for(hh=h;hh>=0;hh--)
+      {
+        cur_x = xyz[0*offset+hh*width+w];
+        cur_y = xyz[1*offset+hh*width+w];
+        cur_z = xyz[2*offset+hh*width+w];
+      
+        if (norm(cur_x,cur_y,cur_z) > 0.01)
+        {
+          cdiff = cur_z-compz;
+          
+          if (cdiff == 0)
+          {
+            return hh;
+          }
+          
+          if (cdiff < 0) // current is below comp
+          {
+            //check lower bound
+            if (cdiff >= bdiffl)
+            {
+              bhl = hh;
+              bdiffl = cdiff;
+            }
+          }
+          
+          else if (cdiff > 0) //current is above comp
+          {
+            //check top
+            if (cdiff < bdifft)
+            {
+              bht = hh;
+              bdifft = cdiff;
+              break; //stop
+            }
+          }
+         
+        }
+      }
+    
+      if (bhl-bht <= 1 && bhl-bht >= 0)
+      {
+        if (bhl == bht)
+        {
+          return bht;
+        }
+        if (fabs(bdiffl) <= fabs(bdifft))
+        {
+          return bhl;
+        }
+        else
+        {
+          return bht;
+        }
+      }
+      else
+      {
+        return -1;
+      }
+    }
+    else if(cur_z > compz) // current 
+    {
+      //need to go lower
+      for(hh=h;hh<height;hh++)
+      {
+        cur_x = xyz[0*offset+hh*width+w];
+        cur_y = xyz[1*offset+hh*width+w];
+        cur_z = xyz[2*offset+hh*width+w];
+      
+        if (norm(cur_x,cur_y,cur_z) > 0.01)
+        {
+          cdiff = cur_z-compz;
+          
+          if (cdiff == 0)
+          {
+            return hh;
+          }
+          
+          if (cdiff > 0) // current above desired
+          {
+            //check upper bound
+            if (cdiff <= bdifft)
+            {
+              bht = hh;
+              bdifft = cdiff;
+            }
+          }
+          else if (cdiff < 0) // current below desired
+          {
+            //check lower bound
+            if ((cdiff > bdiffl))
+            {
+              bhl = hh;
+              bdiffl = cdiff;
+              break; //stop
+            }
+          }
+            
+        }
+      }
+    
+      if (bhl-bht <= 1 && bhl-bht >= 0)
+      {
+        if (bhl == bht)
+        {
+          return bht;
+        }
+        if (fabs(bdifft) <= fabs(bdiffl))
+        {
+          return bht;
+        }
+        else
+        {
+          return bhl;
+        }
+      }
+      else
+      {
+        return -1;
+      }
+    }    
+    else
+    {
+      return h;
+    }  
 }
-
-
-
+}
 
 int get_step_maps_updown(int* step_updown, double* xyz, double min_step_size, 
                          double max_step_size, int dir, int height, int width)
@@ -297,9 +495,9 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
 {
   int h,w;
   int s;
-  int sh,sw;
+  int sh,sw,ph;
   double xcur,ycur,zcur,tcur;
-  double xque,yque,tque;
+  double xque,yque,zque,tque;
   double dist,difft;
   
   int offset0 = 0*height*width;
@@ -327,6 +525,7 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
         
         s = 0;
         sh = h;
+        ph = h;
         sw = w;
         dist = 0;
         difft = 0;
@@ -335,6 +534,16 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
         {
           
           sw = (w+(dir*s)+width) % width;
+          //sh = get_same_z_in_grid(xyz, sw, sh, zcur, height, width);
+          
+          if (sh < 0 || sh >= height)
+          {
+            s = MAX(0,s-1);
+            sw = (w+(dir*s)+width) % width;
+            sh = ph;
+            break;
+          }
+          
           tque = theta[offset0+sh*width+sw];
           difft = tcur-tque;
           if (difft > PI)
@@ -357,23 +566,20 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
             if (dist > max_step_size)
             {
               //went over an edge
-              if (s < 2)
-              {
-                //can't decrease s
-                break;
-              }
-              else
+              if(s > 1)
               {
                 s = MAX(0,s-1);
                 sw = (w+(dir*s)+width) % width;
-                break;
+                sh = ph;
               }
+              break;
             }
             if (dist >= min_step_size)
             {
               //found!
               break;
             }
+            ph = sh;
           }
           s++;
         }
@@ -868,21 +1074,90 @@ int phi_map_var(double* phi_map, double* centered_point_map,
 }
 
 
-/*
-int get_corners(short* corners, double* xyz, double* theta_map, double * phi_map,
-                     double * normal_map
-                     int* step_left, int * step_right, 
-                     int height, int width)
+
+int diff_map(double* diff_map, double* attrib_map, int* lookup_map, int height, int width)
 {
+  int h,w;
+  int offset = height*width;
+  double diff;
+  
+  for(h=0; h<height; h++)
+  {
+    for(w=0; w<width; w++)
+    {
+      diff = attrib_map[h*width+w]-attrib_map[lookup_map[0*offset+h*width+w]*width+lookup_map[1*offset+h*width+w]];
+      diff_map[h*width+w]=diff;
+    }
+  }
+  return 0;
+}
+
+int plane_dist_map(double* dist_map, double* normal_map, double* xyz_map, int* lookup_map, int height, int width)
+{
+  int hcur,wcur;
+  int hque,wque;
+  int indcur,indque;
+  double xcur,ycur,zcur;
+  double acur,bcur,ccur;
+  double xque,yque,zque;
+  int offset = height*width;
+  
+  for(hcur=0;hcur<height;hcur++)
+  {
+    for(wcur=0;wcur<width;wcur++)
+    {
+      indcur = hcur*width+wcur;
+      
+      // 2-over
+      hque = lookup_map[0*offset+indcur];
+      wque = lookup_map[1*offset+indcur];
+      
+      indque = hque*width+wque;
+      
+      /*
+      hque = lookup_map[0*offset+indque];
+      wque = lookup_map[1*offset+indque];
+      
+      indque = hque*width+wque;*/
+      
+      xcur = xyz_map[0*offset+indcur];
+      ycur = xyz_map[1*offset+indcur];
+      zcur = xyz_map[2*offset+indcur];
+      
+      if (norm(xcur,ycur,zcur) > 0.01)
+      {
+      
+        xque = xyz_map[0*offset+indque];
+        yque = xyz_map[1*offset+indque];
+        zque = xyz_map[2*offset+indque];
+      
+        acur = normal_map[0*offset+indcur];
+        bcur = normal_map[1*offset+indcur];
+        ccur = normal_map[2*offset+indcur];
+      
+        dist_map[indcur] = fabs(acur*(xque-xcur) + bcur*(yque-ycur) + ccur*(zque-zcur));
+        //printf("%f\n",dist_map[indcur]);
+        
+        if (norm(xque,yque,zque) < 0.01)
+        {
+          dist_map[indcur]=10000;
+        }
+        else if(norm(xque,yque,zque) < norm(xcur,ycur,zcur))
+        {
+          dist_map[indcur]=0;
+        }
+      }
+      
+    }
+  }
   
 }
-*/
 
 
 
 int theta_map(double* theta_map, double* centered_point_map, int height, int width)
 {
-  int h,w, pw, nw;
+  int h,w, pw, nw,ph,nh;
   double * xyz_hw, * xyz_phw, * xyz_nhw;
   double * pt_p, * pt_n, *pt_c;
   double theta_p, theta_n, theta_c;
@@ -897,25 +1172,34 @@ int theta_map(double* theta_map, double* centered_point_map, int height, int wid
   pt_n = malloc(2*sizeof(double));
   pt_c = malloc(2*sizeof(double));
   
+  int count = 0;
+  
   for (h = 0; h < height; h++)
   {
     for (w = 0; w < width; w++)
     {
-      
-      pw = MAX(0,w-1);
-      nw = MIN(width-1,w+1);
       
       theta_c = -1000;
       
       for (k = 0; k < 3; k++)
       {
         xyz_hw[k] = centered_point_map[k*height*width+h*width+w];
-        xyz_phw[k] = centered_point_map[k*height*width+h*width+pw];
-        xyz_nhw[k] = centered_point_map[k*height*width+h*width+nw];
       }
       
       if (norm3(xyz_hw) > 0.01)
       {
+      
+        pw = MAX(0,w-1);
+        nw = MIN(width-1,w+1);
+        
+        ph = h;
+        nh = h;
+        
+        for (k = 0; k < 3; k++)
+        {
+          xyz_phw[k] = centered_point_map[k*height*width+ph*width+pw];
+          xyz_nhw[k] = centered_point_map[k*height*width+nh*width+nw];
+        }
       
         direction_between_vectors_phi_theta(pt_p, xyz_phw, xyz_hw);
         direction_between_vectors_phi_theta(pt_n, xyz_hw, xyz_nhw);

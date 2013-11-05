@@ -40,6 +40,12 @@ ffi.cdef
    int phi_map_var(double* phi_map, double* centered_point_map, 
                 int* step_up, int* step_down,
                 int height, int width);
+   
+   int diff_map(double* diff_map, double* attrib_map, int* lookup_map, int height, int width);
+   int plane_dist_map(double* dist_map, double* normal_map, double* xyz_map, int* lookup_map, int height, int width);
+   
+   int get_same_z_in_grid(double* xyz, int w, int h, double compz, int height, int width);
+   
 ]]
 
 local libpc   = util.ffi.load('libpointcloud')
@@ -57,6 +63,17 @@ PointCloud.faro_degree_above = 90
 PointCloud.faro_degree_below = 60
 PointCloud.very_small_number = 0.00000000000000001
 PointCloud.fudge_number = 1000
+
+local function round(dbl)
+  local du = math.ceil(dbl)
+  local dl = math.floor(dbl)
+  if math.abs(du-dbl) <= math.abs(dl-dbl) then
+    return du
+  else
+    return dl
+  end
+end
+
 
 -- rgb_map is a 2D equirectangular grid of rgb values which corresponds to xyz_map
 function PointCloud:load_rgb_map(imagefile, type)
@@ -197,12 +214,12 @@ function PointCloud:get_rgb()
 end
 
 -- returns list of depths corresponding to points
-function PointCloud:get_depth()
-   if not self.depth then 
+function PointCloud:get_depth(force)
+   if (not self.depth) or force then 
       points     = self.points
-      depth = torch.sqrt(points:clone():norm(2,2)):squeeze()
+      self.depth = points:clone():norm(2,2):squeeze()
    end
-   return depth
+   return self.depth
 end
 
 -- returns list of depths corresponding to points
@@ -227,16 +244,6 @@ function PointCloud:get_normal_phi_theta(force)
     --[[]]
     libpc.phi_map(torch.data(self.phi_map),torch.data(point_map:clone():contiguous()),height,width)
     libpc.theta_map(torch.data(self.theta_map),torch.data(point_map:clone():contiguous()),height,width)
-    --[[]]
-    
-    --[[
-    local mu,md,ml,mr = self:get_lookup_map()
-    libpc.phi_map_var(torch.data(self.phi_map),torch.data(point_map:clone():contiguous()),
-                      torch.data(mu:contiguous()), torch.data(md:contiguous()),
-                      height,width)
-    libpc.theta_map_var(torch.data(self.theta_map),torch.data(point_map:clone():contiguous()),
-                      torch.data(ml:contiguous()), torch.data(mr:contiguous()),
-                      height,width)
     --[[]]
   
     self.normal_mask = self.phi_map:lt(-10):add(self.theta_map:lt(-10)):gt(0)
@@ -275,6 +282,8 @@ function PointCloud:get_normal_map()
 end
 
 function PointCloud:get_normal_map_varsize()
+
+  if not self.var_normal_map then
     local tic = log.toc()
     local point_map = self:get_xyz_map_no_mask()
     local height = self.height
@@ -312,11 +321,19 @@ function PointCloud:get_normal_map_varsize()
     
     dd = nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
     
-    return nmp,dd,phi,theta,mask
+    self.var_normal_map = nmp
+    self.var_normal_dd = dd
+    self.var_phi = phi
+    self.var_theta = theta
+    self.var_normal_mask = mask
+  end
+  return self.var_normal_map,self.var_normal_dd,self.var_phi,self.var_theta,self.var_normal_mask
+    --return nmp,dd,phi,theta,mask
 end
 
 function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff, phi, theta, mask)
 
+  if not self.smooth_normal_map then
     local tic = log.toc()
     if not win then
       max_win = 10
@@ -361,8 +378,17 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff, phi, theta,
     dd = smooth_nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
   
     print('get_smooth_normal_map: '..(log.toc()-tic))
-  
-    return smooth_nmp, dd, smooth_phi, smooth_theta, mask
+    
+    self.smooth_normal_map = smooth_nmp
+    self.smooth_normal_dd = dd
+    self.smooth_phi = smooth_phi
+    self.smooth_theta = smooth_theta
+    self.smooth_normal_mask = mask
+    
+  end
+    
+  --return smooth_nmp, dd, smooth_phi, smooth_theta, mask
+  return self.smooth_normal_map, self.smooth_normal_dd, self.smooth_phi, self.smooth_theta, self.smooth_normal_mask
 
 end
 
@@ -426,8 +452,8 @@ function PointCloud:get_lookup_map()
   local min_depth = depth:min()
   local max_depth = depth:max()
   local noise = self:get_noise()
-  local mindist = math.max(5*min_depth*2*math.pi/width,10)+5*noise
-  local maxdist = 2.5*max_depth*2*math.pi/width+5*noise
+  local mindist = 25--math.max(5*min_depth*2*math.pi/width,10)+5*noise
+  local maxdist = 100--2.5*max_depth*2*math.pi/width+5*noise
   theta = theta:contiguous()
   
   print(mindist,maxdist,noise,min_depth,max_depth)
@@ -435,13 +461,14 @@ function PointCloud:get_lookup_map()
   local map_u = torch.zeros(2,height,width):int():contiguous()
   local map_d = torch.zeros(2,height,width):int():contiguous()
   local map_l = torch.zeros(2,height,width):int():contiguous()
-  local map_r = torch.zeros(2,height,width):int():contiguous()
-  
+  local map_r = torch.zeros(2,height,width):int():contiguous() 
   
   libpc.get_step_maps(torch.data(map_u), torch.data(map_d), torch.data(map_l), torch.data(map_r), 
                   torch.data(xyz), torch.data(theta), mindist, maxdist, height, width)
   return map_u,map_d,map_l,map_r
 end
+
+
 
 
 
@@ -982,7 +1009,6 @@ function PointCloud:get_connections_and_corners()
   
   local xyz = self:get_xyz_map_no_mask()  
   local depth = self:get_depth_map_no_mask()
-  local index,mask_extant = self:get_index_and_mask()
   
   local noise = self:get_noise()
   local winsize = 10+math.min(10,noise)
@@ -995,7 +1021,7 @@ function PointCloud:get_connections_and_corners()
   
   print(noise)
   
-  local snormal,sphi,stheta,sdd = self:get_smooth_normal(winsize,angdiff,angdiff)
+  local snormal,sdd,sphi,stheta,smask = self:get_smooth_normal(winsize,angdiff,angdiff)
   
   local mask_phi = sphi:clone():abs():ge(thresh_phi)
   local mask_height = {{1,thresh_height},{}}
@@ -1148,6 +1174,578 @@ function PointCloud:get_flattened_images(scale,numCorners)
   
   return imagez,corners,image_corners, scale
 end
+
+
+
+local function get_height_slice(zzz, lobound, upbound ,emask,nmask,pmask)
+
+  local lev = zzz:ge(lobound):cmul(zzz:le(upbound)):cmul(emask:eq(0)):cmul(nmask:eq(0)):cmul(pmask)
+  --local lev = zzz:ge(lobound):cmul(zzz:le(upbound)):cmul(emask:eq(0)):cmul(nmask:eq(0))
+  
+  return lev
+end
+
+local function squeeze_slice(xyz,nmp,dd,smask)
+  
+  local rmask1 = smask:eq(0)
+  
+  
+  local xxyy = xyz:sub(1,2):clone()
+  local dpth = xyz:sub(1,2):clone():norm(2,1):squeeze()
+  local nmxy = nmp:clone():cdiv(nmp:sub(1,2):clone():norm(2,1):repeatTensor(3,1,1))
+  nmxy:select(1,3):fill(0)
+  local nmdd = dd:clone()
+  
+  --image.display(smask:double():cmul(dd):add(dd))
+  local smsk = torch.zeros(smask:size())
+  for w = 1,dd:size(2) do
+    local submask = smask:select(2,w):clone()
+    if submask:double():sum() > 0 then
+      local subdpth = dpth:select(2,w):clone()
+      local dmin = subdpth[submask]:min()
+      local dmax = subdpth[submask]:max()
+      local dmask = subdpth:ge(dmin):cmul(subdpth:le(dmin+10)):cmul(submask)
+      smsk:select(2,w):copy(dmask:clone())
+    end
+  end
+  smask = smsk:byte()
+  --image.display(smask:double():cmul(dd):add(dd))
+
+  rmask1 = smask:eq(0)
+  local rmask2 = rmask1:repeatTensor(2,1,1)
+  local rmask3 = rmask1:repeatTensor(3,1,1)
+  
+  xxyy[rmask2] = 0
+  nmxy[rmask3] = 0
+  nmdd[rmask1] = 0
+  
+  local ssum1 = smask:double():sum(1):squeeze()
+  local ssum2 = ssum1:repeatTensor(2,1)
+  local ssum3 = ssum1:repeatTensor(3,1)
+  local smsk1 = ssum1:eq(0)
+  local smsk2 = ssum2:eq(0)
+  local smsk3 = ssum3:eq(0)
+    
+  local xysqz = xxyy:sum(2):squeeze():cdiv(ssum2)
+  local nmsqz = nmxy:sum(2):squeeze():cdiv(ssum3)
+  local ddsqz = nmdd:sum(1):squeeze():cdiv(ssum1)
+  
+  local thsqz = nmsqz[1]:clone():acos()
+  thsqz[nmsqz[2]:lt(0)] = thsqz[nmsqz[2]:lt(0)]:mul(-1)
+  
+  xysqz[smsk2]=0
+  nmsqz[smsk3]=0
+  ddsqz[smsk1]=0
+  thsqz[smsk1]=0
+  
+  local smsk = smsk1:eq(0)
+  
+  xxyy = nil
+  nmxy = nil
+  bndd = nil
+  ssum1 = nil
+  ssum2 = nil
+  ssum3 = nil
+  smsk1 = nil
+  smsk2 = nil
+  smsk3 = nil
+  
+  return xysqz,nmsqz,ddsqz,thsqz,smsk
+  
+end
+
+local function bin_slice(xysqz,nmsqz,ddsqz,smask,width,scale,fht,fwt,cph,cpw)
+
+  local flat_map = torch.zeros(fht,fwt)
+  
+  local xyu = torch.zeros(2,width)
+  local ndu = torch.zeros(width)
+  local nmu = torch.zeros(3,width)
+  local nbu = torch.zeros(width)
+  
+  local count = 0
+  
+  for i=1,width do
+    if smask[i] > 0 then
+      local xy = xysqz:select(2,i)
+      
+      local w = round(xy[1]/scale)+cpw
+      local h = round(-xy[2]/scale)+cph
+      
+      local c = flat_map[h][w]
+      
+      if c == 0 then
+        count = count + 1
+        c = count
+        --xyu:select(2,c):copy(torch.Tensor({(w-cpw)*scale,-(h-cph)*scale}))
+        xyu:select(2,c):copy(xysqz:select(2,i):clone())
+        flat_map[h][w] = c
+      end
+      nbu:sub(c,c):add(1)
+      ndu:sub(c,c):add(ddsqz[i])
+      nmu:select(2,c):add(nmsqz:select(2,i):clone())      
+    elseif count == 0 or nbu[count] ~= 0 then
+        count = count + 1
+    end
+  end
+  
+  xyu=xyu:sub(1,2,1,count):clone()
+  nbu=nbu:sub(1,count):clone()
+  ndu=ndu:sub(1,count):clone()
+  nmu=nmu:sub(1,3,1,count):clone()
+  
+  local umask1 = nbu:gt(0)
+  local umask3 = umask1:repeatTensor(3,1)
+  
+  ndu[umask1]=ndu[umask1]:cdiv(nbu[umask1])
+  nmu[umask3]=nmu[umask3]:cdiv(nbu[umask1]:repeatTensor(3,1))
+  
+  local ntu = nmu[1]:clone():acos()
+  ntu[nmu[2]:lt(0)] = ntu[nmu[2]:lt(0)]:mul(-1)
+  ntu[nbu:le(0)]=0
+  
+  local umask = umask1
+  local fmask = flat_map:gt(0)
+  local vmask = flat_map[fmask]:long()
+  
+  return xyu,nmu,ndu,ntu,umask,fmask,vmask,flat_map
+  
+end
+
+local function flatten_slice(nmu,ndu,ntu,fmask,vmask,fht,fwt)
+  
+  local flat_nmp = torch.zeros(3,fht,fwt)
+  local flat_nmd = torch.zeros(fht,fwt)
+  local flat_nth = torch.zeros(fht,fwt)
+  
+  for k = 1,3 do
+    flat_nmp[k][fmask] = nmu[k][vmask]+1
+  end
+  flat_nmd[fmask] = ndu[vmask]
+  flat_nth[fmask] = ntu[vmask]+2*math.pi
+  
+  return flat_nmp, flat_nmd, flat_nth
+end
+
+local function colinear(xyu,nmu,ndu,umask,i,thresh)
+  if i <= 1 or i >= umask:size(1) then
+    return true
+  end
+  
+  ci = i
+  pi = i-1
+  ni = i+1
+  
+  if umask[pi] == 0 or umask[ci] == 0 or umask[ni] == 0 then
+    return false
+  end
+  
+  local pd = torch.Tensor(6)
+    
+  pd[1] = xyu:sub(1,2,ci,ci):clone():cmul(nmu:sub(1,2,pi,pi)):sum()+(ndu[pi])
+  pd[2] = xyu:sub(1,2,ci,ci):clone():cmul(nmu:sub(1,2,ni,ni)):sum()+(ndu[ni])
+  
+  pd[3] = xyu:sub(1,2,pi,pi):clone():cmul(nmu:sub(1,2,ci,ci)):sum()+(ndu[ci])
+  pd[4] = xyu:sub(1,2,pi,pi):clone():cmul(nmu:sub(1,2,ni,ni)):sum()+(ndu[ni])
+  
+  pd[5] = xyu:sub(1,2,ni,ni):clone():cmul(nmu:sub(1,2,pi,pi)):sum()+(ndu[pi])
+  pd[6] = xyu:sub(1,2,ni,ni):clone():cmul(nmu:sub(1,2,ci,ci)):sum()+(ndu[ci])
+  
+  if pd:abs():max() <= thresh then
+    return true
+  else
+    return false
+  end
+  
+end
+
+local function isColinear(pts,i,radius,noisethresh)
+
+  local dim = pts:size(1)
+  local len = pts:size(2)
+  local pts_t = pts:contiguous()
+  local cent = pts_t:sub(1,dim,i,i):expand(pts_t:size(1),1)
+  local pts_c = (pts_t-cent:contiguous():expand(pts_t:size()):contiguous()):contiguous()
+  local nrm_c = pts_c:clone():norm(2,1):squeeze()
+  local ind_z = pts_t:clone():norm(2,1):eq(0)
+  if ind_z:double():sum() > 0 then
+    return false
+  end
+  local ind_s = nrm_c:le(radius)
+  --ind_s[math.max(1,i-1)] = 1
+  --ind_s[math.min(len,i+1)] = 1
+  local totind = ind_s:double():sum()
+  local totlft = ind_s:sub(1,i):sum()
+  local totrgt = ind_s:sub(i,len):sum()
+  
+  if i == 1 or i == len then
+    if totind < dim*2 then
+      return false
+    end
+  elseif totind < dim*2 or totlft < dim+1 or totrgt < dim+1 then
+    return false
+  end
+  
+  -- look only at local points
+  local pts_u = torch.Tensor(dim,ind_s:double():sum())
+  for k=1,dim do
+    pts_u[k] = pts_c[k][ind_s]
+  end
+
+  pts_u = pts_u:contiguous()
+  local s,v,d = torch.svd(pts_u)
+  local abc = s:sub(1,dim,dim,dim):contiguous()
+  local maxnoise = (abc:expand(pts_u:size()):contiguous():cmul(pts_u):sum(1)):abs():max()
+  
+  if maxnoise > noisethresh then
+    --print(maxnoise)
+    return false
+  else
+    return true
+  end
+end
+
+local function isCorner(xyu,nmu,ndu,umask,i,thresh)
+  
+  local len = umask:size(1)
+  if i == 1 or i == len then
+    return false
+  else
+  
+    local radius = 50
+    local step = 7
+    
+    local pts 
+    local lft
+    local rgt
+    local cnt
+    
+    lft = math.max(1,i-step)
+    rgt = math.min(len,i+step)
+    cnt = i-lft+1
+    pts = xyu:contiguous():sub(1,2,lft,rgt):clone()
+    local colinear_c = isColinear(pts,cnt,radius,thresh)
+    
+    lft = math.max(1,i-step)
+    rgt = math.min(len,i)
+    cnt = i-lft+1
+    pts = xyu:contiguous():sub(1,2,lft,rgt):clone()
+    local colinear_l = isColinear(pts,cnt,radius,thresh)
+    
+    lft = math.max(1,i)
+    rgt = math.min(len,i+step)
+    cnt = i-lft+1
+    pts = xyu:contiguous():sub(1,2,lft,rgt):clone()
+    local colinear_r = isColinear(pts,cnt,radius,thresh)
+    
+    if colinear_c then
+      return false
+    else
+      local dptc = xyu:sub(1,2,i,i):clone():norm()
+      local dptl = xyu:sub(1,2,i-1,i-1):clone():norm()
+      local dptr = xyu:sub(1,2,i+1,i+1):clone():norm()
+        
+      if colinear_l and colinear_r then
+        return true
+      elseif colinear_l then
+        if dptc > 0 and (dptc <= dptr or dptr == 0) then
+          return true
+        else
+          return false
+        end
+      elseif colinear_r then
+        if dptc > 0 and (dptc <= dptl or dptl == 0) then
+          return true
+        else
+          return false
+        end
+      else
+        return false
+      end
+    end
+  end
+end
+
+function PointCloud:test(h,scale)
+  
+  scale = scale or 10
+  
+  local height = self.height
+  local width = self.width
+  local lobound = h-scale--/2
+  local upbound = h+scale--/2
+  local phthrsh = math.pi/6
+  local rx = math.ceil(self.radius[1]/scale)
+  local ry = math.ceil(self.radius[2]/scale)
+  local fht = ry*2+1
+  local fwt = rx*2+1
+  local cph = ry+1
+  local cpw = rx+1
+  
+  local index,emask = self:get_index_and_mask()
+  local xyz = self:get_xyz_map_no_mask()
+  local nmp,dd,phi,theta,nmask = self:get_normal_map_varsize()
+  nmp,dd,phi,theta,nmask = self:get_smooth_normal(nil, nil, nil, phi, theta, nmask)
+  
+  local pmask = phi:clone():abs():lt(phthrsh)
+  
+  local zzz = xyz[3]:clone()
+  local smask = get_height_slice(zzz, lobound, upbound ,emask,nmask,pmask)
+  
+  if smask:double():sum() > 2 then
+  
+    local xysqz,nmsqz,ddsqz,thsqz,smask = squeeze_slice(xyz,nmp,dd,smask)
+    
+    xyz = nil
+    nmp = nil
+    dd = nil
+    phi = nil
+    theta = nil
+    nmask = nil
+    
+    if smask:double():sum() > 2 then
+      local xyu,nmu,ndu,ntu,umask,fmask,vmask,flat_map = bin_slice(xysqz,nmsqz,ddsqz,smask,width,scale,fht,fwt,cph,cpw)
+      --[[]]
+      if fmask:double():sum() > 2 then
+        
+        local flat_nmp, flat_nmd, flat_nth = flatten_slice(nmu,ndu,ntu,fmask,vmask,fht,fwt)
+        
+        local nduu = xyu:clone():cmul(nmu:sub(1,2):clone()):sum(1):mul(-1):squeeze()
+        local ndpt = xyu:clone():norm(2,1):squeeze()
+        nduu[umask:eq(0)] = 0
+        ndpt[umask:eq(0)] = math.huge
+        
+        
+        -- check validity of candidate corner
+        local pd = 15
+        local md = 15*self.meter
+        
+        local corn = torch.zeros(umask:size())
+        local dthe = torch.zeros(umask:size())
+        local www = umask:size(1)
+        local onC = false
+        local beg = 0
+        local enn = 0
+        local xyc
+        local ww
+        local hh
+        local cnt = 0
+        for i = 1,www do
+          local u = umask[i]
+          dthe[i] = math.abs(ntu[((i) % www) + 1]-ntu[((i-2+www) % www)+1])
+          if u > 0 and isCorner(xyu,nmu,nduu,umask,i,pd) then
+          
+            local p = i-1
+            local n = i+1
+            local colp = colinear(xyu,nmu,nduu,umask,p,pd)
+            local coln = colinear(xyu,nmu,nduu,umask,n,pd)
+            if onC then
+              enn = i
+            else
+              cnt=cnt+1
+              onC = true
+              beg = i
+              enn = i
+            end
+              
+            if  colp or coln then
+              if (colp and coln) then
+                corn[i] = 1
+              elseif (not(colp) and (p > 0 and p <= www) and ndpt[i] <= ndpt[p]) or 
+                     (not(coln) and (n > 0 and n <= www) and ndpt[i] <= ndpt[n]) then
+                corn[i] = 0.75
+              else
+                corn[i] = 0.5
+              end
+            else
+              local xy = xyu:select(2,i)
+                corn[i] = 0.25
+            end
+              
+          else
+            if onC then
+              onC = false
+              
+              if beg == enn then
+
+                --[[]]
+                xyc = xyu:select(2,beg):clone()
+                ww = round(xyc[1]/scale)+cpw
+                hh = round(-xyc[2]/scale)+cph
+                  
+                flat_nmp:sub(1,1,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                flat_nmp:sub(2,2,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                flat_nmp:sub(3,3,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                --[[]]
+                
+              else
+                
+                --[[
+                for j=beg,enn do
+                  xyc = xyu:select(2,j):clone()
+                  ww = round(xyc[1]/scale)+cpw
+                  hh = round(-xyc[2]/scale)+cph
+                  
+                  flat_nmp:sub(1,1,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(1)
+                  flat_nmp:sub(2,2,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(1)
+                  flat_nmp:sub(3,3,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(1)
+                end
+                --[[]]
+                
+                --[[]]
+                local maxd,maxi = (xyu:sub(1,2,beg,enn-1):clone()-xyu:sub(1,2,beg+1,enn):clone()):norm(2,1):max(2)
+                local mind,mini = (xyu:sub(1,2,beg,enn-1):clone()-xyu:sub(1,2,beg+1,enn):clone()):norm(2,1):min(2)
+                
+                maxd = maxd:squeeze()
+                mind = mind:squeeze()
+                maxi = maxi:squeeze()+beg
+                mini = mini:squeeze()+beg
+                
+                if maxd - mind <= 2.5*pd then
+                    
+                  local maxd,maxi = dthe:sub(beg,enn):clone():max(1)
+                  maxd = maxd:squeeze()
+                  maxi = maxi:squeeze()+beg-1
+                  
+                  xyc = xyu:select(2,maxi):clone()
+                  ww = round(xyc[1]/scale)+cpw
+                  hh = round(-xyc[2]/scale)+cph
+                  flat_nmp:sub(1,1,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                  flat_nmp:sub(2,2,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                  flat_nmp:sub(3,3,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                
+                else
+                
+                  --[[]]
+                  for j=beg,enn do
+                  
+                    local dpc = ndpt[j]
+                    local dpl = dpc
+                    local dpr = dpc
+                    if j > beg then
+                      dpl = ndpt[j-1]
+                    end
+                    if j < enn then
+                      dpr = ndpt[j+1]
+                    end
+                    
+                    if dpc <= dpl and dpc <= dpr and dpc <= md then
+                    
+                      xyc = xyu:select(2,j):clone()
+                      ww = round(xyc[1]/scale)+cpw
+                      hh = round(-xyc[2]/scale)+cph
+                      flat_nmp:sub(1,1,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                      flat_nmp:sub(2,2,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                      flat_nmp:sub(3,3,math.max(1,hh-1),math.min(fht,hh+1),math.max(1,ww-1),math.min(fwt,ww+1)):fill(2)
+                      
+                    end
+                  end
+                  --[[]]
+                end
+                
+                --[[]]
+              end   
+            end
+          end
+        end
+        
+        nduu = nil
+        ndpt = nil
+        collectgarbage()
+        
+        --flat_nmp:sub(1,2,cph-2,cph+2,cpw-2,cpw+2):fill(0.5)
+        image.display(flat_nmp:clone():div(2))
+        
+      end
+      
+      --[[]]
+    end
+    
+    --return xysqz,nmsqz,ddsqz,thsqz,smask
+
+  else
+    xyz = nil
+    nmp = nil
+    dd = nil
+    phi = nil
+    theta = nil
+    nmask = nil
+  end
+  
+end
+
+function PointCloud:test2(scale)
+  scale = scale or 10
+  local stp = scale/2
+  local maxz = self.maxval[3]
+  local minz = self.minval[3]
+  local rngz = math.ceil((maxz-minz)/stp+1)
+  local i = 0
+  
+  print(rngz,scale)
+  
+  local xyzrmp = torch.zeros(3,rngz,self.width)
+  local nmprmp = torch.zeros(3,rngz,self.width)
+  local nddrmp = torch.zeros(  rngz,self.width)
+  local nthrmp = torch.zeros(  rngz,self.width)
+  
+  for i=1,rngz do
+    local h = (i-1)*stp+minz
+    local j = rngz-i+1
+    if i % 10 == 0 then
+      print(i,h)
+    end
+    local xysqz,nmsqz,ddsqz,thsqz,smask = self:test(h,scale)
+    if xysqz then
+      xyzrmp:sub(1,2,j,j):copy(xysqz:contiguous())
+      xyzrmp[3][j][smask]=h
+      nmprmp:sub(1,3,j,j):copy(nmsqz:contiguous())
+      nddrmp[j]=ddsqz
+      nthrmp[j]=thsqz
+      xysqz = nil
+      nmsqz = nil
+      ddsqz = nil
+      thsqz = nil
+      smask = nil
+    end
+    collectgarbage()
+  end
+  return xyzrmp,nmprmp,nddrmp,nthrmp
+end
+
+function PointCloud:test3()
+  local xyz = self:get_xyz_map_no_mask()
+  local index,emask = self:get_index_and_mask()
+  
+  local dp2 = xyz:sub(1,2):clone():norm(2,1):squeeze()
+  dp2[emask]=0
+  
+  local zzz = xyz[3]:clone()
+  
+  local xxu = xyz[1]:clone():cdiv(dp2)
+  local yyu = xyz[2]:clone():cdiv(dp2)
+  
+  local tht = xxu:clone():acos()
+  
+  tht[yyu:lt(0)] = tht[yyu:lt(0)]:mul(-1)
+  tht[emask] = 0
+  xxu[emask] = 0
+  yyu[emask] = 0
+  
+  local thtsum = tht:sum(1)
+  local thtcnt = emask:eq(0):double():sum(1)
+  local thtavg = thtsum:clone():cdiv(thtcnt)
+  thtavg[thtcnt:eq(0)] = 0
+  
+  thtsum = nil
+  thtcnt = nil
+  
+  xxu = nil
+  yyu = nil
+  
+  return zzz,tht,dp2
+end
+
 
 
 
