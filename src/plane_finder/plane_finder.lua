@@ -1,8 +1,8 @@
-pi               = math.pi
-linear_plane     = geom.linear_model.fit
-compute_residual = geom.linear_model.residual
+local pi               = math.pi
+local linear_plane     = geom.linear_model.fit
+local compute_residual = geom.linear_model.residual
 
-pf = Class()
+local pf = Class()
 
 -- same as geom.linear_model.fit but flips the normal to point towards the origin
 function pf.fit_plane(pts)
@@ -47,27 +47,25 @@ end
 -- DxWxH to NxD with mask
 function pf.get_points_from_map(map,mask,scratch)
    local pts
-   local npts = map[1]:nElement()
+   local n_pts = map[1]:nElement()
    if mask then
-      npts    = mask:sum()
+      n_pts   = mask:sum()
       scratch = scratch or torch.Tensor()
-      pts     = scratch:resize(3,npts)
+      pts     = scratch:resize(3,n_pts)
       pts[1]  = map[1][mask]
       pts[2]  = map[2][mask]
       pts[3]  = map[3][mask]
    else
       pts = map:reshape(map:size(1),map:size(2)*map:size(3))
    end
-   return pts:t():contiguous(),npts
+   return pts:t():contiguous(),n_pts
 end
 
 function pf.newErode(erosion_amount,image_h, image_w)
    erosion  = image.newErosion(erosion_amount)
    return function (mask)
-      -- printf("eroding: %d",mask:sum())
       mask = mask:double():resize(image_h,image_w)
       mask = erosion(mask):gt(0)
-      -- printf(" -> to %d",mask:sum())
       return mask
    end
 end
@@ -88,10 +86,10 @@ end
 
 function pf.select_points(pts,mask)
    local ptsd   = pts:size(pts:nDimension())
-   local npts   = mask:sum()
+   local n_pts  = mask:sum()
    local mask   = mask:reshape(mask:nElement(),1):expand(mask:nElement(),ptsd)
    local outpts = pts[mask]
-   return outpts:resize(npts,ptsd), npts
+   return outpts:resize(n_pts,ptsd), n_pts
 end
 
 function pf.get_patch_pts(idx,win_h,win_w,data,mask)
@@ -112,13 +110,13 @@ function pf.find_points_mask(points,plane_eqn,threshold)
 end
 
 function pf.find_points_explained_by_plane(points, plane_eqn, threshold, normal_filter, normal_threshold, normals)
-   plane_pts_mask = find_points_mask(points,plane_eqn,threshold)
+   local plane_pts_mask = find_points_mask(points,plane_eqn,threshold)
    if normal_filter then 
       plane_pts_mask =
          filter_by_normal(plane_eqn, plane_pts_mask, normal_threshold, normals)
    end
-   pts,npts = select_points(points, plane_pts_mask)
-   return pts, npts, plane_pts_mask
+   local pts,n_pts = select_points(points, plane_pts_mask)
+   return pts, n_pts, plane_pts_mask
 end
 
 function pf.score(points, plane_eqn)
@@ -137,63 +135,93 @@ function pf.get_vals_index(bmap,map)
             c = c + 1
             idx[1][c] = i
             idx[2][c] = j
-            val[c] = mx[i][j]
+            val[c] = map[i][j]
          end
       end
    end
    return idx, val, c
 end
 
+function pf.get_max_val_index(map)
+   local v2,idx2 = map:max(1):max(2)
+   local v1,idx1 = map:max(2):max(1)
+   v1 = v1:squeeze()
+   v2 = v2:squeeze()
+   idx1 = idx1:squeeze()
+   idx2 = idx2:squeeze()
+   if v1 ~= v2 then 
+      print(idx1, idx2, v1, v2)
+      error("something is very wrong") end
+   return torch.Tensor({idx1,idx2}), v1
+end
+
+function pf.get_mask(points, plane_eqn, threshold, normal_filter, normal_threshold, normals)
+   local pts, n_pts, mask =
+      find_points_explained_by_plane(points, plane_eqn, threshold, 
+                                     normal_filter, normal_threshold, normals)
+   return mask
+end
+
 function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_filter,normal_threshold,normals)
    -- compute overlap between points in each plane
+   p1.mask = p1.mask or get_mask(points,p1.eqn,threshold,normal_filter,normal_threshold,normals)
+   p2.mask = p2.mask or get_mask(points,p2.eqn,threshold,normal_filter,normal_threshold,normals)
+
+   -- if (p1.mask:sum() ~= p1.n_pts) then 
+   --    log.trace("new thres: ", p1.mask:sum(),"old: ", p1.n_pts)
+   --    -- error("recreating points explained by plane")
+   -- end
+
+   -- if (p2.mask:sum() ~= p2.n_pts) then 
+   --    log.trace("new thres: ", p2.mask:sum(),"old: ", p2.n_pts)
+   --    -- error("recreating points explained by plane")
+   -- end
+
    local intersection_mask = torch.cmul(p1.mask,p2.mask)
    local n_intersection    = intersection_mask:sum()
    local union_mask        = torch.add(p1.mask,p2.mask):gt(0)
    local n_union           = union_mask:sum()
-   local p_bigger          = p1.npts >= p2.npts and p1 or p2
-   local p_smaller         = p1.npts <  p2.npts and p1 or p2
+   local p_bigger          = p1.n_pts >= p2.n_pts and p1 or p2
+   local p_smaller         = p1.n_pts <  p2.n_pts and p1 or p2
    
-   local p_merge = nil
+   local p_merge      = nil
    local combo_string = "not combined"
-   local score_data = 
-      string.format("large_plane: %d %f small_plane: %d %f ",
-                    p_bigger.npts, p_bigger.score, p_smaller.npts, p_smaller.score)
+   local score_data  = { large_plane_npts  = p_bigger.n_pts, 
+                         large_plane_score = p_bigger.score, 
+                         small_plane_npts  = p_smaller.n_pts, 
+                         small_plane_score = p_smaller.score,
+                         n_intersection    = n_intersection,
+                         n_union           = n_union
+   }
+
 
    -- test 1: no intersection return nil
    -- the intersection must cover some percent of the smaller patch
-   if n_intersection < intersection_threshold * p_smaller.npts then 
+   if n_intersection < intersection_threshold * p_smaller.n_pts then 
       combo_string = "not combining: no intersection"
-      print(" ** " .. combo_string)
-      print("    " .. score_data)
       return nil, combo_string, score_data 
    end
 
    -- test 2: total intersection return bigger (TODO: could check normal and "carve" into larger plane)
-   if n_intersection > (1 - intersection_threshold) * p_smaller.npts then 
+   if n_intersection > (1 - intersection_threshold) * p_smaller.n_pts then 
       combo_string = "combining larger subsumes smaller"
-      print(" ** " .. combo_string)
-      print("    " .. score_data)
       return p_bigger , combo_string, score_data
    end
 
    -- test 3: plane normals beyond threshold
-   norm_diff = p1.eqn[{{1,3}}] - p2.eqn[{{1,3}}]
-   norm_dist = math.sqrt(norm_diff:cmul(norm_diff):sum())
+   local norm_diff = p1.eqn[{{1,3}}] - p2.eqn[{{1,3}}]
+   local norm_dist = math.sqrt(norm_diff:cmul(norm_diff):sum())
    if norm_dist > normal_threshold then 
       combo_string = "not combining: normals beyond threshold"
-      print(" ** " .. combo_string)
-      print("    " .. score_data)
       return nil, combo_string, score_data 
    end
 
    --test 4: harder tests about fitting planes on different sets
    -- points in union and intersect
-   printf("  + testing merge npts: %d intersection %d union bigger patch : %d smaller: %d",
-          n_intersection, n_union, p_bigger.npts, p_smaller.npts)
-   printf("  - %s", score_data)
+   -- print(score_data)
 
-   local union_pts, union_npts = select_points(points,union_mask)
-   local inter_pts, inter_npts = select_points(points,intersection_mask)
+   local union_pts, union_n_pts = select_points(points,union_mask)
+   local inter_pts, inter_n_pts = select_points(points,intersection_mask)
 
    -- fit planes to union and intersect
    local union_plane_eqn = fit_plane(union_pts)
@@ -203,49 +231,57 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
    local union_score = score(union_pts, union_plane_eqn)
    local inter_score = score(inter_pts, inter_plane_eqn)
 
-   local new_union_pts,new_union_npts,new_union_plane_pts_mask,new_union_score
+   -- TODO no locals just store everying in table 
+   score_data.union_n_pts     = union_n_pts
+   score_data.union_score     = union_score
+   score_data.union_plane_eqn = union_plane_eqn
+   score_data.inter_n_pts     = inter_n_pts
+   score_data.inter_score     = inter_score
+   score_data.inter_plane_eqn = inter_plane_eqn
+
+   local new_union_pts,new_union_n_pts,new_union_plane_pts_mask,new_union_score
    -- find set of points (from all points) close to the new planes and score
    if (union_score < threshold) then
-      new_union_pts,new_union_npts, new_union_plane_pts_mask =
+      new_union_pts,new_union_n_pts, new_union_plane_pts_mask =
          find_points_explained_by_plane(points,union_plane_eqn,threshold, 
                                         normal_filter, normal_threshold, normals)
       new_union_score = score(new_union_pts, union_plane_eqn)
       printf("  - plane fit on union is good %f and fits %d with score %f:",
-             union_score, new_union_npts, new_union_score )
-      score_data = string.format("%s union: %f %d %f",
-                                 score_data, union_score, new_union_npts, new_union_score)
+             union_score, new_union_n_pts, new_union_score )
+      score_data.exp_union_score = new_union_score
+      score_data.exp_union_n_pts = new_union_n_pts
    end
 
-   local new_inter_pts,new_inter_npts,new_inter_plane_pts_mask, new_inter_score
+   local new_inter_pts,new_inter_n_pts,new_inter_plane_pts_mask, new_inter_score
    if (inter_score < threshold) then
-      new_inter_pts,new_inter_npts, new_inter_plane_pts_mask = 
+      new_inter_pts,new_inter_n_pts, new_inter_plane_pts_mask = 
          find_points_explained_by_plane(points, inter_plane_eqn, threshold, 
                                         normal_filter, normal_threshold, normals)
       new_inter_score = score(new_inter_pts, inter_plane_eqn)
       printf("  - plane fit on inter is good %f and fits %d with score %f:",
-             inter_score, new_inter_npts, new_inter_score)
-      score_data = string.format("%s intersection: %f %d %f", 
-                                 score_data, inter_score, new_inter_npts, new_inter_score)
+             inter_score, new_inter_n_pts, new_inter_score)
+      score_data.exp_inter_score = new_union_score
+      score_data.exp_inter_n_pts = new_union_n_pts
    end
    
    if (union_score < inter_score)  then
       -- if score of plane fit to the union is lower then prefer the union
-      if new_union_pts and (new_union_score < threshold) and (new_union_npts > p_bigger.npts) then
+      if new_union_pts and (new_union_score < threshold) and (new_union_n_pts > p_bigger.n_pts) then
          printf("  * combining with plane fit on union b/c union_score lower")
          local mask = new_union_plane_pts_mask:resizeAs(p_bigger.mask)
          -- return merged
          p_merge = {eqn      = union_plane_eqn,
-                    npts     = new_union_npts,
+                    n_pts    = new_union_n_pts,
                     score    = new_union_score,
                     mask     = mask
          }
          combo_string = "inter b/c inter_score is lower"
-      elseif new_inter_pts and (new_inter_score < threshold) and (new_inter_npts > p_bigger.npts) then
+      elseif new_inter_pts and (new_inter_score < threshold) and (new_inter_n_pts > p_bigger.n_pts) then
          printf("  * combining with plane fit on intersection though union_score lower")
          local mask = new_inter_plane_pts_mask:resizeAs(p_bigger.mask)
          -- return merged
          p_merge = {eqn      = inter_plane_eqn,
-                    npts     = new_inter_npts,
+                    n_pts    = new_inter_n_pts,
                     score    = new_inter_score,
                     mask     = mask
          }
@@ -253,22 +289,22 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
       end
    else
       -- else score of intersection is lower and prefer intersection
-      if new_inter_pts and (new_inter_score < threshold) and (new_inter_npts > p_bigger.npts) then
+      if new_inter_pts and (new_inter_score < threshold) and (new_inter_n_pts > p_bigger.n_pts) then
          printf("  * combining with plane fit on intersection b/c inter_score is lower")
          local mask = new_inter_plane_pts_mask:resizeAs(p_bigger.mask)
          -- return merged
          p_merge = {eqn      = inter_plane_eqn,
-                    npts     = new_inter_npts,
+                    n_pts    = new_inter_n_pts,
                     score    = new_inter_score,
                     mask     = mask
          }
          combo_string = "inter b/c inter_score is lower"
-      elseif new_union_pts and (new_union_score < threshold) and (new_union_npts > p_bigger.npts) then
+      elseif new_union_pts and (new_union_score < threshold) and (new_union_n_pts > p_bigger.n_pts) then
          printf("  * combining with plane fit on union")
          local mask = new_union_plane_pts_mask:resizeAs(p_bigger.mask)
          -- return merged
          p_merge = {eqn      = union_plane_eqn,
-                    npts     = new_union_npts,
+                    n_pts    = new_union_n_pts,
                     score    = new_union_score,
                     mask     = mask
          }
@@ -283,13 +319,14 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
       end
    end
 
-   print(" ** " .. combo_string)
-   print("    " .. score_data)
    return p_merge, combo_string, score_data
 end
 
-function add_to_score(score_hash, score_str, score_data)
+function add_to_score(score_hash, score_str, score_data, i, j)
    score_hash = score_hash or {}
+   score_data = score_data or {}
+   score_data.from = i 
+   score_data.to   = j
    if score_hash[score_str] then 
       hash_bucket = score_hash[score_str]
       hash_bucket.cnt = hash_bucket.cnt + 1
@@ -309,34 +346,40 @@ end
 
 -- loops through planes in input_planes, combines them if the
 -- intersection is sufficient, and score of combined plane is better.
-function pf.combine_planes (points,input_planes,offset,threshold,
+function pf.combine_planes (points,input_planes,threshold,
                             normal_filter, normal_threshold, normals,
-                            score_keeper)
+                            score_keeper, loser_keeper)
    local n_input_planes = #input_planes
    printf("** Combining %d planes with threshold: %f",n_input_planes, threshold)
    local removed        = {}
-   local output_planes  = {}
-   for i = offset,n_input_planes-1 do
-      if not removed[i] then
-         p1      = input_planes[i]
-         for j = i+1,n_input_planes do
-            if not removed[j] then
-               p2  = input_planes[j]
-               p3,str,data  = merge_planes(points,threshold,p1,p2,0.5,normal_filter, normal_threshold, normals)
-               if p3 then
-                  p1 = p3 -- update the current plane
-                  removed[j] = true
-                  score_keeper = add_to_score(score_keeper, str, data)
-               end
-            end
+   local output_planes  = {input_planes[1]}
+   for i = 2,n_input_planes do
+      local p1         = input_planes[i]
+      local n_planes   = #output_planes
+      local not_merged = true
+      local j = 1
+      while not_merged and (j <= n_planes) do 
+         -- printf(" ++ testing %d to %d",i,j)
+         local p2  = output_planes[j]
+         local p3,str,data = 
+            merge_planes(points,threshold,p1,p2,0.1,normal_filter, normal_threshold, normals)
+         if p3 then
+            output_planes[j] = p3
+            not_merged = false
+            -- print("merged "..str)
+            add_to_score(score_keeper, str, data, i, j)
+         else
+            -- print("not merging "..str)
+            add_to_score(loser_keeper, str, data, i, j)
          end
-         -- if not removed add possibly updated p1 to output
+         j = j + 1
+      end
+      if not_merged then
+         -- print("not merged STOP")
+         -- if not removed add p1 to output
          table.insert(output_planes, p1)
       end
-   end
-   -- make sure we add the last one
-   if not removed[n_input_planes] then
-      table.insert(output_planes, input_planes[n_input_planes])
+      collectgarbage()
    end
    return output_planes, score_keeper
 end
@@ -385,29 +428,32 @@ end
 
 
 -- keep colors consistent
-torch.manualSeed(1)
-local colors = torch.rand(1000,3)
-torch.seed() -- make things random again
+local colors = image.colormap(1000)
 
-function pf.visualize_planes(planes, rgb)
-   rgb = rgb or torch.Tensor(3,planes[1].mask:size(1),planes[1].mask:size(2)):fill(0)
+function pf.visualize_planes(planes, height, width, rgb)
+   local pmask = planes[1].mask
+   height = height or pmask:size(1)
+   width = width or pmask:size(2)
+   rgb = rgb or torch.Tensor(3,height,width):fill(0)
 
    for i = #planes,1,-1 do
-      pl = planes[i]
-      m = pl.mask
-      rgb[1][m] = colors[i][1]
-      rgb[2][m] = colors[i][2]
-      rgb[3][m] = colors[i][3]
-
-      if pl.debug_info then
-         for j,p in pairs(pl.debug_info) do
-            if (p.win_size and p.win_idx) then
-               wx = p.win_size.x
-               wy = p.win_size.y
-               -- visualize saliency window white
-               draw_window(rgb,p.win_idx,wx,wy)
-            else
-               print("something wrong with ",pl)
+      local pl = planes[i]
+      local m = pl.mask
+      if not m then 
+         print("warning no mask for plane "..i)
+      else
+         rgb[1][m] = colors[i][1]
+         rgb[2][m] = colors[i][2]
+         rgb[3][m] = colors[i][3]
+         
+         if pl.debug_info then
+            for j,p in pairs(pl.debug_info) do
+               if (p.win_size and p.win_idx) then
+                  local wx = p.win_size.x
+                  local wy = p.win_size.y
+                  -- visualize saliency window white
+                  draw_window(rgb,p.win_idx,wx,wy)
+               end
             end
          end
       end
@@ -429,7 +475,7 @@ end
 
 -- function plane from seed
 -- output: plane or error_flag
-dbg_count = 0
+local dbg_count = 0
 function pf.from_seed(...)
    local _, points, mask, threshold, min_points_for_seed, min_points_for_plane,
             expanded_set, 
@@ -490,10 +536,10 @@ function pf.from_seed(...)
 
    -- block for finding planes based on seed or from support of expanded set
    while true do -- this is a dummy block to avoid a string of nested ifs with breaks.
-      local seed_npts = mask:sum()
-      local mask_size = mask:size()
+      local seed_n_pts = mask:sum()
+      local mask_size  = mask:size()
       -- 1) 1st test: seed has a minimum number of points to form a plane
-      if ( seed_npts < 3) then
+      if ( seed_n_pts < 3) then
          error_string="not enough seed points"
          break
       end
@@ -509,13 +555,13 @@ function pf.from_seed(...)
          break
       end
       
-      local seed_explained_pts, seed_explained_npts, seed_explained_mask =
+      local seed_explained_pts, seed_explained_n_pts, seed_explained_mask =
          find_points_explained_by_plane(points, seed_plane_eqn, threshold, 
                                         normal_filter, normal_threshold, normals)
       
       -- 3) 3rd test: seed plane explains the minimum number of points. eg. could be 0 after an erosion
       
-      if seed_explained_npts < min_points_for_seed then
+      if seed_explained_n_pts < min_points_for_seed then
          error_string="seed explained points (after filtering) do not explain enough points for seed"
          break
       end
@@ -523,11 +569,11 @@ function pf.from_seed(...)
       local seed_explained_score = score(seed_explained_pts,seed_plane_eqn)
 
       -- 4) 4th test if seed explains enough points and points are below threshold we have a plane
-      if (seed_npts > min_points_for_seed) and (seed_explained_score < threshold) then
+      if (seed_n_pts > min_points_for_seed) and (seed_explained_score < threshold) then
          -- the plane from original seed that explains a minumum number of points
          current_plane =
             {eqn         = seed_plane_eqn,
-             npts        = seed_explained_npts,
+             n_pts       = seed_explained_n_pts,
              score       = seed_explained_score,
              mask        = seed_explained_mask:resize(mask_size),
              debug_info  = debug_info
@@ -539,7 +585,7 @@ function pf.from_seed(...)
             error_string="found plane"
          else
             error_string="no plane found. not testing expanded points"
-            printf(" - no plane found: seed npts: %d score: %f, %f", seed_npts, seed_score, seed_explained_score)
+            printf(" - no plane found: seed n_pts: %d score: %f, %f", seed_n_pts, seed_score, seed_explained_score)
          end
          break
       end
@@ -548,19 +594,19 @@ function pf.from_seed(...)
       -- expand support to all points explained by seed, to test a better plane
       local expanded_plane_eqn  = fit_plane(seed_explained_pts)
 
-      local expanded_set_pts, expanded_set_npts, expanded_set_mask =
+      local expanded_set_pts, expanded_set_n_pts, expanded_set_mask =
          find_points_explained_by_plane(points, expanded_plane_eqn, threshold, 
                                         normal_filter, normal_threshold, normals)
 
       -- 4) don't have a valid plane from seed or expanded set
-      if (expanded_set_npts < min_points_for_plane) and (seed_npts < min_points_for_plane) then
+      if (expanded_set_n_pts < min_points_for_plane) and (seed_n_pts < min_points_for_plane) then
          error_string = "plane fit on expanded set does not explain enough points for plane"
          break
       end
 
       -- 5) 5rd test plane fit on the expanded set.  Does it do better than plane fit on segment?
       --  5a) is it a good plane and better than what we have
-      if (expanded_set_npts < seed_npts) then
+      if (expanded_set_n_pts < seed_n_pts) then
          error_string="plane fit on expanded set explains fewer points than plane on seed"
          break
       end
@@ -575,7 +621,7 @@ function pf.from_seed(...)
 
       current_plane =
          {eqn        = expanded_plane_eqn,
-          npts       = expanded_set_npts,
+          n_pts      = expanded_set_n_pts,
           score      = expanded_set_score,
           mask       = expanded_set_mask:resize(mask_size),
           debug_info = debug_info
@@ -587,7 +633,7 @@ function pf.from_seed(...)
 end
 
 function pf.find_rotation_to_align_axis(norm)
-   local angle_az = geom.util.unit_cartesian_to_spherical_angles(planes[3].eqn)
+   local angle_az = geom.util.unit_cartesian_to_spherical_angles(norm)
    -- TODO check this again.  Disconnect btw. 2D projections and 3D.  I would have expected azimuth in first
    return geom.quaternion.from_euler_angle(torch.Tensor({0,angle_az[1]}))
 end
@@ -611,19 +657,19 @@ function pf.dump_pts(pts,fname)
 end
 
 -- align
-function pf.align_planes(planes,allpts)
-   maxv = -1
-   midx = 1
-   for i,p in pairs(planes) do
-      if (p.eqn[1] > maxv) and (p.npts > allpts:size(1)*0.01) then
+function pf.align_planes(_planes,_allpts)
+   local maxv = -1
+   local midx = 1
+   for i,p in pairs(_planes) do
+      if (p.eqn[1] > maxv) and (p.n_pts > _allpts:size(1)*0.01) then
          maxv = p.eqn[1] ;
          midx = i ;
       end
    end
 
-   pm = planes[midx]
-   quat = find_rotation_to_align_axis(pm.eqn)
-   aapts = axis_align(allpts,quat)
+   local pm    = _planes[midx]
+   local quat  = find_rotation_to_align_axis(pm.eqn)
+   local aapts = axis_align(_allpts,quat)
    return quat, aapts
 end
 
@@ -638,21 +684,21 @@ function pf.aligned_planes_to_obj (planes, aapts, quat, fname)
    io = require 'io'
    fname = fname or "planes"
 
-   objf = io.open(fname..".obj",'w')
+   local objf = io.open(fname..".obj",'w')
 
    -- loop through planes. rotate normals.  find bbx in plane. create rectangle.
    for i,p in pairs(planes) do
 
-      ppts = select_points(aapts,p.mask)
+      local ppts = select_points(aapts,p.mask)
       
-      pn = geom.quaternion.rotate(quat,p.eqn)
-      pcntr = ppts:mean(1):squeeze()
+      local pn = geom.quaternion.rotate(quat,p.eqn)
+      local pcntr = ppts:mean(1):squeeze()
       pn[4] = -pn[{{1,3}}] * pcntr
-      pmin = ppts:min(1):squeeze()
-      pmax = ppts:max(1):squeeze()
-      s = torch.sign(pn)
-      m = torch.abs(pn[{{1,3}}])
-      _,mi = m:max(1)
+      local pmin = ppts:min(1):squeeze()
+      local pmax = ppts:max(1):squeeze()
+      local s = torch.sign(pn)
+      local m = torch.abs(pn[{{1,3}}])
+      local _,mi = m:max(1)
       mi = mi:squeeze()
 
       if ((mi == 1) and (s[mi] > 0)) then
@@ -689,7 +735,7 @@ function pf.aligned_planes_to_obj (planes, aapts, quat, fname)
    end
 
    -- write faces
-   s = "f "
+   local s = "f "
    for i = 1,#planes*4 do
       s = string.format("%s %d",s,i)
       if (i%4) == 0 then

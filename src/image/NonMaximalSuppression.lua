@@ -25,8 +25,7 @@ function NMS:__init(win_width, win_height)
    self.off_width  = math.ceil(self.win_width/2)
    self.off_height = math.ceil(self.win_height/2)
 
-   self.ops = nn.Sequential()
-   self.ops:add(nn.SpatialMaxPooling(self.win_width,self.win_height,1,1))
+   self.ops = nn.SpatialMaxPooling(self.win_width,self.win_height,1,1)
 end
 
 function NMS:forward(input)
@@ -35,15 +34,23 @@ function NMS:forward(input)
       input:resize(util.util.add_slices(1,input:size()))
    end
    self.ops:forward(input)
-   local maxout = self.ops.output
+   local maxout     = self.ops.output
+   maxout = maxout[{{},{1,maxout:size(2)-1},{1,maxout:size(3)-1}}]
+   local out_height = self.off_height + maxout:size(2)-1
+   local out_width  = self.off_width  + maxout:size(3)-1
+   
    self.output = self.output or torch.Tensor(input:size())
    self.output:resize(input:size()):zero()
 
-   local ivals = input:narrow(2,self.off_height,maxout:size(2)):narrow(3,self.off_width,maxout:size(3))
-   local outnarrow = self.output:narrow(2,self.off_height,maxout:size(2)):narrow(3,self.off_width,maxout:size(3))
+   local ivals = 
+      input[{{},{self.off_height,out_height},{self.off_width,out_width}}]
+
+   local outnarrow  = 
+      self.output[{{},{self.off_height,out_height},{self.off_width,out_width}}]
+
    outnarrow:eq(ivals,maxout)
    outnarrow:cmul(ivals)
-   
-   return self.output
+
+   return self.output:squeeze()
    
 end
