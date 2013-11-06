@@ -22,8 +22,9 @@ cmd:option('-min_pts_for_plane', 900) -- 30x30 window is minimum
 cmd:option('-graph_merge_thres', 5)
 cmd:option('-scale_factor', 1.2)
 cmd:option('-n_scale', 5)
+cmd:option('-search_multi_scale_saliency', false)
 cmd:option('-normal_filter', true)
-cmd:option('-expanded_points', false)
+cmd:option('-expanded_set', false)
 cmd:option('-use_saliency', false)
 cmd:option('-normal_type', 'raw')
 cmd:option('-dummy',false)
@@ -55,24 +56,22 @@ min_points_for_plane  = tonumber(params.min_pts_for_plane)
 base_win      = math.floor(math.sqrt(min_points_for_seed))
 scale_factor  = tonumber(params.scale_factor)
 n_scale       = params.n_scale
+search_multi_scale_saliency = params.search_multi_scale_saliency
 
 -- flags
 normal_filter     = params.normal_filter
 erosion_filter    = false
-expanded_points   = params.expanded_points
+expanded_set      = params.expanded_set
 add_planes_bool   = params.add_planes
 combine_planes_every  = tonumber(params.combine_planes_every)
 use_saliency      = params.use_saliency
 normal_type       = params.normal_type
 
 for _,pcfile in pairs(pcfiles) do
-   local planes = {}
-   _G.test_planes = planes
+   local planes    = {}
+   _G.test_planes  = planes
    _G.error_counts = {}
-   _G.add_scores = {}
-   _G.cmb_scores = {}
-   _G.count    = 1
-   last_tested = 1
+   local count     = 1
 
    -- setup outfile naming
    out_dir = base_out_dir .. "/".. pcfile:gsub("[/%.]","_")
@@ -89,7 +88,8 @@ for _,pcfile in pairs(pcfiles) do
                            threshold, min_points_for_seed, min_points_for_plane)
 
    if normal_filter   then out_dir = out_dir .. string.format("_nf_%1.2f", normal_threshold)  end
-   if expanded_points then out_dir = out_dir .. "_exp" end
+   if expanded_set then out_dir = out_dir .. "_exp" end
+   if search_multi_scale_saliency then out_dir = out_dir .. "_multi_sal" end
    out_dir = out_dir .. "_normal_"..normal_type
    print("Making ".. out_dir)
    if not os.execute(string.format("mkdir -p %s", out_dir)) then
@@ -142,13 +142,22 @@ for _,pcfile in pairs(pcfiles) do
                                                            nscale=n_scale}
 
          patch_mask = valid:clone():zero()
+         search_scales = n_scale
+         if search_multi_scale_saliency then 
+            search_scales = 1
+         end
 
-         for scale = n_scale,1,-1 do
+         for scale = search_scales,1,-1 do
 
             -- TODO different x and y window sizes
             local final_win = base_win * scale_factor ^ (scale -1)
             -- find patches for initial candidate_planes
-            local inv_salient  = sc[scale]:clone()
+            local inv_salient  = nil
+            if search_multi_scale_saliency then 
+               inv_salient = salient:clone()
+            else
+               inv_salient = sc[scale]:clone()
+            end
 
             local max_saliency = inv_salient:max()
             inv_salient:add(-max_saliency):abs()
@@ -166,7 +175,7 @@ for _,pcfile in pairs(pcfiles) do
             while (n_patches > 1) do
 
                printf(" - %d patches left with window %d,%d",n_patches, final_win, final_win)
-               -- speed this up for single batch
+               -- find a single max value to process
                idx,val = plane_finder.get_max_val_index(mx)
                -- printf("max saliency = %f %f %f", mx:max(), mx[{idx[1],idx[2]}], val)
 
@@ -184,7 +193,7 @@ for _,pcfile in pairs(pcfiles) do
                      threshold            = threshold,
                      min_points_for_seed  = min_points_for_seed,
                      min_points_for_plane = min_points_for_plane,
-                     expanded_set         = explanded_set,
+                     expanded_set         = expanded_set,
                      normal_filter        = normal_filter,
                      normals              = allnrm,
                      normal_threshold     = normal_threshold,
@@ -358,14 +367,6 @@ for _,pcfile in pairs(pcfiles) do
       score_file:write(string.format("score mean %f min %f max %f \n",pstd:mean(),pstd:min(), pstd:max()))
       score_file:write(string.format("points explained %d/%d %2.1f%%\n",found_pts, total_pts, percent_found))
       score_file:write(string.format("time: %fs\n", toc*1e-3))
-      score_file:write("Add Scores:\n")
-      for str,tbl in pairs(add_scores) do
-         score_file:write(string.format("%s %d\n", str, tbl.cnt))
-      end
-      for str,tbl in pairs(cmb_scores) do
-         score_file:write(string.format("%s %d\n", str, tbl.cnt))
-      end
-
       score_file:close()
       os.execute("cat "..score_fname)
 

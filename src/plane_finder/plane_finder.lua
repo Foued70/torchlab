@@ -580,9 +580,9 @@ function pf.from_seed(...)
             }
       end
 
-      if not expanded_points then
+      if not expanded_set then
          if current_plane then 
-            error_string="found plane"
+            error_string="found plane. not testing expanded points"
          else
             error_string="no plane found. not testing expanded points"
             printf(" - no plane found: seed n_pts: %d score: %f, %f", seed_n_pts, seed_score, seed_explained_score)
