@@ -555,7 +555,7 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
             difft = difft+2*PI;
           }
           
-          if (difft*dir > 0)
+          if (difft*dir >= 0)
           {
           
             xque = xyz[offset0+sh*width+sw];
@@ -581,6 +581,10 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
             }
             ph = sh;
           }
+          /*else
+          {
+            printf("keep looking %d %d %f %f\n",h,w,tcur,tque);
+          }*/
           s++;
         }
         step_leftright[offset0+h*width+w] = sh;
@@ -1556,4 +1560,149 @@ int phi_map_smooth(double* smoothed_phi_map, double* phi_map, char * extant_map,
       smoothed_phi_map[index_curr] = phi_mean;
     }
   }
+}
+
+
+
+int remap_points(double* depth_sum, double* depth_num, double* phi_new, double* theta_new,
+                 double* depth_old, char* rmask_old, double* phi_old, double* theta_old,
+                 int hght_old, int wdth_old, int hght_new, int wdth_new,
+                 double phi_max, double phi_stp, double theta_max, double theta_stp)
+{
+  int i,j,k, ci,ni,cj,nj, off0,off1, r,c, ind_tmp, ind_new;
+  int ind[2][2];
+  double p[2][2];
+  double t[2][2];
+  double d[2][2];
+  int exnum;
+  double td, t_tmp,p_tmp,d_tmp, t_lo,t_hi,p_lo,p_hi, d_avg;
+  int hc,wc, hlo,hhi,wlo,whi, h,w;
+  int flag;
+  
+  for(i = 0; i < hght_old-1; i++)
+  {
+    ci = i;
+    ni = i+1; 
+    off0 = ci*wdth_old;
+    off1 = ni*wdth_old;
+    
+    for(j = 0; j< wdth_old; j++)
+    {
+    
+      cj = j;
+      nj = (j+1) % wdth_old;
+      
+      ind[0][0] = off0 + cj;
+      ind[0][1] = off0 + nj;
+      ind[1][0] = off1 + cj;
+      ind[1][1] = off1 + nj;
+      
+      exnum = 0;
+      p_lo =  2*PI;
+      p_hi = -2*PI;
+      t_lo =  2*PI;
+      t_hi = -2*PI;
+      d_avg = 0;
+      
+      for (r=0;r<2;r++)
+      {
+        for (c=0;c<2;c++)
+        {
+        
+          ind_tmp = ind[r][c];
+          
+          if (rmask_old[ind_tmp]==0)
+          {
+            exnum++;
+            
+            p_tmp = phi_old[ind_tmp];
+            t_tmp = theta_old[ind_tmp];
+            d_tmp = depth_old[ind_tmp];
+          
+            if (c == 1)
+            {
+              td = t_tmp-t[r][c-1];
+              if (td > PI || (td < 0 && td > -PI))
+              {
+                p_tmp = p[r][c-1];
+                t_tmp = t[r][c-1];
+                d_tmp = d[r][c-1];
+              }
+            }
+            
+            hc = (phi_max - p_tmp)/phi_stp;
+            wc = (theta_max - t_tmp)/theta_stp;
+            
+            hlo = MAX(0, floor(hc));
+            hhi = MIN(hght_new-1, ceil(hc));
+            wlo = MAX(0, floor(wc));
+            whi = MIN(wdth_new-1, ceil(wc));
+            
+            for (h=hlo;h<=hhi;h++)
+            {
+              for(w=wlo;w<=whi;w++)
+              {
+                ind_new = h*wdth_old+w;
+                depth_num[ind_new] = depth_num[ind_new]+1;
+                depth_sum[ind_new] = depth_sum[ind_new]+d_tmp;
+              }
+            }
+            
+            if (p_tmp < p_lo)
+            {
+              p_lo = p_tmp;
+            }
+            if (p_tmp > p_hi)
+            {
+              p_hi = p_tmp;
+            }
+            if (t_tmp < t_lo)
+            {
+              t_lo = t_tmp;
+            }
+            if (t_tmp > t_hi)
+            {
+              t_hi = t_tmp;
+            }
+            
+            d_avg = d_avg+d_tmp;
+          
+          }
+          else
+          {
+            p_tmp = 0;
+            t_tmp = 0;
+            d_tmp = 0;
+          }
+          
+          p[r][c] = p_tmp;
+          t[r][c] = t_tmp;
+          d[r][c] = d_tmp;
+          
+        }
+      }
+      
+      if ((t_hi - t_lo <= 1.5*theta_stp) && (p_hi - p_lo <= 1.5*phi_stp))
+      {
+        d_avg = d_avg/exnum;
+        hlo = MAX(0, floor((phi_max - p_hi)/phi_stp));
+        hhi = MIN(hght_new-1, ceil((phi_max - p_lo)/phi_stp));
+        wlo = MAX(0, floor((theta_max - t_hi)/theta_stp));
+        whi = MIN(wdth_new-1, ceil((theta_max - t_lo)/theta_stp));
+        
+        for (h=hlo;h<=hhi;h++)
+        {
+          for(w=wlo;w<=whi;w++)
+          {
+            ind_new = h*wdth_old+w;
+            depth_num[ind_new] = depth_num[ind_new]+1;
+            depth_sum[ind_new] = depth_sum[ind_new]+d_avg;
+          }
+        }
+      }
+      
+      
+    }
+  }
+  return 0;
 }
