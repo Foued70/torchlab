@@ -121,7 +121,8 @@ for i = 1,#pl do
          -- normalize
          p.res_cum[t]:div(n_pts)
          aoc = p.res_cum[t]:sum()/100
-         normal_data_str = string.format("normal thres: %2.3f n_pts: %6d area: %1.3f", normal_thres[t-1], n_pts,aoc)
+         normal_data_str = string.format("normal thres: %2.3f n_pts: %6d area: %1.3f", 
+                                         normal_thres[t-1], n_pts,aoc)
          rout:write("# " .. normal_data_str .."\n")
          for j = 1,100 do
             rout:write(string.format("%f %f\n",p.res_cum[1][j],p.res_cum[t][j]))
@@ -145,6 +146,7 @@ for i = 1,#pl do
       tcount = 1
       p.nrm_cum = torch.Tensor(1+n_secondary_thres,100)
       r = torch.linspace(0.001,2)
+      n_secondary_thres = 11
       residual_thres = torch.linspace(0,10,n_secondary_thres)
       residual_thres:apply(function (x) return 2^x end)
       p.nrm_cum[1] = r
@@ -166,11 +168,11 @@ for i = 1,#pl do
             out[mask:reshape(mask:nElement())] = normal_dist_filtered
             out:resize(map_height,map_width)
             image.save(
-               string.format("normal_dist_%03d_nthres_%f.png",
+               string.format("normal_dist_%03d_rthres_%05d.png",
                              i,residual_thres[ni]),
                image.combine(torch.log1p(out)))
             image.save(
-               string.format("normal_dist_%03d_nthres_%f_thres_%2.4f.png",
+               string.format("normal_dist_%03d_rthres_%05d_nthres_%2.4f.png",
                              i,residual_thres[ni],r[15]),
                image.combine(out:gt(r[15])))
          else
@@ -201,7 +203,8 @@ for i = 1,#pl do
          p.nrm_cum[t]:div(n_pts)
          aoc = p.nrm_cum[t]:sum()/100
          normal_data_str = 
-            string.format("residual thres: %2.3f n_pts: %6d area: %1.3f", residual_thres[t-1], n_pts,aoc)
+            string.format("distance from plane: %5d mm n_pts: %6d area: %1.3f", 
+                          residual_thres[t-1], n_pts,aoc)
          rout:write("# " .. normal_data_str .."\n")
          for j = 1,100 do
             rout:write(string.format("%f %f\n",p.nrm_cum[1][j],p.nrm_cum[t][j]))
