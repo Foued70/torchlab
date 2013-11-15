@@ -1,3 +1,6 @@
+require 'gnuplot'
+gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")
+gnuplot.setterm("wxt")
 io = require 'io'
 -- plane_finder = require './plane_finder'
 src_dir = "arcs/motor-unicorn-0776/source/faro/"
@@ -11,65 +14,116 @@ _G.pl = torch.load("output/arcs_temporary-circle-6132_source_po_scan_a_001_sweep
 
 -- _G.pls = plane_finder.Planes.new(pl)
 
-_G.xyz_map   = pc:get_xyz_map()
+_G.xyz_map    = pc:get_xyz_map()
 _G.map_height = xyz_map:size(2)
 _G.map_width  = xyz_map:size(3)
 _G.points     = xyz_map:reshape(xyz_map:size(1),map_height*map_width)
-_G.points_NxD = points:t():contiguous()
 
 _G.normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize()
 normals:resize(3,map_height*map_width)
-_G.normals_NxD = normals:t():contiguous()
 
-p = pl[1]
+_G.ss = nn.SoftShrink(0.1)
 
-_G.sig = nn.Sigmoid()
+score_res_thres  = 100
+score_norm_thres = math.pi/3
 
-res_scale = 100
-nrm_scale = 0.4
+for pi = 1,#pl do 
+   p = pl[pi]
+   res_scale = score_res_thres
+   nrm_scale = score_norm_thres
 
-p.residuals = geom.linear_model.residual(points_NxD,p.eqn)
+   -- class iterated reweighted ?   
+   local residuals   = geom.linear_model.residual_fast(points,p.eqn)
+   local cosine_dist = plane_finder.util.cosine_distance(normals:t(),p.eqn)
+   -- TODO score 2D 
+   -- plane_finder.util.score_plane(p.eqn, points, score_res_thres)
+   --       plane_finder.util.score_plane_with_normal_threshold(
+   local orig_s, orig_x, orig_c, orig_n_pts = 
+      plane_finder.util.score_plane_2D(
+         p.eqn, points, normals, score_res_thres,  score_norm_thres, n_measurements)
+   local curves = {{string.format("iteration: %d thres: %2.1f mm norm: %0.3f rad",
+                                  0 , res_scale,nrm_scale),orig_c }}
+   local prev_s     = orig_s
+   local prev_n_pts = orig_n_pts
+   local doresidual = false
 
--- sort of kernel. Could learn thresholds for planes and normals
--- except that we don't have to because there are plausible real world thresholds
-_G.x = p.residuals:clone()
-x:div(res_scale)
-x:resize(map_height,map_width)
-_G.residual_out = sig:forward(x):clone()
-
--- invert abs of sigmoid (0 -> 1)
-residual_out:add(-0.5):abs():mul(-2):add(1)
-
-_G.normal_diff = plane_finder.util.compute_normal_diff(p.eqn, normals_NxD)
-normal_diff:div(nrm_scale)
-normal_diff:resize(map_height,map_width)
-_G.normal_out = sig:forward(normal_diff):clone()
--- invert abs of sigmoid (0 -> 1)
-normal_out:add(-0.5):abs():mul(-2):add(1)
-
--- TODO some mixing ? alpha = 0.5
-combo = residual_out:clone()
-combo:cmul(normal_out)
-
-ss = nn.SoftShrink(0.7)
-_G.combo_out = ss:forward(combo):clone()
-
--- batch with neighborhood distance
-
-mask = combo_out:gt(0)
-
-filtered_points = torch.Tensor(3,mask:sum())
-for i = 1,3 do 
-   filtered_points[i] = points[i][mask] 
+   -- TODO other convergence
+   for li = 1,128 do 
+      collectgarbage()
+      -- TODO don't need to recompute all this ... put in get_nbhd function.
+      local x = residuals:clone()
+      x:div(res_scale)
+      x:resize(map_height,map_width)
+      local residual_out = util.stats.gaussian_kernel(x)
+      
+      local n = cosine_dist:clone()
+      n:div(nrm_scale)
+      n:resize(map_height,map_width)
+      local normal_out = util.stats.gaussian_kernel(n)
+      
+      -- TODO some mixing ? alpha = 0.5
+      combo = residual_out:clone()
+      combo:cmul(normal_out)
+      local combo_out = ss:forward(combo):clone()
+      
+      -- batch with neighborhood distance
+      mask = combo_out:gt(0)
+      npts = mask:sum()
+      if npts < 100 then
+         printf("only %d points in neighborhood. Stopping",npts)
+         break
+      else
+         filtered_points = torch.Tensor(3,npts)
+         for i = 1,3 do 
+            filtered_points[i] = points[i][mask] 
+         end
+         w    = combo_out[mask]
+         peqn = geom.linear_model.fit_weighted(filtered_points, w)
+         geom.linear_model.normal_towards_origin(peqn)
+         -- DONE score with 2D
+         -- plane_finder.util.score_plane_with_normal_threshold(
+         new_s, new_x, new_c, new_n_pts = 
+            plane_finder.util.score_plane_2D(
+               peqn, points, normals, score_res_thres,  score_norm_thres, n_measurements)
+         
+         if new_s > prev_s then
+            printf("[%d][%d] score old: %f (%d) new: %f (%d) orig: %f (%d)",
+                   pi,li,prev_s,prev_n_pts,new_s,new_n_pts,orig_s,orig_n_pts)
+            table.insert(curves, {string.format("iteration: %d thres: %2.1f mm norm: %0.3f rad",
+                                                li, res_scale,nrm_scale),new_c})
+            print(" - updating plane")
+            prev_s = new_s
+            prev_c = new_c
+            prev_n_pts = new_n_pts
+            p.eqn = peqn
+            -- recompute if we change the equation
+            residuals = geom.linear_model.residual_fast(points,p.eqn)
+            inum = string.format("%03d_%03d", pi, li)
+            score = string.format("s%f_r%2.1f_n%0.3f",new_s,res_scale,nrm_scale)
+            image.save(string.format("%s_%s_residual.png",inum,score),    image.combine(residual_out))
+            image.save(string.format("%s_%s_normal.png",inum,score),      image.combine(normal_out))
+            image.save(string.format("%s_%s_neighborhood.png",inum,score),image.combine(combo_out))
+         elseif doresidual and (res_scale > 1) then 
+            res_scale = res_scale * 0.7
+            printf("Narrowing nbd : res %f mm", res_scale)
+            doresidual = not doresidual
+         elseif (nrm_scale > 0.008) then 
+            nrm_scale = nrm_scale * 0.7
+            printf("Narrowing nbd : normal %f radians", nrm_scale)
+            doresidual = not doresidual
+         else
+            break
+         end
+      end
+   end
+   for i,c in pairs(curves) do 
+      gnuplot.pngfigure(string.format("%03d_%03d_plot.png",pi,i))
+      gnuplot.title(c[1])
+      gnuplot.xlabel("residual threshold in mm")
+      gnuplot.ylabel("normal threshold in radians")
+      gnuplot.zlabel("number of points withing scoring thresholds")
+      -- gnuplot.raw("set key bottom right")
+      gnuplot.splot(c[2])
+      gnuplot.close()
+   end
 end
-w = combo_out[mask]
-peqn = geom.linear_model.fit_weighted(filtered_points, w)
-
-s,c = plane_finder.util.score_plane(pl[1].eqn,points_NxD, 100)
-snew, cnew = plane_finder.util.score_plane(peqn,points_NxD, 100)
-
-print("score old: "..s.." new: "..snew)
-require 'gnuplot'
-gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")
-gnuplot.setterm("wxt")
-gnuplot.plot({{c:t()},{cnew:t()}})
