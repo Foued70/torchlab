@@ -22,16 +22,17 @@ _G.points     = xyz_map:reshape(xyz_map:size(1),map_height*map_width)
 _G.normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize()
 normals:resize(3,map_height*map_width)
 
-res_thres  = 100
-res_decr   = 0.7
-res_stop   = 1
-norm_thres = math.pi/3
-norm_decr  = 0.7
-norm_stop  = math.pi/360
 
-itrw = plane_finder.IterativeReweighting.new(
-   res_thres,res_decr,res_stop,norm_thres,norm_decr,norm_stop)
-itrw.save_images = true
+itrw = plane_finder.IterativeReweightedFit.new{
+   residual_thres = 100,
+   residual_decr  = 0.7,
+   residual_stop  = 1,
+   normal_thres   = math.pi/3,
+   normal_decr    = 0.7,
+   normal_stop    = math.pi/360
+}
+
+-- itrw.save_images = true
 
 for pi = 1,#pl do 
    p = pl[pi]

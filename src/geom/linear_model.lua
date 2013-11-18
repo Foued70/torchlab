@@ -1,12 +1,40 @@
+-- funcs from stats
+remove_mean         = util.stats.remove_mean
+min_pca_svd         = util.stats.min_pca_svd
+min_pca_eig         = util.stats.min_pca_eig
+covariance          = util.stats.covariance
+weighted_covariance = util.stats.weighted_covariance
+
 Class()
 -- compute weights + bias 
 -- eg: fit a plane : ax + by + cz + d = 0 
 
 function fit(pts)
    -- pts NxD (D == 3 for 3D points)
-   local d = pts:size(2)
-   local pts,m = remove_mean(pts) 
-   local n = util.stats.min_pca_svd(pts)
+   local d        = pts:size(2)
+   local pts,m    = remove_mean(pts,2) 
+   local n        = min_pca_svd(pts)
+   local model    = torch.Tensor(d+1)
+   model[{{1,d}}] = n
+   model[d+1]     = - ( n * m:squeeze())
+   return model 
+end
+
+function fit_eig (pts)
+   local c,m      = covariance(pts)
+   local d        = c:size(1)
+   local n        = min_pca_eig(c)
+   local model    = torch.Tensor(d+1)
+   model[{{1,d}}] = n
+   model[d+1]     = - ( n * m:squeeze())
+   return model 
+end
+
+function fit_weighted(pts, w)
+   w = w or torch.ones(pts[1]:size()):div(pts[1]:nElement())
+   local c,m      = weighted_covariance(pts,w)
+   local d        = c:size(1)
+   local n        = min_pca_eig(c)
    local model    = torch.Tensor(d+1)
    model[{{1,d}}] = n
    model[d+1]     = - ( n * m:squeeze())
@@ -47,23 +75,3 @@ function residual_fast(pts,model)
    return res
 end
 
-function fit_eig (pts)
-   local c,m      = util.stats.covariance(pts)
-   local d        = c:size(1)
-   local n        = util.stats.min_pca_eig(c)
-   local model    = torch.Tensor(d+1)
-   model[{{1,d}}] = n
-   model[d+1]     = - ( n * m:squeeze())
-   return model 
-end
-
-function fit_weighted(pts, w)
-   w = w or torch.ones(pts[1]:size()):div(pts[1]:nElement())
-   local c,m      = util.stats.weighted_covariance(pts,w)
-   local d        = c:size(1)
-   local n        = util.stats.min_pca_eig(c)
-   local model    = torch.Tensor(d+1)
-   model[{{1,d}}] = n
-   model[d+1]     = - ( n * m:squeeze())
-   return model 
-end

@@ -1,10 +1,19 @@
 Class()
 
-function remove_mean (pts)
-   local d    = pts:size(1)
-   local n    = pts:nElement()/d
-   local pts  = pts:clone():reshape(d,n)
-   local m    = pts:mean(2)
+function remove_mean (pts,dim)
+   dim = dim or 1
+   local d,n,m
+   if dim == 1 then    
+      d    = pts:size(dim)
+      n    = pts:nElement()/d
+      pts  = pts:clone():reshape(d,n)
+      m    = pts:mean(2)
+   elseif dim == pts:nDimension() then
+      d    = pts:size(dim)
+      n    = pts:nElement()/d
+      pts  = pts:clone():reshape(n,d)
+      m    = pts:mean(1)
+   end
    pts:add(-1,m:expandAs(pts))
    return pts,m
 end
@@ -49,8 +58,9 @@ function weighted_covariance(pts, w)
    return C,m
 end
 
+-- expects NxD for svd
 function min_pca_svd (pts, d)
-   d = d or pts:nDimension() -- TODO allow other dimensions
+   d = d or pts:size(pts:nDimension()) -- TODO allow other dimensions
    local n = pts:nElement()/d
    pts = pts:reshape(n,d)
    -- svd expects pts NxD which is opposite of what we usually want

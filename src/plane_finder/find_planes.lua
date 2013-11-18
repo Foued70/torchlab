@@ -1,3 +1,6 @@
+require 'gnuplot'
+gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")
+gnuplot.setterm("wxt")
 pi = math.pi
 pi2 = pi/2
 io               = require 'io'
@@ -6,7 +9,7 @@ imgraph          = require "../imgraph/init"
 saliency         = require "../image/saliency"
 fit_plane        = geom.linear_model.fit
 compute_residual = geom.linear_model.residual
-plane_finder     = require './plane_finder.lua'
+plane_finder_utils     = require './plane_finder.lua'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -25,6 +28,7 @@ cmd:option('-n_scale', 5)
 cmd:option('-search_multi_scale_saliency', false)
 cmd:option('-normal_filter', true)
 cmd:option('-expanded_set', false)
+cmd:option('-iterative', false)
 cmd:option('-use_saliency', false)
 cmd:option('-normal_type', 'raw')
 cmd:option('-dummy',false)
@@ -44,7 +48,7 @@ base_out_dir = params.out_dir
 max_radius      = 25000
 
 threshold             = tonumber(params.thres)
-normal_threshold      = math.cos(math.pi/6)
+normal_threshold      = 0.2 -- math.cos(math.pi/6)
 graph_merge_threshold = tonumber(params.graph_merge_thres)
 
 
@@ -62,15 +66,36 @@ search_multi_scale_saliency = params.search_multi_scale_saliency
 normal_filter     = params.normal_filter
 erosion_filter    = false
 expanded_set      = params.expanded_set
+iterative_reweight = params.iterative
 add_planes_bool   = params.add_planes
 combine_planes_every  = tonumber(params.combine_planes_every)
 use_saliency      = params.use_saliency
 normal_type       = params.normal_type
 
-for _,pcfile in pairs(pcfiles) do
+
+finder = plane_finder.Finder.new{
+   threshold            = threshold,
+   min_points_for_seed  = min_points_for_seed,
+   min_points_for_plane = min_points_for_plane,
+   normal_filter        = normal_filter,
+   normal_threshold     = normal_threshold
+}
+
+itrw = plane_finder.IterativeReweightedFit.new{
+   residual_thres = 100,
+   residual_decr  = 0.7,
+   residual_stop  = 1,
+   normal_thres   = math.pi/3,
+   normal_decr    = 0.7,
+   normal_stop    = math.pi/360
+}
+
+itrw.save_images = true
+
+for pci,pcfile in pairs(pcfiles) do
    local planes    = {}
-   _G.test_planes  = planes
-   _G.error_counts = {}
+   test_planes  = planes
+   error_counts = {}
    local count     = 1
 
    -- setup outfile naming
@@ -88,7 +113,8 @@ for _,pcfile in pairs(pcfiles) do
                            threshold, min_points_for_seed, min_points_for_plane)
 
    if normal_filter   then out_dir = out_dir .. string.format("_nf_%1.2f", normal_threshold)  end
-   if expanded_set then out_dir = out_dir .. "_exp" end
+   if expanded_set then out_dir = out_dir .. "_expanded" end
+   if iterative_reweight then out_dir = out_dir .. "_iterative" end
    if search_multi_scale_saliency then out_dir = out_dir .. "_multi_sal" end
    out_dir = out_dir .. "_normal_"..normal_type
    print("Making ".. out_dir)
@@ -106,9 +132,9 @@ for _,pcfile in pairs(pcfiles) do
       -- load pointcloud
       _G.pc     = PointCloud.PointCloud.new(pcfile, max_radius)
       xyz_map   = pc:get_xyz_map()
-      allpts    = xyz_map:reshape(xyz_map:size(1),xyz_map:size(2)*xyz_map:size(3)):t():contiguous()
-      _G.test_points = allpts
-
+      points    = xyz_map
+      allpts    = points:reshape(xyz_map:size(1),xyz_map:size(2)*xyz_map:size(3)):t():contiguous()
+      
       normals,dd,phi,theta,norm_mask = pc:get_normal_map()
       if (normal_type == "var") then
          normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize()
@@ -123,12 +149,11 @@ for _,pcfile in pairs(pcfiles) do
       allnrm[{{1,3},{}}]:copy(normals)
       -- allnrm[{4,{}}]:copy(dd)
       allnrm = allnrm:t():contiguous()
-      _G.test_nrm = allnrm
       collectgarbage()
 
       -- norm_mask == 1 where normals are bad, our mask is where pts are valid
-      _G.initial_valid = norm_mask:eq(0)
-      _G.valid = initial_valid:clone()
+      initial_valid = norm_mask:eq(0)
+      valid = initial_valid:clone()
 
       local imgh = normals:size(2)
       local imgw = normals:size(3)
@@ -176,34 +201,22 @@ for _,pcfile in pairs(pcfiles) do
 
                printf(" - %d patches left with window %d,%d",n_patches, final_win, final_win)
                -- find a single max value to process
-               idx,val = plane_finder.get_max_val_index(mx)
-               -- printf("max saliency = %f %f %f", mx:max(), mx[{idx[1],idx[2]}], val)
+               idx,val = plane_finder_utils.get_max_val_index(mx)
 
                -- remove this value whether accepted or not
-               bbx = plane_finder.compute_bbx(idx,final_win,final_win,imgh,imgw)
+               bbx = plane_finder_utils.compute_bbx(idx,final_win,final_win,imgh,imgw)
 
                patch_mask:fill(0)
                patch_mask[{{bbx[1],bbx[2]},{bbx[3],bbx[4]}}] = 1
                patch_mask:cmul(valid)
 
+               debug_info = {{
+                                win_idx  = idx[{{},i}]:clone(),
+                                win_size = {x=final_win, y=final_win}
+                             }}
+
                current_plane, error_string =
-                  plane_finder.from_seed{
-                     points               = allpts,
-                     mask                 = patch_mask,
-                     threshold            = threshold,
-                     min_points_for_seed  = min_points_for_seed,
-                     min_points_for_plane = min_points_for_plane,
-                     expanded_set         = expanded_set,
-                     normal_filter        = normal_filter,
-                     normals              = allnrm,
-                     normal_threshold     = normal_threshold,
-                     erosion_filter       = erosion_filter,
-                     erosion_function     = erodeDilate,
-                     debug_info           = {{
-                                                win_idx  = idx[{{},i}]:clone(),
-                                                win_size = {x=final_win, y=final_win}
-                                             }}
-                  }
+                  finder:validate_seed(allpts, allnrm, patch_mask, debug_info)
 
                -- clear mx so we don't check the same patch twice
 
@@ -211,19 +224,40 @@ for _,pcfile in pairs(pcfiles) do
                n_patches = mx:gt(0):sum()
 
                if current_plane then
+                  itrw.image_id = string.format("pc_%03d_plane_%04d_",pci,#planes+1)
+                  best_plane, best_score, best_n_points, curves = 
+                     itrw:fit(points, normals:reshape(3,normals:nElement()/3), current_plane.eqn)
+
+                  -- TODO this is part of Plane object
+                  local explained_pts, explained_n_pts, explained_mask =
+                     finder:find_points_explained_by_plane(allpts, allnrm, best_plane)
+
+                  current_plane.eqn   = best_plane
+                  current_plane.n_pts = explained_n_pts
+                  current_plane.score = best_score
+                  current_plane.mask  = explained_mask:resize(patch_mask:size())
+
+                  gnuplot.pngfigure(string.format("%splot.png",itrw.image_id))
+                  gnuplot.xlabel("residual threshold in mm")
+                  gnuplot.ylabel("number of points withing scoring thresholds")
+                  gnuplot.raw("set key bottom right")   
+                  gnuplot.plot(curves)
+                  gnuplot.close()
+
+                  image.save(string.format("%smask.png",itrw.image_id), image.combine(current_plane.mask:eq(0)))
                   -- don't keep checking windows already explained by a plane
                   mx[current_plane.mask] = 0
-                  plane_finder.recompute_valid_points(valid,planes)
-
+                  valid = plane_finder_utils.recompute_valid_points(valid,planes)
+                  image.save(string.format("%svalid.png",itrw.image_id), image.combine(valid))
                   table.insert(planes, current_plane)
-               end
 
-               printf(" - result: %s", error_string)
-
-               if error_counts[error_string] then
-                  error_counts[error_string] = error_counts[error_string] + 1
-               else
-                  error_counts[error_string] = 1
+                  printf(" - result: %s", error_string)
+                  
+                  if error_counts[error_string] then
+                     error_counts[error_string] = error_counts[error_string] + 1
+                  else
+                     error_counts[error_string] = 1
+                  end
                end
 
 
@@ -234,7 +268,7 @@ for _,pcfile in pairs(pcfiles) do
             end -- while still valid in this scale
             if (#planes > 0) then
                image.save(string.format("%s/scale_%dx%d.png",out_dir,final_win,final_win),
-                          plane_finder.visualize_planes(planes))
+                          plane_finder_utils.visualize_planes(planes))
             end
          end -- for scales
       else
@@ -287,7 +321,7 @@ for _,pcfile in pairs(pcfiles) do
             segm_mask = mstsegm:eq(segm_id):cmul(valid)
 
             current_plane, error_string =
-               plane_finder.from_seed{
+               plane_finder_utils.from_seed{
                   points               = allpts,
                   mask                 = segm_mask,
                   threshold            = threshold,
@@ -343,7 +377,7 @@ for _,pcfile in pairs(pcfiles) do
       percent_found  = 100 - percent_remain
 
       if (n_planes > 0) then
-         rgb = plane_finder.visualize_planes(planes)
+         rgb = plane_finder_utils.visualize_planes(planes)
       end
 
       _G.outname = out_dir .. "/planes"
@@ -399,8 +433,8 @@ for _,pcfile in pairs(pcfiles) do
 
       collectgarbage()
       -- save obj
-      quat, aapts = plane_finder.align_planes(planes,allpts)
-      plane_finder.aligned_planes_to_obj (planes, aapts, quat, outname..".obj")
+      quat, aapts = plane_finder_utils.align_planes(planes,allpts)
+      plane_finder_utils.aligned_planes_to_obj (planes, aapts, quat, outname..".obj")
 
       -- save planes with out masks
       for _,p in pairs(planes) do
