@@ -15,9 +15,8 @@ cmd:text()
 cmd:text('Options')
 cmd:option('-imagedir', './', 'directory in which to find images')
 cmd:option('-imageglob', '*png', 'shell pattern to match image files in dir')
-cmd:option('-scale', 1, 'how much to down scale original image')
 cmd:option('-enblend', false, 'use enblend to make final image')
-cmd:option('-outimage', 'output_360.png', 'filename of image output')
+cmd:option('-outimage', 'panorama_360.png', 'filename of image output')
 
 cmd:text()
 
@@ -27,7 +26,6 @@ cmd:text()
 params     = cmd:parse(process.argv)
 imageglob  = params.imageglob
 imagedir   = params.imagedir
-scale      = params.scale
 enblend    = params.enblend
 outimage   = params.outimage
 
@@ -38,7 +36,7 @@ wiggle_mult = 2^3 -- 2^<number of iterations>
 current_phi = 0
 update = true
 for _,s in pairs({0.125,0.25,0.5}) do
-
+   collectgarbage()
    aligner:set_scale(s)
 
    -- update current best scores
@@ -60,4 +58,9 @@ for _,s in pairs({0.125,0.25,0.5}) do
    aligner:display_and_save(enblend,outfname)
 
    wiggle_mult = wiggle_mult / 2
+end
+
+-- quit out of luvit if
+if not params.interactive then
+   process.exit()
 end
