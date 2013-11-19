@@ -40,21 +40,21 @@ function score_plane(plane_eqn, points, max_dist, n_measurements)
 end
 
 function score_plane_with_normal_threshold(plane_eqn, points, normals, max_dist,  normal_thres, n_measurements)
-   local cosine_dist = plane_finder.util.cosine_distance(normals:t(),plane_eqn)
+   local cosine_dist = Plane.util.cosine_distance(plane_eqn,normals)
    max_dist = max_dist or residual:max()
    normal_thres = normal_thres or math.pi/6
    n_measurements = n_measurements or 10
    normal_mask = cosine_dist:lt(normal_thres)
    points_filtered = select_points_fast(points,normal_mask)
-   local residual = geom.linear_model.residual_fast(points_filtered,plane_eqn):abs()
+   local residual = geom.linear_model.residual_fast(plane_eqn,points_filtered):abs()
    local curve = sweep_threshold(residual, max_dist, n_measurements)
    local n_pts = curve[2][n_measurements]
    return curve[2]:sum()/(n_pts*n_measurements), curve, n_pts
 end
 
 function score_plane_2D(plane_eqn, points, normals, max_dist, max_normal_dist, n_measurements)
-   local cosine_dist = plane_finder.util.cosine_distance(normals:t(),plane_eqn)
-   local residual    = geom.linear_model.residual_fast(points,plane_eqn):abs()
+   local cosine_dist = Plane.util.cosine_distance(plane_eqn,normals)
+   local residual    = geom.linear_model.residual_fast(plane_eqn,points):abs()
    max_dist = max_dist or residual:max()
    n_measurements = n_measurements or 10
    local xaxis, curves = sweep_threshold_2d(residual, max_dist, cosine_dist, max_normal_dist, n_measurements)
@@ -72,8 +72,15 @@ end
 
 -- normals dim 2 size (N,3)
 -- plane_eqn dim 1 size 4
-function cosine_distance(normals, plane_eqn)
-   return torch.mv(normals,plane_eqn[{{1,3}}]):acos()
+function cosine_distance(plane_eqn, normals, result)
+   local d = normals:size(1)
+   result = result or torch.Tensor()
+   result:resizeAs(normals[1]):copy(normals[1]):mul(plane_eqn[1])
+   for i = 2,d do 
+      result:add(torch.mul(normals[i],plane_eqn[i]))
+   end
+   result:acos()
+   return result
 end
 
 

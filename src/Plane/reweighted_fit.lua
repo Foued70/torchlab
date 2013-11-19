@@ -2,7 +2,6 @@ require 'gnuplot'
 gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")
 gnuplot.setterm("wxt")
 io = require 'io'
--- plane_finder = require './plane_finder'
 src_dir = "arcs/motor-unicorn-0776/source/faro/"
 -- s = src_dir .. "sweep_001.xyz"
 s = "arcs/temporary-circle-6132/source/po_scan/a/001/sweep.xyz"
@@ -12,18 +11,14 @@ end
 
 _G.pl = torch.load("output/arcs_temporary-circle-6132_source_po_scan_a_001_sweep_xyz/combined__thres_40_minplane_150_nf_0.87_normal_var_baseplanes_saliency_base_12_scale_1.2_n_scale_5_thres_20_minseed_150_minplane_900_nf_0.87_normal_var/planes.t7")
 
--- _G.pls = plane_finder.Planes.new(pl)
-
-_G.xyz_map    = pc:get_xyz_map()
-_G.map_height = xyz_map:size(2)
-_G.map_width  = xyz_map:size(3)
-_G.points     = xyz_map:reshape(xyz_map:size(1),map_height*map_width)
+_G.points     = pc:get_xyz_map()
 
 _G.normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize()
-normals:resize(3,map_height*map_width)
+
+-- normals:resize(3,map_height*map_width)
 
 
-itrw = plane_finder.IterativeReweightedFit.new{
+itrw = Plane.IterativeReweightedFit.new{
    residual_thres = 100,
    residual_decr  = 0.7,
    residual_stop  = 1,

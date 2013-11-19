@@ -2,10 +2,10 @@ local pi               = math.pi
 local linear_plane     = geom.linear_model.fit
 local compute_residual = geom.linear_model.residual
 
-local pf = Class()
+local fu = Class()
 
 -- same as geom.linear_model.fit but flips the normal to point towards the origin
-function pf.fit_plane(pts)
+function fu.fit_plane(pts)
    local plane_eqn = linear_plane(pts)
    if plane_eqn[4] > 0 then 
       plane_eqn:mul(-1)
@@ -13,7 +13,7 @@ function pf.fit_plane(pts)
    return plane_eqn
 end
 
-function pf.compute_bbx(idx,win_h,win_w,img_h,img_w)
+function fu.compute_bbx(idx,win_h,win_w,img_h,img_w)
    local hwin_h  = win_h / 2
    local hwin_w  = win_w / 2
    local near_h  = math.max(1,idx[1]-hwin_h)
@@ -23,7 +23,7 @@ function pf.compute_bbx(idx,win_h,win_w,img_h,img_w)
    return {near_h, far_h, near_w, far_w }
 end
 
-function pf.draw_window(rgb,idx,win_w,win_h)
+function fu.draw_window(rgb,idx,win_w,win_h)
    local dims    = rgb:nDimension()
    local img_w   = rgb:size(dims)
    local img_h   = rgb:size(dims-1)
@@ -38,14 +38,14 @@ function pf.draw_window(rgb,idx,win_w,win_h)
    rgb[{{},{far_h,far_h+1},{near_w,far_w}}] = 1
 end
 
-function pf.remove_plane(rgb, mask)      -- removed pts black
+function fu.remove_plane(rgb, mask)      -- removed pts black
    rgb[1][mask] = 0
    rgb[2][mask] = 0
    rgb[3][mask] = 0
 end
 
 -- DxWxH to NxD with mask
-function pf.get_points_from_map(map,mask,scratch)
+function fu.get_points_from_map(map,mask,scratch)
    local pts
    local n_pts = map[1]:nElement()
    if mask then
@@ -61,7 +61,7 @@ function pf.get_points_from_map(map,mask,scratch)
    return pts:t():contiguous(),n_pts
 end
 
-function pf.newErode(erosion_amount,image_h, image_w)
+function fu.newErode(erosion_amount,image_h, image_w)
    erosion  = image.newErosion(erosion_amount)
    return function (mask)
       mask = mask:double():resize(image_h,image_w)
@@ -70,7 +70,7 @@ function pf.newErode(erosion_amount,image_h, image_w)
    end
 end
 
-function pf.newErodeDilate(erosion_amount,dilation_amount,smoothing_amount,image_h, image_w)
+function fu.newErodeDilate(erosion_amount,dilation_amount,smoothing_amount,image_h, image_w)
    erosion  = image.newErosion(erosion_amount)
    dilation = image.newDilation(dilation_amount,smoothing_amount)
    return function (mask)
@@ -84,7 +84,7 @@ function pf.newErodeDilate(erosion_amount,dilation_amount,smoothing_amount,image
    end
 end
 
-function pf.select_points(pts,mask)
+function fu.select_points(pts,mask)
    local ptsd   = pts:size(pts:nDimension())
    local n_pts  = mask:sum()
    local mask   = mask:reshape(mask:nElement(),1):expand(mask:nElement(),ptsd)
@@ -92,7 +92,7 @@ function pf.select_points(pts,mask)
    return outpts:resize(n_pts,ptsd), n_pts
 end
 
-function pf.get_patch_pts(idx,win_h,win_w,data,mask)
+function fu.get_patch_pts(idx,win_h,win_w,data,mask)
    local dims  = data:nDimension()
    local img_w = data:size(dims)
    local img_h = data:size(dims-1)
@@ -104,12 +104,12 @@ function pf.get_patch_pts(idx,win_h,win_w,data,mask)
    return get_points_from_map(win,mask)
 end
 
-function pf.find_points_mask(points,plane_eqn,threshold)
+function fu.find_points_mask(points,plane_eqn,threshold)
    -- points Nx3
-   return compute_residual(points,plane_eqn):abs():lt(threshold)
+   return compute_residual(plane_eqn, points):abs():lt(threshold)
 end
 
-function pf.find_points_explained_by_plane(points, plane_eqn, threshold, normal_filter, normal_threshold, normals)
+function fu.find_points_explained_by_plane(points, plane_eqn, threshold, normal_filter, normal_threshold, normals)
    local plane_pts_mask = find_points_mask(points,plane_eqn,threshold)
    if normal_filter then 
       plane_pts_mask =
@@ -119,12 +119,13 @@ function pf.find_points_explained_by_plane(points, plane_eqn, threshold, normal_
    return pts, n_pts, plane_pts_mask
 end
 
-function pf.score(points, plane_eqn)
-   return compute_residual(points,plane_eqn):std()
+-- TODO replace with Score class
+function fu.score(plane_eqn, points)
+   return compute_residual(plane_eqn,points):std()
 end
 
 -- TODO in C ackkkkk, need a generic bytemap to 1D index and 1D index to ND index
-function pf.get_vals_index(bmap,map)
+function fu.get_vals_index(bmap,map)
    local k = bmap:sum()
    local idx = torch.LongTensor(2,k)
    local val = torch.Tensor(k)
@@ -142,7 +143,7 @@ function pf.get_vals_index(bmap,map)
    return idx, val, c
 end
 
-function pf.get_max_val_index(map)
+function fu.get_max_val_index(map)
    local v2,idx2 = map:max(1):max(2)
    local v1,idx1 = map:max(2):max(1)
    v1 = v1:squeeze()
@@ -155,14 +156,14 @@ function pf.get_max_val_index(map)
    return torch.Tensor({idx1,idx2}), v1
 end
 
-function pf.get_mask(points, plane_eqn, threshold, normal_filter, normal_threshold, normals)
+function fu.get_mask(points, plane_eqn, threshold, normal_filter, normal_threshold, normals)
    local pts, n_pts, mask =
       find_points_explained_by_plane(points, plane_eqn, threshold, 
                                      normal_filter, normal_threshold, normals)
    return mask
 end
 
-function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_filter,normal_threshold,normals)
+function fu.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_filter,normal_threshold,normals)
    -- compute overlap between points in each plane
    p1.mask = p1.mask or get_mask(points,p1.eqn,threshold,normal_filter,normal_threshold,normals)
    p2.mask = p2.mask or get_mask(points,p2.eqn,threshold,normal_filter,normal_threshold,normals)
@@ -228,8 +229,8 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
    local inter_plane_eqn = fit_plane(inter_pts)
 
    -- residual w/respect to points in set (must be low or set has outliers)
-   local union_score = score(union_pts, union_plane_eqn)
-   local inter_score = score(inter_pts, inter_plane_eqn)
+   local union_score = score(union_plane_eqn, union_pts)
+   local inter_score = score(inter_plane_eqn, inter_pts)
 
    -- TODO no locals just store everying in table 
    score_data.union_n_pts     = union_n_pts
@@ -245,7 +246,7 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
       new_union_pts,new_union_n_pts, new_union_plane_pts_mask =
          find_points_explained_by_plane(points,union_plane_eqn,threshold, 
                                         normal_filter, normal_threshold, normals)
-      new_union_score = score(new_union_pts, union_plane_eqn)
+      new_union_score = score(union_plane_eqn, new_union_pts)
       printf("  - plane fit on union is good %f and fits %d with score %f:",
              union_score, new_union_n_pts, new_union_score )
       score_data.exp_union_score = new_union_score
@@ -257,7 +258,7 @@ function pf.merge_planes(points,threshold,p1,p2,intersection_threshold,normal_fi
       new_inter_pts,new_inter_n_pts, new_inter_plane_pts_mask = 
          find_points_explained_by_plane(points, inter_plane_eqn, threshold, 
                                         normal_filter, normal_threshold, normals)
-      new_inter_score = score(new_inter_pts, inter_plane_eqn)
+      new_inter_score = score(inter_plane_eqn, new_inter_pts)
       printf("  - plane fit on inter is good %f and fits %d with score %f:",
              inter_score, new_inter_n_pts, new_inter_score)
       score_data.exp_inter_score = new_union_score
@@ -346,7 +347,7 @@ end
 
 -- loops through planes in input_planes, combines them if the
 -- intersection is sufficient, and score of combined plane is better.
-function pf.combine_planes (points,input_planes,threshold,
+function fu.combine_planes (points,input_planes,threshold,
                             normal_filter, normal_threshold, normals,
                             score_keeper, loser_keeper)
    local n_input_planes = #input_planes
@@ -384,7 +385,7 @@ function pf.combine_planes (points,input_planes,threshold,
    return output_planes, score_keeper
 end
 
-function pf.add_planes(points, planes, candidate_planes, threshold, 
+function fu.add_planes(points, planes, candidate_planes, threshold, 
                        normal_filter, normal_threshold, normals, 
                        score_keeper)
    -- attempt to add candidates to existing planes
@@ -418,7 +419,7 @@ function pf.add_planes(points, planes, candidate_planes, threshold,
    return planes, score_keeper
 end
 
-function pf.recompute_valid_points(valid_points,planes)
+function fu.recompute_valid_points(valid_points,planes)
    local vpts = valid_points:clone()
    for i = 1,#planes do
       vpts:cmul(planes[i].mask:eq(0))
@@ -430,7 +431,7 @@ end
 -- keep colors consistent
 local colors = image.colormap(1000)
 
-function pf.visualize_planes(planes, height, width, rgb)
+function fu.visualize_planes(planes, height, width, rgb)
    local pmask = planes[1].mask
    height = height or pmask:size(1)
    width = width or pmask:size(2)
@@ -461,7 +462,7 @@ function pf.visualize_planes(planes, height, width, rgb)
    return image.combine(rgb)
 end
 
-function pf.filter_by_normal(plane_eqn, mask, normal_threshold, normals)
+function fu.filter_by_normal(plane_eqn, mask, normal_threshold, normals)
    local ndim = normals:size(normals:nDimension())
    local explained_normals =
       select_points(normals,mask)
@@ -473,10 +474,11 @@ function pf.filter_by_normal(plane_eqn, mask, normal_threshold, normals)
    return filtered_mask
 end
 
+-- TODO get rid of this function as it is replaced by Finder.lua
 -- function plane from seed
 -- output: plane or error_flag
 local dbg_count = 0
-function pf.from_seed(...)
+function fu.from_seed(...)
    local _, points, mask, threshold, min_points_for_seed, min_points_for_plane,
             expanded_set, 
             normal_filter, normal_threshold, normals, 
@@ -484,7 +486,7 @@ function pf.from_seed(...)
             debug_info = 
                dok.unpack(
       {...},
-      'plane_finder.from_seed',
+      'Plane.finder_utils.from_seed',
       'validate a plane in a set of points given a subset of points',
       {arg='points',
        type='torch.Tensor',
@@ -547,7 +549,7 @@ function pf.from_seed(...)
       local seed_pts = select_points(points,mask)
 
       local seed_plane_eqn = fit_plane(seed_pts)
-      local seed_score     = score(seed_pts,seed_plane_eqn)
+      local seed_score     = score(seed_plane_eqn, seed_pts)
 
       -- 2) 2nd test: points in the segment explain a plane (no outliers in the segment)
       if (seed_score > threshold) then
@@ -566,7 +568,7 @@ function pf.from_seed(...)
          break
       end
 
-      local seed_explained_score = score(seed_explained_pts,seed_plane_eqn)
+      local seed_explained_score = score(seed_plane_eqn, seed_explained_pts)
 
       -- 4) 4th test if seed explains enough points and points are below threshold we have a plane
       if (seed_n_pts > min_points_for_seed) and (seed_explained_score < threshold) then
@@ -611,7 +613,7 @@ function pf.from_seed(...)
          break
       end
 
-      local expanded_set_score = score(expanded_set_pts,expanded_plane_eqn)
+      local expanded_set_score = score(expanded_plane_eqn, expanded_set_pts)
 
       -- 5b) is the score below the threshold
       if (expanded_set_score > threshold) then
@@ -632,18 +634,18 @@ function pf.from_seed(...)
    return current_plane, error_string
 end
 
-function pf.find_rotation_to_align_axis(norm)
+function fu.find_rotation_to_align_axis(norm)
    local angle_az = geom.util.unit_cartesian_to_spherical_angles(norm)
    -- TODO check this again.  Disconnect btw. 2D projections and 3D.  I would have expected azimuth in first
    return geom.quaternion.from_euler_angle(torch.Tensor({0,angle_az[1]}))
 end
 
-function pf.axis_align(pts,quat)
+function fu.axis_align(pts,quat)
    quat = quat or find_rotation_to_align_axis(pts)
    return geom.quaternion.rotate(quat,pts), quat
 end
 
-function pf.dump_pts(pts,fname)
+function fu.dump_pts(pts,fname)
    fname = fname or "points.xyz"
    io = require 'io'
    f = io.open(fname,'w')
@@ -657,7 +659,7 @@ function pf.dump_pts(pts,fname)
 end
 
 -- align
-function pf.align_planes(_planes,_allpts)
+function fu.align_planes(_planes,_allpts)
    local maxv = -1
    local midx = 1
    for i,p in pairs(_planes) do
@@ -673,14 +675,14 @@ function pf.align_planes(_planes,_allpts)
    return quat, aapts
 end
 
-function pf.dump_pts_to_xyz (planes, aapts, fname)
+function fu.dump_pts_to_xyz (planes, aapts, fname)
    for i,p in pairs(planes) do
       ppts = select_points(aapts,p.mask)
       dump_pts(ppts,string.format("%s_%d_pts.xyz",fname,i))
    end
 end
 
-function pf.aligned_planes_to_obj (planes, aapts, quat, fname)
+function fu.aligned_planes_to_obj (planes, aapts, quat, fname)
    io = require 'io'
    fname = fname or "planes"
 
@@ -746,4 +748,4 @@ function pf.aligned_planes_to_obj (planes, aapts, quat, fname)
    objf:close()
 end
 
-return pf
+return fu
