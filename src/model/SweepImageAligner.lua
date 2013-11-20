@@ -540,7 +540,7 @@ function SweepImageAligner:find_best_input_vfov()
    return self.vfov, current_best_score, scores
 end
 
-function SweepImageAligner:generate_panorama(lambda,enblend,outfname)
+function SweepImageAligner:generate_panorama(enblend,outfname, lambda)
    tmp_fnames  = ""
    n_images    = self.n_images
    delta       = self.delta
@@ -557,7 +557,7 @@ function SweepImageAligner:generate_panorama(lambda,enblend,outfname)
    for i = 1,n_images do
 
       img = self:get_image(i,"RGBA")
-
+     
       printf("[%d] lambda: %2.4f phi: %2.4f",i,lambda, phi)
       mapper:set_input_lambda_phi(lambda,phi)
       mapper:update()
