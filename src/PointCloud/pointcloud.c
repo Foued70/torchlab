@@ -458,6 +458,16 @@ int get_step_maps_updown(int* step_updown, double* xyz, double min_step_size,
           yque = xyz[offset1+sh*width+sw];
           zque = xyz[offset2+sh*width+sw];
           
+          if (norm(xque,yque,zque) < 0.01)
+          {
+            if (s > 0)
+            {
+              s = MAX(0,s-1);
+              sh = h+(dir*s);;
+              break;
+            }
+          }
+          
           dist = distance(xcur,ycur,zcur,xque,yque,zque);
           
           if (dist > max_step_size)
@@ -544,6 +554,21 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
             break;
           }
           
+          xque = xyz[offset0+sh*width+sw];
+          yque = xyz[offset1+sh*width+sw];
+          zque = xyz[offset2+sh*width+sw];
+          
+          if (norm(xque,yque,zque) < 0.01)
+          {
+            if (s > 0)
+            {
+              s = MAX(0,s-1);
+              sw = (w+(dir*s)+width) % width;
+              sh = ph;
+              break;
+            }
+          }
+          
           tque = theta[offset0+sh*width+sw];
           difft = tcur-tque;
           if (difft > PI)
@@ -557,9 +582,6 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
           
           if (difft*dir >= 0)
           {
-          
-            xque = xyz[offset0+sh*width+sw];
-            yque = xyz[offset1+sh*width+sw];
           
             dist = distance(xcur,ycur,0,xque,yque,0);
           
@@ -904,8 +926,6 @@ int flatten_image(double* imagez, double* image_corner,
   
   return 0;
 }
-
-
 
 
 
@@ -1562,147 +1582,142 @@ int phi_map_smooth(double* smoothed_phi_map, double* phi_map, char * extant_map,
   }
 }
 
-
-
-int remap_points(double* depth_sum, double* depth_num, double* phi_new, double* theta_new,
-                 double* depth_old, char* rmask_old, double* phi_old, double* theta_old,
+int remap_points(double* depth_sum, double* depth_num, double* depth_old, 
+                 char* rmask_old, double* phi_old, double* theta_old,
                  int hght_old, int wdth_old, int hght_new, int wdth_new,
                  double phi_max, double phi_stp, double theta_max, double theta_stp)
 {
-  int i,j,k, ci,ni,cj,nj, off0,off1, r,c, ind_tmp, ind_new;
-  int ind[2][2];
-  double p[2][2];
-  double t[2][2];
-  double d[2][2];
-  int exnum;
-  double td, t_tmp,p_tmp,d_tmp, t_lo,t_hi,p_lo,p_hi, d_avg;
-  int hc,wc, hlo,hhi,wlo,whi, h,w;
-  int flag;
+  int i,j;
+  int ci,ni,pi,cj,nj,pj;
+  int coff,noff,poff;
+  short r_cc;
+  int ind_cc;
+  double phi_cc, phi_lo, phi_hi, phi_tmp, phi_new;
+  double the_cc, the_lo, the_hi, the_tmp, the_new;
+  int r,c,ind_tmp, hlo,wlo,hhi,whi, h,w, ind_new;
+  double depth_cc, wt_new, td;
   
-  for(i = 0; i < hght_old-1; i++)
+  int* ind_on_row = malloc(2*sizeof(int));
+  int* ind_on_col = malloc(2*sizeof(int));
+  
+  for(i = 0; i < hght_old; i++)
   {
+  
     ci = i;
-    ni = i+1; 
-    off0 = ci*wdth_old;
-    off1 = ni*wdth_old;
+    ni = i+1;
+    pi = i-1;
+    
+    if (pi == 0)
+    {
+      pi = i;
+    }
+    if (ni == hght_old)
+    {
+      ni = i;
+    }
+    
+    coff = ci*wdth_old;
+    noff = ni*wdth_old;
+    poff = pi*wdth_old;
     
     for(j = 0; j< wdth_old; j++)
     {
     
       cj = j;
       nj = (j+1) % wdth_old;
+      pj = (j-1 + wdth_old) % wdth_old;
       
-      ind[0][0] = off0 + cj;
-      ind[0][1] = off0 + nj;
-      ind[1][0] = off1 + cj;
-      ind[1][1] = off1 + nj;
+      ind_cc = coff + cj;
+      ind_on_col[0] = poff + cj;
+      ind_on_col[1] = noff + cj;
+      ind_on_row[0] = coff + pj;
+      ind_on_row[1] = coff + nj;
       
-      exnum = 0;
-      p_lo =  2*PI;
-      p_hi = -2*PI;
-      t_lo =  2*PI;
-      t_hi = -2*PI;
-      d_avg = 0;
+      r_cc = rmask_old[ind_cc];
       
-      for (r=0;r<2;r++)
+      if (r_cc == 0)
       {
-        for (c=0;c<2;c++)
-        {
+        phi_cc = phi_old[ind_cc];
+        the_cc = theta_old[ind_cc];
+        depth_cc = depth_old[ind_cc];
         
-          ind_tmp = ind[r][c];
-          
-          if (rmask_old[ind_tmp]==0)
+        phi_lo = phi_cc;
+        phi_hi = phi_cc;
+        the_lo = the_cc;
+        the_hi = the_cc;
+        
+        for (r = 0; r<2; r++)
+        {
+          ind_tmp = ind_on_col[r];
+          if (rmask_old[ind_tmp] == 0)
           {
-            exnum++;
-            
-            p_tmp = phi_old[ind_tmp];
-            t_tmp = theta_old[ind_tmp];
-            d_tmp = depth_old[ind_tmp];
-          
-            if (c == 1)
-            {
-              td = t_tmp-t[r][c-1];
-              if (td > PI || (td < 0 && td > -PI))
-              {
-                p_tmp = p[r][c-1];
-                t_tmp = t[r][c-1];
-                d_tmp = d[r][c-1];
-              }
-            }
-            
-            hc = (phi_max - p_tmp)/phi_stp;
-            wc = (theta_max - t_tmp)/theta_stp;
-            
-            hlo = MAX(0, floor(hc));
-            hhi = MIN(hght_new-1, ceil(hc));
-            wlo = MAX(0, floor(wc));
-            whi = MIN(wdth_new-1, ceil(wc));
-            
-            for (h=hlo;h<=hhi;h++)
-            {
-              for(w=wlo;w<=whi;w++)
-              {
-                ind_new = h*wdth_old+w;
-                depth_num[ind_new] = depth_num[ind_new]+1;
-                depth_sum[ind_new] = depth_sum[ind_new]+d_tmp;
-              }
-            }
-            
-            if (p_tmp < p_lo)
-            {
-              p_lo = p_tmp;
-            }
-            if (p_tmp > p_hi)
-            {
-              p_hi = p_tmp;
-            }
-            if (t_tmp < t_lo)
-            {
-              t_lo = t_tmp;
-            }
-            if (t_tmp > t_hi)
-            {
-              t_hi = t_tmp;
-            }
-            
-            d_avg = d_avg+d_tmp;
-          
-          }
-          else
-          {
-            p_tmp = 0;
-            t_tmp = 0;
-            d_tmp = 0;
-          }
-          
-          p[r][c] = p_tmp;
-          t[r][c] = t_tmp;
-          d[r][c] = d_tmp;
-          
+            phi_tmp = phi_old[ind_tmp];
+            phi_lo = fmin(phi_lo,phi_tmp);
+            phi_hi = fmax(phi_hi,phi_tmp);
+          } 
         }
-      }
-      
-      if ((t_hi - t_lo <= 1.5*theta_stp) && (p_hi - p_lo <= 1.5*phi_stp))
-      {
-        d_avg = d_avg/exnum;
-        hlo = MAX(0, floor((phi_max - p_hi)/phi_stp));
-        hhi = MIN(hght_new-1, ceil((phi_max - p_lo)/phi_stp));
-        wlo = MAX(0, floor((theta_max - t_hi)/theta_stp));
-        whi = MIN(wdth_new-1, ceil((theta_max - t_lo)/theta_stp));
+        for (c = 0; c<2; c++)
+        {
+          ind_tmp = ind_on_row[c];
+          if (rmask_old[ind_tmp] == 0)
+          {
+            the_tmp = theta_old[ind_tmp];
+            if (c == 0 && the_cc >= 0 && the_tmp < 0)
+            {
+              the_hi = PI;
+            }
+            else if (c == 1 && the_cc < 0 && the_tmp >= 0)
+            {
+              the_lo = 0;
+            }
+            else
+            {
+              the_lo = fmin(the_lo,the_tmp);
+              the_hi = fmax(the_hi,the_tmp);
+            }
+          } 
+        }
+        
+        phi_lo = MAX(phi_lo, phi_cc - 2*phi_stp);
+        phi_hi = MIN(phi_hi, phi_cc + 2*phi_stp);
+        the_lo = MAX(the_lo, the_cc - 2*theta_stp);
+        the_hi = MIN(the_hi, the_cc + 2*theta_stp);
+        
+        hlo = MAX(0, floor((phi_max - phi_hi)/phi_stp));
+        hhi = MIN(hght_new-1, ceil((phi_max - phi_lo)/phi_stp));
+        wlo = MAX(0, floor((theta_max - the_hi)/theta_stp));
+        whi = MIN(wdth_new-1, ceil((theta_max - the_lo)/theta_stp));
         
         for (h=hlo;h<=hhi;h++)
         {
           for(w=wlo;w<=whi;w++)
           {
             ind_new = h*wdth_old+w;
-            depth_num[ind_new] = depth_num[ind_new]+1;
-            depth_sum[ind_new] = depth_sum[ind_new]+d_avg;
+            phi_new = phi_max-h*phi_stp;
+            the_new = theta_max-w*theta_stp;
+            td = the_new-the_cc;
+            if (td > PI)
+            {
+              td = td - 2*PI;
+            }
+            else if (td < -PI)
+            {
+              td = td + 2*PI;
+            }
+            
+            wt_new = 1/(pow(phi_new-phi_cc,2)+pow(td,2)+1);
+            
+            depth_num[ind_new] = depth_num[ind_new]+wt_new;
+            depth_sum[ind_new] = depth_sum[ind_new]+(wt_new*depth_cc);
           }
         }
-      }
-      
-      
+        
+      }      
     }
   }
+  
+  free(ind_on_row);
+  free(ind_on_col);
   return 0;
 }
+
