@@ -84,14 +84,6 @@ function fu.newErodeDilate(erosion_amount,dilation_amount,smoothing_amount,image
    end
 end
 
-function fu.select_points(pts,mask)
-   local ptsd   = pts:size(pts:nDimension())
-   local n_pts  = mask:sum()
-   local mask   = mask:reshape(mask:nElement(),1):expand(mask:nElement(),ptsd)
-   local outpts = pts[mask]
-   return outpts:resize(n_pts,ptsd), n_pts
-end
-
 function fu.get_patch_pts(idx,win_h,win_w,data,mask)
    local dims  = data:nDimension()
    local img_w = data:size(dims)
@@ -104,25 +96,6 @@ function fu.get_patch_pts(idx,win_h,win_w,data,mask)
    return get_points_from_map(win,mask)
 end
 
-function fu.find_points_mask(points,plane_eqn,threshold)
-   -- points Nx3
-   return compute_residual(plane_eqn, points):abs():lt(threshold)
-end
-
-function fu.find_points_explained_by_plane(points, plane_eqn, threshold, normal_filter, normal_threshold, normals)
-   local plane_pts_mask = find_points_mask(points,plane_eqn,threshold)
-   if normal_filter then 
-      plane_pts_mask =
-         filter_by_normal(plane_eqn, plane_pts_mask, normal_threshold, normals)
-   end
-   local pts,n_pts = select_points(points, plane_pts_mask)
-   return pts, n_pts, plane_pts_mask
-end
-
--- TODO replace with Score class
-function fu.score(plane_eqn, points)
-   return compute_residual(plane_eqn,points):std()
-end
 
 -- TODO in C ackkkkk, need a generic bytemap to 1D index and 1D index to ND index
 function fu.get_vals_index(bmap,map)

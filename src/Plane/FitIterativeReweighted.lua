@@ -1,26 +1,26 @@
-local cosine_distance = Plane.util.cosine_distance
-local residual        = geom.linear_model.residual_fast
-local kernel          = util.stats.gaussian_kernel
-local fit_plane       = geom.linear_model.fit_weighted 
+local cosine_distance       = Plane.util.cosine_distance
+local residual              = geom.linear_model.residual_fast
+local kernel                = util.stats.gaussian_kernel
+local fit_weighted_plane    = geom.linear_model.fit_weighted 
 local normal_towards_origin = geom.linear_model.normal_towards_origin
 
-local ss              = nn.SoftShrink(0.1)
+local ss                    = nn.SoftShrink(0.1)
 
 -- class iterated reweighted   
 local itrw = Class()
 
 function itrw:__init(...)
    _,
-   self.residual_thres,
+   self.residual_threshold,
    self.residual_decr,
    self.residual_stop,
-   self.normal_thres,
+   self.normal_threshold,
    self.normal_decr,
    self.normal_stop,
    self.min_points_for_plane =
       dok.unpack(
          {...},
-         'IterativeReweightedFit',
+         'FitIterativeReweighted',
          'find best plane within a threshold using robust iterative reweighting scheme',
          {arg='residual_threshold',
           type='number',
@@ -49,7 +49,7 @@ function itrw:__init(...)
          {arg='min_points_for_plane',
           type='number',
           help='minimum number of points to fit ',
-          default=150},
+          default=900},
          {arg='score_threshold_for_convergence',
           type='number',
           help='score improvement at which we decide that we have convergence ',
@@ -57,20 +57,16 @@ function itrw:__init(...)
       )
    
    self.score = Plane.ScoreWithNormal.new{
-      max_distance_from_plane = residual_threshold,
-      max_radians_from_normal = normal_threshold
+      max_distance_from_plane = self.residual_threshold,
+      max_radians_from_normal = self.normal_threshold
    }
    
+   self.max_iter    = 64
    self.save_images = false
+   self.verbose     = false
    self.image_id    = ''
 
 end
-
--- TODO score class
--- function itrw:score(plane_eqn, points, normals)
---   return score_plane(
---       plane_eqn , points, normals, self.residual_thres,  self.normal_thres, self.n_measurements)
--- end
 
 function itrw:get_neighborhood(residuals, residual_threshold, normal_dists, normal_threshold)
    local residual_weights = kernel(torch.div(residuals,residual_threshold))
@@ -93,9 +89,10 @@ function itrw:fit(points, normals, plane_eqn)
    local map_width  = points:size(3)
    points  = points:reshape(3,points:nElement()/3)
    normals = normals:reshape(3,normals:nElement()/3)
-   local current_residual_threshold = self.residual_thres
-   local current_normal_threshold   = self.normal_thres
+   local current_residual_threshold = self.residual_threshold
+   local current_normal_threshold   = self.normal_threshold
 
+   -- TODO if not plane fit plane w/ warning.
    local best_plane   = plane_eqn
    local residuals    = residual(best_plane,points)
    local normal_dists = cosine_distance(best_plane, normals)
@@ -110,10 +107,11 @@ function itrw:fit(points, normals, plane_eqn)
    local best_n_pts = orig_n_pts
    local doresidual = false
    local new_s = 1
-   -- TODO other convergence
+   local new_c, new_n_pts
    iter = 0
+   -- TODO other convergence ??
    -- while new_s - best_s > 0.0001 do 
-   while iter < 64 do 
+   while iter < self.max_iter do 
       iter = iter + 1
       collectgarbage()
       -- 1) compute mask for points based on current thresholds:
@@ -137,18 +135,20 @@ function itrw:fit(points, normals, plane_eqn)
          --    a) remove mean (non-weighted)
          --    b) compute weighted covariance matrix
          --    c) find smallest eigenvector of covariance matrix
-         local test_plane = fit_plane(filtered_points, filtered_weights)
+         local test_plane = fit_weighted_plane(filtered_points, filtered_weights)
          normal_towards_origin(test_plane)
          
          new_s, new_c, new_n_pts = self.score:compute(test_plane, points, normals)
          
          if new_s > best_s then
-            printf(" - %s[%d] score old: %f (%d) new: %f (%d) orig: %f (%d)",
-                   self.image_id,iter,best_s,best_n_pts,new_s,new_n_pts,orig_s,orig_n_pts)
+            if self.verbose then 
+               printf(" - %s[%d] score old: %f (%d) new: %f (%d) orig: %f (%d)",
+                      self.image_id,iter,best_s,best_n_pts,new_s,new_n_pts,orig_s,orig_n_pts)
+               print(" - updating plane")
+            end
             table.insert(curves, {string.format("iteration: %d score: %2.4f thres: %2.1f mm, %0.3f rad",
                                                 iter, best_s, current_residual_threshold,current_normal_threshold),
                                   new_c:t()})
-            print(" - updating plane")
             best_s     = new_s
             best_n_pts = new_n_pts
             best_plane = test_plane
@@ -160,16 +160,16 @@ function itrw:fit(points, normals, plane_eqn)
                local result_str = string.format("s%f_r%2.1f_n%0.3f",
                                                 new_s,current_residual_threshold,current_normal_threshold)
                weights:resize(map_height,map_width)
-               image.save(string.format("%s_%s_neighborhood.png",
+               image.save(string.format("%s_%s_neighborhood.jpg",
                                         inum_str,result_str), image.combine(weights))
             end
          elseif doresidual and (current_residual_threshold > self.residual_stop) then 
             current_residual_threshold = current_residual_threshold * self.residual_decr
-            printf("Narrowing nbd : res %f mm", current_residual_threshold)
+            if self.verbose then printf("Narrowing nbd : res %f mm", current_residual_threshold) end 
             doresidual = not doresidual
          elseif (current_normal_threshold > self.normal_stop) then 
             current_normal_threshold = current_normal_threshold * self.normal_decr
-            printf("Narrowing nbd : normal %f radians", current_normal_threshold)
+            if self.verbose then printf("Narrowing nbd : normal %f radians", current_normal_threshold) end
             doresidual = not doresidual
          else
             break

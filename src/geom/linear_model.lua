@@ -66,8 +66,9 @@ end
 function residual_fast(model, pts, res)
    d = pts:size(1)
    if d ~= model:size(1)-1 then 
-      error("model size "..model:size(1).." not eq pts dim "..pts:size(2))
+      error("model size "..model:size(1).." not eq pts dim "..pts:size(1))
    end
+   pts = pts:reshape(d,pts:nElement()/d)
    res = res or torch.Tensor()
    res:resize(pts:size(2)):copy(pts[1]):mul(model[1])
    for i = 2,d do 

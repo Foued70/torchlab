@@ -30,6 +30,25 @@ function sweep_threshold_2d(distances, max_dist, d2, max_d2, n_measurements)
    return r,cumulative
 end
 
+-- expects NxD
+function select_points(pts,mask)
+   local pts_d  = pts:size(pts:nDimension())
+   local n_pts  = mask:sum()
+   local mask   = mask:reshape(mask:nElement(),1):expandAs(pts)
+   local outpts = pts[mask]
+   return outpts:resize(n_pts,ptsd), n_pts
+end
+
+-- expects DxN
+function select_points_fast(pts,mask)
+   local d      = pts:size(1)
+   pts = pts:reshape(d,pts:nElement()/d)
+   local n_pts  = mask:sum()
+   local mask   = mask:reshape(1,mask:nElement()):expandAs(pts)
+   local outpts = pts[mask]:resize(d,n_pts)
+   return outpts, n_pts
+end
+
 function score_plane(plane_eqn, points, max_dist, n_measurements)
    local residual = geom.linear_model.residual(points,plane_eqn):abs()
    max_dist = max_dist or residual:max()
@@ -60,14 +79,6 @@ function score_plane_2D(plane_eqn, points, normals, max_dist, max_normal_dist, n
    local xaxis, curves = sweep_threshold_2d(residual, max_dist, cosine_dist, max_normal_dist, n_measurements)
    local n_pts = curves:max()
    return curves:sum()/(n_pts*curves:nElement()), xaxis, curves, n_pts
-end
-
-function select_points_fast(pts,mask)
-   local d   = pts:size(1)
-   local n_pts  = mask:sum()
-   local mask   = mask:reshape(1,mask:nElement()):expandAs(pts)
-   local outpts = pts[mask]:resize(d,n_pts)
-   return outpts, n_pts
 end
 
 -- normals dim 2 size (N,3)
