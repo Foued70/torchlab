@@ -842,9 +842,11 @@ function PointCloud:remap(hh,ww)
   pc_remap.width = wdth_n
   pc_remap.hwindices = hwindices
   pc_remap.points = points
-  pc_remap.rgb = torch.zeros(count,3):byte()
   pc_remap.xyz_phi_map = phi_n
   pc_remap.xyz_theta_map = theta_n
+  pc_remap.format = self.format
+  pc_remap.rgb = points:clone():norm(2,2):repeatTensor(1,3):clone()
+  pc_remap.rgb:div(pc_remap.rgb:max()):mul(255):floor():byte()
   
   pc_remap:reset_point_stats()
   
@@ -1439,6 +1441,9 @@ function PointCloud:save_mask_to_xyz(fname,mask,rgb_map)
   points[3] = xyz[3][mask]
   rgb = rgb:t():clone():contiguous()
   points = points:t():clone():contiguous()
+  if self.format == 1 then
+     points = points/self.meter
+   end
   saveHelper_xyz(points,rgb,fname)
 end
 
