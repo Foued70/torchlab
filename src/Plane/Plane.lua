@@ -1,4 +1,3 @@
-local linear_fit = geom.linear_model.fit
 local compute_residual = geom.linear_model.residual_fast
 local select_points    = Plane.util.select_points_fast
 local cosine_distance  = Plane.util.cosine_distance
@@ -72,14 +71,6 @@ function Plane:filter_points(points, normals)
    return pts, n_pts, mask
 end
 
-function Plane:fit_points(pts)
-   local plane_eqn = linear_fit(pts:t())
-   if plane_eqn[4] > 0 then 
-      plane_eqn:mul(-1)
-   end
-   self.eqn = plane_eqn
-   return self.eqn
-end
 
 -- TODO integrate score class
 function Plane:score(points)

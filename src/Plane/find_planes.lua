@@ -29,6 +29,7 @@ cmd:option('-scale_factor', 1.8)
 cmd:option('-n_scale', 5)
 cmd:option('-expanded_set', false)
 cmd:option('-iterative', false)
+cmd:option('-pin_center', false)
 cmd:option('-use_saliency', false)
 cmd:option('-normal_type', 'var')
 cmd:option('-dummy',false)
@@ -66,6 +67,7 @@ n_scale               = params.n_scale
 graph_merge_threshold = tonumber(params.graph_merge_threshold)
 -- flags
 iterative_reweight = params.iterative
+pin_center         = params.pin_center
 use_saliency       = params.use_saliency
 normal_type        = params.normal_type
 
@@ -119,6 +121,7 @@ for pci,pcfile in pairs(pcfiles) do
    if iterative_reweight then out_dir = out_dir .. "_iterative" end
    if use_slope_score then out_dir = out_dir .. "_slope_score" end
    if down_weight_iterative then out_dir = out_dir .. "_down_weight" end
+   if pin_center then out_dir = out_dir .. "_pinned_center" end
    if search_multi_scale_saliency then out_dir = out_dir .. "_multi_sal" end
    out_dir = out_dir .. "_normal_"..normal_type
    print("Making ".. out_dir)
@@ -136,13 +139,9 @@ for pci,pcfile in pairs(pcfiles) do
       _G.pc     = PointCloud.PointCloud.new(pcfile, max_radius)
       points    = pc:get_xyz_map()
       
+      -- only var map
       normals,dd,phi,theta,norm_mask = pc:get_normal_map()
-      if (normal_type == "var") then
-         normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize()
-      elseif (normal_type == "var_smooth") then
-         normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize()
-         normals,phi,theta,dd,norm_mask = pc:get_smooth_normal(nil,nil,nil,phi,theta,norm_mask)
-      elseif (normal_type == "smooth") then
+      if (normal_type == "smooth") then
          normals,dd,phi,theta,norm_mask = pc:get_smooth_normal()
       end
 
@@ -202,7 +201,9 @@ for pci,pcfile in pairs(pcfiles) do
             -- clear mx so we don't check the same patch twice 
             mx[{{bbx[1],bbx[2]},{bbx[3],bbx[4]}}] = 0
             n_patches = mx:gt(0):sum()
-            
+
+            local plane_center = nil
+
             if current_plane then
                current_plane:residual_threshold(residual_threshold_for_removal)
                current_plane:normal_threshold(normal_threshold_for_removal)
@@ -214,8 +215,14 @@ for pci,pcfile in pairs(pcfiles) do
                
                itrw.image_id = string.format("%s/plane_%04d_",out_dir,#planes+1)
 
+               if pin_center then 
+                  plane_center = current_plane.center
+               end
+
                best_plane, best_score, best_n_points, curves, new_weights = 
-                  itrw:fit(points, normals:reshape(3,normals:nElement()/3), current_plane.eqn, cumulative_weights)
+                  itrw:fit(points, normals:reshape(3,normals:nElement()/3), 
+                           current_plane.eqn, plane_center,
+                           cumulative_weights)
                
                if cumulative_weights then  
                   cumulative_weights:cmul(new_weights:add(-new_weights:max()):abs())
@@ -409,17 +416,15 @@ for pci,pcfile in pairs(pcfiles) do
       score_file = io.open(score_fname,"w")
       score_file:write("# saliency base_win scale_factor n_scale ")
       score_file:write("segmentation graphmerge ")
-      score_file:write("norm_1=raw,2=smooth,3=var,4=var_smooth normal_threshold ")
+      score_file:write("norm_1=var,2=smooth normal_threshold ")
       score_file:write("minseed minplane ")
       score_file:write("psearched pfound scmean scmin scmax found_pts remain_pts total_pts percent_found time\n")
       score_file:write(string.format("%s ", file_bname))
       score_file:write(string.format("%d %d %f %d ", (use_saliency and 1) or 0, base_win, scale_factor, n_scale))
       score_file:write(string.format("%d %d ", (use_saliency and 0) or 1, graph_merge_threshold))
       score_file:write(string.format("%d %f ",
-                                     normal_type == "raw" and 1 or
-                                        (normal_type == "smooth" and 2) or
-                                        (normal_type == "var" and 3) or
-                                        (normal_type == "var_smooth" and 4) or 0,
+                                     normal_type == "var" and 1 or
+                                        (normal_type == "smooth" and 2) or 0,
                                      normal_threshold))
       score_file:write(string.format("%d %d ", min_points_for_seed, min_points_for_plane))
       score_file:write(string.format("%d ",count))

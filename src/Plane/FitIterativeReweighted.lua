@@ -87,7 +87,7 @@ function itrw:get_neighborhood(residuals, _residual_threshold, normal_dists, _no
    return weights, mask, npts
 end
 
-function itrw:fit(points, normals, plane_eqn, initial_weights)
+function itrw:fit(points, normals, plane_eqn, plane_center, initial_weights)
    local psize = points:size()
    local map_height = points:size(2)
    local map_width  = points:size(3)
@@ -145,7 +145,7 @@ function itrw:fit(points, normals, plane_eqn, initial_weights)
          --    a) remove mean (non-weighted)
          --    b) compute weighted covariance matrix
          --    c) find smallest eigenvector of covariance matrix
-         local test_plane = fit_weighted_plane(filtered_points, filtered_weights)
+         local test_plane = fit_weighted_plane(filtered_points, filtered_weights, plane_center)
          normal_towards_origin(test_plane)
          
          new_s, new_c, new_n_pts = self.score:compute(test_plane, points, normals, self.use_slope_score)
