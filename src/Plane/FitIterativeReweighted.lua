@@ -65,17 +65,21 @@ function itrw:__init(...)
    self.save_images = false
    self.verbose     = false
    self.image_id    = ''
-
+   self.use_slope_score = false
 end
 
-function itrw:get_neighborhood(residuals, residual_threshold, normal_dists, normal_threshold)
-   local residual_weights = kernel(torch.div(residuals,residual_threshold))
-   local normal_weights   = kernel(torch.div(normal_dists,normal_threshold))
+
+function itrw:get_neighborhood(residuals, _residual_threshold, normal_dists, _normal_threshold, initial_weights)
+   local residual_weights = kernel(torch.div(residuals,_residual_threshold))
+   local normal_weights   = kernel(torch.div(normal_dists,_normal_threshold))
       -- TODO some mixing coeff ? alpha = 0.5
    local combo_weights    = torch.cmul(residual_weights,normal_weights)
 
    -- soft threshold
    local weights          = ss:forward(combo_weights)
+   if initial_weights then
+      weights:cmul(initial_weights)
+   end
    -- hard threshold
    local mask             = weights:gt(0)
    -- number of inliers of hard threshold
@@ -83,7 +87,7 @@ function itrw:get_neighborhood(residuals, residual_threshold, normal_dists, norm
    return weights, mask, npts
 end
 
-function itrw:fit(points, normals, plane_eqn)
+function itrw:fit(points, normals, plane_eqn, initial_weights)
    local psize = points:size()
    local map_height = points:size(2)
    local map_width  = points:size(3)
@@ -92,14 +96,14 @@ function itrw:fit(points, normals, plane_eqn)
    local current_residual_threshold = self.residual_threshold
    local current_normal_threshold   = self.normal_threshold
 
+   printf(" ** starting fit with res: %f norm: %f", current_residual_threshold, current_normal_threshold)
    -- TODO if not plane fit plane w/ warning.
    local best_plane   = plane_eqn
    local residuals    = residual(best_plane,points)
    local normal_dists = cosine_distance(best_plane, normals)
 
    -- score input plane
-   local orig_s, orig_c, orig_n_pts = self.score:compute(best_plane, points, normals)
-
+   local orig_s, orig_c, orig_n_pts = self.score:compute(best_plane, points, normals, self.use_slope_score)
    -- output for gnuplot
    local curves = {{string.format("iteration: %d thres: %2.1f mm norm: %0.3f rad",
                                   0 , current_residual_threshold,current_normal_threshold),orig_c:t()}}
@@ -108,7 +112,8 @@ function itrw:fit(points, normals, plane_eqn)
    local doresidual = false
    local new_s = 1
    local new_c, new_n_pts
-   iter = 0
+   local weights, weights_out, mask, npts
+   local iter = 0
    -- TODO other convergence ??
    -- while new_s - best_s > 0.0001 do 
    while iter < self.max_iter do 
@@ -117,9 +122,14 @@ function itrw:fit(points, normals, plane_eqn)
       -- 1) compute mask for points based on current thresholds:
       -- current_residual_threshold and current_normal_threshold
 
-      local weights, mask, npts = self:get_neighborhood(residuals,    current_residual_threshold,
-                                                        normal_dists, current_normal_threshold)
-
+      weights, mask, npts = self:get_neighborhood(residuals,    current_residual_threshold,
+                                                  normal_dists, current_normal_threshold, 
+                                                  initial_weights)
+      if (iter == 1)  then 
+         weights_out = weights:clone()
+      end
+      -- log.trace(weights:max(), weights:sum(), weights:gt(0):sum())
+      -- log.trace(initial_weights:max(), initial_weights:sum(), initial_weights:gt(0):sum())
       if npts < self.min_points_for_plane then
          printf("only %d points in neighborhood. Stopping",npts)
          break
@@ -138,20 +148,22 @@ function itrw:fit(points, normals, plane_eqn)
          local test_plane = fit_weighted_plane(filtered_points, filtered_weights)
          normal_towards_origin(test_plane)
          
-         new_s, new_c, new_n_pts = self.score:compute(test_plane, points, normals)
-         
+         new_s, new_c, new_n_pts = self.score:compute(test_plane, points, normals, self.use_slope_score)
          if new_s > best_s then
             if self.verbose then 
-               printf(" - %s[%d] score old: %f (%d) new: %f (%d) orig: %f (%d)",
-                      self.image_id,iter,best_s,best_n_pts,new_s,new_n_pts,orig_s,orig_n_pts)
+               printf(" - [%d] %s score old: %f (%d) new: %f (%d) orig: %f (%d)",
+                      iter,self.image_id,
+                      best_s,best_n_pts,
+                      new_s,new_n_pts,
+                      orig_s,orig_n_pts)
                print(" - updating plane")
             end
-            table.insert(curves, {string.format("iteration: %d score: %2.4f thres: %2.1f mm, %0.3f rad",
-                                                iter, best_s, current_residual_threshold,current_normal_threshold),
-                                  new_c:t()})
             best_s     = new_s
             best_n_pts = new_n_pts
             best_plane = test_plane
+            table.insert(curves, {string.format("iteration: %d score: %2.4f thres: %2.1f mm, %0.3f rad",
+                                                iter, best_s, current_residual_threshold,current_normal_threshold),
+                                  new_c:t()})
             -- recompute if we change the equation
             residuals    = residual(best_plane, points)
             normal_dists = cosine_distance(best_plane,normals)
@@ -176,5 +188,5 @@ function itrw:fit(points, normals, plane_eqn)
          end
       end
    end
-   return best_plane, best_s, best_n_pts, curves
+   return best_plane, best_s, best_n_pts, curves, weights_out
 end
