@@ -15,10 +15,7 @@ _G.points     = pc:get_xyz_map()
 
 _G.normals,dd,phi,theta,norm_mask = pc:get_normal_map_varsize()
 
--- normals:resize(3,map_height*map_width)
-
-
-itrw = Plane.IterativeReweightedFit.new{
+itrw = Plane.FitIterativeReweighted.new{
    residual_thres = 100,
    residual_decr  = 0.7,
    residual_stop  = 1,

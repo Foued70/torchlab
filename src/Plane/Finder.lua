@@ -1,26 +1,26 @@
-fit_plane     = Plane.finder_utils.fit_plane
-score         = Plane.finder_utils.score
-select_points = Plane.finder_utils.select_points
-fpep          = Plane.finder_utils.find_points_explained_by_plane
+local select_points = Plane.util.select_points_fast
 
-local pi = math.pi
 local Finder = Class()
 
 function Finder:__init(...)
    _,
-   self.threshold, 
+   self.residual_threshold, 
+   self.normal_threshold, 
    self.min_points_for_seed, 
    self.min_points_for_plane,
-   self.normal_filter,
-   self.normal_threshold = 
+   self.min_auc_score = 
       dok.unpack(
          {...},
          'Finder',
          'validate a plane in a set of points given a subset of points',
-         {arg='threshold',
+         {arg='residual_threshold',
           type='number',
           help='minimum score (std of residual) to accept a plane',
           default=40},
+         {arg='normal_threshold',
+          type='number',
+          help='minimum score (std of residual) to accept a plane',
+          default=math.pi/3},
          {arg='min_points_for_seed',
           type='number',
           help='minimum number of points to consider set at seed',
@@ -29,20 +29,17 @@ function Finder:__init(...)
           type='number',
           help='minimum number of points to consider set a plane',
           default=900},
-         {arg='normal_filter',
-          type="boolean",
-          help="should filter by point normals",
-          default=true},
-         {arg='normal_threshold',
+         {arg='min_auc_score',
           type='number',
-          help='minimum difference in point normals to accept as part of same plane',
-          default=pi/6}
+          help='minimum area under the curve to consider seed a plane',
+          default=0.5}
       )
-end
 
-function Finder:find_points_explained_by_plane(points, normals, plane_eqn)
-   return fpep(points, plane_eqn, self.threshold, 
-               self.normal_filter, self.normal_threshold, normals)
+   self.score = Plane.ScoreWithNormal.new{
+      max_distance_from_plane = self.residual_threshold,
+      max_radians_from_normal = self.normal_threshold
+   }
+   self.use_slope_score = false
 end
 
 function Finder:validate_seed(points, normals, mask, debug_info)
@@ -62,38 +59,40 @@ function Finder:validate_seed(points, normals, mask, debug_info)
 
       local seed_pts = select_points(points,mask)
 
-      local seed_plane_eqn = fit_plane(seed_pts)
-      local seed_score     = score(seed_plane_eqn,seed_pts)
+      local seed_plane = Plane.Plane.new{
+         residual_threshold = self.residual_threshold,
+         normal_threshold   = self.normal_threshold
+      }
+      seed_plane:fit_points(seed_pts)
+      local seed_score  = seed_plane:score(seed_pts)
 
       -- 2) 2nd test: points in the segment explain a plane (no outliers in the segment)
-      if (seed_score > self.threshold) then
+      if (seed_score > self.residual_threshold) then
          error_string="seed plane above threshold"
          break
       end
 
       local seed_explained_pts, seed_explained_n_pts, seed_explained_mask =
-         self:find_points_explained_by_plane(points, normals, seed_plane_eqn)
+         seed_plane:filter_points(points, normals)
       
-      -- 3) 3rd test: seed plane explains the minimum number of points. eg. could be 0 after an erosion
-      
+      -- 3) 3rd test: seed plane explains the minimum number of points.      
       if seed_explained_n_pts < self.min_points_for_seed then
          error_string="seed explained points (after filtering) do not explain enough points for seed"
          break
       end
       
-      local seed_explained_score = score(seed_plane_eqn,seed_explained_pts)
+      local seed_explained_score = seed_plane:score(seed_explained_pts)
 
+      seed_plane.auc_score, seed_plane.curve = 
+         self.score:compute(seed_plane.eqn, points, normals, self.use_slope_score)
+      
       -- 4) 4th test if seed explains enough points and points are below threshold we have a plane
-      if (seed_n_pts > self.min_points_for_seed) and (seed_explained_score < self.threshold) then
+      if (seed_n_pts > self.min_points_for_seed) and 
+         (seed_explained_score < self.residual_threshold) and 
+      (seed_plane.auc_score > self.min_auc_score) then
          -- the plane from original seed that explains a minumum number of points
-         current_plane =
-            {eqn         = seed_plane_eqn,
-             n_pts       = seed_explained_n_pts,
-             score       = seed_explained_score,
-             mask        = seed_explained_mask:resize(mask_size),
-             debug_info  = debug_info
-            }
-         error_string = "Found plane for seed."
+         current_plane = seed_plane
+         error_string  = "Found plane for seed."
       end
       break
    end -- break out of dummy loop for plane finding

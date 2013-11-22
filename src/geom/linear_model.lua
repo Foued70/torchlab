@@ -1,9 +1,9 @@
 -- funcs from stats
-remove_mean         = util.stats.remove_mean
-min_pca_svd         = util.stats.min_pca_svd
-min_pca_eig         = util.stats.min_pca_eig
-covariance          = util.stats.covariance
-weighted_covariance = util.stats.weighted_covariance
+local remove_mean         = util.stats.remove_mean
+local min_pca_svd         = util.stats.min_pca_svd
+local min_pca_eig         = util.stats.min_pca_eig
+local covariance          = util.stats.covariance
+local weighted_covariance = util.stats.weighted_covariance
 
 Class()
 -- compute weights + bias 
@@ -49,25 +49,28 @@ function normal_towards_origin(model)
    return model
 end
 
-function residual(pts,model)
+function residual(model, pts, res)
    d = pts:size(2)
    if d ~= model:size(1)-1 then 
       error("model size "..model:size(1).." not eq pts dim "..pts:size(2))
    end
+   res = res or torch.Tensor()
+   res:resize(pts:size(1))
    -- pts is Nx3
-   res = torch.mv(pts,model[{{1,d}}])
+   torch.mv(res,pts,model[{{1,d}}])
    res:add(model[d+1])
    return res
 end
 
 -- pts is DxN as should be
-function residual_fast(pts,model)
+function residual_fast(model, pts, res)
    d = pts:size(1)
    if d ~= model:size(1)-1 then 
-      error("model size "..model:size(1).." not eq pts dim "..pts:size(2))
+      error("model size "..model:size(1).." not eq pts dim "..pts:size(1))
    end
-   -- pts is Nx3
-   res = pts[1]:clone():mul(model[1])
+   pts = pts:reshape(d,pts:nElement()/d)
+   res = res or torch.Tensor()
+   res:resize(pts:size(2)):copy(pts[1]):mul(model[1])
    for i = 2,d do 
       res:add(torch.mul(pts[i],model[i]))
    end

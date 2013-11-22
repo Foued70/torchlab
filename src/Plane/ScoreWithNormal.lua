@@ -29,9 +29,10 @@ function ScoreWithNormal:__init(...)
 
    self.residual        = torch.Tensor()
    self.normal_distance = torch.Tensor()
+   self.slope_at        = 3
 end
 
-function ScoreWithNormal:compute(plane_eqn, points, normals)
+function ScoreWithNormal:compute(plane_eqn, points, normals, use_slope_score)
    local normal_threshold = self.max_radians_from_normal
    local normal_distance  = self.normal_distance
    cosine_distance(plane_eqn, normals, normal_distance)
@@ -55,5 +56,9 @@ function ScoreWithNormal:compute(plane_eqn, points, normals)
    self.curve = curve
    self.n_pts = n_pts
 
+   if use_slope_score then
+      score = curve[2][self.slope_at]/curve[2][self.n_measurements]
+   end
    return score, curve, n_pts
 end
+
