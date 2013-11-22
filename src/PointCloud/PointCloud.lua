@@ -25,8 +25,6 @@ ffi.cdef
                                           int pan_hght, int pan_wdth,
                                           int img_hght, int img_wdth);
     
-   int theta_map(double* theta_map, double* centered_point_map, int height, int width);
-   int phi_map(double* phi_map, double* centered_point_map, int height, int width);
    int theta_map_smooth(double* smoothed_theta_map, double* theta_map, char * extant_map, 
                      int height, int width, int max_win, double max_theta_diff);
    int phi_map_smooth(double* smoothed_phi_map, double* phi_map, char * extant_map, 
@@ -230,65 +228,76 @@ function PointCloud:get_intensity_cost(scale, mid_value)
    return rgb_cost
 end
 
-function PointCloud:get_normal_phi_theta(force)
-  if not(self.phi_map and self.theta_map and self.normal_mask) or force then
-    local tic = log.toc()
-    local point_map = self:get_xyz_map_no_mask()
-    local height = self.height
-    local width = self.width
-    self.phi_map = torch.zeros(height,width):clone():contiguous()
-    self.theta_map = torch.zeros(height,width):clone():contiguous()
-  
-    --[[]]
-    libpc.phi_map(torch.data(self.phi_map),torch.data(point_map:clone():contiguous()),height,width)
-    libpc.theta_map(torch.data(self.theta_map),torch.data(point_map:clone():contiguous()),height,width)
-    --[[]]
-  
-    self.normal_mask = self.phi_map:lt(-10):add(self.theta_map:lt(-10)):gt(0)
-    self.phi_map[self.normal_mask] = 0
-    self.theta_map[self.normal_mask] = 0
+function PointCloud:get_noise()
 
-    print('get_normal_phi_theta: '..(log.toc()-tic))
+  local height = self.height
+  local width = self.width
+  
+  local index,mask=self:get_index_and_mask()
+  local phi,theta = self:get_xyz_phi_theta()
+  local xyz = self:get_xyz_map_no_mask()
+  local z = xyz[3]:clone()
+  
+  local phi_max = phi:max()
+  local phi_min = phi:min()
+  local phi_rng = phi_max-phi_min
+  local phi_stp = phi_rng/(height-1)
+  local phi_thr = phi_stp/2
+  
+  local top_row_mask = phi:le(phi_max):cmul(phi:ge(phi_max-phi_thr))
+  
+  top_row_mask[mask] = 0
+  
+  topnoise = z[top_row_mask]:std()
+  
+  return topnoise
+  
+end
+
+function PointCloud:get_lookup_map(mask_tmp,mind,maxd)
+  local height = self.height
+  local width = self.width
+  local xyz = self:get_xyz_map_no_mask():clone():contiguous()
+  local phi,theta = self:get_xyz_phi_theta()
+  
+  local depth = self.points:sub(1,self.count,1,2):clone():norm(2,2)
+  local min_depth = depth:min()
+  local max_depth = depth:max()
+  local noise = self:get_noise()
+  local mindist = mind or 25--math.max(5*min_depth*2*math.pi/width,10)+5*noise
+  local maxdist = maxd or 100--2.5*max_depth*2*math.pi/width+5*noise
+  theta = theta:contiguous()
+  
+  if mask_tmp then
+    xyz[mask_tmp:repeatTensor(3,1,1)] = 0
+    phi=phi:clone()
+    phi[mask_tmp] = 0
+    theta=theta:clone()
+    theta[mask_tmp] = 0
   end
-  return self.phi_map, self.theta_map, self.normal_mask
-end
-
-function PointCloud:get_normal_map()
-    local tic = log.toc()
-    local phi,theta,mask = self:get_normal_phi_theta()
-    local height = self.height
-    local width = self.width
-    local nmp = torch.zeros(3,height,width)
   
-    nmp[3] = phi:clone():sin()
-    nmp[2] = phi:clone():cos():cmul(theta:clone():sin())
-    nmp[1] = phi:clone():cos():cmul(theta:clone():cos())
-    
-    local dd = nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
-    local neg = dd:lt(0)
-    
-    for i = 1,3 do
-      nmp[i][neg] = -nmp[i][neg]
-      nmp[i][mask] = 0
-    end
-    
-    dd = nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
-    
-    print('get_normal_map: '..(log.toc()-tic))
-    
-    return nmp,dd,phi,theta,mask
+  print(mindist,maxdist,noise,min_depth,max_depth)
+  
+  local map_u = torch.zeros(2,height,width):int():contiguous()
+  local map_d = torch.zeros(2,height,width):int():contiguous()
+  local map_l = torch.zeros(2,height,width):int():contiguous()
+  local map_r = torch.zeros(2,height,width):int():contiguous() 
+  
+  libpc.get_step_maps(torch.data(map_u), torch.data(map_d), torch.data(map_l), torch.data(map_r), 
+                  torch.data(xyz:contiguous()), torch.data(theta:contiguous()), mindist, maxdist, height, width)
+  return map_u,map_d,map_l,map_r
 end
 
-function PointCloud:get_normal_map_varsize(mask_tmp,mind,maxd)
+function PointCloud:get_normal_map(mask_tmp,mind,maxd)
 
     local tic = log.toc()
+    
     local point_map = self:get_xyz_map_no_mask()
     local height = self.height
     local width = self.width
     local phi = torch.zeros(height,width):clone():contiguous()
     local theta = torch.zeros(height,width):clone():contiguous()
     
-    --[[]]
     local mu,md,ml,mr = self:get_lookup_map(mask_tmp,mind,maxd)
     libpc.phi_map_var(torch.data(phi),torch.data(point_map:clone():contiguous()),
                       torch.data(mu:contiguous()), torch.data(md:contiguous()),
@@ -296,7 +305,6 @@ function PointCloud:get_normal_map_varsize(mask_tmp,mind,maxd)
     libpc.theta_map_var(torch.data(theta),torch.data(point_map:clone():contiguous()),
                       torch.data(ml:contiguous()), torch.data(mr:contiguous()),
                       height,width)
-    --[[]]
   
     local mask = phi:lt(-10):add(theta:lt(-10)):gt(0)
     phi[mask] = 0
@@ -323,9 +331,10 @@ function PointCloud:get_normal_map_varsize(mask_tmp,mind,maxd)
     end
     
   return nmp,dd,phi,theta,mask
+  
 end
 
-function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff, phi, theta, mask)
+function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
 
     local tic = log.toc()
     if not win then
@@ -341,9 +350,7 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff, phi, theta,
     local height = self.height
     local width = self.width
   
-    if not (phi and theta and mask) then
-      phi,theta,mask = self:get_normal_phi_theta()
-    end
+    local nmp,dd,phi,theta,mask = self:get_normal_map()
     local extant_map = mask:clone():eq(0)
     local smooth_phi = phi:clone():contiguous():fill(0)
     local smooth_theta = theta:clone():contiguous():fill(0)
@@ -403,66 +410,6 @@ function PointCloud:get_xyz_phi_theta(force)
     self.xyz_theta_map = theta
   end
   return self.xyz_phi_map,self.xyz_theta_map
-end
-
-function PointCloud:get_noise()
-
-  local height = self.height
-  local width = self.width
-  
-  local index,mask=self:get_index_and_mask()
-  local phi,theta = self:get_xyz_phi_theta()
-  local xyz = self:get_xyz_map_no_mask()
-  local z = xyz[3]:clone()
-  
-  local phi_max = phi:max()
-  local phi_min = phi:min()
-  local phi_rng = phi_max-phi_min
-  local phi_stp = phi_rng/(height-1)
-  local phi_thr = phi_stp/2
-  
-  local top_row_mask = phi:le(phi_max):cmul(phi:ge(phi_max-phi_thr))
-  
-  top_row_mask[mask] = 0
-  
-  topnoise = z[top_row_mask]:std()
-  
-  return topnoise
-  
-end
-
-function PointCloud:get_lookup_map(mask_tmp,mind,maxd)
-  local height = self.height
-  local width = self.width
-  local xyz = self:get_xyz_map_no_mask():clone():contiguous()
-  local phi,theta = self:get_xyz_phi_theta()
-  
-  local depth = self.points:sub(1,self.count,1,2):clone():norm(2,2)
-  local min_depth = depth:min()
-  local max_depth = depth:max()
-  local noise = self:get_noise()
-  local mindist = mind or 25--math.max(5*min_depth*2*math.pi/width,10)+5*noise
-  local maxdist = maxd or 100--2.5*max_depth*2*math.pi/width+5*noise
-  theta = theta:contiguous()
-  
-  if mask_tmp then
-    xyz[mask_tmp:repeatTensor(3,1,1)] = 0
-    phi=phi:clone()
-    phi[mask_tmp] = 0
-    theta=theta:clone()
-    theta[mask_tmp] = 0
-  end
-  
-  print(mindist,maxdist,noise,min_depth,max_depth)
-  
-  local map_u = torch.zeros(2,height,width):int():contiguous()
-  local map_d = torch.zeros(2,height,width):int():contiguous()
-  local map_l = torch.zeros(2,height,width):int():contiguous()
-  local map_r = torch.zeros(2,height,width):int():contiguous() 
-  
-  libpc.get_step_maps(torch.data(map_u), torch.data(map_d), torch.data(map_l), torch.data(map_r), 
-                  torch.data(xyz:contiguous()), torch.data(theta:contiguous()), mindist, maxdist, height, width)
-  return map_u,map_d,map_l,map_r
 end
 
 
@@ -842,9 +789,11 @@ function PointCloud:remap(hh,ww)
   pc_remap.width = wdth_n
   pc_remap.hwindices = hwindices
   pc_remap.points = points
-  pc_remap.rgb = torch.zeros(count,3):byte()
   pc_remap.xyz_phi_map = phi_n
   pc_remap.xyz_theta_map = theta_n
+  pc_remap.format = self.format
+  pc_remap.rgb = points:clone():norm(2,2):repeatTensor(1,3):clone()
+  pc_remap.rgb:div(pc_remap.rgb:max()):mul(255):floor():byte()
   
   pc_remap:reset_point_stats()
   
@@ -1298,7 +1247,6 @@ function PointCloud:estimate_faro_pose(degree_above, degree_below)
 end
 
 
-
 --[[ SAVE FUNCTIONS ]]--
 
 function PointCloud:downsample_points(leafsize)
@@ -1439,6 +1387,9 @@ function PointCloud:save_mask_to_xyz(fname,mask,rgb_map)
   points[3] = xyz[3][mask]
   rgb = rgb:t():clone():contiguous()
   points = points:t():clone():contiguous()
+  if self.format == 1 then
+     points = points/self.meter
+   end
   saveHelper_xyz(points,rgb,fname)
 end
 

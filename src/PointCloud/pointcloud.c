@@ -130,8 +130,6 @@ double distance_to_plane(double x, double y, double z, double nx, double ny, dou
 }
 
 
-
-
 int get_index_and_mask(long* index_map, short* mask_map, double* points, short* hwindices,
                        long length, int height, int width)
 {
@@ -149,7 +147,6 @@ int get_index_and_mask(long* index_map, short* mask_map, double* points, short* 
   
   return 0;
 }
-
 
 
 int get_same_z_in_grid(double* xyz, int w, int h, double compz, int height, int width)
@@ -628,8 +625,6 @@ int get_step_maps(int* step_up, int* step_down, int* step_left, int* step_right,
 }
 
 
-
-
 int downsample(double* downsampled_points, double* downsampled_rgb, 
                              int* downsampled_count, double* coord_map, 
                              double* points_map, double* rgb_map, 
@@ -928,7 +923,6 @@ int flatten_image(double* imagez, double* image_corner,
 }
 
 
-
 int theta_map_var(double* theta_map, double* centered_point_map, 
                   int* step_left, int* step_right,
                   int height, int width)
@@ -1097,258 +1091,6 @@ int phi_map_var(double* phi_map, double* centered_point_map,
   
 }
 
-
-
-int diff_map(double* diff_map, double* attrib_map, int* lookup_map, int height, int width)
-{
-  int h,w;
-  int offset = height*width;
-  double diff;
-  
-  for(h=0; h<height; h++)
-  {
-    for(w=0; w<width; w++)
-    {
-      diff = attrib_map[h*width+w]-attrib_map[lookup_map[0*offset+h*width+w]*width+lookup_map[1*offset+h*width+w]];
-      diff_map[h*width+w]=diff;
-    }
-  }
-  return 0;
-}
-
-int plane_dist_map(double* dist_map, double* normal_map, double* xyz_map, int* lookup_map, int height, int width)
-{
-  int hcur,wcur;
-  int hque,wque;
-  int indcur,indque;
-  double xcur,ycur,zcur;
-  double acur,bcur,ccur;
-  double xque,yque,zque;
-  int offset = height*width;
-  
-  for(hcur=0;hcur<height;hcur++)
-  {
-    for(wcur=0;wcur<width;wcur++)
-    {
-      indcur = hcur*width+wcur;
-      
-      // 2-over
-      hque = lookup_map[0*offset+indcur];
-      wque = lookup_map[1*offset+indcur];
-      
-      indque = hque*width+wque;
-      
-      /*
-      hque = lookup_map[0*offset+indque];
-      wque = lookup_map[1*offset+indque];
-      
-      indque = hque*width+wque;*/
-      
-      xcur = xyz_map[0*offset+indcur];
-      ycur = xyz_map[1*offset+indcur];
-      zcur = xyz_map[2*offset+indcur];
-      
-      if (norm(xcur,ycur,zcur) > 0.01)
-      {
-      
-        xque = xyz_map[0*offset+indque];
-        yque = xyz_map[1*offset+indque];
-        zque = xyz_map[2*offset+indque];
-      
-        acur = normal_map[0*offset+indcur];
-        bcur = normal_map[1*offset+indcur];
-        ccur = normal_map[2*offset+indcur];
-      
-        dist_map[indcur] = fabs(acur*(xque-xcur) + bcur*(yque-ycur) + ccur*(zque-zcur));
-        //printf("%f\n",dist_map[indcur]);
-        
-        if (norm(xque,yque,zque) < 0.01)
-        {
-          dist_map[indcur]=10000;
-        }
-        else if(norm(xque,yque,zque) < norm(xcur,ycur,zcur))
-        {
-          dist_map[indcur]=0;
-        }
-      }
-      
-    }
-  }
-  
-}
-
-
-
-int theta_map(double* theta_map, double* centered_point_map, int height, int width)
-{
-  int h,w, pw, nw,ph,nh;
-  double * xyz_hw, * xyz_phw, * xyz_nhw;
-  double * pt_p, * pt_n, *pt_c;
-  double theta_p, theta_n, theta_c;
-  double dist_p, dist_n, dist_c;
-  int k;
-  
-  xyz_hw = malloc(3*sizeof(double));
-  xyz_phw = malloc(3*sizeof(double));
-  xyz_nhw = malloc(3*sizeof(double));
-  
-  pt_p = malloc(2*sizeof(double));
-  pt_n = malloc(2*sizeof(double));
-  pt_c = malloc(2*sizeof(double));
-  
-  int count = 0;
-  
-  for (h = 0; h < height; h++)
-  {
-    for (w = 0; w < width; w++)
-    {
-      
-      theta_c = -1000;
-      
-      for (k = 0; k < 3; k++)
-      {
-        xyz_hw[k] = centered_point_map[k*height*width+h*width+w];
-      }
-      
-      if (norm3(xyz_hw) > 0.01)
-      {
-      
-        pw = MAX(0,w-1);
-        nw = MIN(width-1,w+1);
-        
-        ph = h;
-        nh = h;
-        
-        for (k = 0; k < 3; k++)
-        {
-          xyz_phw[k] = centered_point_map[k*height*width+ph*width+pw];
-          xyz_nhw[k] = centered_point_map[k*height*width+nh*width+nw];
-        }
-      
-        direction_between_vectors_phi_theta(pt_p, xyz_phw, xyz_hw);
-        direction_between_vectors_phi_theta(pt_n, xyz_hw, xyz_nhw);
-        direction_between_vectors_phi_theta(pt_c, xyz_phw, xyz_nhw);
-        
-        dist_p = distance3(xyz_phw,xyz_hw);
-        dist_n = distance3(xyz_hw,xyz_nhw);
-        dist_c = distance3(xyz_phw,xyz_nhw);
-      
-        theta_p = pt_p[1]-PI/2;
-        theta_n = pt_n[1]-PI/2;
-        
-        if (norm3(xyz_nhw) > 0.01 && norm3(xyz_phw) && dist_c > 0.01)
-        {
-          theta_c = pt_c[1]-PI/2;
-        }
-        else if (norm3(xyz_nhw) > 0.01 && dist_n > 0.01)
-        {
-          theta_c = theta_n;
-        }
-        else if (norm3(xyz_phw) > 0.01 && dist_p > 0.01)
-        {
-          theta_c = theta_p;
-        }
-        
-        if (theta_c <= -PI && theta_c != -1000)
-        {
-          theta_c = theta_c + 2*PI;
-        }
-      }
-      
-      theta_map[h*width+w] = theta_c;
-      
-    }
-  }
-  
-  free(xyz_hw);
-  free(xyz_phw);
-  free(xyz_nhw);
-  
-  free(pt_p);
-  free(pt_n);
-}
-
-int phi_map(double* phi_map, double* centered_point_map, int height, int width)
-{
-  int h,w, ph, nh;
-  double * xyz_hw, * xyz_phw, * xyz_nhw;
-  double phi_p, phi_n, phi_c;
-  double dia_p, dia_c, dia_n;
-  double dz_p, dz_n, dz_c, dd_p, dd_n, dd_c;
-  double rad_p,rad_n,rad_c;
-  double dist_p, dist_n, dist_c;
-  int k;
-  
-  xyz_hw = malloc(3*sizeof(double));
-  xyz_phw = malloc(3*sizeof(double));
-  xyz_nhw = malloc(3*sizeof(double));
-  
-  
-  for (w = 0; w < width; w++)
-  {
-    for (h = 0; h < height; h++)
-    {
-      ph = MAX(0,h-1);
-      nh = MIN(height-1,h+1);
-      phi_c = -1000;
-      
-      for (k = 0; k < 3; k++)
-      {
-        xyz_hw[k] = centered_point_map[k*height*width+h*width+w];
-        xyz_phw[k] = centered_point_map[k*height*width+ph*width+w];
-        xyz_nhw[k] = centered_point_map[k*height*width+nh*width+w];
-      }
-      
-      if (norm3(xyz_hw) > 0.01)
-      {
-      
-        dist_p = distance3(xyz_phw,xyz_hw);
-        dist_n = distance3(xyz_hw,xyz_nhw);
-        dist_c = distance3(xyz_phw,xyz_nhw);
-      
-        dia_p = sqrt(pow(xyz_phw[0],2) + pow(xyz_phw[1],2));
-        dia_c = sqrt(pow(xyz_hw[0],2) + pow(xyz_hw[1],2));
-        dia_n = sqrt(pow(xyz_nhw[0],2) + pow(xyz_nhw[1],2));
-      
-        dd_p = dia_p - dia_c;
-        dd_n = dia_c - dia_n;
-        dd_c = dia_p - dia_n;
-      
-        dz_p = xyz_phw[2]-xyz_hw[2];
-        dz_n = xyz_hw[2]-xyz_nhw[2];
-        dz_c = xyz_phw[2]-xyz_nhw[2];
-        
-        rad_p = sqrt(pow(dd_p,2)+pow(dz_p,2));
-        rad_n = sqrt(pow(dd_n,2)+pow(dz_n,2));
-        rad_c = sqrt(pow(dd_c,2)+pow(dz_c,2));
-      
-        phi_p = -asin(dd_p/rad_p);
-        phi_n = -asin(dd_n/rad_n);
-      
-        if (norm3(xyz_nhw) > 0.01 && norm3(xyz_phw) && h > 0 && nh < height && dist_c > 0.01 && rad_c > 0)
-        {
-          phi_c = -asin(dd_c/rad_c);
-        }
-        else if (norm3(xyz_nhw) > 0.01 && nh < height && dist_n > 0.01 && rad_n > 0)
-        {
-          phi_c = -phi_n;
-        }
-        else if (norm3(xyz_phw) > 0.01 && h > 0 && dist_p > 0.01 && rad_p > 0)
-        {
-          phi_c = -phi_p;
-        }
-      }
-      
-      phi_map[h*width+w] = phi_c;
-      
-    }
-  }
-  
-  free(xyz_hw);
-  free(xyz_phw);
-  free(xyz_nhw);
-  
-}
 
 int theta_map_smooth(double* smoothed_theta_map, double* theta_map, char * extant_map, 
                      int height, int width, int max_win, double max_theta_diff)
