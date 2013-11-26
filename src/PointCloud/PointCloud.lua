@@ -186,6 +186,11 @@ end
 -- can create these from an rgb_map image if they don't exist
 function PointCloud:get_rgb()
    if ((not self.rgb) or (self.rgb:size(1) ~= self.points:size(1))) then 
+   
+      if (not self.rgb_map) then
+        self.rgb_map = self:get_normal_map():add(1):div(2):mul(100):floor():add(155)
+      end
+
       if self.rgb_map then
          img = self.rgb_map
          index,mask = self:get_index_and_mask()
@@ -202,8 +207,8 @@ function PointCloud:get_rgb()
          -- make the matrix Nx3 like self.points
          self.rgb = rgb:transpose(1,2):contiguous()
       else
-         print("don't know where to get the data perhaps you need to load the rgb image load_rgb_map()")
-         return nil
+        print("don't know where to get the data perhaps you need to load the rgb image load_rgb_map()")
+        return nil
       end
    end
    return self.rgb
@@ -1336,11 +1341,12 @@ end
 
 local function saveHelper_xyz(points, rgb, fname)
    local file = io.open(fname, 'w')
-   local tmpt = torch.range(1,points:size(1))                                                                                                                                
+   local tmpt = torch.range(1,points:size(1))
+                                                                                                                             
    tmpt:apply(function(i) 
-      pt = points[i]
+      local pt = points[i]
       if(rgb) then 
-        rgbx = rgb[i]
+        local rgbx = rgb[i]
         file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
       else
         file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..'\n')        
