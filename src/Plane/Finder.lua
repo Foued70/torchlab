@@ -1,4 +1,5 @@
 local select_points = Plane.util.select_points_fast
+local fit_plane_to_points = Plane.util.fit_plane_to_points
 
 local Finder = Class()
 
@@ -48,7 +49,7 @@ function Finder:validate_seed(points, normals, mask, debug_info)
    local error_string  = nil
 
    -- block for finding planes based on seed or from support of expanded set
-   while true do -- this is a dummy block to avoid a string of nested ifs with breaks.
+   while true do -- this is a dummy block to replace a string of nested ifs with breaks.
       local seed_n_pts = mask:sum()
       local mask_size  = mask:size()
       -- 1) 1st test: seed has a minimum number of points to form a plane
@@ -63,7 +64,7 @@ function Finder:validate_seed(points, normals, mask, debug_info)
          residual_threshold = self.residual_threshold,
          normal_threshold   = self.normal_threshold
       }
-      seed_plane:fit_points(seed_pts)
+      seed_plane.eqn, seed_plane.center = fit_plane_to_points(seed_pts)
       local seed_score  = seed_plane:score(seed_pts)
 
       -- 2) 2nd test: points in the segment explain a plane (no outliers in the segment)

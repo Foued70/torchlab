@@ -1,4 +1,13 @@
+local linear_fit = geom.linear_model.fit
 Class()
+
+function fit_plane_to_points(pts, m)
+   local plane_eqn, m = linear_fit(pts, m)
+   if plane_eqn[4] > 0 then 
+      plane_eqn:mul(-1)
+   end
+   return plane_eqn, m
+end
 
 function sweep_threshold(distances, max_dist, n_measurements)
    max_dist = max_dist or distances:max()

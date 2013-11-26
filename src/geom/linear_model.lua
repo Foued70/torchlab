@@ -9,36 +9,36 @@ Class()
 -- compute weights + bias 
 -- eg: fit a plane : ax + by + cz + d = 0 
 
-function fit(pts)
-   -- pts NxD (D == 3 for 3D points)
-   local d        = pts:size(2)
-   local pts,m    = remove_mean(pts,2) 
-   local n        = min_pca_svd(pts)
+-- pts DxN (D == 3 for 3D points)
+function fit(pts,m)
+   local d        = pts:size(1)
+   local pts,m    = remove_mean(pts,1,m) 
+   local n        = min_pca_svd(pts:t())
    local model    = torch.Tensor(d+1)
    model[{{1,d}}] = n
-   model[d+1]     = - ( n * m:squeeze())
-   return model 
+   model[d+1]     = - ( n * m)
+   return model, m
 end
 
-function fit_eig (pts)
-   local c,m      = covariance(pts)
+function fit_eig (pts, m )
+   local c,m      = covariance(pts, m)
    local d        = c:size(1)
    local n        = min_pca_eig(c)
    local model    = torch.Tensor(d+1)
    model[{{1,d}}] = n
-   model[d+1]     = - ( n * m:squeeze())
-   return model 
+   model[d+1]     = - ( n * m)
+   return model,m  
 end
 
-function fit_weighted(pts, w)
+function fit_weighted(pts, w, center)
    w = w or torch.ones(pts[1]:size()):div(pts[1]:nElement())
-   local c,m      = weighted_covariance(pts,w)
+   local c,m      = weighted_covariance(pts,w,center)
    local d        = c:size(1)
    local n        = min_pca_eig(c)
    local model    = torch.Tensor(d+1)
    model[{{1,d}}] = n
-   model[d+1]     = - ( n * m:squeeze())
-   return model 
+   model[d+1]     = - ( n * m)
+   return model, m
 end
 
 function normal_towards_origin(model)
