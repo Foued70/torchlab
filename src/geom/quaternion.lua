@@ -32,6 +32,12 @@ function equals(quat1, quat2)
    return (diff:lt(1e-8):sum() == 4)
 end
 
+function inverse(quat)
+   local dis = quat:norm()
+   local quat_new = quat:clone()*-1
+   quat_new[4]= -quat_new[4]
+   return quat_new/dis
+end
 -- use to concatenate 2 rotations (careful: quat2 then quat1
 -- non-cummutative)
 -- DONE: multiple
