@@ -112,7 +112,7 @@ end
 
 function SweepTreeNode:getTransformationToRoot(icp)
 	if(self:isRoot()) then
-		return torch.eye(4)
+		return self.pair:getTransformation(true)
 	else
 		return self.from:getTransformationToRoot(icp)*self.pair:getTransformation(false,icp,self.inverse)
 	end
