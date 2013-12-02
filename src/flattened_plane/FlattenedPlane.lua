@@ -4,7 +4,7 @@ local path = require 'path'
 local pcl = PointCloud.PointCloud
 local Sweep = align_floors_endtoend.Sweep
 local io = require 'io'
-function FlattenedPlane:__init(base_dir, sweep_name, tree, index)
+function FlattenedPlane:__init(base_dir, sweep_name, pc, transf, index)
     if not(util.fs.is_dir(base_dir)) then
         error("expected base_dir to exist for initializer for Sweep")
     end
@@ -15,18 +15,28 @@ function FlattenedPlane:__init(base_dir, sweep_name, tree, index)
     self.index = index
     self.base_dir = base_dir
     self.fsave_me = path.join(self.base_dir, FlattenedPlane.PLANE, "plane_".. sweep_name ..  "index_" .. index .. ".dat")
-    self.rootTransformation = torch.eye(4,4)
 
     self.resolution = 10
 
-    local nodes = tree:getAllNodes()
-    self.rootTransformation = tree:getRoot():getTransformationToRoot()
+    self.transformation = transf or torch.eye(4,4)
     self:setupQuatToFlatten()
-    v = nodes[self.sweep_name]
-    self.sweep_node = v
     self.thresh = .05
-    self:addPlane(v:getSweep(), v:getTransformationToRoot())
+    self:addPlane(pc)
     self:saveMe()
+end
+
+function FlattenedPlane:get_xyz_coordinates()
+    local minT, maxT = self:calculateMinAndMaxT()
+    local flat, t, x_mat, y_mat = FlattenedPlane.flattened2Image(torch.zeros(1,2), minT, maxT)
+    local eq_new = flattened_plane.PlaneIntersectionLine.getRotatedEquation(self:getPlaneEquation(self.index), self.quat)
+    local x = x_mat:reshape(x_mat:size(1)*x_mat:size(2))*self.resolution --add min??
+    local y = y_mat:reshape(y_mat:size(1)*y_mat:size(2))*self.resolution
+    local z = (x*eq_new[1]+y*eq_new[2]+eq_new[4])/-eq_new[3]
+    local unrotate_pts = geom.quaternion.rotate(geom.quaternion.inverse(self.quat), torch.cat(torch.cat(x,y ,2),z,2))
+    local pts_test = PointCloud.PointCloud.get_global_from_2d_pts(unrotate_pts,torch.inverse(self.transformation)) --+center:reshape(1,3):repeatTensor(unrotate_pts:size(1),1)
+    --local pts_test = PointCloud.PointCloud.get_global_from_2d_pts(self.plane:reshape(3,self.plane:size(2)*self.plane:size(3)):t(),torch.inverse(self.transformation)) --+center:reshape(1,3):repeatTensor(unrotate_pts:size(1),1)
+
+    return pts_test
 end
 function FlattenedPlane:getBaseDir()
     return self.base_dir
@@ -52,24 +62,24 @@ function FlattenedPlane:setupQuatToFlatten()
     --local quat2 = geom.quaternion.from_euler_angle(angle_az)
     self.quat = quat1 --geom.quaternion.product(quat2, quat1)
 end
-function FlattenedPlane.newOrLoad(base_dir, sweep_name, tree, index)
+function FlattenedPlane.newOrLoad(base_dir, sweep_name, pc, transf, index)
     if(util.fs.is_file(path.join(base_dir, FlattenedPlane.PLANE, "plane_" ..sweep_name .. "index_" .. index .. ".dat"))) then
         print("loading plane from file " .. "plane_" ..sweep_name ..  "index_" .. index .. ".dat")
         return torch.load(path.join(base_dir, FlattenedPlane.PLANE, "plane_" ..sweep_name ..  "index_" .. index .. ".dat"))
     else
-        return FlattenedPlane.new(base_dir, sweep_name, tree, index)
+        return FlattenedPlane.new(base_dir, sweep_name, pc, transf, index)
     end
 end
 
 function FlattenedPlane:__write_keys()
-  return {'base_dir', 'sweep_node', 'fsave_me', 'sweep_name', 'resolution', 'quat','plane','planed', 'plane_reald', 'index',
-        'emptiesI', 'occupiedI', 'rootTransformation',
+  return {'base_dir','fsave_me', 'sweep_name', 'resolution', 'quat','plane','planed', 'plane_reald', 'index',
+        'emptiesI', 'occupiedI',
         'iempties', 'iemptiesF', 'iemptiesFD', 'rempties','iemptiesFP',
         'ioccupied', 'ioccupiedF', 'ioccupiedFD', 'roccupied', 'ioccupiedFP',
         'minT', 'maxT', 'thresh','mask',
         'notnils', 'rnotnils','notnilsI', 'inilsF',
         'plane_interesection_data','iallD',
-        'allIntersections', 'allIntersectionsInfo',
+        'allIntersections', 'allIntersectionsInfo', 'transformation'
 }
 end
 
@@ -82,11 +92,11 @@ function FlattenedPlane:getAllPlaneEquations()
 end
 function FlattenedPlane:getPlaneEquation(k)
     local eqn = self:getAllPlaneEquations(self.base_dir)[k].eqn
-    local quat =  geom.quaternion.from_rotation_matrix(self.rootTransformation:sub(1,3,1,3))
+    local quat =  geom.quaternion.from_rotation_matrix(self.transformation:sub(1,3,1,3))
     local n1 = geom.quaternion.rotate(quat, eqn:sub(1,3))
     local pt1,t,vec1 = FlattenedPlane.findVector(eqn)
     local pt1r = geom.quaternion.rotate(quat, pt1)
-    pt1r = pt1r+self.rootTransformation:sub(1,3,4,4)
+    pt1r = pt1r+self.transformation:sub(1,3,4,4)
     local d_new = -pt1r*n1
    return torch.cat(n1, torch.Tensor({d_new}))
 end
@@ -111,11 +121,10 @@ function FlattenedPlane.select3d(from, selectPts)
 
 end
 
-function FlattenedPlane:addPlane(sweep, H)
+function FlattenedPlane:addPlane(pc)
     --to do check argument type
-    local H = H or torch.eye(4)
+    local H = self.transformation
     local eqn = self:getPlaneEquation(self.index)
-    local pc = sweep:getPC()
 
     local plane = self:getPlaneViewFromCenter(eqn, H, pc)
     local center = H:sub(1,3,4,4):squeeze()
@@ -132,6 +141,7 @@ function FlattenedPlane:addPlane(sweep, H)
     local matcher = Plane.Matcher.new()
     local normals, temp, temp, temp, maskN = pc:get_normal_map()
     local normals = flattened_plane.FlattenedPlane.select3d(normals, maskN*-1+1)
+
     local pts = flattened_plane.FlattenedPlane.select3d(pc:get_xyz_map_no_mask(), maskN*-1+1)
     local score, indices = matcher:match(self:getAllPlaneEquations(), pts:t(), normals:t())
     score = score:squeeze()
@@ -152,9 +162,7 @@ function FlattenedPlane:addPlane(sweep, H)
     local notnilsI = maskI*-1+1
     local notnils = FlattenedPlane.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),notnilsI)
         
-
     self.pc =pc
-    self.H = H
     self.rempties = torch.zeros(0,0)
     self.roccupied = torch.zeros(0,0)
     self.plane = plane
@@ -251,7 +259,8 @@ function FlattenedPlane:getPlaneViewFromCenter(eqn,H, pc)
     --means we are shooting ray forwards and not backwards
     local good_index = torch.gt(z_new, 0)
     local temp_pt = center:reshape(1,3):repeatTensor(transposedPts:size(1),1)+mvdCenter:clone():cmul(z_new:repeatTensor(3,1):t())
-    local good_index2 = torch.ones(good_index:size()):byte() --torch.lt((temp_pt-center:reshape(1,3):repeatTensor(temp_pt:size(1),1)):norm(2,2):squeeze(), pc:get_max_radius())
+    local good_index2 = torch.ones(good_index:size()):byte() 
+    good_index2 =torch.lt((temp_pt-center:reshape(1,3):repeatTensor(temp_pt:size(1),1)):norm(2,2):squeeze(), pc:get_max_radius()*5)
     local good_index3 = torch.eq(torch.lt(temp_pt:clone():sum(2), math.huge):double() + torch.gt(temp_pt:clone():sum(2),math.huge):double(),1):squeeze()
     local cum_good = torch.eq(good_index+good_index2+good_index3,3)
     temp_pt:select(2,1)[cum_good*-1+1]= 0
@@ -590,7 +599,7 @@ function FlattenedPlane.get_ith_plane(plane_num, sweep_name, redo)
         local scan = align_floors_endtoend.Scan.new("/Users/stavbraun/Desktop/play/motor-unicorn-0776_newsonia")
         local forest =  scan:organize_in_trees()         
         local tree = forest.tree_list.sweep_001
-        plane = FlattenedPlane.new(base_dir,sweep_name, forest.tree_list.sweep_001, plane_num)
+        plane = FlattenedPlane.new(base_dir,sweep_name, forest.tree_list.sweep_001:getRoot():getSweep():getPC(), forest.tree_list.sweep_001:getRoot():getTransformationToRoot(), plane_num)
         
        -- plane:addAllFrustrumsAndEmpties()
         --a,b,c = plane:getCornersSonia()
@@ -619,6 +628,7 @@ end
 
     i=20 our_img = torch.lt(torch.abs(d_interpolated-d_real),i):cmul(torch.ne(d_interpolated,-1))
 ]]
+--[[
 function FlattenedPlane:getSegmentation()
     thresh = torch.Tensor({.005, .01, .03, .05, .07, .09, .11, .13, .15, .2})
     --for j=1,10  do
@@ -696,7 +706,7 @@ function FlattenedPlane.getImgraphFun(inputimg)
 
     return mstsegmcolor, mstsegm, cc, imgraph
 end
-
+]]--
 function FlattenedPlane:saveAllToWebsite(filename)
     local s = "using sweeps "
     for k,v in pairs(self.rempties) do
