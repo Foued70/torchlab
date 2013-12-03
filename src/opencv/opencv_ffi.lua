@@ -162,6 +162,17 @@ void flann_knn(Mat* m_object, Mat* m_destinations, int knn, Mat* m_indices, Mat*
 void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresults, Mat* m_indices, Mat* m_dists);
 void get_orientation(Mat* src, int ksize, Mat* mag, Mat* orientaiton);
 Mat* phaseCorrelate(Mat *src, Mat *dst);
+void flood_fill(Mat* img, Mat* result, int x, int y);
+Mat* find_contours(Mat* image);
+void distance_transform(Mat* img, Mat* result);
+void fillQuad(Mat* img, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4);
+void fillQuadAll(Mat* img, Mat* quad);
+void fillQuadAllWithInterpolation(Mat* img, Mat* resultD, Mat* quad);
+void resize(Mat* src, Mat* dst, double factor);
+Mat* DFT(Mat*src);
+void threshold(Mat* src,  Mat*dst);
+Mat* rotateImage(const Mat* src, Mat* dst, double angle, double centerC, double centerR, int size_1, int size_2);
+Mat* inpaint(Mat* src, Mat* mask, Mat*dst, double radius, bool method);
 ]]
 
 -- utils.lua
