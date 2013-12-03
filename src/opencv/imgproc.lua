@@ -388,3 +388,11 @@ function inpaint(img, mask, radius, method)
    opencv_ffi.inpaint(img.mat, mask.mat, dest.mat, radius or 3, method or true)
    return dest
 end
+
+function convexHull(points, clockwise)
+   if ((not points.mat) or (type(points.mat) ~= "cdata")) then 
+      error("problem with input points")
+   end
+   clockwise = clockwise or false
+   return opencv.Mat.new(opencv_ffi.computeConvexHull(points.mat,clockwise))
+end

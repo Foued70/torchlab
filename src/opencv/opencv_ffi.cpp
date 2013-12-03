@@ -476,6 +476,14 @@ extern "C" {
     return warpedSrc;
   }
 
+  Mat* computeConvexHull(const Mat* points, bool clockwise)
+  {
+    Mat* hull = new Mat(0,0,points->type());
+    bool returnPoints = NULL;
+    convexHull(*points,*hull,clockwise,returnPoints);
+    return hull;
+  }
+
   /*
   get the pairwise distance between all pairs of points in A and B
   if A is mxp and B is nxp then the result will be mxn 

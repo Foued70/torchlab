@@ -145,6 +145,7 @@ Mat* getHomography(const KeyPoint* keyptr_src,  int npts_src,
 -- imgproc.lua
 ffi.cdef [[
 Mat* warpImage(const Mat* src, const Mat* transform, int size_x, int size_y);
+Mat* computeConvexHull(const Mat* points, bool clockwise);
 Mat* CannyDetectEdges(Mat* src, double threshold1, double threshold2);
 Mat* HoughLinesRegular(Mat* image, double rho, double theta, int threshold, double srn, double stn);
 Mat* HoughLinesProbabilistic(Mat* image, double rho, double theta, int threshold, double minLineLength, double maxLineGap);
