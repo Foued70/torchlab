@@ -24,6 +24,10 @@ end
 
 -- points and normals in DxN format
 function Matcher:match(planes, points, normals)
+   local d = points:size(1)
+   local n = points:nElement()/d
+   points = points:reshape(d,n)
+   normals = normals:reshape(d,n)
    -- TODO could do this with less memory
    local score = self.score or torch.Tensor()
    score:resize(#planes,points:size(2))
@@ -38,8 +42,7 @@ function Matcher:match(planes, points, normals)
       local residual_weights = kernel(torch.div(residuals,self.residual_threshold))
       local normal_weights   = kernel(torch.div(normal_dists,self.normal_threshold))
       -- TODO some mixing coeff ? alpha = 0.5
-      score[i]:copy(torch.cmul(residual_weights,normal_weights))
-   
+      score[i]:copy(torch.cmul(residual_weights,normal_weights))   
    end
 
    return score:max(1)
