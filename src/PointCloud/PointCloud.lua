@@ -526,11 +526,11 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    
    local file = io.open(pcfilename, 'r');
    local line = file:read();
-   
+
    if line == nil or line:len() < 5 then
       error("file did not have enough stuff in it")
    end
-   
+
    local po_cloud_file = false
    -- find first line which starts with a number
    local countHeader = 0
@@ -697,6 +697,31 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 
    print("pass 2: count: "..self.count..", height: "..self.height..", width: "..self.width);
 end   
+local function concatSelecteD(tens, indices)
+  return torch.cat(torch.cat(tens:select(2,1)[indices], 
+            tens:select(2,2)[indices], 2),tens:select(2,3)[indices],2)
+end
+local function concatSelecteD2(tens, indices)
+  return torch.cat(tens:select(2,1)[indices], 
+            tens:select(2,2)[indices], 2)
+end
+
+--should be called right after instantiation, does not recalculate all the maps
+--dumb downsampling, just takes subset of rows and columns (based on factor)
+function PointCloud:dumbDownsampleBy(factor)
+  local factor = factor or 2    
+  local divByFactor = torch.eq(self.hwindices:clone():div(factor)*factor-self.hwindices,0)
+  local indexGood = torch.eq(divByFactor:sum(2),2)
+  self.rgb = concatSelecteD(self.rgb,indexGood):contiguous()
+  self.hwindices:div(factor)
+  self.hwindices = concatSelecteD2(self.hwindices,indexGood):contiguous()
+  self.points = concatSelecteD(self.points,indexGood):contiguous()
+
+  self.width = self.hwindices:select(2,2):max()
+  self.height = self.hwindices:select(2,1):max()
+  self:reset_point_stats()
+  collectgarbage()
+end
 
 function PointCloud:set_pc_od_file(pcfilename)
   local loaded = torch.load(pcfilename)
@@ -715,8 +740,9 @@ function PointCloud:set_pc_od_file(pcfilename)
   if self.theta_map then 
     self.theta_map = self.theta_map:type('torch.DoubleTensor'):div(PointCloud.fudge_number)
   end
+  self.normal_mask = loaded[7]
   if(self.normal_mask) then
-    self.normal_mask = loaded[7]:type('torch.ByteTensor')
+    self.normal_mask = self.normal_mask:type('torch.ByteTensor')
   end
   self.local_to_global_pose = loaded[8]
   self.local_to_global_rotation = loaded[9]
@@ -1222,12 +1248,33 @@ function PointCloud:get_global_points()
    return rotate_translate(rot,pose,self.points)
 end
 
-function PointCloud:get_global_normal_map(recompute)
-  local norm = self:get_normal_map(recompute)
+function PointCloud:get_global_points_H(H)
+   return (H*torch.cat(self.points,torch.ones(self.points:size(1),1)):t()):t():sub(1,-1,1,3)
+end
+
+
+function PointCloud:get_global_normal_map_H(H)
+  local norm = self:get_smooth_normal()
+  local H_new = H:clone()
+  H_new[{{1,3},{4}}] = 0
+  pts = norm:reshape(3,norm:size(2)*norm:size(3)):t():clone()
+  return (H_new*torch.cat(pts,torch.ones(pts:size(1),1)):t()):t():sub(1,-1,1,3):t():reshape(3,norm:size(2),norm:size(3))
+
+  --[[
   local pose = self:get_local_to_global_pose()
   local rot  = self:get_local_to_global_rotation()
-  return rotate_translate(rot, pose,norm:reshape(3,norm:size(2)*norm:size(3)):t():clone()):t():reshape(3,norm:size(2),norm:size(3))
+  return rotate_translate(rot, torch.zeros(3),norm:reshape(3,norm:size(2)*norm:size(3)):t():clone()):t():reshape(3,norm:size(2),norm:size(3))
+--]]
 end
+
+function PointCloud.get_global_from_2d_pts(pts_o, H)
+    return (H*torch.cat(pts_o,torch.ones(pts_o:size(1),1)):t()):t():sub(1,-1,1,3)
+end
+function PointCloud:get_global_from_3d_pts(pts_o, H)
+    pts = pts_o:reshape(3,pts_o:size(2)*pts_o:size(3)):t():clone()
+    return (H*torch.cat(pts,torch.ones(pts:size(1),1)):t()):t():sub(1,-1,1,3):t():reshape(3,pts_o:size(2),pts_o:size(3))
+end
+
 
 function PointCloud:estimate_global_faro_pose(degree_above, degree_below)
   local poseFaro = self:estimate_faro_pose(degree_above, degree_below)
@@ -1264,7 +1311,8 @@ function PointCloud:downsample_points(leafsize)
    local ranges = self.maxval:clone():squeeze():add(self.minval:clone():squeeze():mul(-1))
    local pts = self:get_xyz_map_no_mask():clone()
    local crd = pts:clone():add(self.minval:clone():mul(-1):squeeze():repeatTensor(self.width,self.height,1):transpose(1,3)):div(scale):floor():add(1)
-   local rgb = self:get_rgb_map_no_mask():type('torch.DoubleTensor')
+   local rgb = self:get_rgb_map_no_mask()
+   if(rgb) then rgb = rgb:type('torch.DoubleTensor') end
    pts = crd:clone():add(-1):mul(scale):add(self.minval:squeeze():repeatTensor(self.height,self.width,1):transpose(1,3))
    
    local points = torch.zeros(self.count,3)
@@ -1276,8 +1324,10 @@ function PointCloud:downsample_points(leafsize)
    local downsampled_count = torch.data(count)
    local coord_map = torch.data(crd:clone():contiguous())
    local points_map = torch.data(pts:clone():contiguous())
-   local rgb_map = torch.data(rgb:clone():contiguous())
-
+   local rgb_map 
+   if(rgb) then
+    rgb_map = torch.data(rgb:clone():contiguous())
+  end
    toc = log.toc()-tic
    tic = tic + toc 
    print('downsample: setup: '..toc)
@@ -1358,17 +1408,21 @@ function PointCloud:save_points_to_xyz(fname)
 end
 
 function PointCloud:save_global_points_to_xyz(fname)
-   local points = self:get_global_points()
+  local points = self:get_global_points_H(H)
+  if self.format == 1 then
+      points = points/self.meter
+  end  
+  saveHelper_xyz(points, self:get_rgb(), fname)
+end
+function PointCloud:save_global_points_to_xyz_H(fname,H)
+   local points = self:get_global_points_H(H)
    if self.format == 1 then
      points = points/self.meter
    end  
    saveHelper_xyz(points, self:get_rgb(), fname)
 end
 
-function PointCloud:save_any_points_to_xyz(fname, points,rgb)
-   if self.format == 1 then
-     points = points/self.meter
-   end
+function PointCloud.save_any_points_to_xyz(fname, points,rgb)
    saveHelper_xyz(points, rgb, fname)
 end
 

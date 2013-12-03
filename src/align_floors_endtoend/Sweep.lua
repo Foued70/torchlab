@@ -126,7 +126,7 @@ function Sweep:getDepthImage(H, center_i, res)
     local idx, mask = pc:get_index_and_mask()
     mask = mask*-1+1
     pc:set_pose_from_rotation_matrix(H or torch.eye(4))
-    local normals = pc:get_global_normal_map(H or torch.eye(4))
+    local normals = pc:get_global_normal_map_H(H or torch.eye(4))
 
     pc:set_pose_from_rotation_matrix(torch.eye(4))
     pc:save_to_od(self.fod)
