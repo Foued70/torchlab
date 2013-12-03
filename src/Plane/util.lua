@@ -39,6 +39,15 @@ function sweep_threshold_2d(distances, max_dist, d2, max_d2, n_measurements)
    return r,cumulative
 end
 
+-- expects DxN
+function get_distance(point,points)
+   local tmp = points:clone()
+   tmp:add(-1,point:reshape(3,1):expandAs(points))
+   tmp:cmul(tmp)
+   local out = tmp:sum(1)
+   return out:sqrt():squeeze()
+end
+
 -- expects NxD
 function select_points(pts,mask)
    local pts_d  = pts:size(pts:nDimension())
