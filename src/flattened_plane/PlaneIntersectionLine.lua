@@ -42,31 +42,34 @@ function PlaneIntersectionLine:convertIntersectLineToPlane(j, curj, intersect, i
     local distances = geom.util.pairwise_distance(good_pts:sub(1,-1,1,2), plane_coords)
     local temp, dcoords = distances:min(2)
     dcoords = dcoords:squeeze()
-    intersectv = intersectv[intersect]
-    local counter = 1
-    local predictedF = torch.ones(plane_coords:size(1)):fill(-1)
-    predictedF[dcoords:long()]=intersectv
-    local predictedB = torch.ones(plane_coords:size(1)):fill(-1)
-    predictedB[dcoords:long()]=intersectv
-    local lastGoodValueF = 1
-    local lastGoodValueB = 1
-    for i =1,plane_coords:size(1) do
+    local flat2d = {}, flat2, x_mat, y_mat, t
+    for i =1, table.getn(intersectv) do
+        intersectv_t = intersectv[i][intersect]
+        local counter = 1
+        local predictedF = torch.ones(plane_coords:size(1)):fill(-1)
+        predictedF[dcoords:long()]=intersectv_t
+        local predictedB = torch.ones(plane_coords:size(1)):fill(-1)
+        predictedB[dcoords:long()]=intersectv_t
+        local lastGoodValueF = 1
+        local lastGoodValueB = 1
+        for i =1,plane_coords:size(1) do
 
-        if(predictedF[i] == -1) then
-            predictedF[i] = lastGoodValueF
-        else
-            lastGoodValueF = predictedF[i]
-        end
-        j=plane_coords:size(1)-i+1
-        if(predictedB[j] == -1) then
-            predictedB[j] = lastGoodValueB
-        else
-            lastGoodValueB = predictedB[j]
-        end
+            if(predictedF[i] == -1) then
+                predictedF[i] = lastGoodValueF
+            else
+                lastGoodValueF = predictedF[i]
+            end
+            j=plane_coords:size(1)-i+1
+            if(predictedB[j] == -1) then
+                predictedB[j] = lastGoodValueB
+            else
+                lastGoodValueB = predictedB[j]
+            end
 
+        end
+        flat2, flat2d[i], t, x_mat, y_mat = FlattenedPlane.flattened2Image(plane_coords, minT, maxT,
+            (predictedF+predictedB)/2)
     end
-    local flat2, flat2d, t, x_mat, y_mat = FlattenedPlane.flattened2Image(plane_coords, minT, maxT,
-        (predictedF+predictedB)/2)
     return flat2, flat2d, plane_coords[1][1]-minT[1][1]+1, plane_coords[1][2]-minT[1][2]+1, plane_coords[-1][1]-minT[1][1]+1, plane_coords[-1][2]-minT[1][2]+1
 end
 
@@ -126,7 +129,9 @@ local function calculateMinAndMax(lua_table_of_vectors, minT, maxT)
     return minT, maxT
 end
 function PlaneIntersectionLine:getRotatedIntersectionAndOccupiedEmpties(j)
+    --log.tic()
     local intersect, coord = self:findIntersectionImageOnPlane(j)
+
     if(not(intersect)) then
         return nil
     end
@@ -164,11 +169,14 @@ function PlaneIntersectionLine:getRotatedIntersectionAndOccupiedEmpties(j)
     local combined = PlaneIntersectionLine.getLineCoordinates(startX, startY, endX, endY)
 
     local flatOcc, t, x_mat, y_mat= FlattenedPlane.flattened2Image(rotatePtsOcc:sub(1,-1,1,2), minT:sub(1,-1,1,2), maxT:sub(1,-1,1,2))    
+
     local flatEmpt= FlattenedPlane.flattened2Image(rotatePtsEmpt:sub(1,-1,1,2), minT:sub(1,-1,1,2), maxT:sub(1,-1,1,2))    
+
     local locOfRow = combined:t()[1]:mean()-minT[1][1]+1
+
     local flatIntersect = torch.zeros(flatOcc:size())
     flatIntersect[{{locOfRow, locOfRow}, {math.min(startY, endY)-minT[1][2]+1, math.max(startY, endY)-minT[1][2]+1}}]=1
-    
+
     return flatIntersect, flatOcc, flatEmpt, x_mat, y_mat
 end
 
@@ -201,10 +209,12 @@ function PlaneIntersectionLine:sendRotateScoreBackToPlane(j, flatIntersect, flat
                 torch.ge(rotatePtsBack:t()[2], minTO[1][2])+torch.le(rotatePtsBack:t()[2], maxTO[1][2])
     good_pts = torch.eq(good_pts,4)
     local rotatePtsBack = FlattenedPlane.select3d(rotatePtsBack, good_pts)
-
-    local newCum, newCumD = FlattenedPlane.flattened2Image(rotatePtsBack:sub(1,-1,1,2):clone(), minTO:sub(1,-1,1,2), maxTO:sub(1,-1,1,2), 
-        flatIntersectD[good_pts])    
-
+    local newCum = {}
+    local newCumD = {}
+    for i=1, table.getn(flatIntersectD) do
+    newCum[i], newCumD[i] = FlattenedPlane.flattened2Image(rotatePtsBack:sub(1,-1,1,2):clone(), minTO:sub(1,-1,1,2), maxTO:sub(1,-1,1,2), 
+        flatIntersectD[i][good_pts])    
+    end
     --image.display(temp)
     return newCum, newCumD
 end
