@@ -11,6 +11,7 @@ extern "C"
 #include "opencv2/features2d/features2d.hpp"
 #include "opencv2/nonfree/nonfree.hpp"
 #include "opencv2/calib3d/calib3d.hpp"
+#include "opencv2/photo/photo.hpp"
 
 using namespace cv;
 using namespace std;
@@ -695,4 +696,255 @@ Mat* phaseCorrelate(Mat *src, Mat *dst)
   return ret;
 }
 
+void flood_fill(Mat* img, Mat* result, int x, int y)
+{
+  uchar fillValue = 1;
+  //cv::copyMakeBorder(*result, *result, 1, 1, 1, 1, cv::BORDER_REPLICATE);
+
+  cv::floodFill(*img, *result, cv::Point(x,y), cv::Scalar(255), 0, cv::Scalar(1), cv::Scalar(), 4 | cv::FLOODFILL_MASK_ONLY);
+
+}
+static double angle( Point pt1, Point pt2, Point pt0 )
+{
+    double dx1 = pt1.x - pt0.x;
+    double dy1 = pt1.y - pt0.y;
+    double dx2 = pt2.x - pt0.x;
+    double dy2 = pt2.y - pt0.y;
+    return (dx1*dx2 + dy1*dy2)/sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10);
+}
+
+
+Mat* find_contours(Mat* image)
+{
+    vector<vector<Point> > contours;
+    Mat canny;
+    int thresh = 100;
+        // try several threshold levels
+   // Canny( *image, canny, thresh, thresh*2, 3 );
+
+
+    // Find contours and store them in a list
+    findContours(*image, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+
+    // Test contours
+    vector<Point> approx;
+    for (size_t i = 0; i < contours.size(); i++)
+    {
+      cout << "contour found " << contours[i] << endl;
+            // approximate contour with accuracy proportional
+            // to the contour perimeter
+            approxPolyDP(Mat(contours[i]), approx, arcLength(Mat(contours[i]), true)*0.02, true);
+            cout << "contour found YES" << approx << endl;
+
+            // Note: absolute value of an area is used because
+            // area may be positive or negative - in accordance with the
+            // contour orientation
+            if (fabs(contourArea(Mat(approx))) > 1000 &&
+                    //fabs(contourArea(Mat(approx))) > 1000 &&
+                    isContourConvex(Mat(approx)))
+            {
+                Mat fun(Mat::zeros(approx.size(),2,CV_64F));
+                for(int i=0; i < approx.size(); i++){
+                  fun.at<double>(i,0) = approx[i].x;
+                  fun.at<double>(i,1) = approx[i].y;
+                }
+                return new Mat(fun);
+            }
+    }
+    return new Mat(Mat::zeros(0,0,CV_64F));
+}
+
+void distance_transform(Mat* img, Mat* result)
+{
+  cv::distanceTransform(*img, *result, CV_DIST_L2, CV_DIST_MASK_PRECISE);
+
+}
+
+void fillQuad(Mat* img, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4) 
+{
+
+  /** Create some points */
+  Point point_list[1][4];
+  point_list[0][0] = Point( x1, y1);
+  point_list[0][1] = Point( x2, y2 );
+  point_list[0][2] = Point( x3, y3 );
+  point_list[0][3] = Point( x4, y4);
+
+  const Point* ppt[1] = { point_list[0] };
+  int npt[] = { 4 };
+
+  fillPoly( *img,
+            ppt,
+            npt,
+            1,
+            Scalar( 1));
+
+}
+
+void fillQuadAll(Mat* img, Mat* quad) 
+{
+  Point point_list[1][4];
+  for (int i = 0; i < quad->rows; i++)
+  {
+      /** Create some points */
+      point_list[0][0] = Point( (*quad).at<double>(i,0), (*quad).at<double>(i,1));
+      point_list[0][1] = Point( (*quad).at<double>(i,2), (*quad).at<double>(i,3) );
+      point_list[0][2] = Point( (*quad).at<double>(i,4), (*quad).at<double>(i,5) );
+      point_list[0][3] = Point( (*quad).at<double>(i,6), (*quad).at<double>(i,7));
+
+      const Point* ppt[1] = { point_list[0] };
+      int npt[] = { 4 };
+
+      fillPoly( *img,
+                ppt,
+                npt,
+                1,
+                Scalar( 1));
+  }
+
+}
+double getBarycentricCoordinatesDistance(Mat* coord, int row, int c1, int c2, int c3, double x, double y)
+{
+  double x1 = (*coord).at<double>(row,c1);
+  double y1 = (*coord).at<double>(row,c1+1);
+  double d1 = (*coord).at<double>(row,c1+3);
+  double x2 = (*coord).at<double>(row,c2);
+  double y2 = (*coord).at<double>(row,c2+1);
+  double d2 = (*coord).at<double>(row,c2+3);
+  double x3 = (*coord).at<double>(row,c3);
+  double y3 = (*coord).at<double>(row,c3+1);
+  double d3 = (*coord).at<double>(row,c3+3);
+  double detT = (y2-y3)*(x1-x3)+(x3-x2)*(y1-y3);
+  double g1 = ((y2-y3)*(x-x3)+(x3-x2)*(y-y3))/detT;
+  double g2 = ((y3-y1)*(x-x3)+(x1-x3)*(y-y3))/detT;
+  double g3 = 1-g1-g2;
+  double ming = std::min(g1,min(g2,g3));
+  double maxg = std::max(g1,max(g2,g3));
+  g1 = max(min(g1,1.0),0.0);
+  g2 = max(min(g2,1.0),0.0);
+  g3 = max(min(g3,1.0),0.0);
+
+  double sum = g1+g2+g3;
+  g1 = g1/sum;
+  g2 = g2/sum;
+  g3 = g3/sum;
+
+
+  return g1*d1+g2*d2+g3*d3;
+
+  /*if(ming>=0 and maxg <=1 ){
+    return g1*d1+g2*d2+g3*d3;
+  } else {
+    return -1;
+  }*/
+}
+
+void fillQuadAllWithInterpolation(Mat* img, Mat* resultD, Mat* quad) 
+{
+  Point point_list[1][4];
+  Mat nonzero;
+  int num_values = 4;
+  for (int i = 0; i < quad->rows; i++)
+  {
+      for (int j=0; j<4; j++) 
+      {
+        /** Create some points */
+        if(((*quad).at<double>(i,num_values*j+2) == 0) || ((*quad).at<double>(i,num_values*((j+1)%4)+2)) == 0 || ((*quad).at<double>(i,num_values*4+2) == 0)) {
+          continue;
+        }
+        point_list[0][0] = Point( (*quad).at<double>(i,num_values*j), (*quad).at<double>(i,num_values*j+1));
+        point_list[0][1] = Point( (*quad).at<double>(i,num_values*((j+1)%4)), (*quad).at<double>(i,num_values*((j+1)%4)+1) );
+        //point_list[0][2] = Point( (*quad).at<double>(i,4), (*quad).at<double>(i,5) );
+        //point_list[0][3] = Point( (*quad).at<double>(i,6), (*quad).at<double>(i,7));
+        point_list[0][2] = Point( (*quad).at<double>(i,num_values*4), (*quad).at<double>(i,num_values*4+1));
+
+        const Point* ppt[1] = { point_list[0] };
+        int npt[] = { 3 };
+        fillPoly( *img,
+                  ppt,
+                  npt,
+                  1,
+                  Scalar( 10*(i+1)+j),
+                  4
+                  );
+      }
+  }
+  int count = 0;
+  
+  for(int i=0; i<img->rows; i++) {
+    for(int j=0; j<img->cols; j++) {
+      if(img->at<double>(i,j) > 0) 
+      {
+        count++;
+        int k = ((int)img->at<double>(i,j)) %10;
+        int rowC = (int)(img->at<double>(i,j)-k)/10;
+        
+        double result = getBarycentricCoordinatesDistance(quad, rowC-1, num_values*k, num_values*((k+1)%4), num_values*4, j, i);
+        if(result != -1) {
+          resultD->at<double>(i,j) = result;
+        }
+      }
+    }
+  }
+
+}
+
+void interpolate(Mat* src, Mat* dst, Mat* map1, Mat* map2) 
+{
+  remap(*src, *dst, *map1, *map2, INTER_CUBIC);
+
+}
+
+
+void resize(Mat* src, Mat* dst, double factor) 
+{
+  resize(*src, *dst, Size(), factor, factor, INTER_LINEAR);
+
+} 
+
+Mat* DFT(Mat*src)
+{
+    Mat padded;                            //expand input image to optimal size
+    int m = getOptimalDFTSize( src->rows );
+    int n = getOptimalDFTSize( src->cols ); // on the border add zero values
+    copyMakeBorder(*src, padded, 0, m - src->rows, 0, n - src->cols, BORDER_CONSTANT, Scalar::all(0));
+
+    Mat planes[] = {Mat_<float>(padded), Mat::zeros(padded.size(), CV_32F)};
+    Mat complexI;
+    merge(planes, 2, complexI);         // Add to the expanded another plane with zeros
+
+    dft(complexI, complexI);            // this way the result may fit in the source matrix
+
+    // compute the magnitude and switch to logarithmic scale
+    // => log(1 + sqrt(Re(DFT(I))^2 + Im(DFT(I))^2))
+    split(complexI, planes);                   // planes[0] = Re(DFT(I), planes[1] = Im(DFT(I))
+    magnitude(planes[0], planes[1], planes[0]);// planes[0] = magnitude
+    Mat magI = planes[0];
+
+    magI += Scalar::all(1);                    // switch to logarithmic scale
+    log(magI, magI);
+
+    // crop the spectrum, if it has an odd number of rows or columns
+    magI = magI(Rect(0, 0, magI.cols & -2, magI.rows & -2));
+    Mat * clone = new Mat(magI.dims,magI.size[0],magI.type());
+    magI.copyTo(*clone);
+    return clone;
+}
+
+void threshold(Mat* src,  Mat*dst) {
+  threshold(*src, *dst, 0, 1, CV_THRESH_OTSU);
+}
+
+Mat* rotateImage(const Mat* src, Mat* dst, double angle, double centerC, double centerR, int size_1, int size_2)
+  {
+    Point2f src_center(centerC, centerR);
+    Mat rot_mat = getRotationMatrix2D(src_center, angle, 1.0);
+    warpAffine(*src, *dst, rot_mat, Size(size_1, size_2));
+
+  }
+
+  Mat* inpaint(Mat* src, Mat* mask, Mat*dst, double radius, bool method)
+{
+  inpaint(*src, *mask, *dst, radius, method ? INPAINT_NS : INPAINT_TELEA);
+}
 } // extern "C"
