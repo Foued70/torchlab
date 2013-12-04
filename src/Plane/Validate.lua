@@ -1,9 +1,9 @@
 local select_points = Plane.util.select_points_fast
 local fit_plane_to_points = Plane.util.fit_plane_to_points
 
-local Finder = Class()
+local Validate = Class()
 
-function Finder:__init(...)
+function Validate:__init(...)
    _,
    self.residual_threshold, 
    self.normal_threshold, 
@@ -12,7 +12,7 @@ function Finder:__init(...)
    self.min_auc_score = 
       dok.unpack(
          {...},
-         'Finder',
+         'Validate',
          'validate a plane in a set of points given a subset of points',
          {arg='residual_threshold',
           type='number',
@@ -43,7 +43,7 @@ function Finder:__init(...)
    self.use_slope_score = false
 end
 
-function Finder:validate_seed(points, normals, mask, debug_info)
+function Validate:seed(points, normals, mask, debug_info)
    
    local current_plane = nil
    local error_string  = nil
