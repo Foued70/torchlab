@@ -293,6 +293,17 @@ function distanceTransform(img)
    return dest
 end
 
+function distanceTransformLabels(img)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dest = opencv.Mat.new(torch.zeros(img:size(1), img:size(2)):byte())  
+   destLabels = opencv.Mat.new(torch.zeros(img:size(1), img:size(2)):float())  
+
+   opencv_ffi.distance_transform_labels(img.mat, dest.mat, destLabels.mat)
+   return dest, destLabels
+end
+
 function fillQuad(img, xyTensor)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input images")

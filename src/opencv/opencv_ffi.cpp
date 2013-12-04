@@ -760,6 +760,12 @@ void distance_transform(Mat* img, Mat* result)
 
 }
 
+void distance_transform_labels(Mat* img, Mat* result, Mat* labels)
+{
+  cv::distanceTransform(*img, *result, *labels, CV_DIST_L2, CV_DIST_MASK_PRECISE, DIST_LABEL_PIXEL);
+
+}
+
 void fillQuad(Mat* img, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4) 
 {
 
