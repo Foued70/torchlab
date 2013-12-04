@@ -335,7 +335,7 @@ function PointCloud:get_normal_map(mask_tmp,mind,maxd)
 end
 
 function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
-
+   if not self.smooth_nmp then 
     local tic = log.toc()
     if not win then
       max_win = 10
@@ -355,8 +355,15 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
     local smooth_phi = phi:clone():contiguous():fill(0)
     local smooth_theta = theta:clone():contiguous():fill(0)
   
-    libpc.phi_map_smooth(torch.data(smooth_phi),torch.data(phi:clone():contiguous()),torch.data(extant_map:clone():contiguous()),height,width,max_win,phi_diff)
-    libpc.theta_map_smooth(torch.data(smooth_theta),torch.data(theta:clone():contiguous()),torch.data(extant_map:clone():contiguous()),height,width,max_win,theta_diff)
+    libpc.phi_map_smooth(torch.data(smooth_phi),
+                         torch.data(phi:clone():contiguous()),
+                         torch.data(extant_map:clone():contiguous()),
+                         height,width,max_win,phi_diff)
+
+    libpc.theta_map_smooth(torch.data(smooth_theta),
+                           torch.data(theta:clone():contiguous()),
+                           torch.data(extant_map:clone():contiguous()),
+                           height,width,max_win,theta_diff)
   
     smooth_phi[mask] = 0
     smooth_theta[mask] = 0
@@ -378,8 +385,13 @@ function PointCloud:get_smooth_normal(max_win, phi_diff, theta_diff)
     dd = smooth_nmp:clone():cmul(self:get_xyz_map_no_mask()):sum(1):squeeze()
   
     print('get_smooth_normal_map: '..(log.toc()-tic))
-    
-  return smooth_nmp, dd, smooth_phi, smooth_theta, mask
+    self.smooth_nmp   = smooth_nmp
+    self.smooth_dd    = dd
+    self.smooth_phi   = smooth_phi
+    self.smooth_theta = smooth_theta
+    self.smooth_mask  = mask
+   end
+   return self.smooth_nmp, self.smooth_dd, self.smooth_phi, self.smooth_theta, self.smooth_mask
 
 end
 
