@@ -266,3 +266,144 @@ function phaseCorrelate(img, dest)
 
    return opencv.Mat.new(opencv_ffi.phaseCorrelate(img.mat, dest.mat));
 end
+
+function floodFill(img, x,y)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dest = opencv.Mat.new(torch.zeros(img:size(1)+2, img:size(2)+2):byte())  
+   opencv_ffi.flood_fill(img.mat, dest.mat, x, y)
+   return dest
+end
+
+function  find_contours(img)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dest = opencv_ffi.find_contours(img.mat)
+   return opencv.Mat.new(dest)
+end
+
+function distanceTransform(img)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dest = opencv.Mat.new(torch.zeros(img:size(1), img:size(2)):byte())  
+   opencv_ffi.distance_transform(img.mat, dest.mat)
+   return dest
+end
+
+function distanceTransformLabels(img)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dest = opencv.Mat.new(torch.zeros(img:size(1), img:size(2)):byte())  
+   destLabels = opencv.Mat.new(torch.zeros(img:size(1), img:size(2)):float())  
+
+   opencv_ffi.distance_transform_labels(img.mat, dest.mat, destLabels.mat)
+   return dest, destLabels
+end
+
+function fillQuad(img, xyTensor)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   if(xyTensor:size(1) ~=4 or xyTensor:size(2)~=2) then
+      error("wrong tensor size, should be 4x2")
+   end
+   xyTensor = xyTensor-1
+   xyTensor = torch.cat(xyTensor:select(2,2),xyTensor:select(2,1),2) --flip x and y for opencv
+   opencv_ffi.fillQuad(img.mat, xyTensor[1][1], xyTensor[1][2], xyTensor[2][1], xyTensor[2][2],
+                                    xyTensor[3][1], xyTensor[3][2], xyTensor[4][1], xyTensor[4][2])
+   return img
+end
+function fillQuadAll(img, xyTensor)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   if(xyTensor:size(2)~=8) then
+      error("wrong tensor size, should be nx2")
+   end
+   xyTensor = xyTensor-1
+   xyTensor = xyTensor:index(2,torch.LongTensor({2,1,4,3,6,5,8,7})) --flip for opencv
+   opencv_ffi.fillQuadAll(img.mat,opencv.Mat.new(xyTensor).mat)
+   return img
+end
+
+function fillQuadAllWithInterpolation(img, xyTensor)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   if(xyTensor:size(2)~=20) then
+      error("wrong tensor size, should be nx2")
+   end
+   local xyTensor = xyTensor-1
+   xyTensor = xyTensor:index(2,torch.LongTensor({  2,1,3,4, 
+                                                   6,5,7,8,
+                                                   10,9, 11, 12, 
+                                                   14, 13, 15,16,
+                                                   18,17, 19, 20})) --flip for opencv
+   --local lastDigit = (xyTensor*10):floor()-(xyTensor:clone():floor()*10)
+   --xyTensor[torch.ge(lastDigit,5)]:ceil()
+   --xyTensor[torch.lt(lastDigit,5)]:floor()
+   --xyYensor = xyTensor:int()
+   local resultD = opencv.Mat.new(torch.ones(img:size(1), img:size(2)):fill(-1))  
+   opencv_ffi.fillQuadAllWithInterpolation(img.mat,resultD.mat, opencv.Mat.new(xyTensor).mat)
+   return img, resultD
+end
+
+function resize(img, factor)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dest = opencv.Mat.new(torch.zeros(img:size(1)*factor, img:size(2)*factor))  
+   opencv_ffi.resize(img.mat, dest.mat, factor)
+   return dest
+end
+
+function DFT(img)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dest = opencv.Mat.new(opencv_ffi.DFT(img.mat))
+   return dest
+end
+
+function threshold(img)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dst = opencv.Mat.new(torch.zeros(img:size(1), img:size(2)))  
+   opencv_ffi.threshold(img.mat, dest.mat)
+   return dest
+end
+
+function rotateImage(img, deg, centerX, centerY, size_x, size_y)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   dst = opencv.Mat.new(torch.zeros(size_x, size_y))  
+   print(centerX-1, centerY-1)
+   opencv_ffi.rotateImage(img.mat, dest.mat, deg, centerY-1, centerX-1, size_x, size_y)
+   return dest
+end
+
+function inpaint(img, mask, radius, method)
+   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
+      error("problem with input images")
+   end
+   if ((not mask.mat) or (type(mask.mat) ~= "cdata")) then 
+      error("problem with mask images")
+   end
+   dst = opencv.Mat.new(torch.zeros(img:size(1), img:size(2)))  
+   opencv_ffi.inpaint(img.mat, mask.mat, dest.mat, radius or 3, method or true)
+   return dest
+end
+
+function convexHull(points, clockwise)
+   if ((not points.mat) or (type(points.mat) ~= "cdata")) then 
+      error("problem with input points")
+   end
+   clockwise = clockwise or false
+   return opencv.Mat.new(opencv_ffi.computeConvexHull(points.mat,clockwise))
+end

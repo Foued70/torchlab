@@ -145,6 +145,7 @@ Mat* getHomography(const KeyPoint* keyptr_src,  int npts_src,
 -- imgproc.lua
 ffi.cdef [[
 Mat* warpImage(const Mat* src, const Mat* transform, int size_x, int size_y);
+Mat* computeConvexHull(const Mat* points, bool clockwise);
 Mat* CannyDetectEdges(Mat* src, double threshold1, double threshold2);
 Mat* HoughLinesRegular(Mat* image, double rho, double theta, int threshold, double srn, double stn);
 Mat* HoughLinesProbabilistic(Mat* image, double rho, double theta, int threshold, double minLineLength, double maxLineGap);
@@ -162,6 +163,18 @@ void flann_knn(Mat* m_object, Mat* m_destinations, int knn, Mat* m_indices, Mat*
 void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresults, Mat* m_indices, Mat* m_dists);
 void get_orientation(Mat* src, int ksize, Mat* mag, Mat* orientaiton);
 Mat* phaseCorrelate(Mat *src, Mat *dst);
+void flood_fill(Mat* img, Mat* result, int x, int y);
+Mat* find_contours(Mat* image);
+void distance_transform(Mat* img, Mat* result);
+void distance_transform_labels(Mat* img, Mat* result, Mat* labels);
+void fillQuad(Mat* img, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4);
+void fillQuadAll(Mat* img, Mat* quad);
+void fillQuadAllWithInterpolation(Mat* img, Mat* resultD, Mat* quad);
+void resize(Mat* src, Mat* dst, double factor);
+Mat* DFT(Mat*src);
+void threshold(Mat* src,  Mat*dst);
+Mat* rotateImage(const Mat* src, Mat* dst, double angle, double centerC, double centerR, int size_1, int size_2);
+Mat* inpaint(Mat* src, Mat* mask, Mat*dst, double radius, bool method);
 ]]
 
 -- utils.lua
