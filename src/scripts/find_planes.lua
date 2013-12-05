@@ -77,8 +77,8 @@ itrw = Plane.FitIterativeReweighted.new{
    min_points_for_plane = min_points_for_plane
 }
 
-itrw.save_images = false
-itrw.verbose     = false
+itrw.save_images = true
+itrw.verbose     = true
 
 matcher = Plane.Matcher.new(residual_threshold, normal_threshold)
 
@@ -257,12 +257,14 @@ for pci,pcfile in pairs(pcfiles) do
          image.save(string.format("%s/distance_%03d.jpg",out_dir,count),
                     image.combine(distance_weights:reshape(imgh,imgw)))
          printf("mx max: %f min: %f", mx:max(), mx:min())
-         printf(" - gt(0.1) : %d", mx:gt(0.1):sum())
-         printf(" - gt(0.5) : %d", mx:gt(0.5):sum())
-         printf(" - gt(1) : %d", mx:gt(1):sum())
-         printf(" - gt(2) : %d", mx:gt(2):sum())
-         printf(" - gt(3) : %d", mx:gt(3):sum())
-         printf(" - gt(4) : %d", mx:gt(4):sum())
+         --  DEBUG down weighted saliency threshold
+         -- printf(" - gt(0.1) : %d", mx:gt(0.1):sum())
+         -- printf(" - gt(0.5) : %d", mx:gt(0.5):sum())
+         -- printf(" - gt(1) : %d", mx:gt(1):sum())
+         -- printf(" - gt(2) : %d", mx:gt(2):sum())
+         -- printf(" - gt(3) : %d", mx:gt(3):sum())
+         -- printf(" - gt(4) : %d", mx:gt(4):sum())
+         -- ]]
          n_patches = mx:gt(1):sum()
 
          collectgarbage()
@@ -272,8 +274,8 @@ for pci,pcfile in pairs(pcfiles) do
          local planefilename = string.format("%s/planes-tmp.t7",out_dir)
          print("saving "..planefilename)
          torch.save(planefilename, planes)
-         print("saving "..imgname)
          local imgname = string.format("%s/scale_%dx%d.jpg",out_dir,base_win,base_win)
+         print("saving "..imgname)
          image.save(imgname, Plane.finder_utils.visualize_planes(planes))
       end
    end -- check SKIP

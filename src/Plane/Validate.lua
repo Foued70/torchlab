@@ -53,7 +53,7 @@ function Validate:seed(points, normals, mask, debug_info)
       local seed_n_pts = mask:sum()
       local mask_size  = mask:size()
       -- 1) 1st test: seed has a minimum number of points to form a plane
-      if ( seed_n_pts < 3) then
+      if ( seed_n_pts < self.min_points_for_seed) then
          error_string="not enough seed points"
          break
       end
@@ -83,19 +83,26 @@ function Validate:seed(points, normals, mask, debug_info)
       end
       
       local seed_explained_score = seed_plane:score(seed_explained_pts)
-
+      
       seed_plane.auc_score, seed_plane.curve = 
          self.score:compute(seed_plane.eqn, points, normals, self.use_slope_score)
       
-      -- 4) 4th test if seed explains enough points and points are below threshold we have a plane
-      if (seed_n_pts > self.min_points_for_seed) and 
-         (seed_explained_score < self.residual_threshold) and 
-      (seed_plane.auc_score > self.min_auc_score) then
-         -- the plane from original seed that explains a minumum number of points
-         current_plane = seed_plane
-         error_string  = "Found plane for seed."
+      -- 4) 4th test if seed explains oints are below threshold we have a plane
+      if (seed_explained_score > self.residual_threshold) then
+         error_string='points explained by seed not above residual'
+         break
       end
-      break
-   end -- break out of dummy loop for plane finding
+
+      -- 5) 5th test if curve of points is above minimum area under curve score
+      if (seed_plane.auc_score < self.min_auc_score) then
+         error_string='auc_score below threshold'
+         break
+      end
+
+      -- the plane from original seed that explains a minumum number of points
+      current_plane = seed_plane
+      error_string  = "Found plane for seed."
+      break -- break out of dummy loop for plane finding
+   end 
    return current_plane, error_string
 end
