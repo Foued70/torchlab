@@ -166,6 +166,7 @@ Mat* phaseCorrelate(Mat *src, Mat *dst);
 void flood_fill(Mat* img, Mat* result, int x, int y);
 Mat* find_contours(Mat* image);
 void distance_transform(Mat* img, Mat* result);
+void distance_transform_labels(Mat* img, Mat* result, Mat* labels);
 void fillQuad(Mat* img, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4);
 void fillQuadAll(Mat* img, Mat* quad);
 void fillQuadAllWithInterpolation(Mat* img, Mat* resultD, Mat* quad);
