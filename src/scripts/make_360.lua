@@ -1,5 +1,6 @@
 -- Class()
-os  = require 'os'
+io    = require 'io'
+os    = require 'os'
 blend = projection.util.blend 
 
 pi = math.pi
@@ -8,7 +9,7 @@ pi2 = pi * 0.5
 cmd = torch.CmdLine()
 cmd:text()
 cmd:text()
-cmd:text('Compute image projections')
+cmd:text('Make 360 from a linear 360 sweep of images')
 cmd:text()
 cmd:text('Options')
 cmd:option('-imagesdir', 'images/', 'directory with the images to load')
@@ -77,7 +78,7 @@ for i = 1,#images do
 
    image_wand:load(images[i])
    image_wand:size(width,height)
-   img = image_wand:toTensor('byte',"RGBA","DHW")
+   img = image_wand:toTensor('float',"RGBA","DHW")
    proj_from:set_lambda_phi(lambda,phi)
    index1D,stride,mask = rect_to_sphere:get_offset_and_mask(force)
    img_out = rect_to_sphere:remap(img)
