@@ -1007,8 +1007,8 @@ imgraph._example = [[
       -- (4) compute the watershed of the graph
       local graph = imgraph.graph(inputimgg, 8)
       local gradient = imgraph.graph2map(graph)
-      local watershed = imgraph.watershed(gradient, 0.08, 8)
-      local watershedgraph = imgraph.graph(watershed, 8)
+      local watershed = imgraph.watershed(gradient, 0.08, 8) 
+      local watershedgraph = imgraph.graph(watershed, 8) 
       local watershedcc = imgraph.connectcomponents(watershedgraph, 0.5, true)
 
       -- (5) compute the saliency of a graph
@@ -1023,7 +1023,7 @@ imgraph._example = [[
 
       -- (7) display results
       image.display{image=inputimg, legend='input image'}
-      image.display{image=cc, legend='thresholded graph'}
+      --image.display{image=cc, legend='thresholded graph'}
       image.display{image=watershed, legend='watershed on the graph'}
       image.display{image=watershedcc, legend='components of watershed'}
       image.display{image=mstsegmcolor, legend='segmented graph, using min-spanning tree'}

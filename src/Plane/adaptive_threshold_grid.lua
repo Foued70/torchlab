@@ -1,5 +1,5 @@
 io = require 'io'
-plane_finder = require './plane_finder'
+--plane_finder = require './plane_finder'
 src_dir = "arcs/motor-unicorn-0776/source/faro/"
 -- s = src_dir .. "sweep_001.xyz"
 s = "arcs/temporary-circle-6132/source/po_scan/a/001/sweep.xyz"
@@ -18,7 +18,7 @@ pc_max_radius = pc:get_max_radius()
 -- pname = "combination__thres_40_minseed_150_minplane_900_nf_0.87_normal_raw/planes.t7"
 -- _G.pl = torch.load(wrk_dir .. "planes/sweep_001/".. pname)
 
-_G.pl = torch.load("output/arcs_temporary-circle-6132_source_po_scan_a_001_sweep_xyz/combined__thres_40_minplane_150_nf_0.87_normal_var_baseplanes_saliency_base_12_scale_1.2_n_scale_5_thres_20_minseed_150_minplane_900_nf_0.87_normal_var/planes.t7")
+_G.pl = torch.load("output/arcs_temporary-circle-6132_source_po_scan_a_001_sweep_xyz/combined_thres_40_minplane_150_nf_0.87_normal_var_baseplanes_saliency_base_12_scale_1.2_n_scale_5_thres_20_minseed_150_minplane_900_nf_0.87_normal_var/planes.t7")
 
 -- _G.pls = plane_finder.Planes.new(pl)
 

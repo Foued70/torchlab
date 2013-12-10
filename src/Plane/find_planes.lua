@@ -1,6 +1,6 @@
 require 'gnuplot'
 gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")
-gnuplot.setterm("wxt")
+gnuplot.setterm("x11")
 pi = math.pi
 pi2 = pi/2
 io               = require 'io'
@@ -45,6 +45,7 @@ params = cmd:parse(process.argv)
 
 src_dir               = params.src_dir:gsub("/*$","")
 wrk_dir               = src_dir:gsub("source","work")
+
 pcfiles               = util.fs.glob(src_dir, {"xyz$"})
 base_out_dir          = params.out_dir
 
