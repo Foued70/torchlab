@@ -4,7 +4,7 @@ local pi2 = math.pi*0.5
 
 -- takes a table of images and a table of the corresponding masks
 -- (binary visibility masks) and blends images into a single output
--- image using the masks.
+-- image using the masks. Warning: Images should be float.
 function blend (images, masks)
    img_size = images[1]:size()
    usealpha = false
@@ -26,7 +26,6 @@ function blend (images, masks)
       end
    end
    allmask:add(-(allmask:min()-1))
-
    allmask = allmask:typeAs(images[1]):add(-allmask:max()):abs()
    -- sum to 1
    allmask = allmask:clone():fill(1):cdiv(allmask)

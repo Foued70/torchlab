@@ -89,7 +89,7 @@ end
 function exec(cmd) 
   local io = require 'io'
   h = io.popen(cmd) 
-  line = h:read("*l") 
+  line = h:read("*a") 
   h:close() 
   return line 
 end

@@ -64,9 +64,10 @@ end
 
 -- pts is DxN as should be
 function residual_fast(model, pts, res)
-   d = pts:size(1)
-   if d ~= model:size(1)-1 then 
-      error("model size "..model:size(1).." not eq pts dim "..pts:size(1))
+   d  = pts:size(1)
+   md = model:size(1)
+   if not((d == md) or (d == md-1)) then 
+      error("model size "..md.." not eq pts dim "..d)
    end
    pts = pts:reshape(d,pts:nElement()/d)
    res = res or torch.Tensor()
@@ -74,7 +75,9 @@ function residual_fast(model, pts, res)
    for i = 2,d do 
       res:add(torch.mul(pts[i],model[i]))
    end
-   res:add(model[d+1])
+   if md == d+1 then 
+      res:add(model[d+1])
+   end
    return res
 end
 

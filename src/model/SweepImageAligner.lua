@@ -12,6 +12,9 @@ function SweepImageAligner:__init(imagePathOrData)
    if type(imagePathOrData) == "string" then
       self.image_filenames = 
          string.split(util.fs.exec(string.format('ls %s',imagePathOrData)))
+      for _,fn in pairs(self.image_filenames) do 
+         printf(" - file: %s",fn)
+      end
    elseif type(imagePathOrData) == "table" then
       if type(imagePathOrData[1]) == "string" then
          -- table of image filenames

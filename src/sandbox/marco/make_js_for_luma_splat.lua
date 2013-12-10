@@ -46,9 +46,13 @@ function save_js_for_luma()
    objf = assert(io.open(outjs, "w"))
    objf:write(string.format("var %s = [\n",bname))
    i = 1
-   d:apply(function (x) objf:write(string.format("%f,",x)) if (i%9 == 0) then objf:write("\n") end i = i+1 end)
-           objf:write("];")
-           objf:close()
+   d:apply(function (x) 
+              objf:write(string.format("%f,",x)) 
+              if (i%9 == 0) then objf:write("\n") end 
+              i = i+1 
+           end)
+   objf:write("];")
+   objf:close()
 end
 
 -- now dump ply
