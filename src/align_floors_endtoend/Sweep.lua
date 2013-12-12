@@ -104,7 +104,6 @@ function Sweep:getDepthImage(H, center_i, res)
     local dis = pts:clone():norm(2,2)
 
     local azimuth  = (torch.atan2(pts:select(2,2):clone(), pts:select(2,1):clone()) +math.pi)*-1+2*math.pi--range 0 to 2*math.pi                   
-
     local elevation = torch.acos(pts:select(2,3):clone():cdiv(dis))  -- 0 to math.pi*150/180
     --image.display(azimuth)
     local size_x = 360

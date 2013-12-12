@@ -251,7 +251,7 @@ function Scan:attemptToAlignPair(s_ij)
     s_ij:getSweep2():getPC(t*t2):write(path.join(self.base_dir,"DOWNSAMPLEDXYZ","noicpsecond"..s_ij:getSweep2():getName()..'.xyz'))
     --]]
     score =  s_ij:get3dValidationScore(nil, 5)
-    if (score[1]<.75 or score[4]<.15) then --not(success) then --
+    if (score[1]<.8 or score[4]<.15) then --not(success) then --
         print("BAD ALIGNMENT---------" .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
         return false, s_ij
     else

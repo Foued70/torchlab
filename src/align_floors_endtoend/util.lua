@@ -207,3 +207,8 @@ function findAngDiff(nlist1,nlist2,trans1,trans2)
 --  return diff
    
 end
+
+function angleBetween(n1,n2)
+    local dot = n1:clone():cmul(n2):sum(2):squeeze()
+    return torch.acos(dot):squeeze()
+end
