@@ -1,8 +1,6 @@
-
-torch = Class()
-
+Class()
 -- Method to return pointer to raw data
-function torch.flipTB(tensor)
+function flipTB(tensor)
   local t = tensor:clone()
   for i=1,t:size(1) do
     t[i] = tensor[t:size(1)-i+1]
@@ -10,12 +8,11 @@ function torch.flipTB(tensor)
   return t
 end 
 
-function torch.flipLR(tensor)
+function flipLR(tensor)
   return torch.flipTB(tensor:t()):t()
 end
 
-
-function torch.unique(tensor)
+function unique(tensor)
 	if not(tensor:type() == "torch.IntTensor") then
 		error("requires int tensor")
 	end
@@ -32,7 +29,7 @@ function torch.unique(tensor)
     return t[combined]
 end
 
-function torch.select3d(from, selectPts)
+function select3d(from, selectPts)
     local npts
     if(from:dim()==2) then
         if (selectPts:dim() == 1) then
@@ -50,4 +47,11 @@ function torch.select3d(from, selectPts)
         error("wrong number of select pts")
     end
 
+end
+
+function assign3d(from, selectPts, normals_n)
+    normals_n[{{},1}][selectPts] = from[{{},1}]
+    normals_n[{{},2}][selectPts] = from[{{},2}]
+    normals_n[{{},3}][selectPts] = from[{{},3}]
+    return normals_n
 end

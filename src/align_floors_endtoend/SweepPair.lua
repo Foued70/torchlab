@@ -2,9 +2,10 @@ SweepPair = Class()
 SweepPair.SWEEPPAIR = "SWEEPPAIR"
 local colors = require '../opencv/types/Colors.lua'
 local path = require 'path'
-FindTransformation = align_floors_endtoend.FindTransformation
-TransformationValidation = align_floors_endtoend.TransformationValidation
-Sweep = align_floors_endtoend.Sweep
+local FindTransformation = align_floors_endtoend.FindTransformation
+local TransformationValidation = align_floors_endtoend.TransformationValidation
+local Sweep = align_floors_endtoend.Sweep
+local util_sweep = align_floors_endtoend.util
 
 --transformation from sweep2 to sweep1
 function SweepPair:__init(base_dir, sweep1, sweep2)
@@ -310,59 +311,15 @@ function SweepPair:setBestTransformationH(H)
     self:saveMe()     
   end
 end
-function SweepPair:getICPFromPoints(pc1_pts, pc2_pts)
-    local pc1 = pcl.PCLPointCloud.fromPoints(pc1_pts:contiguous())
-    local pc2 = pcl.PCLPointCloud.fromPoints(pc2_pts:contiguous())
-    local pc1_d = pc1:uniformSample(.005*self:getMeter())
-    local pc2_d = pc2:uniformSample(.005*self:getMeter())
-
-    print("Starting icp algorithm")
-    log.tic()
-    local transf, converged = pcl.PCLPointCloud.doICP(pc2_d, pc1_d, 
-      self.parameters.icp_transform_eps, 
-      self.parameters.icp_max_iterations, 
-      self.parameters.icp_ransac_iterations,
-      self.parameters.icp_correspondence*self:getMeter()/20) --starts w 10 cm, so now .5 cm
-    --converged = converged and not((torch.abs(transf[3][1]) > .05) or (torch.abs(transf[3][2]) > .05))
-    if(converged) then
-      --transf[{3,{1,2}}]:fill(0)
-      --transf[{{1,2},3}]:fill(0)
-
-      print("final icp converged in time " .. log.toc() .. " with transformation:")
-      print(transf)
-    else
-      print("icp did not converge in time " .. log.toc())
-    end
-    return transf
-end
 
 function SweepPair:getFinalIcp()
     self:setFinalICPTransformation(torch.eye(4))
     local t2 = self:getTransformation(false, false, false)
-    local pc1_pts, pc1_rgb =       self:getSweep1():getPoints()
-    local pc1 = pcl.PCLPointCloud.fromPoints(pc1_pts, pc1_rgb)
-    local pc2_pts, pc2_rgb =self:getSweep2():getPoints(t2)
-    local pc2 = pcl.PCLPointCloud.fromPoints(pc2_pts:contiguous(), pc2_rgb:contiguous())
-    local pc1_d = pc1:uniformSample(.005*self:getMeter())
-    local pc2_d = pc2:uniformSample(.005*self:getMeter())
-
-    print("Starting icp algorithm")
-    log.tic()
-    local transf, converged = pcl.PCLPointCloud.doICP(pc2_d, pc1_d, 
-      self.parameters.icp_transform_eps, 
-      self.parameters.icp_max_iterations, 
-      self.parameters.icp_ransac_iterations,
-      self.parameters.icp_correspondence*self:getMeter()/20) --starts w 10 cm, so now .5 cm
-    --converged = converged and not((torch.abs(transf[3][1]) > .05) or (torch.abs(transf[3][2]) > .05))
+    local pc1_pts =  self:getSweep1():getPC().points
+    local pc2_pts = self:getSweep2():getPC():get_global_points_H(t2)
+    local transf, converged = self:getICPFromPoints(pc1_pts, pc2_pts)
     if(converged) then
-      --transf[{3,{1,2}}]:fill(0)
-      --transf[{{1,2},3}]:fill(0)
-
-      print("final icp converged in time " .. log.toc() .. " with transformation:")
-      print(transf)
       self:setFinalICPTransformation(transf)        
-    else
-      print("icp did not converge in time " .. log.toc())
     end
     self:saveMe()
 end
@@ -370,12 +327,25 @@ end
 function SweepPair:getIcp(recalc)
   if(self.need_recalculating_icp) or recalc then
     local t2 = self:getTransformation(false, true, false)
-    local pc1_pts, pc1_rgb =       self:getSweep1():getPoints()
-    local pc1 = pcl.PCLPointCloud.fromPoints(pc1_pts)
-    local pc2_pts, pc2_rgb =self:getSweep2():getPoints(t2)
+    local pc1_pts =  self:getSweep1():getPC().points
+    local pc2_pts = self:getSweep2():getPC():get_global_points_H(t2)
+    local transf, converged = self:getICPFromPoints(pc1_pts, pc2_pts, .02, 5)
+    if(converged) then
+      self:setICPTransformation(transf)        
+    end
+
+    self.need_recalculating_icp = false
+    self:saveMe()
+  end
+end
+
+function SweepPair:getICPFromPoints(pc1_pts, pc2_pts, downsample_radius, icp_corr)
+    downsample_radius = downsample_radius or .005
+    icp_corr = icp_corr or 20
+    local pc1 = pcl.PCLPointCloud.fromPoints(pc1_pts:contiguous())
     local pc2 = pcl.PCLPointCloud.fromPoints(pc2_pts:contiguous())
-    local pc1_d = pc1:uniformSample(.02*self:getMeter())
-    local pc2_d = pc2:uniformSample(.02*self:getMeter())
+    local pc1_d = pc1:uniformSample(downsample_radius*self:getMeter())
+    local pc2_d = pc2:uniformSample(downsample_radius*self:getMeter())
 
     print("Starting icp algorithm")
     log.tic()
@@ -383,24 +353,16 @@ function SweepPair:getIcp(recalc)
       self.parameters.icp_transform_eps, 
       self.parameters.icp_max_iterations, 
       self.parameters.icp_ransac_iterations,
-      self.parameters.icp_correspondence*self:getMeter()/5)
-    --converged = converged and not((torch.abs(transf[3][1]) > .05) or (torch.abs(transf[3][2]) > .05))
+      self.parameters.icp_correspondence*self:getMeter()/icp_corr) --starts w 10 cm, so now .5 cm
     if(converged) then
-      --transf[{3,{1,2}}]:fill(0)
-      --transf[{{1,2},3}]:fill(0)
-
       print("icp converged in time " .. log.toc() .. " with transformation:")
       print(transf)
-      self:setICPTransformation(transf)        
-      
     else
       print("icp did not converge in time " .. log.toc())
     end
-
-    self.need_recalculating_icp = false
-    self:saveMe()
-  end
+    return transf, converged
 end
+
 
 --note: could make this more accurate by seeing if there is a closest neighbor closer than the one shot alone the ray..
 --(e.g. if we are close to a wall, distance along ray will be very long even if the two walls are close in 3d space)
@@ -430,13 +392,13 @@ function SweepPair:get3dValidationScore(noticp, thresh_res, sweep_size)
     self.noticp = noticp
     local H =self:getTransformation(false, noticp, false)
     local thresh_1 = self:getScale()*self.thresh_res--.01 -> 10 m, .02  -- equivalent to 2cm
-    local f1,c1,pts1,norm1 = self:getSweep1():getDepthImage(nil, nil, sweep_size)
+    local f1,norm1 = self:getSweep1():getDepthImage(nil, nil, sweep_size)
 
-    local f2,c2, pts2, norm2 = self:getSweep2():getDepthImage(H, torch.zeros(3), sweep_size)
+    local f2, norm2 = self:getSweep2():getDepthImage(H, torch.zeros(3), sweep_size)
     local numRight1, portionSeen1, closePts1, nclosePts1 = SweepPair.findScore(f1, f2, norm1, norm2, thresh_1)
     center = H:sub(1,3,4,4):squeeze()
-    local f2,c2,pts2, norm2 = self:getSweep2():getDepthImage(H, center, sweep_size)
-    local f1,c1,pts1,norm1 = self:getSweep1():getDepthImage(nil, center, sweep_size)
+    local f2, norm2 = self:getSweep2():getDepthImage(H, center, sweep_size)
+    local f1,norm1 = self:getSweep1():getDepthImage(nil, center, sweep_size)
 
     local numRight2, portionSeen2, closePts2, nclosePts2= SweepPair.findScore(f2, f1, norm2, norm1, thresh_1)
 
@@ -445,8 +407,8 @@ function SweepPair:get3dValidationScore(noticp, thresh_res, sweep_size)
     print("closet pts first  " .. closePts1 .. " and second : " .. closePts2)
     print("normal closet pts first  " .. nclosePts1 .. " and second : " .. nclosePts2)
 
-    self.threed_validation_score = torch.Tensor({(numRight1+numRight2)/2,  (portionSeen1+portionSeen2)/2, 
-      (closePts1 + closePts2)/2, (nclosePts1+nclosePts2)/2})
+    self.threed_validation_score = torch.Tensor({math.min(numRight1,numRight2),  math.min(portionSeen1,portionSeen2), 
+      math.min(closePts1,closePts2), math.min(nclosePts1,nclosePts2)})
     self:saveMe()
   else 
     print("calculated score in the past ".. self.threed_validation_score[1] .. " " .. 
@@ -508,22 +470,21 @@ end
 --first is whether we want sweep 1 or sweep 2
 --dontUseICP is true if don't want to add icp
 function SweepPair:getTransformation(first, dontUseICP, inverse) 
-  collectgarbage()
   local myTransformation
   if(first) then
     local sweepToUse = self:getSweep1()
     if(inverse) then
       sweepToUse = self:getSweep2()
     end  
-    myTransformation = Sweep.get2DTo3DTransformation(self:getScale(), 
+    myTransformation = util_sweep.get2DTo3DTransformation(self:getScale(), 
       sweepToUse:getInitialTransformation(), 
       -sweepToUse:getFloor()) --bring floor to 0
     return myTransformation
   end
   if(dontUseICP) then
-    myTransformation= Sweep.get2DTo3DTransformation(self:getScale(), self:getAlignmentTransformation(), self:getZTransformation())
+    myTransformation= util_sweep.get2DTo3DTransformation(self:getScale(), self:getAlignmentTransformation(), self:getZTransformation())
   else
-      myTransformation= self:getICPTransformation()*Sweep.get2DTo3DTransformation(self:getScale(), self:getAlignmentTransformation(), self:getZTransformation())
+      myTransformation= self:getICPTransformation()*util_sweep.get2DTo3DTransformation(self:getScale(), self:getAlignmentTransformation(), self:getZTransformation())
     if(self.ficpH_F) then
       myTransformation = self:getFinalICPTransformation()*myTransformation
     end
@@ -544,7 +505,7 @@ function SweepPair:getTransformation(first, dontUseICP, inverse)
   return myTransformation
 end
 
-
+-----------------------------------------------------------------------------------------
 --display helper methods
 function SweepPair:displayDiffTransformationI(i)
   --sweep1 and sweep2 will already have incorporated the best transformation, no need to save
@@ -565,99 +526,28 @@ end
 function SweepPair:displayTransformationH(H)
   local corners1, flattenedxy1, flattenedv1 = self:getSweep1():getFlattenedAndCorners()
   local corners2, flattenedxy2, flattenedv2  = self:getSweep2():getFlattenedAndCorners()
-  local temp, temp, combined = SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
+  local temp, temp, combined = util_sweep.warpAndCombine(H, flattenedxy1, flattenedxy2)
   image.display(combined)
 end
 
 function SweepPair:displayCurrent(icp)
   if(icp) then
-    self:displayTransformationH(Sweep.get3Dto2DTransformation(self:getScale(), self:getTransformation()))
+    self:displayTransformationH(util_sweep.get3Dto2DTransformation(self:getScale(), self:getTransformation()))
   else
     self:displayTransformationH(self:getAlignmentTransformation())
   end
 end
 
+-----------------------------------------------------------------------------------------
 --SAVE HELPERS
 function SweepPair:saveCurrent(fname)
-  self:saveCombinedTransformationH(fname, Sweep.get3Dto2DTransformation(self:getScale(), self:getTransformation()))
+  self:saveCombinedTransformationH(fname, util_sweep.get3Dto2DTransformation(self:getScale(), self:getTransformation()))
 end
 
 function SweepPair:saveCombinedTransformationH(fname, H)
   local corners1, flattenedxy1, flattenedv1 = self:getSweep1():getFlattenedAndCorners()
   local corners2, flattenedxy2, flattenedv2  = self:getSweep2():getFlattenedAndCorners()
-  local temp, temp, combined = SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
+  local temp, temp, combined = util_sweep.warpAndCombine(H, flattenedxy1, flattenedxy2)
   image.save(fname, combined)
 end
 
---warps 2 into 1 using H
-function SweepPair.warpAndCombine(H, flattenedxy1, flattenedxy2)
-  flattenedxy2 = Sweep.applyToPointsReturn2d(H,flattenedxy2:t()):t()
-  local src_center =    Sweep.applyToPointsReturn2d(H,torch.zeros(2,1))
-  local dest_center = torch.zeros(2,1)
-  local combinedMin = torch.cat(torch.min(flattenedxy1,1), torch.min(flattenedxy2,1), 1)
-  local minT = torch.min(combinedMin, 1):reshape(2)
-
-  local combinedMax = torch.cat(torch.max(flattenedxy1,1), torch.max(flattenedxy2,1), 1)
-  local maxT = torch.max(combinedMax, 1):reshape(2)
-
-  local H_translation = Sweep.getRotationMatrix(0,torch.Tensor({-minT[1]+1, -minT[2]+1}))
-
-  flattenedxy1 = Sweep.applyToPointsReturn2d(H_translation, flattenedxy1:t()):t()
-  flattenedxy2 = Sweep.applyToPointsReturn2d(H_translation,flattenedxy2:t()):t()
-
-  local size_us = (maxT-minT+1):ceil():reshape(2)
-  local su1 = size_us[1]
-  local su2 = size_us[2]
-  local combined = torch.zeros(3, su1, su2)
-
-
-  for i = 1, flattenedxy2:size(1) do
-  local f = flattenedxy2[i]
-  local hh = f[1]
-  local ww = f[2]
-  local hh_l = math.max(1,math.floor(hh))
-  local ww_l = math.max(1,math.floor(ww))
-  local hh_h = math.min(su1,math.ceil(hh))
-  local ww_h = math.min(su2,math.ceil(ww))
-
-  if hh_h - hh < hh - hh_l then
-    hh = hh_l
-  else
-    hh = hh_h
-  end
-
-  if ww_h - ww < ww - hh_l then
-    ww = ww_l
-  else
-    ww = ww_h
-  end
-
-  combined[2][hh][ww]=255
-  end
-  for i = 1, flattenedxy1:size(1) do
-  local f = flattenedxy1[i]
-  local hh = f[1]
-  local ww = f[2]
-  local hh_l = math.max(1,math.floor(hh))
-  local ww_l = math.max(1,math.floor(ww))
-  local hh_h = math.min(su1,math.ceil(hh))
-  local ww_h = math.min(su2,math.ceil(ww))
-
-  if hh_h - hh < hh - hh_l then
-    hh = hh_l
-  else
-    hh = hh_h
-  end
-
-  if ww_h - ww < ww - hh_l then
-    ww = ww_l
-  else
-    ww = ww_h
-  end
-
-  combined[1][hh][ww]=255
-  end
-  src_center = Sweep.applyToPointsReturn2d(H_translation,src_center):reshape(2)
-  dest_center = Sweep.applyToPointsReturn2d(H_translation,dest_center):reshape(2)
-  return src_center, dest_center, combined
-end
