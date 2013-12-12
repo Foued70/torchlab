@@ -1,6 +1,5 @@
 Sweep = Class()
 
-Sweep.XYZ = "XYZ"
 Sweep.PNG = "PNG"
 Sweep.OD = "OD"
 Sweep.SWEEP = "SWEEP"
@@ -8,30 +7,31 @@ Sweep.SWEEP = "SWEEP"
 local path = require 'path'
 local pcl = PointCloud.PointCloud
 
-function Sweep:__init(base_dir, name, extname)
-    if not(path.extname(name) == "" or path.extname(name) == name) then
-        error("expected name without extension to be given to Sweep initializer")
+function Sweep:__init(base_dir, name, xyz_file)
+    if not(path.extname(xyz_file) == ".xyz") then
+        error("expected extention to be .xyz")
     end
     if not(util.fs.is_dir(base_dir)) then
         error("expected base_dir to exist for initializer for Sweep")
     end
-    if not(util.fs.is_file(path.join(base_dir, Sweep.XYZ, name .. ".xyz"))) then
-        error("expected sweep to exist in XYZ folder of base_dir " .. path.join(base_dir, Sweep.XYZ, name.. ".xyz"))
+    if not(util.fs.is_file(xyz_file)) then
+        error("expected xyz file to exist")
     end
-    self.extname = extname or ".xyz"
+    self.extname = path.extname(xyz_file)
     self.base_dir = base_dir
     self.name = name
+    self.fxyz = xyz_file
     self:mkdirs()
     self:init_variables()
     self:saveMe()
 end
 
-function Sweep.newOrLoad(base_dir, name, extname)
+function Sweep.newOrLoad(base_dir, name, xyz_dir)
     if(util.fs.is_file(path.join(base_dir, Sweep.SWEEP, name .. ".dat"))) then
         print("loading sweep from file " .. name)
         return torch.load(path.join(base_dir, Sweep.SWEEP, name .. ".dat"))
     else
-        return Sweep.new(base_dir, name, extname)
+        return Sweep.new(base_dir, name, xyz_dir)
     end
 end
 function Sweep:mkdirs()
@@ -46,7 +46,6 @@ function Sweep:init_variables()
     self.parameters.octTreeRes = .02
     self.initial = torch.eye(3)
     self.fod = path.join(self.base_dir, Sweep.OD, self.name.. ".od")
-    self.fxyz = path.join(self.base_dir, Sweep.XYZ, self.name.. self.extname)
     self.fpng = path.join(self.base_dir,Sweep.PNG, self.name..".png")
     self.fsave_me = path.join(self.base_dir, Sweep.SWEEP, self.name .. ".dat")
 end
@@ -99,14 +98,6 @@ function Sweep:getPC(recalc)
     return pc
 end
 
-local function select3d(from, selectPts)
-    local normals_n = torch.zeros(torch.gt(selectPts,0):sum(),3)
-    normals_n[{{},1}] = from[{{},1}][selectPts]
-    normals_n[{{},2}] = from[{{},2}][selectPts]
-    normals_n[{{},3}] = from[{{},3}][selectPts]
-    return normals_n
-end
-
 local function select3d2(from, selectPts, normals_n)
     normals_n[{{},1}][selectPts] = from[{{},1}]
     normals_n[{{},2}][selectPts] = from[{{},2}]
@@ -134,8 +125,10 @@ function Sweep:getDepthImage(H, center_i, res)
     local ns1 = normals:size(2)
     local ns2 = normals:size(3)
     normals = normals:reshape(3,ns1*ns2):t()  
-    mask = mask:reshape(1,ns1*ns2):squeeze()
-    normals = select3d(normals, mask:byte())
+    mask = mask:reshape(ns1*ns2):squeeze()
+    print(normals)
+    print(mask)
+    normals = util.torch.select3d(normals, mask:byte())
     
     local dis = pts:clone():norm(2,2)
 
@@ -157,14 +150,14 @@ function Sweep:getDepthImage(H, center_i, res)
     azimuth = azimuth[azimuthGood]
     elevation = elevation[azimuthGood]
     dis = dis[azimuthGood]
-    pts = select3d(pts, azimuthGood)
-    normals = select3d(normals, azimuthGood)
+    pts = util.torch.select3d(pts, azimuthGood)
+    normals = util.torch.select3d(normals, azimuthGood)
     local elevationGood = torch.eq(torch.ge(elevation, min_y)+torch.le(elevation, max_y),2)
     azimuth = azimuth[elevationGood]:long()
     elevation = elevation[elevationGood]:long()
     dis = dis[elevationGood]
-    pts = select3d(pts, elevationGood)
-    normals = select3d(normals, elevationGood)
+    pts = util.torch.select3d(pts, elevationGood)
+    normals = util.torch.select3d(normals, elevationGood)
     local indexVal = elevation*size_x*res+azimuth
     local temp, order = torch.sort(dis,true)
 
@@ -189,8 +182,7 @@ end
 function Sweep:getAxisAlignAngle(recalc)
     if(not(self.angle) or recalc) then
         local norm_map = self:getPC():get_normal_map()
-         norm_map = norm_map:reshape(norm_map:size(1),norm_map:size(2)*norm_map:size(3)):t()
-         norm_map = select3d(norm_map, torch.ne(norm_map:clone():norm(2,2):squeeze(),0))
+         norm_map = util.torch.select3d(norm_map, torch.ne(norm_map:clone():norm(2,1):squeeze(),0))
         local angle_az = geom.util.unit_cartesian_to_spherical_angles(norm_map:t():contiguous())
         local az = angle_az[1][torch.eq(torch.lt(angle_az[2], math.pi/4)+torch.gt(angle_az[2],-math.pi/4),2)]
         local t,angle1 = torch.histc(az,361,-math.pi,math.pi):max(1)

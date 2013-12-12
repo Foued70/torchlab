@@ -6,49 +6,43 @@ local SweepPair = align_floors_endtoend.SweepPair
 local SweepTreeNode = align_floors_endtoend.SweepTreeNode
 local SweepTree = align_floors_endtoend.SweepTree
 local SweepForest = align_floors_endtoend.SweepForest 
-
-local Scan = Class()
+ 
+ Scan = Class()
 
 Scan.XYZ = "XYZ"
 
+--[[
+po_dir = "/Users/stavbraun/Desktop/play/elegant-prize-3149/source/po_scan/a/"
+savedir = "/Users/stavbraun/Desktop/play/elegant-prize-3149/source/"
+scan = align_floors_endtoend.Scan.new(savedir, po_dir)
 
-function Scan:__init(base_dir, complete_loop, first_sweep)
-    self.base_dir = base_dir
-    self.xyz_dir = path.join(base_dir,Scan.XYZ)
-    if(not(util.fs.is_dir(self.xyz_dir))) then
-        error("xyz dir given does not exist")
-    end
-    self.all_files = util.fs.files_only(self.xyz_dir,'.xyz')
+]]--
+function Scan:__init(save_dir, po_dir, complete_loop, first_sweep, extname, maxDepth)
+    self.base_dir = save_dir
+    self.all_folders = util.fs.dirs_only(po_dir)
     self.complete_loop = complete_loop or false    
 
-    self.numfiles = #self.all_files
+    self.numfiles = 17 --table.getn(self.all_folders)
     self.scores = {}
     self.first_sweep = first_sweep or 1
-end
-
-function Scan:load_and_save_all_sweeps()
-    if util.fs.is_dir(self.xyz_dir) then
-        for i = 1,self.numfiles do
-            local fname = self.all_files[i]
-            local bname = path.basename(fname,'.xyz')
-            local aSweep = Sweep.newOrLoad(self.base_dir,bname)
-            local pc = aSweep:getPC()
-        end
-        collectgarbage()
+    self.maxDepth = 2 or maxDepth
+    self.complete_loop_num = self.num_files
+    if(not(self.complete_loop)) then
+        self.complete_loop_num  = 10^10
     end
 end
 
 function Scan:find_forward_and_backward()
     util.fs.mkdir_p(path.join(self.base_dir,"DOWNSAMPLEDXYZ"))
-    print('looping through forward and back pairs')
+    print('looping through forward pairs')
     for i = 1,self.numfiles do
-        print('create new sweep pair')
+        print('create new sweep pair' .. i .. " and " .. (i+1))
         local success, pair = self:attemptToAlign(i, i+1)
         collectgarbage()
     end
     self:final_registration()
 
-    collectgarbage()
+    --collectgarbage()
 end
 
 function Scan:final_registration()
@@ -95,15 +89,66 @@ function Scan:final_registration()
         local pc = pair:getSweep2():getPC()
         pc:set_pose_from_rotation_matrix(transavg)
         pc:save_to_od(pair:getSweep2().fod)
-        pc:save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",pair:getSweep2():getName()..'.xyz'))
-
+        pc:save_global_points_to_xyz(path.join(self.base_dir,"DOWNSAMPLEDXYZ",pair:getSweep2():getName()..".xyz"))
     end
 end
+
+--do icp with everything, not just pairwise
+function Scan:do_icp_final(tree)
+    local nodes = tree:getAllNodes()
+    local io = require 'io'
+    local pts
+    for k,v in pairs(nodes) do
+        local pair = v:getPair()
+        --pair:setFinalICPTransformation(torch.eye(4))
+        --pair:getIcp(true)
+        --pair:getFinalIcp()
+       -- pc = pair:getSweep2():getPC()
+       -- pc:save_global_points_to_xyz_H(v:getSweep():getName() .. "yes2.xyz", v:getTransformationToRoot())
+    end
+
+    local all_nodes = {}
+    local node_distances = {}
+    function getNodesAndDistances(v)
+        all_nodes[table.getn(all_nodes)+1] = v
+        local depth= torch.abs(tree:getRoot():getId()-v:getId())
+        node_distances[table.getn(node_distances)+1] = math.min(depth%self.numfiles,(-depth)%self.numfiles)
+    end
+    SweepTree.traverse(tree:getRoot(), getNodesAndDistances)
+    node_distances = torch.Tensor(node_distances)
+    local temp,order = torch.sort(node_distances)
+    local pointsA, rgbA
+    for i=1,order:size(1) do
+        v = all_nodes[order[i]]
+        d = node_distances[order[i]]
+        print(d)
+        pair = v:getPair()
+        if(not(pointsA)) then
+            pointsA, rgbA = pair:getSweep2():getPoints(v:getTransformationToRoot())
+        else
+            points, rgb = pair:getSweep2():getPoints(v:getTransformationToRoot())
+            transf = pair:getICPFromPoints(pointsA, points)
+            if(transf) then
+                pair:setFinalICPTransformation(transf*pair:getFinalICPTransformation())
+            end
+            points, rgb = pair:getSweep2():getPoints(v:getTransformationToRoot())
+            print(rgb)
+            print(rgbA)
+            pointsA = torch.cat(pointsA, points, 1)
+            rgbA = torch.cat(rgbA, rgb, 1)
+             
+        end
+    end
+
+    --collectgarbage()
+end
+
+--save flattened images to easily visualize
 function Scan:save_all_2dcombined()
     local combined_images = path.join(self.base_dir,"combined")
     util.fs.mkdir_p(combined_images)
-    for i = 1,self.numfiles-1 do
-        for j=i+1,self.numfiles do
+    for i = 1,self.numfiles do
+        for j=i+1,math.min(i+3,self.numfiles) do
             local sweepPair_curr_to_nex = self:get_sweeppair(i,j)
             local name1 = sweepPair_curr_to_nex:getSweep1():getName()
             local name2 = sweepPair_curr_to_nex:getSweep2():getName()
@@ -125,7 +170,6 @@ function Scan:find_forward_and_backward_all_pairs()
 
     for i = 1,self.numfiles-1 do
         for j=i+1,self.numfiles do
-
             print('create new sweep pair')
             local success, pair = self:attemptToAlign(i,j)
             local score = s_ij:get3dValidationScore()
@@ -139,10 +183,9 @@ function Scan:find_forward_and_backward_all_pairs()
     end
     collectgarbage()
     print(all_scores)
-    torch.save("woohoo2.dat", {all_scores, portion_scores, close_scores, nclose_scores})
     return all_scores, portion_scores, close_scores
 end
---scan = align_floors_endtoend.Scan.new("/Users/stavbraun/Desktop/play/motor-unicorn-0776_play")
+--scan = align_floors_endtoend.Scan.new("/Users/stavbraun/Desktop/play/motor-unicorn-0776_newsonia2")
 
 function Scan:organize_in_trees()
         util.fs.mkdir_p(path.join(self.base_dir,"DOWNSAMPLEDXYZ"))
@@ -165,6 +208,7 @@ function Scan:organize_in_trees()
         local curSweep = self:get_ith_sweep(j, true)
         local tree_containing_previous = forest:findTreeWithNode(prevName)      
         local node = tree_containing_previous:getNode(prevName)
+        print("here" .. curSweep:getName())
         local successTree = self:alignWithForest(forest, curSweep, curSweepId)
         if successTree then
             used_list[curSweepId] = curSweepId
@@ -181,62 +225,88 @@ function Scan:organize_in_trees()
         end
         collectgarbage()
     end
+    if(true) then
+        return forest
+    end
     for k,v in pairs(forest:getTrees()) do
         while(self:mergeForestWithTree(forest, v)) do end --while this tree can be merged with others...
     end
-    torch.save("test.dat",forest)
     return forest
 end
 
-function Scan:getOctTreeForTree(tree)
+function Scan:saveTransformations(tree,res)
     local nodes = tree:getAllNodes()
-    local tree = octomap.Tree.new(res)
+    for k,v in pairs(nodes) do
+        print(k)
+        local transf = v:getTransformationToRoot()
+        torch.save("transf_" .. k .. "_" .. tree.root:getName() .. ".dat", transf)
+    end
+    return tree
+end
+
+function Scan:getOctTreeForTree(tree,res)
+    local nodes = tree:getAllNodes()
+    local res = res or .02
+    local tree = octomap.Tree.new(res*1000*2.5)
     for k,v in pairs(nodes) do
         local transf = v:getTransformationToRoot()
         local pc = v:getSweep():getPC()
-        pc:set_pose_from_rotation_matrix(transf)
-        pc:set_local_scan_center(pc:estimate_faro_pose())
-        local pc_points     = pc:get_global_points()
-        local pc_pose       = pc:get_global_scan_center()
-        local pc_max_radius = pc:get_max_radius()
-        tree:add_points(pc_points,pc_pose,pc_max_radius)
-        pc:write(v:getSweep().fod)
-        pc:save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",v:getSweep():getName()..'.xyz'))
+        local pts, tmp = v:getSweep():getPoints(transf)
+        local center  = transf:sub(1,3,4,4):squeeze():contiguous()
+        --pts = v:getSweep():getZeroAzimuthAndElevation(transf):contiguous()        
+        tree:add_points(pts:contiguous(),center, pc:get_max_radius())
+           tree:add_points_only_empties(v:getSweep():getZeroAzimuthAndElevation(transf):contiguous(),center, pc:get_max_radius())
         collectgarbage()
     end
     return tree
 end
+
 function Scan:findTransformationsForTree(tree)
- local nodes = tree:getAllNodes()
- for k,v in pairs(nodes) do
-    local transf = v:getTransformationToRoot()
-    print(k)
-    print(transf)
-
-    pc = v:getSweep():getPC()
-    pc:set_pose_from_rotation_matrix(transf)
-    pc:write(v:getSweep().fod)
-    pc:save_downsampled_global_to_xyz(0.01, path.join(self.base_dir,"DOWNSAMPLEDXYZ",v:getSweep():getName()..'.xyz'))
- end
---[[
-tree = forest.tree_list["sweep_001"]
-pair = scan:get_sweeppair(1,30)
-trans1= pair:getTransformation(false,true,false)
-pc1 = pair:getSweep1():getPC()
-pc2 = pair:getSweep2():getPC()
-pc1:set_pose_from_rotation_matrix(torch.eye(4))
-pc1:save_downsampled_global_to_xyz(0.01, "my1.xyz")
-pc2:set_pose_from_rotation_matrix(trans1)
-pc2:save_downsampled_global_to_xyz(0.01, "my30.xyz")
-
-]]--
+    local nodes = tree:getAllNodes()
+    local io = require 'io'
+    for k,v in pairs(nodes) do
+        local transf = v:getTransformationToRoot()
+        local pc = v:getSweep():getPC()
+        pc:set_pose_from_rotation_matrix(transf)
+        pc:write(path.join(self.base_dir,"DOWNSAMPLEDXYZ",v:getSweep():getName() .. ".xyz"))
+    end
 end
+
+
+local function saveHelper_xyz(points, rgb, file)
+   local tmpt = torch.range(1,points:size(1))                                                                                                                                
+   tmpt:apply(function(i) 
+      pt = points[i]
+      if(rgb) then 
+        rgbx = rgb[i]
+        file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..' '..rgbx[1]..' '..rgbx[2]..' '..rgbx[3]..'\n')
+      else
+        file:write(''..pt[1]..' '..pt[2]..' '..pt[3]..'\n')        
+      end
+   end)
+end
+
+function Scan:saveGlobal(tree)
+    local nodes = tree:getAllNodes()
+    local io = require 'io'
+
+    local file = io.open(path.join(self.base_dir,"DOWNSAMPLEDXYZ","global.xyz"), 'w')
+    for k,v in pairs(nodes) do
+        local transf = v:getTransformationToRoot()
+        local points = v:getSweep():getPoints(transf)
+        if self.format == 1 then
+         points = points/self.meter
+        end  
+        saveHelper_xyz(points, v:getSweep():getPC():get_rgb(), file)
+    end
+    file:close()
+end
+
 function Scan:mergeForestWithTree(forest, tree_orig)
     local foundMatch = false
-    local maxDepth = 15
     --for fun choose depth less than 20 as how far we go to check
     local function checkWithOtherNodes(curtreenode, node,depth, tree)
-        if not(foundMatch) and depth<maxDepth then
+        if not(foundMatch) and depth<self.maxDepth then
             local smallerNode = curtreenode
             local largerNode = node
             local inverse = false
@@ -262,7 +332,7 @@ function Scan:mergeForestWithTree(forest, tree_orig)
             end
         end
     end
-    forest:traverseBasedOnDistanceFromTree(tree_orig, checkWithOtherNodes, self.numfiles)
+    forest:traverseBasedOnDistanceFromTree(tree_orig, checkWithOtherNodes, self.complete_loop_num)
     if(foundMatch) then
         forest:remove(winningTree)
     end
@@ -272,13 +342,15 @@ end
 function Scan:alignWithForest(forest, curnode, i)
     local foundMatch = false
     local goodPair
-    local maxDepth = 15
     local nodeToMatch
     --for fun choose depth less than 20 as how far we go to check
     local function checkWithOtherNodes(node,depth)
-        if not(foundMatch) and depth< maxDepth then
-            print("matching with " .. node:getName() .. " at distance " .. depth)
+        if not(foundMatch) and depth< self.maxDepth then
+            print("matching " .. curnode:getName() .. " with " .. node:getName() .. " at distance " .. depth)
             local s_ij = SweepPair.newOrLoad(self.base_dir, node.sweep,curnode)
+            print(s_ij:getSweep1():getName())
+            print(s_ij:getSweep2():getName())
+
             local success, pair = self:attemptToAlignPair(s_ij)
             if(success) then
                 foundMatch = true
@@ -287,8 +359,12 @@ function Scan:alignWithForest(forest, curnode, i)
             end
         end
     end
-    forest:traverseBasedOnDistanceFrom(i, checkWithOtherNodes, self.numfiles)
+    print("checking with others")
+    forest:traverseBasedOnDistanceFrom(i, checkWithOtherNodes, self.complete_loop_num)
     if(foundMatch) then
+        print(goodPair:getSweep1():getName())
+        print(goodPair:getSweep2():getName())
+
         nodeToMatch:addChild(goodPair:getSweep2():getName(), goodPair, false, i)
     end
     return foundMatch
@@ -297,11 +373,13 @@ end
 function Scan:attemptToAlignPair(s_ij)
     print('Attempting to align ' .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
     s_ij:getAllTransformations()
+    local success
+
+ --          success = s_ij:setBest3DDiffTransformation()     
     s_ij:setBestDiffTransformation(1)
     score =  s_ij:get3dValidationScore(nil, 5)
-    if(score[1]>.8 and score[4]>.3) then
-        s_ij:getIcp()
-    end
+    s_ij:getIcp()
+    
     --[[
     t = s_ij:getTransformation(true, false, false) 
     t2 = s_ij:getTransformation(false, false, false) 
@@ -310,8 +388,8 @@ function Scan:attemptToAlignPair(s_ij)
     t2 = s_ij:getTransformation(false, true, false) 
     s_ij:getSweep2():getPC(t*t2):write(path.join(self.base_dir,"DOWNSAMPLEDXYZ","noicpsecond"..s_ij:getSweep2():getName()..'.xyz'))
     --]]
-    score =  s_ij:get3dValidationScore(nil, 2)
-    if(score[1]<.8 or score[4]<.3) then
+    score =  s_ij:get3dValidationScore(nil, 5)
+    if (score[1]<.6 or score[4]<.15) then --not(success) then --
         print("BAD ALIGNMENT---------" .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
         return false, s_ij
     else
@@ -320,24 +398,21 @@ function Scan:attemptToAlignPair(s_ij)
 end
 
 function Scan:attemptToAlign(i, j)
-    s_ij = scan:get_sweeppair(i,j)
-
-    return self:attemptToAlignPair(s_ij)
+    return self:attemptToAlignPair(scan:get_sweeppair(i,j))
 end
 
 --example input: 1,10, true
 --example input2: 1,10,false
 function Scan:get_ith_sweep(i, forward)
+    local numcur
     if forward then
-        -- forwards
         numcur = (self.first_sweep + (i-1) + (self.numfiles-1)) % self.numfiles + 1
     else
-        --backwards
         numcur = (self.first_sweep - (i-1) + (self.numfiles-1)) % self.numfiles + 1
     end
-    local fnamecur = self.all_files[numcur]
-    local bnamecur = path.basename(fnamecur,'.xyz')
-    return Sweep.newOrLoad(self.base_dir,bnamecur)
+print(self.base_dir)
+print(self.all_folders[numcur]:sub(-3,-1))
+    return Sweep.newOrLoad(self.base_dir,string.format("sweep%03d",self.all_folders[numcur]:sub(-3,-1)), path.join(self.all_folders[numcur],"sweep.xyz"))
 end
 
 --always return smaller/larger
@@ -351,11 +426,5 @@ function Scan:get_ith_sweeppair(i, forward)
 end
 
 function Scan:get_sweeppair(i, j)
-    local numcur, numnex
-        -- forwards
-    numcur = i
-    numnex = j
-                
-    return SweepPair.newOrLoad(self.base_dir, self:get_ith_sweep(i, true), self:get_ith_sweep(j, true))
-  
+   return SweepPair.newOrLoad(self.base_dir, self:get_ith_sweep(i, true), self:get_ith_sweep(j, true))  
 end
