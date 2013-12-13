@@ -11,7 +11,7 @@ local SweepForest = align_floors_endtoend.SweepForest
 
 --[[
 po_dir = "/Users/stavbraun/Desktop/play/elegant-prize-3149/source/po_scan/a/"
-savedir = "/Users/stavbraun/Desktop/play/elegant-prize-3149/source/"
+savedir = "/Users/stavbraun/Desktop/play/elegant-prize-3149/source/test2"
 scan = align_floors_endtoend.Scan.new(savedir, po_dir)
 scan:organize_in_trees()
 ]]--
@@ -20,10 +20,10 @@ function Scan:__init(save_dir, po_dir, complete_loop, first_sweep, extname, maxD
     self.all_folders = util.fs.dirs_only(po_dir)
     self.complete_loop = complete_loop or false    
 
-    self.numfiles = 17 --table.getn(self.all_folders)
+    self.numfiles = table.getn(self.all_folders)
     self.scores = {}
     self.first_sweep = first_sweep or 1
-    self.maxDepth = 4 or maxDepth
+    self.maxDepth = 15 or maxDepth -- a check of diff of ids <= depth is done to determine which pairs will be attempted, so min depth should be 1 if want to check just adjacent pairs
     self.complete_loop_num = self.num_files
     if(not(self.complete_loop)) then
         self.complete_loop_num  = 10^10
@@ -129,30 +129,41 @@ function Scan:organize_in_trees()
     forest:add(tree)
     local i_list = torch.range(1,self.numfiles-1) --self.numfiles-1
     local j_list = i_list+1
-    local used_list = {}
-    used_list[1] = 1
     for k = 1,i_list:size(1) do
-        i = i_list[k]
-        j = j_list[k]
-        local curSweepId = k+1
+        local i = i_list[k]
+        local j = j_list[k]
+        
         local prevName = self:get_ith_sweep(i, true):getName()
         local curName = self:get_ith_sweep(j, true):getName()
         local curSweep = self:get_ith_sweep(j, true)
+
+
         local tree_containing_previous = forest:findTreeWithNode(prevName)      
         local node = tree_containing_previous:getNode(prevName)
-        local successTree = self:alignWithForest(forest, curSweep, curSweepId)
-        if successTree then
-            used_list[curSweepId] = curSweepId
-        else 
+--[[        local successTree = self:alignWithForest(forest, curSweep, curSweepId)
+       if not(successTree) then
             print("creating new tree since couldn't match to any existing")
             local s_jj = self:get_sweeppair(j,j)
             local s_j = self:get_ith_sweep(j, true)
             
-            local new_root = SweepTreeNode.new(s_jj:getSweep1():getName(), s_j, s_jj, false, nil, curSweepId)
+            local new_root = SweepTreeNode.new(s_jj:getSweep1():getName(), s_j, s_jj, false, nil, j)
             local new_tree = SweepTree.new(new_root)
             forest:add(new_tree)
 
             --attempt to match forwards!
+        end
+        ]]--
+        local success, pair = self:attemptToAlignPair(self:get_sweeppair(i,j,true))
+        if(success) then
+            node:addChild(curName, pair, false, j)
+        else
+            local s_jj = self:get_sweeppair(j,j)
+            local s_j = self:get_ith_sweep(j, true)
+            print("creating new tree since couldn't match to any existing for" .. s_jj:getSweep1():getName())
+            
+            local new_root = SweepTreeNode.new(s_jj:getSweep1():getName(), s_j, s_jj, false, nil, j)
+            local new_tree = SweepTree.new(new_root)
+            forest:add(new_tree)
         end
         collectgarbage()
     end
@@ -166,9 +177,8 @@ end
 
 function Scan:mergeForestWithTree(forest, tree_orig)
     local foundMatch = false
-    --for fun choose depth less than 20 as how far we go to check
     local function checkWithOtherNodes(curtreenode, node,depth, tree)
-        if not(foundMatch) and depth<self.maxDepth then
+        if not(foundMatch) and depth<=self.maxDepth then
             local smallerNode = curtreenode
             local largerNode = node
             local inverse = false
@@ -207,12 +217,9 @@ function Scan:alignWithForest(forest, curnode, i)
     local nodeToMatch
     --for fun choose depth less than 20 as how far we go to check
     local function checkWithOtherNodes(node,depth)
-        if not(foundMatch) and depth< self.maxDepth then
+        if not(foundMatch) and depth<= self.maxDepth then
             print("matching " .. curnode:getName() .. " with " .. node:getName() .. " at distance " .. depth)
             local s_ij = SweepPair.newOrLoad(self.base_dir, node.sweep,curnode)
-            print(s_ij:getSweep1():getName())
-            print(s_ij:getSweep2():getName())
-
             local success, pair = self:attemptToAlignPair(s_ij)
             if(success) then
                 foundMatch = true
@@ -221,12 +228,8 @@ function Scan:alignWithForest(forest, curnode, i)
             end
         end
     end
-    print("checking with others")
     forest:traverseBasedOnDistanceFrom(i, checkWithOtherNodes, self.complete_loop_num)
     if(foundMatch) then
-        print(goodPair:getSweep1():getName())
-        print(goodPair:getSweep2():getName())
-
         nodeToMatch:addChild(goodPair:getSweep2():getName(), goodPair, false, i)
     end
     return foundMatch
@@ -236,10 +239,12 @@ function Scan:attemptToAlignPair(s_ij)
     print('Attempting to align ' .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
     s_ij:getAllTransformations()
     local success
-    s_ij.threed_validation_score = -1
  --          success = s_ij:setBest3DDiffTransformation()     
     s_ij:setBestDiffTransformation(1)
-    score =  s_ij:get3dValidationScore(nil, 5)
+    local score =  s_ij:get3dValidationScore(true, 10)
+    if(score[1]<.75 or score[4]<.05) then
+        return false, s_ij
+    end
     s_ij:getIcp()
     
     --[[
@@ -250,11 +255,12 @@ function Scan:attemptToAlignPair(s_ij)
     t2 = s_ij:getTransformation(false, true, false) 
     s_ij:getSweep2():getPC(t*t2):write(path.join(self.base_dir,"DOWNSAMPLEDXYZ","noicpsecond"..s_ij:getSweep2():getName()..'.xyz'))
     --]]
-    score =  s_ij:get3dValidationScore(nil, 5)
-    if (score[1]<.8 or score[4]<.15) then --not(success) then --
+    score =  s_ij:get3dValidationScore(false, 10)
+    if (score[1]<.85 or score[4]<.15) then --not(success) then --
         print("BAD ALIGNMENT---------" .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
         return false, s_ij
     else
+        print("GOOD ALIGNMENT---------" .. s_ij:getSweep1():getName() .. " and " .. s_ij:getSweep2():getName())
         return true, s_ij
     end
 end

@@ -48,17 +48,7 @@ function TransformationValidation.validate_simple(best_pts, best_transformations
          transformations_tmp[good_counter] = best_transformations[i]
          best_pts_temp[good_counter] = best_pts[i]
          good_counter = good_counter +1
-
-      else
-        print("skipping " .. i .. " " .. angle_between)
-         --[[
-         print("we didn't make it" .. i)
-         if(i==20) then
-            print(angle_diff_orig-angle_between)
-            image.display(combined_i)
-         end]]--
-          --     print(best_transformations[i].H)
-         --print(math.deg((torch.abs(torch.acos(best_transformations[i].H[1][1])-angle_diff_orig))))
+        print("good transformation " .. i .. " " .. angle_between)
       end
       collectgarbage()
 

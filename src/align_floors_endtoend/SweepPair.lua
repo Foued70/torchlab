@@ -20,7 +20,7 @@ function SweepPair:__init(base_dir, sweep1, sweep2)
   self.sweep2 = sweep2
   self.need_recalculating_icp = true
   self.threed_validation_score  = -1
-  self.threed_validation_score_icp  = -1
+  self.threed_validation_score_nicp  = -1
   self.name = sweep1:getName() .. "_" .. sweep2:getName()
   self.base_dir = base_dir
   self:mkdirs()
@@ -37,8 +37,8 @@ function SweepPair.newOrLoad(base_dir, sweep1, sweep2)
     end
   end
   function SweepPair:__write_keys()
-    return {'parameters', 'transformationInfo', 'ValidationInfo', 'name', 'base_dir', 'fsave_me', 'sweep1_loc', 'sweep2_loc', 'ValidationInfoSimple',
-    'alignmentH_F', 'icpH_F', 'ficpH_F', 'floor_transformation_F', 'need_recalculating_icp', 'threed_validation_score', 'threed_validation_score_icp', 'best_3d', 'score'}
+    return {'parameters', 'transformationInfo', 'ValidationInfo', 'name', 'thresh_res', 'thresh_res_icp', 'base_dir', 'fsave_me', 'sweep1_loc', 'sweep2_loc', 'ValidationInfoSimple',
+    'alignmentH_F', 'icpH_F', 'ficpH_F', 'floor_transformation_F', 'need_recalculating_icp', 'threed_validation_score', 'threed_validation_score_nicp', 'best_3d', 'score'}
   end
 
   function SweepPair:init_variables()
@@ -309,7 +309,7 @@ function SweepPair:setBestTransformationH(H)
     self:setICPTransformation(torch.eye(4))      
     self.need_recalculating_icp = true
     self.threed_validation_score  = -1
-    self.threed_validation_score_icp  = -1
+    self.threed_validation_score_nicp  = -1
     
     self:saveMe()     
   end
@@ -378,6 +378,7 @@ function SweepPair.findScore(f1, f2, n1, n2, thresh_1)
   local deg = util_sweep.angleBetween(n1,n2):reshape(f1:size(1),f1:size(2))*180/math.pi
   deg:cmul(mask:double())  
   local close_pts_normals = ((torch.le(torch.abs(f1_zeroed-f2),thresh_1):cmul(torch.lt(deg,45))):sum()- (torch.eq(torch.eq(f1_zeroed,0) + torch.eq(f2,0),2):sum()))
+  print(mask:sum()/mask:nElement())
   return (torch.le(f1_zeroed-f2,thresh_1):sum()-torch.eq(f1_zeroed,0):sum())/(torch.gt(f1_zeroed,0):sum()), 
           torch.gt(f1_zeroed,0):sum()/torch.gt(f1,0):sum(), 
           close_pts/torch.gt(f1_zeroed,0):sum(),
@@ -388,11 +389,18 @@ end
 --sweep1's pc and sweep2's pc should already be in correct place
 --threshold in cm
 function SweepPair:get3dValidationScore(noticp, thresh_res, sweep_size)
-  if (self.threed_validation_score_icp and noticp) or (self.threed_validation_score  == -1 and not(noticp)) or (self.thresh_res ~=thresh_res) then
+  if ((((self.threed_validation_score_nicp ==-1) or (self.thresh_res ~=thresh_res)) and noticp)
+      or ((self.threed_validation_score  == -1 or (self.thresh_res_icp ~=thresh_res)) and not(noticp))) then
     local sweep_size = sweep_size or 3
-    self.thresh_res = thresh_res or 2
+    local thresh_1
+    if(noticp) then
+      self.thresh_res = thresh_res or 2
+      thresh_1 = self:getScale()*self.thresh_res--.01 -> 10 m, .02  -- equivalent to 2cm
+    else
+      self.thresh_res_icp = thresh_res or 2
+      thresh_1 = self:getScale()*self.thresh_res_icp--.01 -> 10 m, .02  -- equivalent to 2cm
+    end
     local H =self:getTransformation(false, noticp, false)
-    local thresh_1 = self:getScale()*self.thresh_res--.01 -> 10 m, .02  -- equivalent to 2cm
     local f1,norm1 = self:getSweep1():getDepthImage(nil, nil, sweep_size)
 
     local f2, norm2 = self:getSweep2():getDepthImage(H, torch.zeros(3), sweep_size)
@@ -408,17 +416,17 @@ function SweepPair:get3dValidationScore(noticp, thresh_res, sweep_size)
     print("closet pts first  " .. closePts1 .. " and second : " .. closePts2)
     print("normal closet pts first  " .. nclosePts1 .. " and second : " .. nclosePts2)
     if(noticp) then
-      self.threed_validation_score_icp = torch.Tensor({math.min(numRight1,numRight2),  math.min(portionSeen1,portionSeen2), 
+      self.threed_validation_score_nicp = torch.Tensor({math.min(numRight1,numRight2),  math.min(portionSeen1,portionSeen2), 
         math.min(closePts1,closePts2), math.min(nclosePts1,nclosePts2)})
     else
-            self.threed_validation_score = torch.Tensor({math.min(numRight1,numRight2),  math.min(portionSeen1,portionSeen2), 
+        self.threed_validation_score = torch.Tensor({math.min(numRight1,numRight2),  math.min(portionSeen1,portionSeen2), 
         math.min(closePts1,closePts2), math.min(nclosePts1,nclosePts2)})
     end
     self:saveMe()
   else 
     local threed_validation_score
       if(noticp) then
-        threed_validation_score = self.threed_validation_score_icp
+        threed_validation_score = self.threed_validation_score_nicp
       else
         threed_validation_score = self.threed_validation_score
       end
@@ -427,7 +435,7 @@ function SweepPair:get3dValidationScore(noticp, thresh_res, sweep_size)
           threed_validation_score[4])
   end
   if(noticp) then
-      return self.threed_validation_score_icp 
+      return self.threed_validation_score_nicp 
   else
     return self.threed_validation_score
   end
@@ -458,7 +466,7 @@ function SweepPair:getFinalICPTransformation()
 end
 function SweepPair:setICPTransformation(H)
   self.icpH_F =H
-  self.threed_validation_score_icp  = -1 
+  self.threed_validation_score = -1 
   self:saveMe()
   collectgarbage()
 end
