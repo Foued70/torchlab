@@ -15,8 +15,8 @@ savedir = "/Users/stavbraun/Desktop/play/elegant-prize-3149/source/test2"
 scan = align_floors_endtoend.Scan.new(savedir, po_dir)
 scan:organize_in_trees()
 ]]--
-function Scan:__init(save_dir, po_dir, complete_loop, first_sweep, extname, maxDepth)
-    self.base_dir = save_dir
+function Scan:__init(savedir, po_dir, complete_loop, first_sweep, extname, maxDepth)
+    self.base_dir = savedir
     self.all_folders = util.fs.dirs_only(po_dir)
     self.complete_loop = complete_loop or false    
 
