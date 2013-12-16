@@ -7,7 +7,7 @@ Hough.houghMaxLineGap = 80
 Hough.minThreshold = 10
 Hough.maxThreshold = 150
 Hough.defaultThreshold = 25
-Hough.numLinesDesired = 40
+Hough.numLinesDesired = 10
 
 function Hough:__init(parameters)
 	for paramName in pairs(parameters) do
@@ -164,6 +164,7 @@ while(table.getn(linesSoFar) < Hough.numLinesDesired and counter < torch.ceil(Ho
 	prev_size = table.getn(linesSoFar)
 	counter = counter+1
 end
+print(table.getn(linesSoFar))
 return linesSoFar, linesXYSoFar
 end
 
