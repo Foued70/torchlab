@@ -1463,3 +1463,150 @@ int remap_points(double* depth_sum, double* depth_num, double* depth_old,
   return 0;
 }
 
+
+int compute_number_of_plane_points(double* result, double* xyz, char * rmask,
+                                   double* nmp, double* ndd, 
+                                   double res_thresh, int height, int width)
+{
+  int h, w, hh, ww, h_offset, hh_offset, w_offset, ww_offset;
+  double x, y, z, nx, ny, nz, nd, dist, mind = 4, maxd = 32, res, tot;
+  
+  int offset_1 = height*width;
+  int offset_2 = 2*offset_1;
+  
+  for (h = 0; h < height; h++)
+  {
+  
+    h_offset = h*width;
+    
+    for (w = 0; w < width; w++)
+    {
+    
+      w_offset = h_offset+w;
+      
+      if (rmask[w_offset] == 0)
+      {
+      
+        
+        nd = ndd[w_offset];
+        nx = nmp[w_offset];
+				ny = nmp[offset_1+w_offset];
+				nz = nmp[offset_2+w_offset];
+					  
+				tot = 0;
+			
+  			for (hh = 0; hh < height; hh++)
+	  		{
+			
+					hh_offset = hh*width;
+			
+					for (ww = 0; ww < width; ww++)
+					{
+				
+						ww_offset = hh_offset + ww;
+					
+						if ((rmask[ww_offset] == 0) && (ww_offset != w_offset))
+						{
+							x = xyz[ww_offset];
+							y = xyz[offset_1+ww_offset];
+							z = xyz[offset_2+ww_offset];
+							
+							dist = MAX(mind, MIN(maxd, (double)((h-hh)*(h-hh)+(w-ww)*(w-ww))));
+							
+							if (dist > 0)
+		          {
+							  
+							  res = fabs(x * nx + y * ny + z * nz - nd);
+		            
+  							if (res < res_thresh)
+	  						{
+		  						tot = tot-1/dist;
+			  					//tot++;
+				  			}
+				  		}
+		 				
+		  			}
+					
+					}
+					
+				}
+				
+				result[w_offset] = tot;
+			}
+        
+    }
+    
+    if ((h % 5) == 0)
+    {
+      printf("%d \n",h);
+    }
+      
+  }
+}
+
+int compute_seed_scores(double* result, double* xyz,
+                        double* nmp, double* ndd, 
+                        double res_thresh, int len)
+{
+  int l, ll;
+  double x, y, z, x0, y0, z0, dx,dy,dz, nx, ny, nz, nd, dist, maxd = 256, maxd2 = maxd*maxd, res, tot;
+  
+  int len_1 = len;
+  int len_2 = 2*len;
+  
+  for (l = 0; l < len; l++)
+  {
+  
+    
+    nd = ndd[l];
+    nx = nmp[l];
+		ny = nmp[len_1+l];
+		nz = nmp[len_2+l];
+		
+		x0 = xyz[l];
+		y0 = xyz[len_1+l];
+		z0 = xyz[len_2+l];
+					  
+		tot = 0;
+			
+  	for (ll = 0; ll < len; ll++)
+	  {
+			if (l != ll)
+			{
+				x = xyz[ll];
+				y = xyz[len_1+ll];
+				z = xyz[len_2+ll];
+				
+				dx = fabs(x0-x);
+				dy = fabs(y0-y);
+				dz = fabs(z0-z);
+				
+				if (dx < maxd && dy < maxd && dz < maxd)
+				{
+							
+					dist = dx*dx+dy*dy+dz*dz;
+							
+					if (dist > 0 && dist < maxd2)
+					{  
+						res = fabs(x * nx + y * ny + z * nz - nd);
+								
+						if (res < res_thresh)
+						{
+							tot++;
+						}
+					}
+				}
+			}
+				
+		} 
+    
+    result[l] = tot;
+    
+    if ((l % 10000) == 0)
+    {
+      printf("%d out of %d, %f \n",l/1000,len/1000, tot);
+    }
+      
+  }
+}
+
