@@ -74,7 +74,7 @@ function Sweep:getPC(recalc)
     if (util.fs.is_file(self.fod) and not(recalc)) then
         pc = pcl.new(self.fod)
     else
-        pc = pcl.new(self.fxyz)
+        pc = pcl.new(self.fxyz, nil, 10)
         --pc:downsampleBy(4)
         if util.fs.is_dir(path.join(self.base_dir,Sweep.PNG)) and util.fs.is_file(self.fpng) then
             pc:load_rgb_map(self.fpng)

@@ -543,7 +543,6 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    
    local file = io.open(pcfilename, 'r');
    local line = file:read();
-
    if line == nil or line:len() < 5 then
       error("file did not have enough stuff in it")
    end
@@ -578,6 +577,14 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
 
    if  (countColumns == 3) then
       self.format = 0 -- po_scan
+      po_cloud_file = true
+      local filenew = io.open(path.join(path.dirname(pcfilename), "sweep.meta"),'r')
+      local linenew = filenew:read()
+      self.height = tonumber(linenew:sub(4,-1))
+      linenew = filenew:read()
+      self.width = tonumber(linenew:sub(4,-1))
+      filenew:close()
+      countHeader = 0
    elseif  (countColumns == 8) then
       self.format = 1 -- faro_scan
    else
