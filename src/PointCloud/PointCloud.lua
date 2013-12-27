@@ -1,6 +1,5 @@
 local io = require 'io'
 local path = require 'path'
-local kdtree = kdtree.kdtree
 local ffi = require 'ffi'
 local ctorch = util.ctorch -- ctorch needs to be loaded before we reference THTensor stuff in a cdef
 local log = require '../util/log'
