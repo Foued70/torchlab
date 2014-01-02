@@ -6,7 +6,8 @@ outname=
 for f in $*
 do
     echo $f ;
-    ${dcraw} $f ;
+    #${dcraw} $f ;
+    $(sh dcraw.sh $f)
     fls="$fls ${f%%nef}tiff"
     if [ $outname ]
     then

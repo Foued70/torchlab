@@ -922,6 +922,150 @@ int flatten_image(double* imagez, double* image_corner,
   return 0;
 }
 
+int flatten_image_with_theta(double* imagez, double* image_corner, double* corners_map_filled,
+                                          double* imaget, double* theta_cnt,
+                                          double* coord_map, double *points,
+                                          char* connection_map, char* corners_map, double* theta,
+                                          int pan_hght, int pan_wdth,
+                                          int img_hght, int img_wdth)
+{
+
+  int h,w, pw;
+  double crdx,crdy, pcrdx,pcrdy;
+  double cor_x,cor_y;
+  double ptx,pty,ptz, ptxp,ptyp,ptzp;
+  double theta_p;
+  
+  char conn_hw, conn_hpw;
+  char corn_hw;
+  
+  char on_corner;
+  
+  double dst_con, dst_cor;
+  double cor_stt, cor_end;
+  
+  double slp1,slp2;
+  
+  for(w = 0; w < pan_wdth; w++)
+  {
+  
+    pw = (w - 1 + pan_wdth) % pan_wdth;
+    
+    dst_con = 0;
+    dst_cor = 0;
+
+    cor_stt = 0;
+    cor_end = 0;    
+    cor_x = 0;
+    cor_y = 0;
+    on_corner = 0;
+    
+    for (h = 0; h < pan_hght; h++)
+    {
+      /* find it on connection_map and corner_map */
+      conn_hw = *(connection_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      conn_hpw = *(connection_map + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+      
+      corn_hw = *(corners_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      
+      crdy = *(coord_map + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      crdx = *(coord_map + 1*pan_hght*pan_wdth + h*pan_wdth + w);
+      
+      pcrdy = *(coord_map + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+      pcrdx = *(coord_map + 1*pan_hght*pan_wdth + h*pan_wdth + pw);
+      
+      ptx = *(points + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      pty = *(points + 1*pan_hght*pan_wdth + h*pan_wdth + w);
+      ptz = *(points + 2*pan_hght*pan_wdth + h*pan_wdth + w);
+      
+      ptxp = *(points + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+      ptyp = *(points + 1*pan_hght*pan_wdth + h*pan_wdth + pw);
+      ptzp = *(points + 2*pan_hght*pan_wdth + h*pan_wdth + pw);
+      
+      theta_p = *(theta + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
+      
+      /* check corner */
+      if (on_corner == 0)
+      {
+        /* starting new corner column */
+        if (corn_hw == 1)
+        {
+          cor_stt = ptz;
+          cor_end = ptz;
+          cor_y = crdy;
+          cor_x = crdx;
+          on_corner = 1;
+          *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
+          increment_pixel_in_image(imaget, crdy, crdx, img_hght, img_wdth, theta_p);
+          increment_pixel_in_image(theta_cnt, crdy, crdx, img_hght, img_wdth, 1);
+        }
+      }
+      else
+      {
+        /* continue existing column */
+        if ((corn_hw == 1) && (crdx == cor_x) && (crdy == cor_y))
+        {
+          cor_end = ptz;
+          on_corner = 1;
+          *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
+          increment_pixel_in_image(imaget, crdy, crdx, img_hght, img_wdth, theta_p);
+          increment_pixel_in_image(theta_cnt, crdy, crdx, img_hght, img_wdth, 1);
+        }
+        else
+        {
+          /* stop and draw */
+          dst_cor = 1 + 100*fabs(cor_stt - cor_end);
+          increment_pixel_in_image(image_corner, cor_y, cor_x, img_hght, img_wdth, dst_cor);
+        
+          /* maybe start new column, otherwise refresh */
+          if (corn_hw == 1)
+          {
+            cor_stt = ptz;
+            cor_end = ptz;
+            cor_y = crdy;
+            cor_x = crdx;
+            on_corner = 1;
+            *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
+            increment_pixel_in_image(imaget, crdy, crdx, img_hght, img_wdth, theta_p);
+            increment_pixel_in_image(theta_cnt, crdy, crdx, img_hght, img_wdth, 1);
+          }
+          else
+          {
+            cor_stt = 0;
+            cor_end = 0;
+            cor_y = 0;
+            cor_x = 0;
+            on_corner = 0;
+          }
+          
+        }
+      }
+      
+      /* check connection */
+      if (conn_hw == 1)
+      {
+        dst_con = norm(ptx,pty,0) + 1;
+        
+        if (conn_hpw == 1)
+        {
+          connect_lines_in_image(imagez, crdy, crdx, pcrdy, pcrdx, img_hght, img_wdth, dst_con);
+          connect_lines_in_image(imaget, crdy, crdx, pcrdy, pcrdx, img_hght, img_wdth, theta_p);
+          connect_lines_in_image(theta_cnt, crdy, crdx, pcrdy, pcrdx, img_hght, img_wdth, 1);
+        }
+        else
+        {
+          increment_pixel_in_image(imagez, crdy, crdx, img_hght, img_wdth, dst_con);
+          increment_pixel_in_image(imaget, crdy, crdx, img_hght, img_wdth, theta_p);
+          increment_pixel_in_image(theta_cnt, crdy, crdx, img_hght, img_wdth, 1);
+        }
+      }
+      
+    }
+  }
+  
+  return 0;
+}
+
 
 int theta_map_var(double* theta_map, double* centered_point_map, 
                   int* step_left, int* step_right,
@@ -1464,149 +1608,5 @@ int remap_points(double* depth_sum, double* depth_num, double* depth_old,
 }
 
 
-int compute_number_of_plane_points(double* result, double* xyz, char * rmask,
-                                   double* nmp, double* ndd, 
-                                   double res_thresh, int height, int width)
-{
-  int h, w, hh, ww, h_offset, hh_offset, w_offset, ww_offset;
-  double x, y, z, nx, ny, nz, nd, dist, mind = 4, maxd = 32, res, tot;
-  
-  int offset_1 = height*width;
-  int offset_2 = 2*offset_1;
-  
-  for (h = 0; h < height; h++)
-  {
-  
-    h_offset = h*width;
-    
-    for (w = 0; w < width; w++)
-    {
-    
-      w_offset = h_offset+w;
-      
-      if (rmask[w_offset] == 0)
-      {
-      
-        
-        nd = ndd[w_offset];
-        nx = nmp[w_offset];
-				ny = nmp[offset_1+w_offset];
-				nz = nmp[offset_2+w_offset];
-					  
-				tot = 0;
-			
-  			for (hh = 0; hh < height; hh++)
-	  		{
-			
-					hh_offset = hh*width;
-			
-					for (ww = 0; ww < width; ww++)
-					{
-				
-						ww_offset = hh_offset + ww;
-					
-						if ((rmask[ww_offset] == 0) && (ww_offset != w_offset))
-						{
-							x = xyz[ww_offset];
-							y = xyz[offset_1+ww_offset];
-							z = xyz[offset_2+ww_offset];
-							
-							dist = MAX(mind, MIN(maxd, (double)((h-hh)*(h-hh)+(w-ww)*(w-ww))));
-							
-							if (dist > 0)
-		          {
-							  
-							  res = fabs(x * nx + y * ny + z * nz - nd);
-		            
-  							if (res < res_thresh)
-	  						{
-		  						tot = tot-1/dist;
-			  					//tot++;
-				  			}
-				  		}
-		 				
-		  			}
-					
-					}
-					
-				}
-				
-				result[w_offset] = tot;
-			}
-        
-    }
-    
-    if ((h % 5) == 0)
-    {
-      printf("%d \n",h);
-    }
-      
-  }
-}
 
-int compute_seed_scores(double* result, double* xyz,
-                        double* nmp, double* ndd, 
-                        double res_thresh, int len)
-{
-  int l, ll;
-  double x, y, z, x0, y0, z0, dx,dy,dz, nx, ny, nz, nd, dist, maxd = 256, maxd2 = maxd*maxd, res, tot;
-  
-  int len_1 = len;
-  int len_2 = 2*len;
-  
-  for (l = 0; l < len; l++)
-  {
-  
-    
-    nd = ndd[l];
-    nx = nmp[l];
-		ny = nmp[len_1+l];
-		nz = nmp[len_2+l];
-		
-		x0 = xyz[l];
-		y0 = xyz[len_1+l];
-		z0 = xyz[len_2+l];
-					  
-		tot = 0;
-			
-  	for (ll = 0; ll < len; ll++)
-	  {
-			if (l != ll)
-			{
-				x = xyz[ll];
-				y = xyz[len_1+ll];
-				z = xyz[len_2+ll];
-				
-				dx = fabs(x0-x);
-				dy = fabs(y0-y);
-				dz = fabs(z0-z);
-				
-				if (dx < maxd && dy < maxd && dz < maxd)
-				{
-							
-					dist = dx*dx+dy*dy+dz*dz;
-							
-					if (dist > 0 && dist < maxd2)
-					{  
-						res = fabs(x * nx + y * ny + z * nz - nd);
-								
-						if (res < res_thresh)
-						{
-							tot++;
-						}
-					}
-				}
-			}
-				
-		} 
-    
-    result[l] = tot;
-    
-    if ((l % 10000) == 0)
-    {
-      printf("%d out of %d, %f \n",l/1000,len/1000, tot);
-    }
-      
-  }
-}
 

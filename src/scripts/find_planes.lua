@@ -16,9 +16,9 @@ cmd:text()
 cmd:text('Find planes')
 cmd:text()
 cmd:text('Options')
-cmd:option('-src_dir','arcs/temporary-circle-6132/source/po_scan/a/001/')
-cmd:option('-out_dir','output/')
-cmd:option('-residual_threshold', 60)
+cmd:option('-src_dir','/Users/lihui815/Documents/elegant-prize-3149/source/po_scan/a/002/')
+cmd:option('-out_dir','/Users/lihui815/Documents/elegant-prize-3149/work/output/')
+cmd:option('-residual_threshold', 100)
 cmd:option('-residual_threshold_for_removal', 20)
 cmd:option('-normal_threshold', math.pi/3)
 cmd:option('-normal_threshold_for_removal', math.pi/4)
@@ -78,7 +78,7 @@ itrw = Plane.FitIterativeReweighted.new{
    min_points_for_plane = min_points_for_plane
 }
 
-itrw.save_images = true
+--itrw.save_images = true
 itrw.verbose     = true
 
 matcher = Plane.Matcher.new(residual_threshold, normal_threshold)
@@ -167,7 +167,7 @@ for pci,pcfile in pairs(pcfiles) do
 
       n_patches = mx:gt(1):sum()
 
-      while (n_patches > 1) do
+      while (n_patches > 1) and (#planes < 30) do
          printf(" - %d patches left with window %d,%d",n_patches, base_win, base_win)
          -- find a single max value to process
          idx,val = Plane.finder_utils.get_max_val_index(mx)
@@ -219,7 +219,7 @@ for pci,pcfile in pairs(pcfiles) do
 
             distance_weights = score:mul(1/score:max()):add(-1):abs():cmul(initial_valid)
 
-            image.save(string.format("%spatch_mask.jpg", itrw.image_id),image.combine(patch_mask))
+            --image.save(string.format("%spatch_mask.jpg", itrw.image_id),image.combine(patch_mask))
             gnuplot.pngfigure(string.format("%splot.png",itrw.image_id))
             gnuplot.xlabel("residual threshold in mm")
             gnuplot.ylabel("number of points within scoring thresholds")
@@ -227,9 +227,9 @@ for pci,pcfile in pairs(pcfiles) do
             gnuplot.plot(curves)
             gnuplot.close()
 
-            image.save(string.format("%smask.jpg",itrw.image_id), image.combine(current_plane.mask))
+            --image.save(string.format("%smask.jpg",itrw.image_id), image.combine(current_plane.mask))
 
-            image.save(string.format("%svalid.jpg",itrw.image_id), image.combine(accumulate_valid))
+            --image.save(string.format("%svalid.jpg",itrw.image_id), image.combine(accumulate_valid))
 
             printf(" - result: %s", error_string)
 
@@ -253,8 +253,8 @@ for pci,pcfile in pairs(pcfiles) do
          accumulate_valid[{{bbx[1],bbx[2]},{bbx[3],bbx[4]}}] = 0
          mx = torch.cmul(orig_mx,distance_weights):cmul(accumulate_valid)
          -- DEBUG
-         image.save(string.format("%s/mx_%03d.jpg",out_dir,count),image.combine(mx))
-         image.save(string.format("%s/valid_%03d.jpg",out_dir,count),image.combine(accumulate_valid))
+         --image.save(string.format("%s/mx_%03d.jpg",out_dir,count),image.combine(mx))
+         --image.save(string.format("%s/valid_%03d.jpg",out_dir,count),image.combine(accumulate_valid))
          image.save(string.format("%s/distance_%03d.jpg",out_dir,count),
                     image.combine(distance_weights:reshape(imgh,imgw)))
          printf("mx max: %f min: %f", mx:max(), mx:min())

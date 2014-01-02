@@ -23,6 +23,12 @@ ffi.cdef
                                           double* corners_map_filled,
                                           int pan_hght, int pan_wdth,
                                           int img_hght, int img_wdth);
+    int flatten_image_with_theta(double* imagez, double* image_corner, double* corners_map_filled,
+                                          double* imaget, double* theta_cnt,
+                                          double* coord_map, double *points,
+                                          char* connection_map, char* corners_map, double* theta,
+                                          int pan_hght, int pan_wdth,
+                                          int img_hght, int img_wdth);
     
    int theta_map_smooth(double* smoothed_theta_map, double* theta_map, char * extant_map, 
                      int height, int width, int max_win, double max_theta_diff);
@@ -42,6 +48,7 @@ ffi.cdef
                  char* rmask_old, double* phi_old, double* theta_old,
                  int hght_old, int wdth_old, int hght_new, int wdth_new,
                  double phi_max, double phi_stp, double theta_max, double theta_stp);
+                 
    
 ]]
 
@@ -1140,12 +1147,38 @@ function PointCloud:get_flattened_images(scale,numCorners)
   
   --cfunc
   
+  --[[
   libpc.flatten_image(torch.data(imagez), torch.data(image_corners),
                                               torch.data(crds:clone():contiguous()), torch.data(pts:clone():contiguous()),
                                               torch.data(connections:clone():contiguous()), 
                                               torch.data(corners_map:clone():contiguous()),
                                               torch.data(corners_map_filled),
                                               hght, wdth, height, width)
+  --[[]]
+  local nmp,ndd,nphi,ntheta,mask = self:get_normal_map()
+  local imaget = torch.zeros(height,width):clone():contiguous()
+  local theta_cnt = torch.zeros(height,width):clone():contiguous()
+  
+  libpc.flatten_image_with_theta(torch.data(imagez), torch.data(image_corners), torch.data(corners_map_filled),
+                                          torch.data(imaget), torch.data(theta_cnt),
+                                          torch.data(crds:clone():contiguous()), torch.data(pts:clone():contiguous()),
+                                          torch.data(connections:clone():contiguous()), 
+                                          torch.data(corners_map:clone():contiguous()),
+                                          torch.data(ntheta:clone():contiguous()),
+                                          hght, wdth, height, width)
+  
+  local imaget_mask = theta_cnt:gt(0)
+  imaget[imaget_mask] = imaget[imaget_mask]:cdiv(theta_cnt[imaget_mask])
+  imaget[imaget_mask:eq(0)] = -math.pi*2
+  
+  nm_flat = torch.zeros(3,height,width)
+  nm_flat[1][imaget_mask] = imaget[imaget_mask]:cos()
+  nm_flat[2][imaget_mask] = imaget[imaget_mask]:sin()
+
+
+  --image.display(nm_flat)
+  
+  --[[]]
   
   local mean_height = (imagez:clone():sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum())
   local stdv_height = math.sqrt((imagez:clone():add(-mean_height):pow(2):sum())/(imagez:clone():cdiv(imagez:clone()+PointCloud.very_small_number):sum()))
@@ -1224,7 +1257,7 @@ function PointCloud:get_flattened_images(scale,numCorners)
   
   collectgarbage()
   
-  return imagez,corners,image_corners, scale
+  return imagez,corners,image_corners, scale, imaget, imaget_mask, nm_flat
 end
 
 

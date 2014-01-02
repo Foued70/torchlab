@@ -8,11 +8,13 @@
 chromaR=0.9992 # chromatic aberration Red Channel
 q=3      # ADH interpolation
 m=3      # median filter 3 pass
-b=2      #brightness
+b=10      #brightness default should be 2
 
 manual="1.445312 1.000000 1.75 1.000000"
 camera_fixed="1.671875 1.000000 1.542969 1.000000"
 office="1.838000 1.000000 1.433000 1.000000"
+gallery="1.250 1.000 2.250 1.000"
+graciemansion="1.250 1.000 2.300 1.000"
 
 D65="2.395443 1.000000 1.253807 1"
 Tungsten="1.392498 1.000000 2.375114 1"
@@ -32,7 +34,7 @@ do
 # -6 16 bit output or we are losing dynamic range (advantage of raw)
 # -W don't automatically brighten (or we lose all sense of radiance)
 # -r use fixed white balance 
-    dcraw -v -T -6 -W -r ${office} -b ${b} ${f}
+    dcraw -v -T -6 -W -r ${graciemansion} -b ${b} ${f}
 
 # single image not feeding to HDR (use gamma, export 8-bit)
 #    dcraw -v -T -W -r ${office} -o 2 $f    
