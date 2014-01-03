@@ -57,7 +57,7 @@ And searches for a saliency across scales.
       tAvg[i] = t:time().real 
       local lkr = math.floor(kr * scalefactor^(i-1))
       local lkc = math.floor(kc * scalefactor^(i-1))
-      print(' - computing ('..lkr..','..lkc..')')
+      --print(' - computing ('..lkr..','..lkc..')')
       rr.libsaliency.intAvg(rr,ii,lkr,lkc,sr,sc)
       tAvg[i] = t:time().real - tAvg[i]
       tEnt[i] = t:time().real
@@ -101,6 +101,7 @@ And searches for a saliency across scales.
    m:cmul(tmpm)
    tclearB = t:time().real - tclearB
    tTotal = t:time().real - tTotal
+   --[[
    print(string.format(" - intHist %2d bins: %2.3fs (%2.1f%%)",
                        nbins,tintHist,tintHist/tTotal*100))
    print(" - scales:")
@@ -114,8 +115,10 @@ And searches for a saliency across scales.
                        tScaleSaliency,tScaleSaliency/tTotal*100))
    print(string.format(" - clear border:  %2.3fs (%2.1f%%)",
                        tclearB,tclearB/tTotal*100))
+    --[[]]
    print(string.format("       Total time:  %2.3fs (%2.1f%%)",
                        tTotal,tTotal/tTotal*100))
+    
    return m,sm
 end
 

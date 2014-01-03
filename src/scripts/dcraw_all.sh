@@ -5,6 +5,8 @@ PRJDIR=$1 # /Users/lihui815/Documents/elegant-prize-3149
 SRCDIR=$PRJDIR"/source/po_scan/a"
 WRKDIR=$PRJDIR"/work/a_00/Images"
 
+mkdir $PRJDIR"/work"
+mkdir $PRJDIR"/work/a_00"
 mkdir $WRKDIR
 
 for sweep in $(ls $SRCDIR)

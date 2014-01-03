@@ -34,7 +34,7 @@ _G.aligner = model.SweepImageAligner.new(imagedir.."/"..imageglob)
 -- scales = {0.125,0.25,0.5}
 scales = {0.125}
 wiggle_mult = 2^3 -- 2^<number of iterations>
-current_phi = 1*pi2/32
+current_phi = 0
 update = true
 for _,s in pairs(scales) do
    collectgarbage()

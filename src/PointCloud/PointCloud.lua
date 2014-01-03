@@ -78,6 +78,22 @@ local function round(dbl)
   end
 end
 
+function PointCloud.read_meta_data(filename)
+  local metafile = io.open(filename,'r')
+  local aline = metafile:read()
+  local properties = {}
+  while (aline) do
+    local asplit = string.split(aline,':')
+    local propname = asplit[1]
+    local propvalu = asplit[2]
+    local propname = propname:sub(1,#propname-1)
+    properties[propname]=tonumber(propvalu)
+    aline = metafile:read()
+  end
+  metafile:close()
+  return properties
+end
+
 -- rgb_map is a 2D equirectangular grid of rgb values which corresponds to xyz_map
 function PointCloud:load_rgb_map(imagefile, type)
    type = type or "byte"
@@ -470,7 +486,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
    local radius_near_far
    
    local default_near = 0.01*self.meter
-   local default_far = 25*self.meter
+   local default_far = 50*self.meter
 
    if radius then 
       if type(radius) == "number" then 
@@ -488,7 +504,7 @@ function PointCloud:__init(pcfilename, radius, numstd, option)
 
    if (not numstd) then
       --default number of standard dev prune
-      numstd = 3
+      numstd = 10
    end
 
    if pcfilename then
@@ -584,12 +600,9 @@ function PointCloud:set_pc_ascii_file(pcfilename, radius, numstd)
    if  (countColumns == 3) then
       self.format = 0 -- po_scan
       po_cloud_file = true
-      local filenew = io.open(path.join(path.dirname(pcfilename), "sweep.meta"),'r')
-      local linenew = filenew:read()
-      self.height = tonumber(linenew:sub(4,-1))
-      linenew = filenew:read()
-      self.width = tonumber(linenew:sub(4,-1))
-      filenew:close()
+      self.meta_properties = PointCloud.read_meta_data(path.join(path.dirname(pcfilename), "sweep.meta"))
+      self.height = self.meta_properties.w
+      self.width = self.meta_properties.h
       countHeader = 0
    elseif  (countColumns == 8) then
       self.format = 1 -- faro_scan
@@ -776,6 +789,7 @@ function PointCloud:set_pc_od_file(pcfilename)
   end
   self.local_to_global_pose = loaded[8]
   self.local_to_global_rotation = loaded[9]
+  self.meta_properties = loaded[10]
   self:reset_point_stats()
 end
 
@@ -1436,7 +1450,7 @@ function PointCloud:save_to_od(filename)
     if self.theta_map then 
       theta_map = self.theta_map:clone():mul(PointCloud.fudge_number):clone():type('torch.IntTensor')
     end
-    torch.save(filename, {self.format, self.hwindices, pts, self:get_rgb(), phi_map, theta_map, self.normal_mask, self.local_to_global_pose, self.local_to_global_rotation})
+    torch.save(filename, {self.format, self.hwindices, pts, self:get_rgb(), phi_map, theta_map, self.normal_mask, self.local_to_global_pose, self.local_to_global_rotation,self.meta_properties})
   end
 end
 
