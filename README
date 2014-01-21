@@ -1,6 +1,8 @@
 Install prereqs:
 > brew install cmake
 > brew install readline
+> brew install xz
+> brew install lua
 > brew link readline
 > brew tap homebrew/versions
 > brew install gcc48 --enable-cxx --enable-fortran --enable-objc --enable-objcxx
