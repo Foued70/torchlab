@@ -7,10 +7,10 @@ local thisdir = __dirname
 -- had to split the tensors into separate files as torch or lua has a
 -- limit (main function has more than 65536 constants)
 
-local cam_index    = dofile(thisdir.."/problem-16-22106-pre-cam_index.lua")
-local pts_index    = dofile(thisdir.."/problem-16-22106-pre-pt_index.lua")
-local parameters   = dofile(thisdir.."/problem-16-22106-pre-parameters.lua")
-local observations = dofile(thisdir.."/problem-16-22106-pre-observations.lua")
+local cam_index    = require (thisdir.."/problem-16-22106-pre-cam_index.lua")
+local pts_index    =  require (thisdir.."/problem-16-22106-pre-pt_index.lua")
+local parameters   = require (thisdir.."/problem-16-22106-pre-parameters.lua")
+local observations = require (thisdir.."/problem-16-22106-pre-observations.lua")
 
 observations:resize(nobs,2)
 

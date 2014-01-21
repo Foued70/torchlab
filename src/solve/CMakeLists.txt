@@ -34,6 +34,8 @@ set(NUMERICAL_LIBS cholmod ccolamd camd colamd amd suitesparseconfig cxsparse)
 
 set(CERES_DEPENDENCIES ${GOOGLE_LIBS} ${VECLIB_LIBRARY} ${NUMERICAL_LIBS} gomp)
 
-ADD_FFILIB(solve "${src}")
+SET(src simple_bundle_adjuster.cc)
+
+ADD_FFI_LIB(solve "${src}")
 TARGET_LINK_LIBRARIES(solve luaT TH ${CERES_LIBRARY} ${CERES_DEPENDENCIES})
 
