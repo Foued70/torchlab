@@ -3,17 +3,23 @@
 	the set of input planes created with /src/scripts/find_planes.lua
 ]]--
 
-require 'gnuplot'
+-- require 'gnuplot'
 io = require 'io'
 
-gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")
-gnuplot.setterm('x11')
+-- gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")
+-- gnuplot.setterm('x11')
 
 -- User specified planes and points
+--[[
 planes_fname = 'planes.t7'
 points_fname = 'sweep.xyz' -- note there is an accompanying sweep.meta file
-
 output_fname = 'segmented_points'
+]]--
+
+-- TODO: Use Torch:CmdLine to parse user inputs
+planes_fname = '/Users/uriah/Downloads/precise-transit-6548/work/output/_Users_uriah_Downloads_precise-transit-6548_source_po_scan_a_001_sweep_xyz/iterative_saliency_base_9_scale_1.8_n_scale_5_thres_100_normthres_1.0472_minseed_81_minplane_900_normal_var/planes.t7'
+points_fname = '/Users/uriah/Downloads/precise-transit-6548/source/po_scan/a/001/sweep.xyz' -- note there is an accompanying sweep.meta file
+output_fname = '/Users/uriah/Downloads/precise-transit-6548/work/output/segmented_points'
 
 -- Load planes and point cloud
 planes = torch.load(planes_fname)
@@ -41,7 +47,7 @@ print("Number of planes", #planes)
 print("Number of pointsl", points:size(1))
 
 -- Colormap for different coloring
-colormap = image.colormap(#planes):mul(255.0)
+colormap = image.colormap(#planes):mul(255.0):int()
 
 -- index_rng = torch.range(1, points:size(1))
 pts_rng = torch.range(1,points:size(1))
