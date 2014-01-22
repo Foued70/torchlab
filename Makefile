@@ -31,6 +31,7 @@ gphoto:
 ceres: 
 	cd deps/glog; make
 	cd deps/gflags; make
+	cd deps/protobuf; make
 	cd deps/suitesparse; make
 	cd deps/ceres-solver; make
 

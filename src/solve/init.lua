@@ -1,4 +1,3 @@
-require 'torchffi'
 
 local ffi = require 'ffi'
 
@@ -13,6 +12,7 @@ ffi.cdef[[
 local solveC = util.ffi.load("libsolve")
 
 local solve = {}
+local thisdir = __dirname
 
 -- torch interface to simple bundle adjust
 function solve.simplesba(cam_index,pts_index,obs,prm)
@@ -57,7 +57,8 @@ end
 -- Test the torch interface to simplesba by loading a sample bal file
 -- which is already stored as torch tensors
 function solve.testsimplesba()
-   local bal = require ("solve/test/problem-16-22106-pre")
+   print ("new!!")
+   local bal = require (thisdir .. "/test/problem-16-22106-pre")
    solve.simplesba(bal.cam_index,bal.pts_index, 
                    bal.observations,bal.parameters)
 end
