@@ -24,7 +24,6 @@ gnuplot.setterm('x11')
 io = require 'io'
 fit_plane = geom.linear_model.fit
 residual_fast = geom.linear_model.residual_fast
-randperm = torch.randperm
 
 -- Simple helper function 
 function gradient_magnitude( im ) 
@@ -41,8 +40,10 @@ function ransac_fit( points, n_samples, residual_thresh )
 	local sample_indices = torch.rand(3,n_samples):mul(n_points):int()
 	print("n_points: ", n_points)
 
-	local n_votes = torch.IntTensor(n_samples)
-	local n_inliers = 0 
+	-- Store points and votes from all samples
+	local n_pts = torch.Tensor(n_samples,3,3)
+	local n_inliers = torch.IntTensor(n_samples)
+	local n_planes = {}
 	local inlier_mask = torch.ByteTensor(n_points):zero()
 	-- For all samples, fit a plane and evaluate how many points vote for that plane
 	-- for sample_ind=1, n_samples do 
@@ -62,18 +63,38 @@ function ransac_fit( points, n_samples, residual_thresh )
 
 		-- Determine number of inliers
 		local residuals = residual_fast(current_plane, points:t()):abs() -- DEBUG: start with pts, residuals better be small
-		local current_inlier_mask = residuals:lt(residual_thresh)
-		local current_n_inliers = current_inlier_mask:sum()
-		if ( current_n_inliers > n_inliers ) then 
-			n_inliers = current_n_inliers
-			inlier_mask = current_inlier_mask
-		end	
+        -- local normal_dists = cosine_distance(plane,normals) TODO: add normals into this step 
+		local inlier_mask = residuals:lt(residual_thresh)
+		local inliers = inlier_mask:sum()
+
+		-- Save results
+		n_pts[sample_ind] = pts
+		n_inliers[sample_ind] = inliers
+		n_planes[sample_ind] = current_plane
+
 		-- print("residuals max: ", residuals:max())
 		-- print("residuals min: ", residuals:min())
 		-- print("num_inliers: ", residuals:lt(residual_thresh):sum())
 		-- print("residuals: ", residuals)	
 	end
 	)
+
+	-- Return best
+	_,sorted_i = torch.sort( n_inliers, true ) -- true for descending
+	local current_plane = n_planes[sorted_i[1]]	
+	local inliers = n_inliers[sorted_i[1]] 	
+	-- Recompute inlier mask
+	local residuals = residual_fast(current_plane, points:t()):abs() -- DEBUG: start with pts, residuals better be small
+	local inlier_mask = residuals:lt(residual_thresh)
+	-- Recompute plane given inlier mask
+	local pts = torch.Tensor(3,inliers)
+	pts[1] = points:select(2,1)[inlier_mask]
+	pts[2] = points:select(2,2)[inlier_mask]
+	pts[3] = points:select(2,3)[inlier_mask]
+
+	-- Fit plane to all points
+	local current_plane = fit_plane( pts )
+
 	-- TODO: refit plane given inliers and produce new plane,n_inliers, and inlier_mask
 	return current_plane, n_inliers, inlier_mask:squeeze()
 end

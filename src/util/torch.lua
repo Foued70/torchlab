@@ -12,6 +12,22 @@ function flipLR(tensor)
   return torch.flipTB(tensor:t()):t()
 end
 
+-- TODO: description and proper input handling!
+function meshgrid( xmin, xmax, ymin, ymax) 
+    yrng = ymax-ymin
+    xgrid = torch.range(xmin,xmax):repeatTensor(yrng,1)
+    ygrid = xgrid:clone():t()
+    return xgrid, ygrid
+end
+
+-- TODO: description and proper input handling!
+function meshlist( xmin, xmax, ymin, ymax )
+    xgrid, ygrid = meshgrid( xmin, xmax, ymin, ymax)
+    xrng = xmax-xmin
+    yrng = ymax-ymin
+    return xgrid:reshape(1,xrng*yrng), ygrid:reshape(1,xrng*yrng)
+end
+
 function unique(tensor)
 	if not(tensor:type() == "torch.IntTensor") then
 		error("requires int tensor")
