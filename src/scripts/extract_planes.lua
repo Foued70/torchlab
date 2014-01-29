@@ -82,7 +82,7 @@ function ransac_fit( points, n_samples, residual_thresh )
 	-- Return best
 	_,sorted_i = torch.sort( n_inliers, true ) -- true for descending
 	local current_plane = n_planes[sorted_i[1]]	
-	local inliers = n_inliers[sorted_i[1]] 	
+	local inliers = n_inliersk[sorted_i[1]] 	
 	-- Recompute inlier mask
 	local residuals = residual_fast(current_plane, points:t()):abs() -- DEBUG: start with pts, residuals better be small
 	local inlier_mask = residuals:lt(residual_thresh)
