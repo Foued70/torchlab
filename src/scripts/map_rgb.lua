@@ -124,181 +124,196 @@ function register_image_to_pc(img, xyz_map, rmask, emask, phi, theta, nmpi,
 	return rgb_map, sal_im, score
 end
 
-for sw = 5,22 do
+cmd = torch.CmdLine()
+cmd:text()
+cmd:text()
+cmd:text('Align a linear 360 sweep of images')
+cmd:text()
+cmd:text('Options')
+cmd:option('-prjdir',      '/Users/lihui815/Documents/precise-transit-6548', 'top project directory')
+cmd:option('-srcdir',      'source/po_scan/a',                               'directory with the pointcloud')
+cmd:option('-wrkdir',      'work/a_00',                                      'work dir')
+cmd:option('-imgdir',      'Aligned_For_Use',                      'directory in which to find images')
+cmd:option('-swpdir',      '001',                                            'directory for specific sweep')
+cmd:option('-pcname',      'sweep.xyz',                                      'pointcloud filename')
+cmd:option('-paname',      'enblend_panorama_360.png',                       'imgfilename')
+cmd:option('-interactive',  false,                                           'keep cloudlab on')
 
-  if not(sw == 11) then
+cmd:text()
+
+params     = cmd:parse(process.argv)
+
   
-	topdir = '/Users/lihui815/Documents'
-	prjdir = 'elegant-prize-3149' --'precise-transit-6548'--'mobile-void-0590'--'elegant-prize-3149'
+prjdir = params.prjdir
+srcdir = params.srcdir
 
-	srcdir = 'source/po_scan/a/'
-	wrkdir = 'work/a_00'
-	imgdir = 'Aligned'
-	sweepn = ''..sw
-	while #sweepn < 3 do
-		sweepn = '0'..sweepn
+wrkdir = params.wrkdir
+imgdir = params.imgdir
+sweepn = params.swpdir
+pcname = params.pcname
+paname = params.paname
+
+util.fs.mkdir_p(path.join(prjdir,wrkdir,'NMP'))
+util.fs.mkdir_p(path.join(prjdir,wrkdir,'RGB'))
+util.fs.mkdir_p(path.join(prjdir,wrkdir,'XYZRGB'))
+util.fs.mkdir_p(path.join(prjdir,wrkdir,'OD'))
+util.fs.mkdir_p(path.join(prjdir,wrkdir,'TXT'))
+util.fs.mkdir_p(path.join(prjdir,wrkdir,'SAL'))
+
+pcfile = path.join(prjdir,srcdir,sweepn,pcname)
+imfile = path.join(prjdir,wrkdir,imgdir,sweepn,paname)
+nmfile = path.join(prjdir,wrkdir,'NMP/nmp'..sweepn..'.png')
+clfile = path.join(prjdir,wrkdir,'RGB/rgb'..sweepn..'.png')
+xyfile = path.join(prjdir,wrkdir,'XYZRGB/xyz'..sweepn..'.xyz')
+odfile = path.join(prjdir,wrkdir,'OD/pc'..sweepn..'.od')
+otfile = path.join(prjdir,wrkdir,'TXT/'..sweepn..'.txt')
+slfile = path.join(prjdir,wrkdir,'SAL/'..sweepn..'.png')
+
+dbgf = io.open(otfile,'w')
+
+
+pc = PointCloud.PointCloud.new(pcfile)
+img = image.load(imfile)
+height = pc.height
+width = pc.width
+ih = img:size(2)
+iw = img:size(3)
+rad_per_pix = 2*math.pi/iw
+vscale = 1.15
+hhov = 2*math.pi
+vhov = ih*rad_per_pix*vscale
+xyz_map = pc:get_xyz_map_no_mask()
+index,rmask = pc:get_index_and_mask()
+emask = rmask:eq(0)
+phi,theta = pc:get_xyz_phi_theta()
+nmp,_G.ndd = pc:get_normal_map()
+nmpi = image.combine(nmp)
+
+--[[
+--elegant-prize
+hcen_init = (1/2)*ih+(1/1024)*ih --(- goes down, + goes up)
+thof_init = 43*math.pi/100 --(- goes left, + goes right)
+hhof_init = -104 --(- goes down, + goes up)
+--[[]]
+
+--[[]]
+--mobile-void
+hcen_init = (1/2)*ih+(2/1024)*ih --(- goes down, + goes up)
+thof_init = 30*math.pi/100 - 10/1000 --(- goes left, + goes right)
+hhof_init = -104 --(- goes down, + goes up)
+--[[]]
+
+--[[
+--precise-transit
+hcen_init = (1/2)*ih+(3.5/1024)*ih
+thof_init = pc.meta_properties.camera_offset_azimuth-(3/720)*math.pi
+hhof_init = pc.meta_properties.camera_offset_z
+--[[]]
+
+hcen_wiggle = 2
+thof_wiggle = 2*math.pi/720
+hhof_wiggle = 2.5
+numwiggle = 0
+
+dbg_str = ''..(-1)..', '..(-1)..': best score found at ['..'0'..', '..hcen_init..', '..thof_init..', '..hhof_init..']: '..math.huge..'\n'
+dbgf:write(dbg_str)
+print(dbg_str)
+
+
+best_score = math.huge
+best_rgb = torch.zeros(3,ih,iw)
+best_sal = torch.zeros(3,ih,iw)
+best_hcen = hcen_init
+best_thof = thof_init
+best_hhof = hhof_init
+																				 
+iter = 0                                                     
+while iter < 1 do --5*3 do
+
+	hcen = best_hcen
+	thof = best_thof
+	hhof = best_hhof
+	bwig = 0
+
+	local typ = iter % 3
+
+	for wiggle = -numwiggle,numwiggle do
+	
+		if typ == 0 then
+			hcen = hcen_init + wiggle*hcen_wiggle 
+		elseif typ == 1 then
+			thof = thof_init + wiggle*thof_wiggle
+		else
+			hhof = hhof_init + wiggle*hhof_wiggle
+		end
+	
+		local rgb, sal, score =  register_image_to_pc(img:clone(), xyz_map:clone(), rmask:clone(), 
+																											 emask:clone(), phi:clone(), theta:clone(), nmpi:clone(),
+																											 ih,iw,height,width,rad_per_pix,vscale,hhov,vhov,hcen,thof,hhof)
+																									
+		dbg_str = '     ['..wiggle..', '..hcen..', '..thof..', '..hhof..']: '..score..'\n'
+		dbgf:write(dbg_str)
+		print(dbg_str)
+		
+		if score < best_score then
+			best_score = score
+			best_rgb = rgb
+			best_sal = sal
+			best_hcen = hcen
+			best_thof = thof
+			best_hhof = hhof
+			bwig = wiggle
+
+			dbg_str = '        found new best\n'
+			dbgf:write(dbg_str)
+			print(dbg_str)
+		end
+	
 	end
 
-	util.fs.mkdir_p(path.join(topdir,prjdir,wrkdir,'NMP'))
-	util.fs.mkdir_p(path.join(topdir,prjdir,wrkdir,'RGB'))
-	util.fs.mkdir_p(path.join(topdir,prjdir,wrkdir,'XYZRGB'))
-	util.fs.mkdir_p(path.join(topdir,prjdir,wrkdir,'OD'))
-	util.fs.mkdir_p(path.join(topdir,prjdir,wrkdir,'TXT'))
-	util.fs.mkdir_p(path.join(topdir,prjdir,wrkdir,'SAL'))
+	hcen_init = best_hcen
+	thof_init = best_thof
+	hhof_init = best_hhof
 
-	pcfile = path.join(topdir,prjdir,srcdir,sweepn,'sweep.xyz')
-	imfile = path.join(topdir,prjdir,wrkdir,imgdir,sweepn,'enblend_panorama_360_lambda_0.125_post.png')
-	nmfile = path.join(topdir,prjdir,wrkdir,'NMP/nmp'..sweepn..'.png')
-	clfile = path.join(topdir,prjdir,wrkdir,'RGB/rgb'..sweepn..'.png')
-	xyfile = path.join(topdir,prjdir,wrkdir,'XYZRGB/xyz'..sweepn..'.xyz')
-	odfile = path.join(topdir,prjdir,wrkdir,'OD/pc'..sweepn..'.od')
-	otfile = path.join(topdir,prjdir,wrkdir,'TXT/'..sweepn..'.txt')
-	slfile = path.join(topdir,prjdir,wrkdir,'SAL/'..sweepn..'.png')
-
-	dbgf = io.open(otfile,'w')
-
-
-	pc = PointCloud.PointCloud.new(pcfile)
-	img = image.load(imfile)
-	height = pc.height
-	width = pc.width
-	ih = img:size(2)
-	iw = img:size(3)
-	rad_per_pix = 2*math.pi/iw
-	vscale = 1.15
-	hhov = 2*math.pi
-	vhov = ih*rad_per_pix*vscale
-	xyz_map = pc:get_xyz_map_no_mask()
-	index,rmask = pc:get_index_and_mask()
-	emask = rmask:eq(0)
-	phi,theta = pc:get_xyz_phi_theta()
-	nmp,_G.ndd = pc:get_normal_map()
-	nmpi = image.combine(nmp)
-
-	--[[]]
-	--elegant-prize
-	hcen_init = (1/2)*ih+(5/128)*ih --(- goes down, + goes up)
-	thof_init = 43*math.pi/100 --(- goes left, + goes right)
-	hhof_init = -104 --(- goes down, + goes up)
-	--[[]]
-
-	--[[
-	--mobile-void
-	hcen_init = (1/2)*ih+(5/128)*ih --(- goes down, + goes up)
-	thof_init = 30*math.pi/100 --(- goes left, + goes right)
-	hhof_init = -104 --(- goes down, + goes up)
-	--[[]]
-
-	--[[
-	--precise-transit
-	hcen_init = (1/2)*ih+(5/128)*ih
-	thof_init = pc.meta_properties.camera_offset_azimuth-(7/720)*math.pi
-	hhof_init = pc.meta_properties.camera_offset_z
-	--[[]]
-
-	hcen_wiggle = 2
-	thof_wiggle = 2*math.pi/720
-	hhof_wiggle = 2.5
-	numwiggle = 2
-
-  dbg_str = ''..(-1)..', '..(-1)..': best score found at ['..'0'..', '..hcen_init..', '..thof_init..', '..hhof_init..']: '..math.huge..'\n'
+	if typ == 2 then
+		hcen_wiggle = hcen_wiggle/(numwiggle+1)
+		thof_wiggle = thof_wiggle/(numwiggle+1)
+		hhof_wiggle = hhof_wiggle/(numwiggle+1)
+	end
+	
+	dbg_str = ''..math.floor(iter/3)..', '..typ..': best score found at ['..bwig..', '..best_hcen..', '..best_thof..', '..best_hhof..']: '..best_score..'\n'
 	dbgf:write(dbg_str)
 	print(dbg_str)
 
+	iter = iter + 1
+	
+end
 
-	best_score = math.huge
-	best_rgb = torch.zeros(3,ih,iw)
-	best_sal = torch.zeros(3,ih,iw)
-	best_hcen = hcen_init
-	best_thof = thof_init
-	best_hhof = hhof_init
-																					 
-	iter = 0                                                     
-	while iter < 5*3 do
-	
-		hcen = best_hcen
-		thof = best_thof
-		hhof = best_hhof
-		bwig = 0
-	
-		local typ = iter % 3
-	
-		for wiggle = -numwiggle,numwiggle do
-		
-			if typ == 0 then
-				hcen = hcen_init + wiggle*hcen_wiggle 
-			elseif typ == 1 then
-				thof = thof_init + wiggle*thof_wiggle
-			else
-				hhof = hhof_init + wiggle*hhof_wiggle
-			end
-		
-			local rgb, sal, score =  register_image_to_pc(img:clone(), xyz_map:clone(), rmask:clone(), 
-																												 emask:clone(), phi:clone(), theta:clone(), nmpi:clone(),
-																												 ih,iw,height,width,rad_per_pix,vscale,hhov,vhov,hcen,thof,hhof)
-																										
-      dbg_str = '     ['..wiggle..', '..hcen..', '..thof..', '..hhof..']: '..score..'\n'
-			dbgf:write(dbg_str)
-	    print(dbg_str)
-			
-			if score < best_score then
-				best_score = score
-				best_rgb = rgb
-				best_sal = sal
-				best_hcen = hcen
-				best_thof = thof
-				best_hhof = hhof
-				bwig = wiggle
-	
-				dbg_str = '        found new best\n'
-				dbgf:write(dbg_str)
-  	    print(dbg_str)
-			end
-		
-		end
-	
-		hcen_init = best_hcen
-		thof_init = best_thof
-		hhof_init = best_hhof
-	
-		if typ == 2 then
-			hcen_wiggle = hcen_wiggle/(numwiggle+1)
-			thof_wiggle = thof_wiggle/(numwiggle+1)
-			hhof_wiggle = hhof_wiggle/(numwiggle+1)
-		end
-		
-		dbg_str = ''..math.floor(iter/3)..', '..typ..': best score found at ['..bwig..', '..best_hcen..', '..best_thof..', '..best_hhof..']: '..best_score..'\n'
-  	dbgf:write(dbg_str)
-	  print(dbg_str)
-	
-		iter = iter + 1
-		
-	end
-	
-	image.save(nmfile,nmpi)
-	image.save(clfile,best_rgb)
-	image.save(slfile,best_sal)
+image.save(nmfile,nmpi)
+image.save(clfile,best_rgb)
+image.save(slfile,best_sal)
 
-	pc:load_rgb_map(clfile)
+pc:load_rgb_map(clfile)
 
-	points_t = torch.zeros(3,num)
-	rgb_t = torch.zeros(3,num)
+points_t = torch.zeros(3,num)
+rgb_t = torch.zeros(3,num)
 
-	for i = 1,3 do
-		points_t[i] = xyz_map[i][msk:byte()]
-		rgb_t[i] = rgb_map[i][msk:byte()]
-	end
-	rgb_t:mul(255):floor()
+for i = 1,3 do
+	points_t[i] = xyz_map[i][msk:byte()]
+	rgb_t[i] = rgb_map[i][msk:byte()]
+end
+rgb_t:mul(255):floor()
 
-	points = points_t:t()
-	rgb = rgb_t:t()
-	pc.save_any_points_to_xyz(xyfile,points,rgb)
-	pc:save_to_od(odfile)
+points = points_t:t()
+rgb = rgb_t:t()
+pc.save_any_points_to_xyz(xyfile,points,rgb)
+pc:save_to_od(odfile)
 
-	--[[]]
-	
-	dbgf:close()
+--[[]]
 
-  end
-	collectgarbage()
+dbgf:close()
+
+if not params.interactive then
+  collectgarbage()
+  process.exit()
 end
