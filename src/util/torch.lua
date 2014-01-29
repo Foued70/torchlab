@@ -12,6 +12,36 @@ function flipLR(tensor)
   return torch.flipTB(tensor:t()):t()
 end
 
+-- TODO: description and proper input handling!
+function meshgrid( xmin, xmax, ymin, ymax) 
+    local xrng = xmax-xmin+1
+    local yrng = ymax-ymin+1
+    local xgrid = torch.range(xmin,xmax):repeatTensor(yrng,1)
+    local ygrid = torch.range(ymin,ymax):repeatTensor(xrng,1)
+    return xgrid, ygrid:t()
+end
+
+-- TODO: description and proper input handling!
+function meshlist( xmin, xmax, ymin, ymax )
+    local xgrid, ygrid = meshgrid( xmin, xmax, ymin, ymax)
+    local xrng = xmax-xmin+1
+    local yrng = ymax-ymin+1
+    return xgrid:reshape(1,xrng*yrng), ygrid:reshape(1,xrng*yrng)
+end
+
+--[[ 
+    maskdim:  -- possibly not the best naming choice
+        Apply a mask along the specified dimension 
+        note: Similar in functionality as select3d, probably could be made a part of that function
+]]--
+function maskdim( tensor, mask, dim )
+    if mask:type() ~= "torch.ByteTensor" then
+        error("mask is not of type torch.ByteTensor")
+    end
+    -- TODO: more size, spec testing, etc ...
+    return tensor:index(dim,torch.range(1,tensor:size(dim)):long()[mask])
+end
+
 function unique(tensor)
 	if not(tensor:type() == "torch.IntTensor") then
 		error("requires int tensor")

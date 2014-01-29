@@ -7,6 +7,7 @@ Install prereqs:
 > brew tap homebrew/versions
 > brew install gcc48 --enable-cxx --enable-fortran --enable-objc --enable-objcxx
 
+
 Add cloudlab to ~/.bash_profile, ~/.bash_login, or ~/.profile (pick first one that exists already). Note that a default installation of OSX will not create a bash profile, in which case you must create one manually:
 
 export CLOUDLAB_INSTALL_ROOT=~/cloudlab
@@ -20,3 +21,12 @@ Get the cloudlab repo.  Don’t clone it into CLOUDLAB_INSTALL_ROOT
 
 Build the dependencies. This will take <1 hours and you will see warning messages. From cloudlab root:
 > make
+
+
+Notes:
+* If you are using gnuplot then install XQuartz from http://xquartz.macosforge.org/ and 
+  > brew install gnuplot
+* Remember "cook" is your friend. Lets say you want to make and install imgraph
+  > cd src/scripts/imgraph
+  > cook 
+  And your done! 

@@ -14,6 +14,8 @@ link_libraries(${PCL_LIBRARIES})
 
 LINK_DIRECTORIES(${install_lib})
 
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=1024")
+
 SET(package pcl_ffi)
 
 SET(src pcl_ffi.cpp)
