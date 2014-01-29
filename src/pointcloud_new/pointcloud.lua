@@ -17,6 +17,18 @@ ffi.cdef
     int get_normal_phi_map(double* phi_map, double* centered_point_map, 
                 int* step_up, int* step_down,
                 int height, int width);
+    int flatten_image(double* imagez, double* image_corner,
+                                          double* coord_map, double *points,
+                                          char* connection_map, char* corners_map,
+                                          double* corners_map_filled,
+                                          int pan_hght, int pan_wdth,
+                                          int img_hght, int img_wdth);
+    int flatten_image_with_theta(double* imagez, double* image_corner, double* corners_map_filled,
+                                          double* imaget, double* theta_cnt,
+                                          double* coord_map, double *points,
+                                          char* connection_map, char* corners_map, double* theta,
+                                          int pan_hght, int pan_wdth,
+                                          int img_hght, int img_wdth);
 ]]
 
 local libpc   = util.ffi.load('libpcd')
@@ -26,6 +38,7 @@ local libpc   = util.ffi.load('libpcd')
 local pi = math.pi
 local r2d = 180/pi
 local d2r = pi/180
+local very_small_number = 0.00000000000000001
 
 pointcloud = Class()
 
@@ -146,9 +159,37 @@ function pointcloud:load_rgb_map(rgb_map, rgb_valid_mask)
   
 end
 
+function pointcloud:get_noise()
 
-
-
+  local height        = self.height
+  local width         = self.width
+  
+  local imask         = self:get_inverse_masks()
+  local xyz,phi,theta = self:get_xyz_map()
+  local z             = xyz[3]:clone()
+  
+  local phi_max       = phi:max()
+  local phi_min       = phi:min()
+  local phi_rng       = phi_max-phi_min
+  local phi_stp       = phi_rng/(height-1)
+  local phi_thr       = phi_stp/2
+  
+  local top_row_mask  = phi:le(phi_max):cmul(phi:ge(phi_max-phi_thr))
+  
+  top_row_mask[imask] = 0
+  
+  topnoise = z[top_row_mask]:std()
+  
+  imask        = nil
+  xyz          = nil
+  phi          = nil
+  theta        = nil
+  top_row_mask = nil
+  collectgarbage()
+  
+  return topnoise
+  
+end
 
 
 -- mapping functions
@@ -331,6 +372,7 @@ function pointcloud:get_normal_map()
   return self.normal_map:clone(), self.normal_phi_map:clone(), self.normal_theta_map:clone(), self.normal_residual_map:clone(), self.normal_valid_mask:clone(), self.normal_inverse_mask:clone()
 end
 
+
 -- list functions
 
 function mapToList(map, msk)
@@ -434,6 +476,408 @@ function pointcloud:get_normal_list(omsk)
   return nlist:clone():contiguous(), phlist:clone():contiguous(), thlist:clone():contiguous(), rlist:clone():contiguous()
 end
 
+
+-- flatten functions
+
+local function adjust_dtheta(dtheta)
+  local mid = dtheta:gt(-math.pi):cmul(dtheta:le(math.pi)):type('torch.DoubleTensor')
+  local top = dtheta:gt(math.pi):type('torch.DoubleTensor')
+  local bot = dtheta:le(-math.pi):type('torch.DoubleTensor')
+  mid:cmul(dtheta:clone())
+  top:cmul(dtheta:clone():add(-math.pi*2))
+  bot:cmul(dtheta:clone():add(math.pi*2))
+  dtheta = mid+top+bot
+  mid = nil
+  top = nil
+  bot = nil
+  collectgarbage()
+  return dtheta
+end
+
+local function get_theta_corners(thresh,xyz,depth,stheta,height,width)
+  for i=1,3 do
+    xyz[i]:cdiv(depth)
+  end
+  
+  local phi_xyz = torch.asin(xyz[3]:clone())
+  
+  local theta_xyz = torch.acos(xyz[1]:clone():cdiv(phi_xyz:clone():cos()))
+  theta_xyz[phi_xyz:clone():cos():eq(0)] = 0
+  theta_xyz[xyz[2]:clone():lt(0)] = theta_xyz[xyz[2]:clone():lt(0)]:mul(-1)
+  
+  local kernel_l = torch.Tensor({{0,0,0},{1,0,0},{0,0,0}})
+  local kernel_r = torch.Tensor({{0,0,0},{0,0,1},{0,0,0}})
+
+  conv = torch.conv2(stheta:clone(), kernel_l, 'F')
+  theta_l = (conv:sub(2,height+1,2,width+1):clone())
+  
+  conv = torch.conv2(stheta:clone(), kernel_r, 'F')
+  theta_r = (conv:sub(2,height+1,2,width+1):clone())
+  
+  dtheta = (theta_r-theta_l):abs()
+  
+  mask_lt = dtheta:lt(2*math.pi/3)
+  mask_md = dtheta:ge(2*math.pi/3):cmul(dtheta:le(4*math.pi/3))
+  mask_gt = dtheta:gt(4*math.pi/3)
+  
+  dtheta[mask_md] = 0
+  dtheta[mask_gt] = dtheta[mask_gt]:mul(-1):add(2*math.pi)
+  
+  local localmax = torch.zeros(height,width)
+  
+  torch.range(1,height):apply(function(h)
+    local dh = dtheta[h]
+    local dwn = dh[1]
+    local dwp = 0
+    local dwc = 0
+    
+    torch.range(1,width):apply(function(w)
+      if w == 1 then
+        dwc = dwn
+        dwn = dh[w+1]
+      elseif w < width then
+        dwp = dwc
+        dwc = dwn
+        dwn = dh[w+1]
+        
+        if dwc > dwp and dwc > dwn then
+          localmax[h][w] = 1
+        end
+      end
+      
+    end)
+  end)
+  
+  dtheta:cmul(localmax)
+  
+  local mask_theta = dtheta:gt(thresh)
+  
+  collectgarbage()
+  
+  return mask_theta
+  
+end
+
+local function get_plane_corners(thresh,xyz,depth,snormal,sdd,mask0,height,width)
+  local kernel
+  local conv
+  local mask1
+  local mask2
+  local mask3
+  local mask4
+  local mask5
+  local mask6
+  local mask7
+  local mask8
+  
+  local dplane_ll
+  local dplane_rr
+  
+  kernel = torch.Tensor({{0,0,0},{1,0,0},{0,0,0}})
+  conv = torch.conv2(depth:clone(),kernel,'F')
+  mask1 = conv:sub(2,height+1,2,width+1):clone():eq(0)
+  mask1 = (mask1-mask0):eq(1)
+  
+  kernel = torch.Tensor({{0,0,0},{0,0,1},{0,0,0}})
+  conv = torch.conv2(depth:clone(),kernel,'F')
+  mask2 = conv:sub(2,height+1,2,width+1):clone():eq(0)
+  mask2 = (mask2-mask0):eq(1)
+  
+  mask1 = (mask1+mask2):gt(0)
+  mask2 = mask1:clone()
+  
+  torch.range(1,height):apply(function(h)
+    local m1 = mask1:select(1,h)
+    local m2 = mask2:select(1,h)
+    torch.range(1,width):apply(function(w)
+      if w == 1 or w == width then
+        m2[w]=0
+      elseif m1[w-1] == 1 and m1[w+1] == 1 and m1[w] == 0 then
+        m2:sub(w-1,w+1):fill(0)
+        m1[w]=1
+      end
+    end)
+  end)
+  
+  kernel = torch.zeros(5,5)
+  kernel[3][1] = 1
+  
+  conv = torch.Tensor(3,height+4,width+4)
+  for i = 1,3 do
+    conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
+  end
+  dplane_ll = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dplane_ll = dplane_ll:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  mask3 = dplane_ll:gt(thresh):type('torch.DoubleTensor')
+  
+  kernel = torch.zeros(5,5)
+  kernel[3][5] = 1
+  
+  conv = torch.Tensor(3,height+4,width+4)
+  for i = 1,3 do
+    conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
+  end
+  local dplane_rr = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dplane_rr = dplane_rr:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  mask4 = dplane_rr:gt(thresh):type('torch.DoubleTensor')
+  
+  local mask7 = (mask3+mask4):gt(0)
+  mask7[mask2]=1
+  mask7[mask0]=0
+  mask7:select(2,1):fill(0)
+  mask7:select(2,width):fill(0)
+
+  local mask8 = mask7:clone():mul(-1):add(1)
+  
+  mask8[mask1]=0
+  
+  collectgarbage()
+  
+  return mask7,mask8
+  
+end
+
+local function get_corners(xyz,depth,snormal,stheta,sdd,mask0,theta_thresh,plane_thresh,height,width)
+  
+  local mask_theta = get_theta_corners(theta_thresh, xyz:clone(), depth:clone(), stheta:clone(), height, width)
+  local mask_plane,mask_same_plane = get_plane_corners(plane_thresh, xyz:clone(), depth:clone(), snormal:clone(), sdd:clone(), mask0, height, width)
+  mask_theta:cmul(mask_same_plane)
+  local mask_corner = (mask_theta+mask_plane):gt(0)
+  
+  collectgarbage()
+  
+  return mask_corner
+end
+
+local function get_connections(xyz,depth,snormal,sdd,plane_thresh,height,width)
+  
+  local dpt_thresh_1 = 3*2*math.pi*20*1000/width
+  local dpt_thresh_2 = 2*math.pi*15/width
+  local kernel
+  local conv
+  local dplane_l
+  local dpoint_l
+  
+  kernel = torch.zeros(5,5)
+  kernel[3][1] = 1
+  
+  conv = torch.Tensor(3,height+4,width+4)
+  for i = 1,3 do
+    conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
+  end
+  dplane_l = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dplane_l = dplane_l:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  local mask_con = dplane_l:clone():abs():lt(plane_thresh)
+  
+  dpoint_l = conv:sub(1,3,3,height+2,3,width+2):clone()
+  dpoint_l = dpoint_l:add(xyz:clone():mul(-1)):norm(2,1):squeeze()
+  local mask_point_1 = dpoint_l:gt(dpt_thresh_1)
+  dpoint_l:cdiv(depth)
+  local mask_point_2 = dpoint_l:gt(dpt_thresh_2)
+  
+  mask_con[mask_point_1] = 0
+  mask_con[mask_point_2] = 0
+  
+  collectgarbage()
+  
+  return mask_con
+  
+end
+
+function pointcloud:get_connections_and_corners()
+  
+  local height = self.height
+  local width  = self.width
+  local imask  = self:get_inverse_masks()
+  
+  local xyz    = self:get_xyz_map()  
+  local depth  = self:get_depth_map()
+  
+  local noise             = self:get_noise()
+  local thresh_theta      = math.pi/4
+  local thresh_plane_conn = math.min(0.25*self.meter,0.01*self.meter+3*noise)
+  local thresh_plane_corn = math.min(0.50*self.meter,0.10*self.meter + 3*noise)
+  local thresh_phi        = math.max(3*math.pi/8, math.pi/2-math.pi/8 - noise*math.pi/20)
+  local thresh_height     = 0.1*height
+  
+  local nmp, nphi, ntht, nrsd, nvmsk, nimsk = self:get_normal_map()
+  
+  local phmask = nphi:clone():abs():ge(thresh_phi)
+  local hmask  = {{1,thresh_height},{}}
+  
+  local mask_corner = get_corners(xyz:clone(),  depth:clone(), nmp:clone(),
+                                  ntht:clone(), nrsd:clone(),  imask,
+                                  thresh_theta, thresh_plane_corn,
+                                  height, width)
+  local mask_connct = get_connections(xyz:clone(),  depth:clone(), nmp:clone(),
+                                      nrsd:clone(), thresh_plane_conn,
+                                      height,width)
+                                      
+  mask_corner[imask ] = 0
+  mask_corner[phmask] = 0
+  mask_corner[hmask ] = 0
+  
+  mask_connct[imask ] = 0
+  mask_connct[phmask] = 0
+  mask_connct[hmask ] = 0
+  
+  return mask_connct, mask_corner
+
+end
+
+function pointcloud:get_flattened_image(scale,numCorners)
+  
+  if not scale then
+    scale = self.meter/100
+  elseif scale < self.meter/1000 then
+    scale = self.meter/1000
+  end
+  
+  if not numCorners then
+    numCorners = 25
+  elseif numCorners > 100 or numCorners < 1 then
+    numCorners = 25
+  end
+  
+  local ranges = self.xyz_radius:clone():mul(2)
+  local minv   = self.xyz_radius:clone():mul(-1)
+  local maxv   = self.xyz_radius:clone()
+  local pix    = ranges:clone():div(scale):floor()
+  local height = pix[1]
+  local width  = pix[2]
+  local hght   = self.height
+  local wdth   = self.width
+  
+  local elim_dist = 0.25      
+  
+  -- make a list for corners
+  local corners  
+  if numCorners and numCorners > 0 then
+      corners = torch.zeros(numCorners,2)
+  end
+  local corners_map_filled = torch.zeros(hght,wdth)
+  
+  -- get the wall connections and the wall corners
+  local connections, corners_map = self:get_connections_and_corners()
+  
+  -- make the flattened images
+  local imagez        = torch.zeros(height,width)
+  local image_corners = imagez:clone()
+  local imaget    = torch.zeros(height,width):clone():contiguous()
+  local theta_cnt = torch.zeros(height,width):clone():contiguous()
+  
+  -- get the coordinates and points
+  local pts  = self:get_xyz_map()
+  pts        = pts:sub(1,2):clone():contiguous()
+  
+  local crds = pts:clone()
+  local mnv  = minv:sub(1,2):repeatTensor(hght,wdth,1):transpose(2,3):transpose(1,2)
+  
+  crds:add(mnv:mul(-1)):div(scale):floor()
+  pts = self:get_xyz_map()
+  
+  -- get the normal map
+  local nmp, nphi, ntht, ndd, nvmsk, nimsk = self:get_normal_map()
+  
+  -- clear some space
+  nmp   = nil
+  nphi  = nil
+  ndd   = nil
+  nvmsk = nil
+  nimsk = nil
+  mnb   = nil
+  collectgarbage()
+  
+  -- call the cfunction
+  libpc.flatten_image_with_theta(torch.data(imagez), torch.data(image_corners), torch.data(corners_map_filled),
+                                          torch.data(imaget), torch.data(theta_cnt),
+                                          torch.data(crds:clone():contiguous()), torch.data(pts:clone():contiguous()),
+                                          torch.data(connections:clone():contiguous()), 
+                                          torch.data(corners_map:clone():contiguous()),
+                                          torch.data(ntht:clone():contiguous()),
+                                          hght, wdth, height, width)
+  
+  -- mask out imaget and nmflat
+  local imaget_mask = theta_cnt:gt(0)
+  imaget[imaget_mask] = imaget[imaget_mask]:cdiv(theta_cnt[imaget_mask])
+  imaget[imaget_mask:eq(0)] = -math.pi*2
+  
+  nm_flat = torch.zeros(3,height,width)
+  nm_flat[1][imaget_mask] = imaget[imaget_mask]:cos()
+  nm_flat[2][imaget_mask] = imaget[imaget_mask]:sin()
+
+  -- normalize some
+  local mean_height = (imagez:clone():sum())/(imagez:clone():cdiv(imagez:clone()+very_small_number):sum())
+  local stdv_height = math.sqrt((imagez:clone():add(-mean_height):pow(2):sum())/(imagez:clone():cdiv(imagez:clone()+very_small_number):sum()))
+  local max_height  = mean_height+stdv_height
+  local show_thresh = 0.1*max_height
+  imagez            = imagez:clone():gt(max_height):type('torch.DoubleTensor'):mul(max_height):add(
+  imagez:clone():le(max_height):type('torch.DoubleTensor'):cmul(imagez)):cmul(imagez:clone():gt(show_thresh):type('torch.DoubleTensor'))
+  imagez:div(imagez:max()+very_small_number)
+  imagez:cmul(imagez:gt(0.05):type('torch.DoubleTensor'))
+  image_corners:div(image_corners:max()+very_small_number):cmul(image_corners:gt(0.05):type('torch.DoubleTensor'))
+  
+  if numCorners and numCorners > 0 then
+    local ps = math.ceil(0.10*self.meter/scale)
+    local bs = math.ceil(0.05*self.meter/scale)
+    local ds =  3
+    local cc = 0
+    local image_corners_orig = image_corners:clone()
+        
+    while cc < numCorners and image_corners:max() > 0 do
+      local maxmap,maxord = image_corners:max(1)
+      local mmmap,mmord = maxmap:max(2)
+      local x = mmord[1][1]
+      local y = maxord[1][x]
+      local patch = image_corners_orig:sub(math.max(1,y-ps),
+                                           math.min(height,y+ps),
+                                           math.max(1,x-ps),
+                                           math.min(width,x+ps))
+      if patch:max() == image_corners[y][x] then
+        cc = cc+1
+        corners[cc] = torch.Tensor({y,x})
+        image_corners:sub(math.max(1,y-bs),
+        math.min(height,y+bs),
+        math.max(1,x-bs),
+        math.min(width,x+bs)):mul(0)
+      else
+        image_corners[y][x] = 0
+      end
+    end
+    if cc < numCorners then
+      if cc == 0 then
+        corners = nil
+      else
+        corners = corners:sub(1,cc):clone()
+      end
+    end
+    image_corners = image_corners_orig
+  end
+  
+  imagez = imagez:clone():repeatTensor(3,1,1)
+  
+  mean_height = nil
+  stdv_height = nil
+  max_height  = nil
+  shor_thresh = nil
+  ranges      = nil
+  minv        = nil
+  maxv        = nil
+  pix         = nil
+  connections = nil
+  corners_map = nil
+  mask        = nil
+  pts         = nil
+  crds        = nil
+  
+  collectgarbage()
+  
+  return imagez, corners, image_corners, scale, imaget, imaget_mask, nm_flat
+end
+
+
+
+
 -- pose functions
 
 function pointcloud:set_global_pose(pose)
@@ -464,6 +908,7 @@ function pointcloud:set_global_pose_and_rotation_from_matrix(mat)
   self:set_global_rotation(geom.quaternion.from_rotation_matrix(mat))
   self:set_global_pose(mat[{{1,3},4}]:clone())
 end
+
 
 -- write and save functions
 
