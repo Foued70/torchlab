@@ -7,25 +7,25 @@ cmd:text()
 cmd:text('convert to ply')
 cmd:text()
 cmd:text('Options')
-cmd:option('-srcdir','/Users/lihui815/Documents/elegant-prize-3149/work/a_00/OD')
-cmd:option('-outdir','/Users/lihui815/Documents/elegant-prize-3149/work/a_00/PLY')
-cmd:option('-non_interactive',true)
+cmd:option('-prjdir','/Users/lihui815/Documents/elegant-prize-3149','')
+cmd:option('-interactive',false)
 -- test new itrw options
 cmd:text()
 
 params = cmd:parse(process.argv)
 
-src_dir               = params.srcdir:gsub('/*$','')
-out_dir               = params.outdir:gsub('/*$','')
+prjdir = params.prjdir
 
+srcdir = path.join(prjdir,'work/a_00/OD' ):gsub('/*$','')
+outdir = path.join(prjdir,'work/a_00/PLY'):gsub('/*$','')
 
-pcfiles               = util.fs.glob(src_dir, {"od$"})
+pcfiles               = util.fs.glob(srcdir, {"od$"})
 
-util.fs.mkdir_p(out_dir)
+util.fs.mkdir_p(outdir)
 
 for j=1,#pcfiles do
   p = pcfiles[j]
-  o = path.join(out_dir,path.basename(p,'.od')..'.ply')
+  o = path.join(outdir,path.basename(p,'.od')..'.ply')
   pc = PointCloud.Pointcloud.new(p)
   pts = pc.points
   rgb = pc.rgb
@@ -62,6 +62,6 @@ for j=1,#pcfiles do
   out:close()
 end
 
-if params.non_interactive then
+if (not params.interactive) then
    process.exit()
 end

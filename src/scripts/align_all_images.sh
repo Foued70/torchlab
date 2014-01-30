@@ -1,5 +1,5 @@
 #!/bin/bash
-# for dcraw processing of all raw files in source folder
+# for aligning all images in a folder
 
 PRJDIR=$1 # /Users/lihui815/Documents/elegant-prize-3149
 SRCDIR=$PRJDIR"/work/a_00/Images"
