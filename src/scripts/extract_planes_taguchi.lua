@@ -46,18 +46,18 @@ select3d = util.torch.select3d
 -- Params
 params = {}
 params.residual_threshold = 20
-params.normal_threshold = 0.4
-params.n_reference_points = 15
+params.normal_threshold = 0.3
+params.n_reference_points = 30
 params.reference_window = 12
 params.min_points_for_seed = math.pow(params.reference_window,2)
 params.min_points_for_plane = params.min_points_for_seed
 params.sample_bounds = torch.ceil(params.reference_window/2)
-params.n_iter = 30
+params.n_iter = 100
 
 print("sample_bounds: ", params.sample_bounds)
 
 -- Filenames and whatnot
-scan_fname = '/Users/uriah/Downloads/precise-transit-6548/source/po_scan/a/007/sweep.xyz' 
+scan_fname = '/Users/uriah/Downloads/precise-transit-6548/source/po_scan/a/004/sweep.xyz' 
 output_dir = '/Users/uriah/Downloads/precise-transit-6548/work/output'
 
 -- Configure plane validator and iterative fitting 
@@ -286,7 +286,7 @@ function extract_planes( points, points_map, normals, point_inds, iter, params )
 	local inlier_mask = n_inlier_mask[sorted_i[1]]:squeeze()
 
 	print("sorted_inliers: ", sorted_inliers)
-	print("best inliers: ", inliers)
+	-- print("best inliers: ", inliers)
 
 	-- inlier_map needs to map to our sampled indices
 	local inlier_map = n_inlier_map[sorted_i[1]]
@@ -319,8 +319,6 @@ while iter < params.n_iter do
 
 	if inlier_mp:sum() > params.reference_window*params.reference_window then
 		imap = inlier_mp:reshape(points_map:size(2)-2*params.sample_bounds+1, points_map:size(3)-2*params.sample_bounds+1)
-		print(inlier_mp:max())
-		print(inlier_mp:min())
 		cc_regions_final_r[imap] = cmap[{iter,1}]
 		cc_regions_final_g[imap] = cmap[{iter,2}]
 		cc_regions_final_b[imap] = cmap[{iter,3}]
@@ -328,6 +326,7 @@ while iter < params.n_iter do
 		plane.inlier_map = torch.ByteTensor(points_map:size(2), points_map:size(3)):zero()
 		plane.inlier_map[{{params.sample_bounds, points_map:size(2)-params.sample_bounds},{params.sample_bounds, points_map:size(3)-params.sample_bounds}}] = imap
 		table.insert( best_planes, plane )
+		print("iter: ", iter)
 		iter = iter + 1
 	end
 

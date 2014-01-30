@@ -20,38 +20,80 @@ match_matrix = torch.Tensor(#planes,#planes):zero()
 
 -- Really shitty match threshold, match_matrix should really hold percentage overlap 
 -- relative to the smaller plane mask 
-match_threshold = 100
+match_threshold = 0.01
 
 -- Compute overlaps between all planes 
 print("Computing overlaps between all planes")
 local overlap = 0
+local smaller = 0
 for i=1, #planes do
+	print(string.format("computing overlaps for plane: %d",i))
 	for j=i, #planes do
-		overlap = (planes[i].inlier_map + planes[j].inlier_map):eq(2):sum()
-		-- print(string.format("overlap for [%d,%d]: %d", i, j, overlap))
-		match_matrix[{i,j}] = overlap
+		if j ~= i then
+			overlap = (planes[i].inlier_map + planes[j].inlier_map):eq(2):sum()
+			smaller = math.min( planes[i].inlier_map:sum(), planes[j].inlier_map:sum() )	
+			if overlap/smaller < match_threshold and overlap > 0 then
+				print(string.format("overlap for [%d,%d]: %d", i, j, overlap/smaller))
+			end
+			match_matrix[{i,j}] = overlap/smaller
+			collectgarbage()
+		end
 	end
 end
 
-match_mask = match_matrix:gt(0)
+match_mask = match_matrix:gt(match_threshold)
 plane_rng = torch.range(1,#planes)
 
 -- Utility functions for my hacky recursive merge 
+
 -- Return unique value from two 1D Tensors , this can be very memory intensive, but since I know that
 -- I probably won't have more than at most a couple thousand planes its ok 
 function unique(s0,s1)
+	-- Check if s0 or s1 are empty if so return the other, or empty
+	if s0:dim() == 0 and s1:dim() == 0 then
+		return torch.Tensor({})
+	end
+	if s0:dim() == 0 then
+		return s1
+	end
+	if s1:dim() == 0 then
+		return s0
+	end
 	local rng = torch.range(1,math.max(s0:max(),s1:max()))
 	local mask = torch.ByteTensor(rng:nElement()):zero()
 	mask[s0:cat(s1):long()] = 1
 	return rng[mask]
 end
 
-function merge(ind, ind_set)
-	local cur_ind_set = plane_rng[match_mask[ind]]	
-	print("cur_ind_set: ", cur_ind_set)
-	for j=2, cur_ind_set:nElement() do
-		cur_ind_set = merge(cur_ind_set[j], cur_ind_set)
+-- subtract set s1 from set s0 
+function subtract(s0,s1)
+	if s0:dim() == 0 then
+		return s0 
 	end
+	if s1:dim() == 0 then
+		return s0 
+	end
+	local mx = math.max(s0:max(), s1:max())	
+	local mask = torch.ByteTensor(mx):zero()
+	mask[s0:long()] = 1
+	mask[s1:long()] = 0 
+	return torch.range(1,mx)[mask]
+end
+
+-- Note this merge is probably inefficient, the for loop can run unnecessarily over 
+-- nodes that have already been merged 
+function merge(ind, ind_set )
+	local h_set = plane_rng[match_mask[{ind,{}}]]
+	local v_set = plane_rng[match_mask[{{},ind}]]
+	local cur_ind_set = unique(h_set, v_set)
+	-- Only explore where what we haven't already seen
+	ind_set = unique( ind_set, torch.Tensor({ind}) )
+	cur_ind_set = subtract(cur_ind_set, ind_set)
+	for j=1, cur_ind_set:nElement() do
+		print(string.format("cur_ind_set[%d]", j))
+		ind_set = merge(cur_ind_set[j], ind_set)
+	end
+	-- Don't forget to add our ind 
 	return unique(ind_set, cur_ind_set)		
 end
 
@@ -63,13 +105,14 @@ while true do
 	if merged == nil then
 		to_merge = plane_rng:clone():long()
 	else
+		-- TODO: replace with subtract 
 		rm_mask[merged:long()] = 0
 		to_merge = plane_rng[rm_mask]
 		if to_merge:nElement() == 0 then 
 			break
 		end
 	end
-	ind_set = plane_rng[match_mask[to_merge[1]]]
+	ind_set = merge(to_merge[1],torch.Tensor({}))
 	if merged == nil then
 		merged = ind_set
 	else
@@ -80,7 +123,7 @@ while true do
 end			
 
 print("Number of merged plane sets: ", #plane_sets)
--- TODO: pretty printing 
+-- pretty printing 
 str = ""
 for k,v in pairs(plane_sets) do 
 	str = str .. string.format("%d:", k)
@@ -91,6 +134,30 @@ for k,v in pairs(plane_sets) do
 end
 print(str)
 
+
+--[[ Reverse edges in plane_sets ... no longer needed :( 
+plane_sets_new = {}
+for k,v in pairs(plane_sets) do 
+	for j=1, v:nElement() do 	
+		if plane_sets_new[v[j] ] == nil then
+			plane_sets_new[v[j] ] = torch.IntTensor({k})
+		else
+			plane_sets_new[v[j] ] = plane_sets_new[v[j] ]:cat( torch.IntTensor({k}) )
+		end
+	end
+end
+print("Reversed Edges: ", #plane_sets_new)
+-- TODO: pretty printing 
+str = ""
+for k,v in pairs(plane_sets_new) do 
+	str = str .. string.format("%d:", k)
+	for j=1, v:nElement() do 
+		str = str .. string.format(" %d ", v[j])
+	end
+	str = str .. string.format("\n")
+end
+print(str)
+]]--
 
 cmap = image.colormap(#plane_sets)
 planes_rgb = torch.Tensor(3, imgh, imgw)
