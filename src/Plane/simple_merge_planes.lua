@@ -23,11 +23,12 @@ match_matrix = torch.Tensor(#planes,#planes):zero()
 match_threshold = 100
 
 -- Compute overlaps between all planes 
+print("Computing overlaps between all planes")
 local overlap = 0
 for i=1, #planes do
 	for j=i, #planes do
 		overlap = (planes[i].inlier_map + planes[j].inlier_map):eq(2):sum()
-		print(string.format("overlap for [%d,%d]: %d", i, j, overlap))
+		-- print(string.format("overlap for [%d,%d]: %d", i, j, overlap))
 		match_matrix[{i,j}] = overlap
 	end
 end
@@ -35,7 +36,7 @@ end
 match_mask = match_matrix:gt(0)
 plane_rng = torch.range(1,#planes)
 
--- Utility functions for my hacky recursive merge ... its basically a poorly written DFS 
+-- Utility functions for my hacky recursive merge 
 -- Return unique value from two 1D Tensors , this can be very memory intensive, but since I know that
 -- I probably won't have more than at most a couple thousand planes its ok 
 function unique(s0,s1)
@@ -54,6 +55,7 @@ function merge(ind, ind_set)
 	return unique(ind_set, cur_ind_set)		
 end
 
+print("Computing Merge Sets")
 merged = nil
 rm_mask = torch.ByteTensor(plane_rng:nElement()):fill(1)
 plane_sets = {}
@@ -77,15 +79,42 @@ while true do
 	collectgarbage()
 end			
 
-print("number of plane sets: ", #plane_sets)
-
+print("Number of merged plane sets: ", #plane_sets)
+-- TODO: pretty printing 
+str = ""
 for k,v in pairs(plane_sets) do 
-	print("plane set:")
-	print(k)
-	print(v)
+	str = str .. string.format("%d:", k)
+	for j=1, v:nElement() do 
+		str = str .. string.format(" %d ", v[j])
+	end
+	str = str .. string.format("\n")
 end
+print(str)
 
-image.display(match_matrix)
+
+cmap = image.colormap(#plane_sets)
+planes_rgb = torch.Tensor(3, imgh, imgw)
+planes_r = planes_rgb[1]
+planes_g = planes_rgb[2]
+planes_b = planes_rgb[3]
+
+-- Now draw pretty merged sets 
+mask = torch.ByteTensor(imgh, imgw):zero()
+for k,v in pairs(plane_sets) do 
+	-- Add all masks 
+	mask:zero()
+	for j=1, v:nElement() do 
+		mask:add( planes[v[j]].inlier_map )
+	end
+	mask = mask:gt(0.5) 
+	planes_r[mask] = cmap[{k,1}]
+	planes_g[mask] = cmap[{k,2}]
+	planes_b[mask] = cmap[{k,3}]
+end
+planes_rgb[1] = planes_r
+planes_rgb[2] = planes_g
+planes_rgb[3] = planes_b
+image.display(planes_rgb)
 
 local im_name = string.format("%s/plane_match_matrix.jpg",output_dir)
 print("saving "..im_name)
