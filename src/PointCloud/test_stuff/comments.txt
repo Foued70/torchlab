@@ -1,0 +1,2 @@
+Scan.lua         line 248    doICP() commented out line 248 in 
+SweepPair.lua    line  21    self.need_recalculating_icp = false -- true
