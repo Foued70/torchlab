@@ -1,6 +1,6 @@
 local io  = require 'io'
 local path = require 'path'
-local pcd = pointcloud_new.pointcloud
+local pcd = pointcloud.pointcloud
 local ffi = require 'ffi'
 local ctorch = util.ctorch
 
@@ -165,18 +165,22 @@ function loader.load_pobot_ascii(dirname, minradius, maxradius)
   xyz_phi_map            = xyz_phi_map:clone():contiguous()
   
   local xyz_theta_map_pe = torch.range(0,height-1):repeatTensor(width,1)
-  xyz_theta_map_pe       = util.torch.flipTB(xyz_theta_map_pe:t())
-  xyz_theta_map_pe       = xyz_theta_map_pe:mul(meta.azimuth_per_point)
+  xyz_theta_map_pe       = xyz_theta_map_pe:t()
+  xyz_theta_map_pe       = xyz_theta_map_pe:mul(-meta.azimuth_per_point)
   
   local xyz_theta_map_pl = torch.range(0,width-1):repeatTensor(height,1)
-  xyz_theta_map_pl       = util.torch.flipTB(xyz_theta_map_pl:t()):t()
-  xyz_theta_map_pl       = xyz_theta_map_pl:mul(meta.azimuth_per_line)
+  xyz_theta_map_pl       = xyz_theta_map_pl:mul(-meta.azimuth_per_line)
   
-  local xyz_theta_map    = xyz_theta_map_pe + xyz_theta_map_pl
-  local msk              = xyz_theta_map:ge(math.pi*2)
-  xyz_theta_map[msk]     = xyz_theta_map[msk]-(math.pi*2)
-  msk                    = xyz_theta_map:gt(math.pi)
-  xyz_theta_map[msk]     = xyz_theta_map[msk]-(math.pi*2)
+  local xyz_theta_map    = xyz_theta_map_pe + xyz_theta_map_pl + math.pi
+  local msk              = torch.zeros(xyz_theta_map:size())
+  while xyz_theta_map:max() >  math.pi do
+    msk              = xyz_theta_map:gt(math.pi)
+    xyz_theta_map[msk]     = xyz_theta_map[msk]-(math.pi*2)
+  end
+  while xyz_theta_map:min() <= -math.pi do
+    msk                    = xyz_theta_map:le(-math.pi)
+    xyz_theta_map[msk]     = xyz_theta_map[msk]+(math.pi*2)
+  end
   xyz_theta_map          = xyz_theta_map:clone():contiguous()
   
   msk                    = nil
