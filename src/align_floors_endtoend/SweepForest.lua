@@ -14,13 +14,13 @@ function SweepForest:add(sweep_tree)
 	if not(sweep_tree.__classname__ == SweepTree.__classname__) then
 	    error("Expected to be given sweep tree node as root!")
     end
-    self.tree_list[sweep_tree:getRoot():getName()] = sweep_tree
+    self.tree_list[sweep_tree:get_root():get_name()] = sweep_tree
 end
 
 function SweepForest:remove(sweep_tree)
 	local success = false
 	for k,v in pairs(self.tree_list) do
-		if v:getRoot():getName() == (sweep_tree:getRoot():getName()) then --if not the tree we are trying to match to
+		if v:get_root():get_name() == (sweep_tree:get_root():get_name()) then --if not the tree we are trying to match to
 			 self.tree_list[k] = nil
 			success = true
 			break;
@@ -32,24 +32,24 @@ function SweepForest:remove(sweep_tree)
     collectgarbage()
 end
 
-function SweepForest:getTrees()
+function SweepForest:get_trees()
 	return self.tree_list
 end
-function SweepForest:findTreeWithNode(name)
+function SweepForest:find_tree_with_node(name)
 	for k,v in pairs(self.tree_list) do
-		if(v:getNode(name)) then
+		if(v:get_node(name)) then
 			return v
 		end
 	end
     collectgarbage()
 end
 
-function SweepForest:traverseBasedOnDistanceFrom(nodeId, func, numfiles)
+function SweepForest:traverse_based_on_distance_from(nodeId, func, numfiles)
 	local all_nodes = {}
 	local node_distances = {}
 	function getNodesAndDistances(v)
 		all_nodes[table.getn(all_nodes)+1] = v
-		local depth= torch.abs(nodeId-v:getId())
+		local depth= torch.abs(nodeId-v:get_id())
 		node_distances[table.getn(node_distances)+1] = math.min(depth%numfiles,(-depth)%numfiles)
 	end
 	for k,v in pairs(self.tree_list) do
@@ -63,7 +63,7 @@ function SweepForest:traverseBasedOnDistanceFrom(nodeId, func, numfiles)
     collectgarbage()
 end
 
-function SweepForest:getNumberForests()
+function SweepForest:get_number_forests()
 	local count = 0
 	for k,v in pairs(self.tree_list) do
 		count = count+1
@@ -71,7 +71,7 @@ function SweepForest:getNumberForests()
 	return count
 end
 
-function SweepForest:getTree(i)
+function SweepForest:get_tree(i)
 	local count = 1
 	for k,v in pairs(self.tree_list) do
 		if(count == i) then
@@ -82,8 +82,8 @@ function SweepForest:getTree(i)
 end
 
 --func should take three arguments, tree1 node, node in other tree, 
-function SweepForest:traverseBasedOnDistanceFromTree(tree1, func, numfiles)
-	if(self:getNumberForests() == 1) then
+function SweepForest:traverse_based_on_distance_from_tree(tree1, func, numfiles)
+	if(self:get_number_forests() == 1) then
 		return
 	end
 	local all_nodes = {}
@@ -91,20 +91,20 @@ function SweepForest:traverseBasedOnDistanceFromTree(tree1, func, numfiles)
 	local node_distances = {}
 	local tree = {}
 	local t
-	local nodes = tree1:getAllNodes()
+	local nodes = tree1:get_all_nodes()
 	function getNodesAndDistances(v)
 		for k2,v2 in pairs(nodes) do
 			all_nodes_cur_tree[table.getn(all_nodes_cur_tree)+1] = v2
 			all_nodes[table.getn(all_nodes)+1] = v
-			depth = torch.abs(v2:getId()-v:getId())
+			depth = torch.abs(v2:get_id()-v:get_id())
 			node_distances[table.getn(node_distances)+1] = math.min(depth%numfiles,(-depth)%numfiles)
 			tree[table.getn(tree)+1] = t
 		end
 	end
 	for k,v in pairs(self.tree_list) do
-		if not(v:getNode(tree1:getRoot():getName())) then --if not the tree we are trying to match to
+		if not(v:get_node(tree1:get_root():get_name())) then --if not the tree we are trying to match to
 			t = v
-			SweepTree.traverse(v:getRoot(), getNodesAndDistances) --get distance between all elements of tree1 and all elements of all other trees
+			SweepTree.traverse(v:get_root(), getNodesAndDistances) --get distance between all elements of tree1 and all elements of all other trees
 		end
 	end
 	node_distances = torch.Tensor(node_distances)
