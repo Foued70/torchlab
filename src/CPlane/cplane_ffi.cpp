@@ -134,7 +134,7 @@ void map2xyz( THDoubleTensor* xyz_map, THDoubleTensor* result ) {
 /*
   Classify each point as planar, invalid or non-planar using a small window of nearby points
 */
-void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, double plane_thresh, THDoubleTensor* errors, THDoubleTensor* normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments ) { 
+void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, THDoubleTensor* errors, THDoubleTensor* normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments ) { 
 
   // Compute halfwidth of the window ... windows should be odd 
   int window_width = (window - 1)/2;
@@ -349,9 +349,10 @@ void addNeighbors( long node_index, Eigen::Vector3d* mean, Eigen::Vector3d* norm
 
 /* 
   Add minimum error point to plane set, update plane parameters and recompute neighbor errors 
+    // Way too many function arguments!!! aaahhh
      This code is mad-gross, a couple structs would fix this ( TODO yo )
 */
-long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eigen::Matrix3d* second_moment, Eigen::Vector3d* mean, Eigen::Vector3d* normal, int* num_points, double* means, double* normals, double* second_moments, double* region_mask,  long width, long height ) {
+long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eigen::Matrix3d* second_moment, Eigen::Vector3d* mean, Eigen::Vector3d* normal, int* num_points, double* means, double* normals, double* second_moments, double* region_mask,  long width, long height, double cosine_thresh, double residual_thresh ) {
   // Extract minimum error point
   long index = front->begin()->second;
   double error = front->begin()->first;
@@ -366,8 +367,10 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
   }
 
   // Check if minimum error point is within thresholds 
+  /*
   double cosine_thresh = 0.3;    
   double residual_thresh = 20.0;
+  */
   double cdist;
   double rdist; 
 
@@ -486,7 +489,7 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
      This algorithm is pretty naive and greedy, we must update the children errors each time we
      add a new child to the current plane estimate 
 */
-void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask ) {
+void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask, double cosine_thresh, double residual_thresh ) {
   // Extract relevent parameters
   long height = th_means->size[1];
   long width = th_means->size[2];
@@ -555,16 +558,23 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
     // Add neighbors 
     // Extract minimum and update plane
     addNeighbors( index, &mean, &normal, &front, means, normals, region_mask, front_mask, width, height);
-    index = updatePlane( &front, &covariance, &second_moment, &mean, &normal, &num_points, means, normals, second_moments, region_mask, width, height );
-    if ( front.begin() == front.end() ) {
-      std::cout << "Error: no more elements in front" << std::endl;
-      return;
+    while ( true ) {
+      index = updatePlane( &front, &covariance, &second_moment, &mean, &normal, &num_points, means, normals, second_moments, region_mask, width, height, cosine_thresh, residual_thresh );
+      if ( front.begin() == front.end() ) {
+        std::cout << "Error: no more elements in front" << std::endl;
+        return;
+      }
+      if ( index == -1 )
+        continue;
+      break;
     }
+      /*
     // Check if we have ran into a "bad" node
     if ( index == -1 || num_points > ( width*height ) ) {
       std::cout << "num_points: " << num_points << std::endl;
       break;
     }
+    */
   }
 
 

@@ -9,8 +9,8 @@ ffi  = require 'ffi'
 ffi.cdef [[
 
 void map2xyz( THDoubleTensor* xyz_map, THDoubleTensor* result );
-void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, double plane_thresh, THDoubleTensor* errors, THDoubleTensor* normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments );
-void grow_plane_region( THLongTensor* th_start_index, THDoubleTensor* th_normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask );
+void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, THDoubleTensor* errors, THDoubleTensor* normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments );
+void grow_plane_region( THLongTensor* th_start_index, THDoubleTensor* th_normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask, double normal_thresh, double residual_thresh );
 
 
 /*

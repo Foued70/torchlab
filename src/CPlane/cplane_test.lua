@@ -1,5 +1,15 @@
 cplane_ffi = require('./cplane_ffi')
+test = CPlane.CPlane.test_cplane
+test('precise-transit-6548', 10)
 
+--[[
+extract_planes_test = CPlane.CPlane.extract_planes_test
+extract_planes_test('precise-transit-6548', 10)
+]]--
+
+
+
+--[[ old test code
 pc = PointCloud.PointCloud.new('/Users/uriah/Downloads/precise-transit-6548/source/po_scan/a/010/sweep.xyz')
 normals = pc:get_normal_map()
 points = pc:get_xyz_map()
@@ -19,19 +29,22 @@ window = 13
 dist_thresh = 81.0
 plane_thresh = 0.025
 
+normal_thresh = 0.5;
+residual_thresh = 15;
+
 
 timer = torch.Timer.new()
 
 t0 = timer:time()['real']
 --cplane_ffi.classifyPoints( torch.cdata(points), window, dist_thresh, plane_thresh, torch.cdata(res), torch.cdata(errors), torch.cdata(normals_ret) ) 
-cplane_ffi.classifyPoints( torch.cdata(points), window, dist_thresh, plane_thresh, torch.cdata(errors), torch.cdata(normals_ret), torch.cdata(means_ret), torch.cdata(second_moments_ret) ) 
+cplane_ffi.classifyPoints( torch.cdata(points), window, dist_thresh, torch.cdata(errors), torch.cdata(normals_ret), torch.cdata(means_ret), torch.cdata(second_moments_ret) ) 
 print( "dt classify: ", timer:time()['real'] - t0 )
 
 
 inds = torch.LongTensor( {300,200} )
 
 t0 = timer:time()['real']
-cplane_ffi.grow_plane_region( torch.cdata(inds), torch.cdata(normals_ret), torch.cdata(means_ret), torch.cdata(second_moments_ret), torch.cdata(region_mask), torch.cdata(front_mask) )
+cplane_ffi.grow_plane_region( torch.cdata(inds), torch.cdata(normals_ret), torch.cdata(means_ret), torch.cdata(second_moments_ret), torch.cdata(region_mask), torch.cdata(front_mask), normal_thresh, residual_thresh )
 print( "dt region growing: ", timer:time()['real'] - t0 )
 
 --cplane_ffi.classifyPoints( torch.cdata(t), window, plane_thresh, torch.cdata(res) ) 
@@ -40,3 +53,4 @@ image.display(errors)
 image.display(normals_ret)
 image.display(means_ret)
 image.display( region_mask )
+]]--
