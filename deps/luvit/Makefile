@@ -24,7 +24,7 @@ all:$(install)
 $(install): $(git_clone)
 	cd $(git_clone); git checkout $(ver)
 	cd $(git_clone); $(args) make
-	cd $(git_clone); $(args) make test
+#	cd $(git_clone); $(args) make test
 	cd $(git_clone); $(args) make install
 
 
