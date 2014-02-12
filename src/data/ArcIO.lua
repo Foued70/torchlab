@@ -45,9 +45,10 @@ end
 -- Shortcut for loading point cloud scan data 
 function ArcIO:getScan( scan_num )
 	self.scan_num = scan_num
-	scan_fname = self.pointcloud_path .. string.format('%.3d/sweep.xyz', scan_num)
+	scan_fname = self.pointcloud_path .. string.format('%.3d', scan_num)
 	print("Loading scan: ", scan_fname)
-	return PointCloud.PointCloud.new( scan_fname )
+	loader = pointcloud.loader.load_pobot_ascii( scan_fname )
+	return pointcloud.pointcloud.new(loader) 
 end
 
 -- Get string to dir in work 

@@ -316,19 +316,19 @@ function extract_planes_random( scan_num )
 
 			plane_ind = plane_ind+1
 
-			-- Add region to cull_map and create new cull_mask 
-			print(cull_map)
-			print(region_mask)
-			cull_map = cull_map:byte():add(region_mask:byte():eq(0)):gt(1)
-			cull_mask = torch.reshape( cull_map, 1,cull_map:nElement()):squeeze():byte()
-			x_inds = x_rng[cull_mask]
-			y_inds = y_rng[cull_mask]
 		end
 
 		if plane_ind > n_planes then
 			break
 		end
 
+		-- Add region to cull_map and create new cull_mask 
+		print(cull_map)
+		print(region_mask)
+		cull_map = cull_map:byte():add(region_mask:byte():eq(0)):gt(1)
+		cull_mask = torch.reshape( cull_map, 1,cull_map:nElement()):squeeze():byte()
+		x_inds = x_rng[cull_mask]
+		y_inds = y_rng[cull_mask]
 
 
 		collectgarbage()

@@ -26,6 +26,7 @@ function meshlist( xmin, xmax, ymin, ymax )
     local xgrid, ygrid = meshgrid( xmin, xmax, ymin, ymax)
     local xrng = xmax-xmin+1
     local yrng = ymax-ymin+1
+    -- note: this reshape operation can be simplified to reshape(xrng*yrng)
     return xgrid:reshape(1,xrng*yrng), ygrid:reshape(1,xrng*yrng)
 end
 
