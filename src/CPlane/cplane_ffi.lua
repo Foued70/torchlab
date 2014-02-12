@@ -9,29 +9,14 @@ ffi  = require 'ffi'
 ffi.cdef [[
 
 void map2xyz( THDoubleTensor* xyz_map, THDoubleTensor* result );
-void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, THDoubleTensor* errors, THDoubleTensor* normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments );
-void grow_plane_region( THLongTensor* th_start_index, THDoubleTensor* th_normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask, double normal_thresh, double residual_thresh );
+void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, THDoubleTensor* errors, THDoubleTensor* normals, 
+					 THDoubleTensor* th_means, THDoubleTensor* th_second_moments );
+void cullPoints( THDoubleTensor* th_cull_mask, THDoubleTensor* th_normals, THDoubleTensor* th_points, int window, 
+				 double cosine_thresh, double residual_thresh );
+void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_normals, THDoubleTensor* th_means, 
+                        THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask, 
+                        THDoubleTensor* th_output_plane,  THDoubleTensor* th_output_mean, double cosine_thresh, double residual_thresh );
 
-
-/*
-// ------------
-//   functions on the OcTree
-//   uses an opaque pointer (not visible from Lua interface)
-// ------------
-typedef struct PCXYZ PCXYZ;
-
-void PointCloud_destroy(PCXYZ* cloud);
-
-PCXYZ* PointCloud_pc_create();
-PCXYZ* PointCloud_fromFile(const char * fname);
-PCXYZ* PointCloud_fromTensor(THDoubleTensor* xyz);
-int PointCloud_toFile(PCXYZ* test, const char * fname);
-void PointCloud_toTensor(PCXYZ* test, THDoubleTensor* xyz);
-bool PointCloud_doICP(PCXYZ* cloud1, PCXYZ* cloud2, THDoubleTensor* transf, double epsilon, double maxIterations, double ransacIterations, double maxCorrespondDis);
-
-PCXYZ* PointCloud_uniformSample(PCXYZ* cloud, double radius);
-double PointCloud_getEuclideanValidationScore(PCXYZ* source, PCXYZ* target, double max_range);
-*/
 
 ]]
 

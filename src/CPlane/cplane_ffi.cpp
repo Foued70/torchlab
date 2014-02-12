@@ -51,7 +51,7 @@ double cosine_distance( Eigen::Vector3d v0, Eigen::Vector3d v1 ) {
   // Account for acos(1) case 
   if ((1-dist) < 1e-12)
     return 0.0;
-  return acos(dist);
+  return abs(acos(dist));
 }
 
 double residual_distance( Eigen::Vector3d normal, Eigen::Vector3d mean, Eigen::Vector3d point ) {
@@ -61,8 +61,8 @@ double residual_distance( Eigen::Vector3d normal, Eigen::Vector3d mean, Eigen::V
 /* 
   Given covariance extract plane equation
 */
-void extract_plane_from_covariance( Eigen::Matrix3d covariance, Eigen::Vector3d mean, Eigen::Vector3d* normal, double* d ) { 
-  Eigen::Vector3d eigenvalues_sorted; 
+void extract_plane_from_covariance(  Eigen::Matrix3d covariance, Eigen::Vector3d mean, Eigen::Vector3d* normal, double* d, Eigen::Vector3d* eigvals ) { 
+  Eigen::Vector3d eigenvalues_sorted;
   Eigen::Vector3d eigenvalues_sorted_inds;
   Eigen::Vector3d local_normal;
   double local_d; 
@@ -98,6 +98,7 @@ void extract_plane_from_covariance( Eigen::Matrix3d covariance, Eigen::Vector3d 
   // Update return values
   *normal = local_normal;
   *d = local_d;
+  *eigvals = eigenvalues_sorted;
 }
 
 
@@ -194,11 +195,17 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
         #ifdef DEBUG
         printf("continueing: [%d, %d] \n", i, j);
         #endif
+        errors_data[i*width+j] = 1;
         continue;
       }
       seed_pos(0) = data[0*height*width + i*width + j];
       seed_pos(1) = data[1*height*width + i*width + j];
       seed_pos(2) = data[2*height*width + i*width + j];
+      // If we are an invalid point then set errors_data to 1 
+      if ( seed_pos(0) == 0 && seed_pos(1) == 0 && seed_pos(2) == 0 ) {
+        errors_data[i*width+j] = 1;
+        continue;
+      }
       // Compute mean of the window ... TODO: i,j,k,l are shitty names  
       mean.setZero();
       int mean_cnt = 0;
@@ -213,6 +220,11 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
             continue;
           }
 
+          // Check if this is an invalid point
+          if ( pos(0) == 0 && pos(1) == 0 && pos(2) == 0 ) {
+            continue;
+          }
+
           mean(0) += data[0*height*width + k*width + l];
           mean(1) += data[1*height*width + k*width + l];
           mean(2) += data[2*height*width + k*width + l];
@@ -220,6 +232,10 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
         }
       }
       // If we didn't get enough points then ignore
+      if ( mean_cnt < 9 ) {
+        errors_data[i*width+j] = 1;
+        continue;
+      }
       mean = mean/double(mean_cnt);
 
       // Compute covariance/scatter and second moment 
@@ -236,6 +252,12 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
           if ( (pos - seed_pos).norm() > dist_thresh && (k<i-1 || k>i+1 || l<j-1 || l>j+1)  ) {
             continue;
           }
+
+          // Check if this is an invalid point
+          if ( pos(0) == 0 && pos(1) == 0 && pos(2) == 0 ) {
+            continue;
+          }
+
           diffvec = pos - mean;
 
           covariance += diffvec * diffvec.transpose();
@@ -252,7 +274,7 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
       std::cout << "covariance: " << covariance << std::endl;
       #endif
 
-      extract_plane_from_covariance( covariance, mean, &normal, &d );
+      extract_plane_from_covariance(  covariance, mean, &normal, &d, &eigenvalues_sorted );
 
       // Write out normals 
       normals_data[0*height*width + i*width + j] = normal(0);
@@ -277,10 +299,14 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
       */
 
       // Hold on to error for each plane ... TODO: handle super tiny eigenvalues
+      /*
       if ( eigenvalues_sorted(1) < 0.01 ) {
+        errors_data[i*width+j] = 1;
         continue;
       }
-      errors_data[i*width+j] = eigenvalues_sorted(0)/eigenvalues_sorted(1);
+      */
+      //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1)+eigenvalues_sorted(2));
+      errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1));
       //errors_data[i*width+j] = dist;
     }
   }
@@ -288,9 +314,87 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
 
 
 /* 
+  Cull points based on normal / residual thresholds
+    - Looks at each point in the window, if any are outside of the thresholds then sets the 
+      mask for that the seed index to 1, otherwise 0 
+*/
+void cullPoints( THDoubleTensor* th_cull_mask, THDoubleTensor* th_normals, THDoubleTensor* th_points, int window, double cosine_thresh, double residual_thresh ) {
+  // Compute halfwidth of the window ... windows should be odd 
+  int window_width = (window - 1)/2;
+  printf("window_width: %d \n", window_width);
+
+  // 3d Matrix 
+  long stack = th_points->size[0];
+  long height = th_points->size[1];
+  long width = th_points->size[2];
+  double *point_data =  THDoubleTensor_data( th_points );
+  double *normal_data =  THDoubleTensor_data( th_normals);
+
+  THDoubleTensor_fill( th_cull_mask, 0 );
+  double *cull_mask_data = THDoubleTensor_data( th_cull_mask );
+
+  Eigen::Vector3d seed_pos;
+  Eigen::Vector3d seed_normal;
+  Eigen::Vector3d pos; 
+  Eigen::Vector3d normal;
+
+  double cdist;
+  double rdist;
+
+  // Apply operation to all elements in map 
+  for ( long i=0; i<height; i++ ) {
+    for ( long j=0; j<width; j++ ) {
+      // Don't compute value at the edges of the window 
+      if ( i-window_width < 0 || j-window_width < 0 || i+window_width+1 > height || j+window_width+1 > width ) {
+        #ifdef DEBUG
+        printf("continuing: [%d, %d] \n", i, j);
+        #endif
+        cull_mask_data[i*width+j] = 1;
+        continue;
+      }
+      // Seed pos
+      seed_pos(0) = point_data[0*height*width + i*width + j];
+      seed_pos(1) = point_data[1*height*width + i*width + j];
+      seed_pos(2) = point_data[2*height*width + i*width + j];
+      // Seed normal 
+      seed_normal(0) = normal_data[0*height*width + i*width + j];
+      seed_normal(1) = normal_data[1*height*width + i*width + j];
+      seed_normal(2) = normal_data[2*height*width + i*width + j];
+
+      // If we are an invalid point then set errors_data to 1 
+      if ( seed_pos(0) == 0 && seed_pos(1) == 0 && seed_pos(2) == 0 ) {
+        cull_mask_data[i*width+j] = 1;
+        continue;
+      }
+      // Compute mean of the window ... TODO: i,j,k,l are shitty names  
+      for ( long k=i-window_width; k<i+window_width+1; k++ ) { 
+        for ( long l=j-window_width; l<j+window_width+1; l++ ) { 
+          // Extract pos data 
+          pos(0) = point_data[0*height*width + k*width + l];
+          pos(1) = point_data[1*height*width + k*width + l];
+          pos(2) = point_data[2*height*width + k*width + l];
+          // Extract normal data 
+          normal(0) = normal_data[0*height*width + k*width + l];
+          normal(1) = normal_data[1*height*width + k*width + l];
+          normal(2) = normal_data[2*height*width + k*width + l];
+
+          cdist = cosine_distance( seed_normal, normal );
+          rdist = residual_distance( seed_normal, seed_pos, pos ); 
+
+          if ( cdist > cosine_thresh || rdist > residual_thresh ) {
+            cull_mask_data[i*width+j] = 1;
+          }
+        }
+      }
+    }
+  }
+}
+
+/* 
   Add Neighbors to front ... ridiculously long function definition, I need some higher level datastructures, lol
 */
-void addNeighbors( long node_index, Eigen::Vector3d* mean, Eigen::Vector3d* normal, std::map<double,long>* front, double* means, double* normals, double* region_mask, double* front_mask, long width, long height ) {
+void addNeighbors( long node_index, Eigen::Vector3d* mean, Eigen::Vector3d* normal, std::map<double,long>* front, 
+                   double* means, double* normals, double* region_mask, double* front_mask, long width, long height ) {
   long y = node_index/width;
   long x = node_index - y*width;
   Eigen::Vector3d neighbor_mean;
@@ -352,7 +456,10 @@ void addNeighbors( long node_index, Eigen::Vector3d* mean, Eigen::Vector3d* norm
     // Way too many function arguments!!! aaahhh
      This code is mad-gross, a couple structs would fix this ( TODO yo )
 */
-long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eigen::Matrix3d* second_moment, Eigen::Vector3d* mean, Eigen::Vector3d* normal, int* num_points, double* means, double* normals, double* second_moments, double* region_mask,  long width, long height, double cosine_thresh, double residual_thresh ) {
+long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eigen::Matrix3d* second_moment, Eigen::Vector3d* mean,
+                  Eigen::Vector3d* normal, int* num_points, double* means, double* normals, double* second_moments, double* region_mask,  
+                  long width, long height, double cosine_thresh, double residual_thresh ) {
+
   // Extract minimum error point
   long index = front->begin()->second;
   double error = front->begin()->first;
@@ -392,12 +499,14 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
   // If the best neighbor is above the thresholds then we are done
   if ( cdist > cosine_thresh || rdist > residual_thresh ) {
   //if ( cdist > cosine_thresh ) {
+      /*
       std::cout << "cosine_distance: " << cdist << std::endl;
       std::cout << "residual_distance: " << rdist << std::endl;
       std::cout << "num_points: " << *num_points << std::endl;
       std::cout << "mean: "  << *mean << std::endl;
       std::cout << "second_moment: " << *second_moment << std::endl;
       std::cout << "covariance: " << *covariance << std::endl;
+      */
       std::cout << "cdist or rdist above thresh exiting " << std::endl;
       return -1;
   }
@@ -437,7 +546,8 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
 
   // TODO: compute normal, etc ... 
   double plane_d;
-  extract_plane_from_covariance( *covariance, *mean, normal, &plane_d );
+  Eigen::Vector3d eigenvalues;
+  extract_plane_from_covariance( *covariance, *mean, normal, &plane_d, &eigenvalues );
 
   /* DEBUG: this is very expensive also segfaults, hehe
   // Update errors for each neighbor  ... there is certainly a better approach than i have chosen
@@ -489,7 +599,11 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
      This algorithm is pretty naive and greedy, we must update the children errors each time we
      add a new child to the current plane estimate 
 */
-void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask, double cosine_thresh, double residual_thresh ) {
+void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_normals, THDoubleTensor* th_means, 
+                        THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask, 
+                        THDoubleTensor* th_output_plane, THDoubleTensor* th_output_mean, double cosine_thresh, double residual_thresh ) {
+
+  // Inputs 
   // Extract relevent parameters
   long height = th_means->size[1];
   long width = th_means->size[2];
@@ -514,6 +628,7 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
   THDoubleTensor_fill( th_front_mask, 0 );
   double* front_mask = THDoubleTensor_data( th_front_mask );
 
+
   // Properties to track for the root plane
   Eigen::Matrix3d covariance;
   Eigen::Matrix3d second_moment;
@@ -536,7 +651,9 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
   }
   // Covariance 
   covariance = second_moment - mean*mean.transpose();  
-  extract_plane_from_covariance( covariance, mean, &normal, &plane_d );
+
+  Eigen::Vector3d eigenvalues;
+  extract_plane_from_covariance( covariance, mean, &normal, &plane_d, &eigenvalues );
 
   // DEBUG: get original normal 
   Eigen::Vector3d orig_normal;
@@ -561,21 +678,28 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
     while ( true ) {
       index = updatePlane( &front, &covariance, &second_moment, &mean, &normal, &num_points, means, normals, second_moments, region_mask, width, height, cosine_thresh, residual_thresh );
       if ( front.begin() == front.end() ) {
-        std::cout << "Error: no more elements in front" << std::endl;
+        std::cout << "Exiting no more elements in front" << std::endl;
+        // Output plane equation 
+        double* output_plane_data = THDoubleTensor_data( th_output_plane );
+        double* output_mean_data = THDoubleTensor_data( th_output_mean );
+        // Copy normal data 
+        for (int k=0; k<3; k++) {
+          output_plane_data[k] = normal(k);
+        }
+        output_plane_data[3] = plane_d;
+        // Copy mean data 
+        for (int k=0; k<3; k++) {
+          output_mean_data[k] = mean(k);
+        }
         return;
       }
       if ( index == -1 )
         continue;
       break;
     }
-      /*
-    // Check if we have ran into a "bad" node
-    if ( index == -1 || num_points > ( width*height ) ) {
-      std::cout << "num_points: " << num_points << std::endl;
-      break;
-    }
-    */
   }
+
+
 
 
   /*

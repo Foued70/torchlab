@@ -6,28 +6,35 @@ require 'gnuplot'
 gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")
 gnuplot.setterm("x11")
 
-job_id = "precise-transit-6548"
+ArcIO = data.ArcIO
+specs = data.ArcSpecs
+angle_between = geom.util.angle_between
+
+arc_io = ArcIO.new( specs.job_id, specs.work_id )
+
+--[[
 
 scan_start = 6
 scan_end = 27
 for scan_num = scan_start, scan_end do
+]]--
+	scan_num = 3
 	print("Merging Planes for scan_num: ", scan_num)
-
-	planes_fname = string.format('/Users/uriah/Downloads/'.. job_id .. '/work/output/planes_%.3d.t7', scan_num)
-	output_dir = '/Users/uriah/Downloads/' .. job_id .. '/work/output'
-
-	-- Load in planes, since plane masks are embedded in the datastructure this is all we need 
-	planes = torch.load( planes_fname )
+	pc = arc_io:getScan( scan_num ) -- TODO: shouldn't need to do this
+	regions_data = arc_io:loadTorch("region_masks", string.format("%.3d", scan_num))
+	planes = regions_data.planes
+	normal_thresh = regions_data.normal_thresh
 
 	imgh = planes[1].inlier_map:size(1)
 	imgw = planes[1].inlier_map:size(2)
 
+	print("n_planes: ", #planes)
 	-- Plane match matrix, represents the overlap between plane i and plane j 
 	match_matrix = torch.Tensor(#planes,#planes):zero()
 
 	-- Really shitty match threshold, match_matrix should really hold percentage overlap 
 	-- relative to the smaller plane mask 
-	match_threshold = 0.01
+	match_threshold = 100
 
 	-- Compute overlaps between all planes 
 	print("Computing overlaps between all planes")
@@ -39,10 +46,20 @@ for scan_num = scan_start, scan_end do
 			if j ~= i then
 				overlap = (planes[i].inlier_map + planes[j].inlier_map):eq(2):sum()
 				smaller = math.min( planes[i].inlier_map:sum(), planes[j].inlier_map:sum() )	
-				if overlap/smaller < match_threshold and overlap > 0 then
-					print(string.format("overlap for [%d,%d]: %f", i, j, overlap/smaller))
+				--[[
+				if overlap < match_threshold and overlap > 0 then
+					print(string.format("overlap for [%d,%d]: %f", i, j, overlap))
 				end
-				match_matrix[{i,j}] = overlap/smaller
+				]]--
+				angle = angle_between( planes[i].eqn:sub(1,3) , planes[j].eqn:sub(1,3) )
+				if overlap > match_threshold then 
+					if angle < normal_thresh then
+						match_matrix[{i,j}] = overlap
+					else
+						print(string.format("angle for [%d,%d]: %f", i, j, angle))
+					end
+				end
+
 				collectgarbage()
 			end
 		end
@@ -195,29 +212,16 @@ for scan_num = scan_start, scan_end do
 	planes_rgb[3] = planes_b
 	-- image.display(planes_rgb)
 
-	-- Save association maatrix and merged planes image
-	local im_name = string.format("%s/plane_match_matrix_%.3d.jpg",output_dir, scan_num)
-	print("saving "..im_name)
-	image.save(im_name, match_matrix)
+	arc_io:dumpImage( match_matrix, "match_matrices", string.format("%.3d", scan_num))
+	arc_io:dumpImage( planes_rgb, "merged_plane_ims", string.format("%.3d", scan_num))
 
-	local im_name = string.format("%s/merged_planes_%.3d.jpg",output_dir, scan_num)
-	print("saving "..im_name)
-	image.save(im_name, planes_rgb)
-	collectgarbage()
-
-	-- Save merged mask 
-	data_fname = string.format("%s/merged_planes_%.3d.t7",output_dir, scan_num)
-	print("saving "..data_fname)
-
-
-	-- Fill out output data structure, must have scan_num and job_id  
 	output = {}
 	output.scan_num = scan_num
-	output.job_id  = job_id 
 	output.plane_masks = plane_masks
 	output.colormap = cmap
-	torch.save(data_fname, output)
-end
+	arc_io:dumpTorch( output, "merged_planes", string.format("%.3d", scan_num))
+
+-- end
 
 
 
