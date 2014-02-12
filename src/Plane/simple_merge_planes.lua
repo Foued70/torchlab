@@ -12,13 +12,16 @@ angle_between = geom.util.angle_between
 
 arc_io = ArcIO.new( specs.job_id, specs.work_id )
 
---[[
+scan_ids = specs.scan_ids
 
+--[[
 scan_start = 6
 scan_end = 27
 for scan_num = scan_start, scan_end do
 ]]--
-	scan_num = 3
+for scan_i = 1,#scan_ids do 
+	scan_num = scan_ids[scan_i]
+
 	print("Merging Planes for scan_num: ", scan_num)
 	pc = arc_io:getScan( scan_num ) -- TODO: shouldn't need to do this
 	regions_data = arc_io:loadTorch("region_masks", string.format("%.3d", scan_num))
@@ -34,7 +37,7 @@ for scan_num = scan_start, scan_end do
 
 	-- Really shitty match threshold, match_matrix should really hold percentage overlap 
 	-- relative to the smaller plane mask 
-	match_threshold = 100
+	match_threshold = 10
 
 	-- Compute overlaps between all planes 
 	print("Computing overlaps between all planes")
@@ -185,7 +188,7 @@ for scan_num = scan_start, scan_end do
 	]]--
 
 	cmap = image.colormap(#plane_sets)
-	planes_rgb = torch.Tensor(3, imgh, imgw)
+	planes_rgb = torch.Tensor(3, imgh, imgw):zero()
 	planes_r = planes_rgb[1]
 	planes_g = planes_rgb[2]
 	planes_b = planes_rgb[3]
@@ -221,7 +224,7 @@ for scan_num = scan_start, scan_end do
 	output.colormap = cmap
 	arc_io:dumpTorch( output, "merged_planes", string.format("%.3d", scan_num))
 
--- end
+end
 
 
 

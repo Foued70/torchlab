@@ -54,7 +54,7 @@ function  test_cplane( job_id, scan_num )
 	points = pc:get_xyz_map()	
 
 	-- some default params	
-	window = 19
+	window = 3
 	dist_thresh = 81.0
 
 	normal_thresh = 0.3;
@@ -99,7 +99,7 @@ function extract_planes_directed( scan_num )
 
 	points = pc:get_xyz_map()	
 
-	window = 19
+	window = 3
 	dist_thresh = 81.0
 
 	normal_thresh = 0.3
@@ -216,22 +216,29 @@ function extract_planes_random( scan_num )
 
 	points = pc:get_xyz_map()	
 
-	window = 19
-	dist_thresh = 81.0
+	window = 27
+	dist_thresh = 9.0
 
-	normal_thresh = 0.1
+	normal_thresh = math.pi/8
 	residual_thresh = 15
 
-	min_region_size = 250 
+	min_region_size = 250
+
+	coverage_thresh = 0.99 -- TODO: have a pointcloud coverage threshold 
 
 	errors, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
 
 	-- Only sample from smooth regions in the cull mask 	
-	cull_map = cullPoints( normals, means, 3, normal_thresh, residual_thresh )
+	--cull_map = cullPoints( normals, means, 3, normal_thresh, residual_thresh )
+	cull_map = cullPoints( normals, means, 3, math.pi/4, 40)
+	--cull_map = cullPoints( normals, points, 3, math.pi/8, 20)
 	cull_map_cp = cull_map:clone()
+
+	-- DEBUG test without cull map 
 
 	cull_map = cull_map:byte():eq(0)
 	image.display(cull_map)
+	image.display(errors:gt(0.3))
 	-- Unroll cull_mask
 	cull_mask = torch.reshape( cull_map, 1,cull_map:nElement()):squeeze():byte()
 
@@ -247,8 +254,10 @@ function extract_planes_random( scan_num )
 	x_inds = x_rng[cull_mask]
 	y_inds = y_rng[cull_mask]
 
+	n_points = points:size(3)*points:size(2)
+
 	-- For drawing, etc ... 
-	n_planes = 200
+	n_planes = 500
 	cmap = image.colormap(n_planes)
 
 	plane_inds = torch.LongTensor( n_planes, 2 )
@@ -266,10 +275,18 @@ function extract_planes_random( scan_num )
 	while true do 
 	-- for plane_ind = 1,n_planes do 
 		sample_ind = torch.rand(1):mul(x_inds:nElement()):long()+1
+
+		print("size inds: ", x_inds:nElement())
+
+		-- Check if we have reached our coverage threshold 
+		if x_inds:nElement() < (1 - coverage_thresh)*n_points then
+			print( "coverage_thresh reached, exiting ")
+			n_planes = plane_ind
+			break
+		end
+
 		x_rand = x_inds[sample_ind]:squeeze()
 		y_rand = y_inds[sample_ind]:squeeze()
-		print("x_rand: ", x_rand)
-		print("y_rand:", y_rand)
 
 		inds = torch.LongTensor({x_rand,y_rand})
 		plane_centroid, plane_equation, region_mask = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
@@ -298,19 +315,20 @@ function extract_planes_random( scan_num )
 			samples_im[{{x_rand}, {y_rand}}] = cmap[{plane_ind,3}]
 
 			plane_ind = plane_ind+1
+
+			-- Add region to cull_map and create new cull_mask 
+			print(cull_map)
+			print(region_mask)
+			cull_map = cull_map:byte():add(region_mask:byte():eq(0)):gt(1)
+			cull_mask = torch.reshape( cull_map, 1,cull_map:nElement()):squeeze():byte()
+			x_inds = x_rng[cull_mask]
+			y_inds = y_rng[cull_mask]
 		end
 
 		if plane_ind > n_planes then
 			break
 		end
 
-		-- Add region to cull_map and create new cull_mask 
-		print(cull_map)
-		print(region_mask)
-		cull_map = cull_map:byte():add(region_mask:byte():eq(0)):gt(1)
-		cull_mask = torch.reshape( cull_map, 1,cull_map:nElement()):squeeze():byte()
-		x_inds = x_rng[cull_mask]
-		y_inds = y_rng[cull_mask]
 
 
 		collectgarbage()

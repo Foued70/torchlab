@@ -7,12 +7,15 @@ io = require('io')
 ArcIO = data.ArcIO
 specs = data.ArcSpecs
 
+scan_ids = specs.scan_ids
 --[[
 scan_start = 6
 scan_end = 27
 for scan_num = scan_start, scan_end do
 ]]--
-scan_num = 3
+
+for scan_i = 1,#scan_ids do 
+	scan_num = scan_ids[scan_i]
 	print("Outputing Points for Segmented Region in scan_num: ", scan_num)
 
 	arc_io = ArcIO.new( specs.job_id, specs.work_id )
@@ -51,6 +54,6 @@ scan_num = 3
 
 	-- Gotta collect that garbage just in case 
 	collectgarbage()
---end
+end
 
 

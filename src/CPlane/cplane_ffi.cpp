@@ -306,7 +306,8 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
       }
       */
       //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1)+eigenvalues_sorted(2));
-      errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1));
+      //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1));
+      errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(2));
       //errors_data[i*width+j] = dist;
     }
   }
@@ -506,8 +507,8 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
       std::cout << "mean: "  << *mean << std::endl;
       std::cout << "second_moment: " << *second_moment << std::endl;
       std::cout << "covariance: " << *covariance << std::endl;
-      */
       std::cout << "cdist or rdist above thresh exiting " << std::endl;
+      */
       return -1;
   }
 
