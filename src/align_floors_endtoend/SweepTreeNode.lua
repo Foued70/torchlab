@@ -111,7 +111,7 @@ function SweepTreeNode:get_child_i(i)
 end
 
 function SweepTreeNode:get_transformation_to_root(icp)
-	if(self:isRoot()) then
+	if(self:is_root()) then
 		return self.pair:get_transformation(true)
 	else
 		return self.from:get_transformation_to_root(icp)*self.pair:get_transformation(false,icp,self.inverse)

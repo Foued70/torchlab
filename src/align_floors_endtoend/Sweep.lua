@@ -5,9 +5,9 @@ Sweep.OD = "OD"
 Sweep.SWEEP = "SWEEP"
 
 local path = require 'path'
-local pcl = PointCloud.PointCloud
+local pcl = pointcloud.pointcloud
 local util_sweep = align_floors_endtoend.util
-local PointCloudLoader = PointCloud.loader.load_pobot_ascii
+local PointCloudLoader = pointcloud.loader.load_pobot_ascii
 
 function Sweep:__init(base_dir, name, xyz_file)
     if not(util.fs.is_dir(base_dir)) then
@@ -69,10 +69,10 @@ function Sweep:get_pc(recalc)
     local pc
     local rgb
     if (util.fs.is_file(self.fod) and not(recalc)) then
-        pc = PointCloud.pointcloud.new(self.fod)--PointCloud.PointCloud.load_od(self.fod)
+        pc = pointcloud.pointcloud.new(self.fod)
     else
         loader = PointCloudLoader(self.floader_input)
-        pc = PointCloud.pointcloud.new(loader)
+        pc = pointcloud.pointcloud.new(loader)
         if util.fs.is_dir(path.join(self.base_dir,Sweep.PNG)) and util.fs.is_file(self.fpng) then
             pc:load_rgb_map(self.fpng)
         end
@@ -111,12 +111,11 @@ function Sweep:get_depth_image_from_perspective(H)
         normals = util.torch.select3d(normals, good)
         local indexVal = elevation*size_x+azimuth
 
-    --[[ optimize to pick closest one to center of point
+    -- optimize to pick closest one to center of point
         local temp, order = torch.sort(dis,true)
         indexVal = indexVal[order]
         normals = normals[order]
         dis = temp
-    --]]
         combined = torch.zeros(size_x*size_y)
         combined[indexVal] = dis
         combined:resize(size_y, size_x)

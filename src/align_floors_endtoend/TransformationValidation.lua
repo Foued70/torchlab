@@ -1,24 +1,22 @@
 TransformationValidation = Class()
 local util_sweep = align_floors_endtoend.util
 function TransformationValidation.validate_simple(best_pts, best_transformations, img_src_points, img_dest_points, angle1, angle2, img_src_angles, img_dest_angles)
-  local best_overlap = torch.Tensor(best_pts:size())
-  local best_pts_temp = torch.Tensor(best_pts:size())
+   local best_overlap = torch.Tensor(best_pts:size())
+   local best_pts_temp = torch.Tensor(best_pts:size())
 
    local transformations_tmp = {}
 
    local center1, center2, combined_i = util_sweep.warp_and_combined(torch.eye(3), img_src_points, img_dest_points)
-   --local angle_diff_orig = util_sweep.findMainDirections(opencv.Mat.new(torch.gt(combined_i[2],0):byte()), opencv.Mat.new(torch.gt(combined_i[1],0):byte()))
-  
-  local diff = angle2-angle1
-  if(diff < 0) then
-    diff = diff + 180
-  end
-  if(diff > 180) then
-    diff = diff -180
-  end
-   
 
-  local angle_diff_orig = math.rad(diff)
+   local diff = angle2-angle1
+   if(diff < 0) then
+      diff = diff + 180
+   end
+   if(diff > 180) then
+      diff = diff -180
+   end
+
+   local angle_diff_orig = math.rad(diff)
    local good_counter = 1
    for i=1,table.getn(best_transformations) do
       local center1, center2, combined_i, combined_a = util_sweep.warp_and_combined(best_transformations[i], img_src_points, img_dest_points, img_src_angles, img_dest_angles)

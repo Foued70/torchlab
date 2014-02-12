@@ -1,5 +1,5 @@
 local path = require 'path'
-local pcl = PointCloud.PointCloud
+local pcl = pointcloud.pointcloud
 
 local Sweep = align_floors_endtoend.Sweep
 local SweepPair = align_floors_endtoend.SweepPair
@@ -39,7 +39,6 @@ function Scan:organize_in_trees()
         local prevName = self:get_ith_sweep(i, true):get_name()
         local curName = self:get_ith_sweep(j, true):get_name()
         local curSweep = self:get_ith_sweep(j, true)
-
 
         local tree_containing_previous = forest:find_tree_with_node(prevName)      
         local node = tree_containing_previous:get_node(prevName)
@@ -159,7 +158,7 @@ function Scan:attempt_to_align_pair(s_ij)
         print("BAD ALIGNMENT---------" .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
         return false, s_ij
     else
-        print("GOOD ALIGNMENT---------" .. s_ij:get_sweep2():get_name() .. " and " .. s_ij:get_sweep2():get_name())
+        print("GOOD ALIGNMENT---------" .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
         return true, s_ij
     end
 end
