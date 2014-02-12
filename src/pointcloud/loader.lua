@@ -1,6 +1,6 @@
 local io  = require 'io'
 local path = require 'path'
-local pcd = pointcloud_new.pointcloud
+local pcd = pointcloud.pointcloud
 local ffi = require 'ffi'
 local ctorch = util.ctorch
 
@@ -91,6 +91,21 @@ function loader.load_pobot_meta_data(filename)
   return properties
 end
 
+function loader.fix_meta(depth_map,meta)
+  local predicted_good = math.floor((2*math.pi-meta.azimuth_per_point*depth_map:size(1))/(meta.azimuth_per_line))
+  local minValue = math.huge
+  local bestI = predicted_good
+  for i=math.max(1, predicted_good-10), math.min(depth_map:size(2), predicted_good+10) do
+    local error = (depth_map:sub(1,-1,1,1)-depth_map:sub(1,-1,i,i)):pow(2):sum()
+    if(error<minValue) then
+      minValue = error
+      bestI = i
+    end
+  end
+  meta.azimuth_per_line = 2*math.pi/(bestI-1)
+  return meta
+end
+
 function loader.load_pobot_ascii(dirname, minradius, maxradius)
 
   minradius = minradius or default_minradius
@@ -153,30 +168,37 @@ function loader.load_pobot_ascii(dirname, minradius, maxradius)
   maxradius   = maxradius * meter
   centroid    = torch.zeros(3)
   
-  -- maps
+  --maps
   local depth_map        = util.torch.flipTB(dpt_list:reshape(width,height):t()):clone():contiguous()
   
+  --this will later be fixed in the data we get, but for now, recalc best min error width to get new azimuth per line
+  meta = loader.fix_meta(depth_map, meta)
+
   local rgb_map          = torch.zeros(height,width):clone():contiguous()
   local intensity_map    = torch.zeros(height,width):clone():contiguous()
-  
+
   local xyz_phi_map      = torch.range(0,height-1):repeatTensor(width,1)
   xyz_phi_map            = util.torch.flipTB(xyz_phi_map:t())
   xyz_phi_map            = xyz_phi_map:mul(meta.elevation_per_point):add(meta.elevation_start+math.pi/2)
   xyz_phi_map            = xyz_phi_map:clone():contiguous()
   
   local xyz_theta_map_pe = torch.range(0,height-1):repeatTensor(width,1)
-  xyz_theta_map_pe       = util.torch.flipTB(xyz_theta_map_pe:t())
-  xyz_theta_map_pe       = xyz_theta_map_pe:mul(meta.azimuth_per_point)
+  xyz_theta_map_pe       = xyz_theta_map_pe:t()
+  xyz_theta_map_pe       = xyz_theta_map_pe:mul(-meta.azimuth_per_point)
   
   local xyz_theta_map_pl = torch.range(0,width-1):repeatTensor(height,1)
-  xyz_theta_map_pl       = util.torch.flipTB(xyz_theta_map_pl:t()):t()
-  xyz_theta_map_pl       = xyz_theta_map_pl:mul(meta.azimuth_per_line)
+  xyz_theta_map_pl       = xyz_theta_map_pl:mul(-meta.azimuth_per_line)
   
-  local xyz_theta_map    = xyz_theta_map_pe + xyz_theta_map_pl
-  local msk              = xyz_theta_map:ge(math.pi*2)
-  xyz_theta_map[msk]     = xyz_theta_map[msk]-(math.pi*2)
-  msk                    = xyz_theta_map:gt(math.pi)
-  xyz_theta_map[msk]     = xyz_theta_map[msk]-(math.pi*2)
+  local xyz_theta_map    = xyz_theta_map_pe + xyz_theta_map_pl + math.pi
+  local msk              = torch.zeros(xyz_theta_map:size())
+  while xyz_theta_map:max() >  math.pi do
+    msk              = xyz_theta_map:gt(math.pi)
+    xyz_theta_map[msk]     = xyz_theta_map[msk]-(math.pi*2)
+  end
+  while xyz_theta_map:min() <= -math.pi do
+    msk                    = xyz_theta_map:le(-math.pi)
+    xyz_theta_map[msk]     = xyz_theta_map[msk]+(math.pi*2)
+  end
   xyz_theta_map          = xyz_theta_map:clone():contiguous()
   
   msk                    = nil

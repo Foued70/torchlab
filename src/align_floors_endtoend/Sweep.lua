@@ -5,36 +5,33 @@ Sweep.OD = "OD"
 Sweep.SWEEP = "SWEEP"
 
 local path = require 'path'
-local pcl = PointCloud.PointCloud
+local pcl = pointcloud.pointcloud
 local util_sweep = align_floors_endtoend.util
+local PointCloudLoader = pointcloud.loader.load_pobot_ascii
+
 function Sweep:__init(base_dir, name, xyz_file)
-    if not(path.extname(xyz_file) == ".xyz") then
-        error("expected extention to be .xyz")
-    end
     if not(util.fs.is_dir(base_dir)) then
         error("expected base_dir to exist for initializer for Sweep")
     end
-    if not(util.fs.is_file(xyz_file)) then
-        error("expected xyz file to exist")
+    if not(util.fs.is_dir(xyz_file)) and not(util.fs.is_file(xyz_file)) then
+        error("expected xyz file or dir to exist ")
     end
-    self.extname = path.extname(xyz_file)
+    self.floader_input = xyz_file
     self.base_dir = base_dir
     self.name = name
-    self.fxyz = xyz_file
     self:mkdirs()
     self:init_variables()
-    self:saveMe()
+    self:save_me()
 end
 
-function Sweep.newOrLoad(base_dir, name, xyz_dir)
-    if(util.fs.is_file(path.join(base_dir, Sweep.SWEEP, name .. ".dat"))) then
-        print("loading sweep from file " .. name)
+function Sweep.new_or_load(base_dir, name, xyz_file)
+    if (util.fs.is_file(path.join(base_dir, Sweep.SWEEP, name .. ".dat"))) then
         return torch.load(path.join(base_dir, Sweep.SWEEP, name .. ".dat"))
     else
-        return Sweep.new(base_dir, name, xyz_dir)
+        return Sweep.new(base_dir, name, xyz_file)
     end
 end
-function Sweep:mkdirs()
+function Sweep:mkdirs() 
     util.fs.mkdir_p(path.join(self.base_dir, Sweep.OD))
     util.fs.mkdir_p(path.join(self.base_dir, Sweep.SWEEP))
 end
@@ -42,7 +39,7 @@ end
 function Sweep:init_variables()
     self.parameters = {}
     self.parameters.scale = 10 -- in milimeters
-    self.parameters.numCorners = 30
+    self.parameters.numCorners = 100
     self.parameters.octTreeRes = .02
     self.initial = torch.eye(3)
     self.fod = path.join(self.base_dir, Sweep.OD, self.name.. ".od")
@@ -53,110 +50,103 @@ end
 function Sweep:__write_keys()
   return {'base_dir', 'name', 'parameters', 
     'floor',
-    'corners', 'flattenedxy', 'flattenedv', 
-    'fod', 'fxyz', 'fpng', 'fsave_me', 'scale', 'extname', 'angle'
+    'corners', 'flattenedxy', 'flattenedv', 'flattened_angles',
+    'fod', 'floader_input', 'fpng', 'fsave_me', 'scale', 'angle','corner_angles', 'combined', 'combined_norms'
     }
 end
 
-function Sweep:getName()
+function Sweep:get_name()
     return self.name
 end
-function Sweep:getBaseDir()
+function Sweep:get_base_dir()
     return self.base_dir
 end
-function Sweep:getSaveLocation()
+function Sweep:get_save_location()
     return self.fsave_me
 end
 
-function Sweep:getPC(recalc)
+function Sweep:get_pc(recalc)
     local pc
     local rgb
     if (util.fs.is_file(self.fod) and not(recalc)) then
-        pc = pcl.new(self.fod)
+        pc = pointcloud.pointcloud.new(self.fod)
     else
-        pc = pcl.new(self.fxyz, nil, 10)
-        --pc:downsampleBy(4)
+        loader = PointCloudLoader(self.floader_input)
+        pc = pointcloud.pointcloud.new(loader)
         if util.fs.is_dir(path.join(self.base_dir,Sweep.PNG)) and util.fs.is_file(self.fpng) then
             pc:load_rgb_map(self.fpng)
         end
-        pc:save_to_od(self.fod)
+        pc:save_to_data_file(self.fod)
         pc = pc
     end
     collectgarbage()
     return pc
 end
 
---this is for faro, that goes -60 to 90 degrees
-function Sweep:getDepthImage(H, center_i, res)
-    local res = res or 1
-    local center = center_i or torch.zeros(3)
-    if(H and not(center_i)) then
-        center = H:sub(1,3,4,4):squeeze()
+--goes -60 to 90 degrees
+function Sweep:get_depth_image_from_perspective(H)
+    local combined, combined_norms
+    if ((H== torch.eye(4)) or not(H)) and self.combined_norms and self.combined then
+        return self.combined, self.combined_norms
+    else
+        local pc = self:get_pc()
+        local dmsk, cmsk, imsk, nmsk = pc:get_valid_masks()
+        local pts= pc:get_xyz_list_transformed(nmsk, H or torch.eye(4)) --pts should already be centered
+        local normals = pc:get_normal_list_transformed(nmsk, H or torch.eye(4))
+        local dis = pts:clone():norm(2,2)
+
+        local azimuth  = (torch.atan2(pts:select(2,2):clone(), pts:select(2,1):clone()) +math.pi)*-1+2*math.pi--range 0 to 2*math.pi                   
+        local elevation = torch.acos(pts:select(2,3):clone():cdiv(dis))  -- 0 to math.pi*150/180
+
+        local size_x = pc:get_depth_map():size(2) --should be sized based on max and min difference... because of overlap
+        local size_y = pc:get_depth_map():size(1)
+        azimuth = (azimuth * (size_x-1)/(360*math.pi/180) + 1)
+        elevation = (elevation * (size_y-1)/(150*math.pi/180) + 1) --to do not hard code here
+
+        local good = torch.eq(
+                        torch.ge(azimuth, 1)+torch.le(azimuth, size_x)+torch.ge(elevation, 1)+torch.le(elevation, size_y),4)
+        azimuth = azimuth[good]:long()
+        elevation = elevation[good]:long()
+        dis = dis[good]
+        normals = util.torch.select3d(normals, good)
+        local indexVal = elevation*size_x+azimuth
+
+    -- optimize to pick closest one to center of point
+        local temp, order = torch.sort(dis,true)
+        indexVal = indexVal[order]
+        normals = normals[order]
+        dis = temp
+        combined = torch.zeros(size_x*size_y)
+        combined[indexVal] = dis
+        combined:resize(size_y, size_x)
+
+        combined_norms = util.torch.assign3d(normals, indexVal, torch.zeros(size_x*size_y,3))
     end
-    local pts= self:getPC():get_global_points_H(H or torch.eye(4)) --pts should already be centered
-    pts = pts-center:reshape(1,3):repeatTensor(pts:size(1),1)
-    local pc = self:getPC()
-    local idx, mask = pc:get_index_and_mask()
-    mask = mask*-1+1
-    local normals = pc:get_global_normal_map_H(H or torch.eye(4))
-    normals = util.torch.select3d(normals, mask)
-    
-    local dis = pts:clone():norm(2,2)
-
-    local azimuth  = (torch.atan2(pts:select(2,2):clone(), pts:select(2,1):clone()) +math.pi)*-1+2*math.pi--range 0 to 2*math.pi                   
-    local elevation = torch.acos(pts:select(2,3):clone():cdiv(dis))  -- 0 to math.pi*150/180
-    --image.display(azimuth)
-    local size_x = 360
-    local size_y = 150
-    local min_x = 1
-    local max_x = size_x*res
-    local min_y = 1
-    local max_y = size_y*res
-
-    azimuth = (azimuth * (max_x-min_x)/(size_x*math.pi/180) + min_y)
-    elevation = (elevation * (max_y-min_y)/(size_y*math.pi/180) + min_y)
-
-    local good = torch.eq(torch.ge(azimuth, min_x)+torch.le(azimuth, max_x)+torch.ge(elevation, min_y)+torch.le(elevation, max_y),4)
-    azimuth = azimuth[good]:long()
-    elevation = elevation[good]:long()
-    dis = dis[good]
-    --pts = util.torch.select3d(pts, good)
-    normals = util.torch.select3d(normals, good)
-    local indexVal = elevation*size_x*res+azimuth
-    local temp, order = torch.sort(dis,true)
-
-    indexVal = indexVal[order]
-    dis = dis[order]
-    --pts = pts[order]
-    normals = normals[order]
-
-    local combined = torch.zeros(size_x*res*size_y*res)
-    combined[indexVal] = dis
-    combined:resize(size_y*res, size_x*res)
-
-    --local combined_pts = util.torch.assign3d(pts, indexVal)
-    local combined_norms = util.torch.assign3d(normals, indexVal, torch.zeros(size_x*res*size_y*res,3))
+    if ((H== torch.eye(4)) or not(H)) then
+        self.combined = combined
+        self.combined_norms = combined_norms
+        self:save_me()
+    end
     return combined, combined_norms
 end
 
 --returns in degrees
-function Sweep:getAxisAlignAngle(recalc)
+function Sweep:get_axis_align_angle(recalc)
     if(not(self.angle) or recalc) then
-        local norm_map = self:getPC():get_normal_map()
-         norm_map = util.torch.select3d(norm_map, torch.ne(norm_map:clone():norm(2,1):squeeze(),0))
-        local angle_az = geom.util.unit_cartesian_to_spherical_angles(norm_map:t():contiguous())
+        local norm_list = self:get_pc():get_normal_list()
+        local angle_az = geom.util.unit_cartesian_to_spherical_angles(norm_list:t():contiguous())
         local az = angle_az[1][torch.eq(torch.lt(angle_az[2], math.pi/4)+torch.gt(angle_az[2],-math.pi/4),2)]
         local t,angle1 = torch.histc(az,361,-math.pi,math.pi):max(1)
         self.angle= angle1:squeeze()-181
-        self:saveMe()
+        self:save_me()
     end
     return self.angle
 end
-function Sweep:getFloor(recalc)
+function Sweep:get_floor(recalc)
     if not(self.floor) or recalc then
-        local faro_points = self:getPC()
-        local  y, i = torch.sort(faro_points.points:select(2, 3), 1);
-        local sorted_face_centers = faro_points.points:index(1, i);
+        local pc = self:get_pc()
+        local  y, i = torch.sort(pc:get_xyz_list():select(2, 3), 1);
+        local sorted_face_centers = pc:get_xyz_list():index(1, i);
 
         local tens = sorted_face_centers:select(2,3):clone():squeeze()
         local max = tens:max()
@@ -179,113 +169,49 @@ function Sweep:getFloor(recalc)
         a = a[torch.gt(dominance,.07)]
         self.floor = histv[a[1]]
     end
-    self:saveMe()
+    self:save_me()
     collectgarbage()
     return self.floor
 end
 
-function Sweep:getInitialTransformation()
+function Sweep:get_initial_transformation()
     local H = torch.eye(3,3)
-    local angle = math.rad(self:getAxisAlignAngle())
-    return util_sweep.getRotationMatrix(angle, torch.Tensor({0,0}))
+    local angle = math.rad(self:get_axis_align_angle())
+    return util_sweep.get_rotation_matrix(angle, torch.Tensor({0,0}))
 end
 
-function Sweep:saveMe()
+function Sweep:save_me()
     torch.save(self.fsave_me, self)
 end
 
-function Sweep:getFlattenedAndCorners(recalc, numCorners)
+function Sweep:get_flattened_and_corners(recalc, numCorners)
     if not(self.flattenedxy and self.flattenedv and self.corners) or recalc then
-        local p = self:getPC()
-        local flattened, corners, temp, scale = p:get_flattened_images(self.parameters.scale, numCorners or self.parameters.numCorners)
+        local pc = self:get_pc()
+        local flattened, corners, temp, scale,image_theta, it_mask, nm_flat = pc:get_flattened_image(self.parameters.scale, numCorners or self.parameters.numCorners)
+                self.minT = torch.Tensor({-flattened[1]:size(1)/2, -flattened[1]:size(2)/2})
+        self.corner_angles =  image_theta:reshape(image_theta:size(1)*image_theta:size(2)):index(1,((corners:select(2,1)-1)*image_theta:size(2)+corners:select(2,2)):long())
 
-        corners = util_sweep.applyToPointsReturn2d(util_sweep.get2DTransformationToZero(flattened[1]),corners:t()):t()
+     
+        corners = util_sweep.apply_to_points_return2d(util_sweep.get_2D_transformation_to_zero(flattened[1]),corners:t()):t()
+        
         local flattenedx, flattenedy, flattenedv = image.thresholdReturnCoordinates(flattened[1],0)
         local flattenedxy = torch.cat(flattenedx, flattenedy,2)         
+        self.flattened_angles = image_theta:reshape(image_theta:size(1)*image_theta:size(2)):index(1,((flattenedxy:select(2,1)-1)*image_theta:size(2)+flattenedxy:select(2,2)):long())
 
-        flattenedxy = util_sweep.applyToPointsReturn2d(util_sweep.get2DTransformationToZero(flattened[1]),flattenedxy:t()):t()
+        flattenedxy = util_sweep.apply_to_points_return2d(util_sweep.get_2D_transformation_to_zero(flattened[1]),flattenedxy:t()):t()
         self.corners = corners
         self.flattenedxy = flattenedxy
         self.flattenedv = flattenedv
+
         self.scale = scale
-        p:save_to_od(self.fod)
-        self:saveMe()
+        pc:save_to_data_file(self.fod)
+        self:save_me()
     end
     collectgarbage()
-    return self.corners, self.flattenedxy, self.flattenedv
-end
-
-function Sweep:flattenAndCornersTo(forward,name, numCorners, H)
-    corners, flattenedxy, flattenedv = self:getFlattenedAndCorners(true, numCorners)
-    return util_sweep.applyToPointsReturn2d(H, self.corners:t()):t(), 
-            util_sweep.applyToPointsReturn2d(H,self.flattenedxy:t()):t(), self.flattenedv
+    return self.corners, self.flattenedxy, self.flattenedv, self.corner_angles, self.flattened_angles
 end
 
 function Sweep:show_flattened()
-	local c,fxy,fv = self:getFlattenedAndCorners()
-	image.display(util_sweep.flattened2Image(fxy,c))
-end
-
------------------------------------------------------------------------------------------------------------------------------
---old stuff w octree
-function Sweep:getTree(H, add_empties, res)
-    log.trace("building tree ...")log.tic()
-    local pc = self:getPC()
-    local t = octomap.Tree.new(res or self.parameters.octTreeRes*pc.meter)
-    local center = torch.zeros(3)
-    if(H) then
-        center = H:sub(1,3,4,4):squeeze():contiguous()
-    end
-    pts = self:getPoints(H)
-    t:add_points(pts:contiguous(),center, pc:get_max_radius())
-    if(add_empties) then
-        t:add_points_only_empties(self:getZeroAzimuthAndElevation(H):contiguous(),center, pc:get_max_radius())
-    end    
-    log.trace(" - in ".. log.toc())
-
-    t:stats()
-    t:info()
-    return t
-end
-function Sweep:getZeroAzimuthAndElevation(H)
-    local center = torch.zeros(3)
-    if(H) then
-        center = H:sub(1,3,4,4):squeeze()
-    end
-    local pc = self:getPC()
-    local pts = pc:get_global_from_3d_pts(pc:get_xyz_map_no_mask(),H or torch.eye(4))
-    pts = pts-center:reshape(3,1,1):repeatTensor(1,pts:size(2),pts:size(3))
-    local idx, mask = pc:get_index_and_mask()
-    local dis = pc:get_depth_map_no_mask()
-
-    pts[3][mask] =0
-    local azimuth = torch.atan2(pts:select(1,2):clone(), pts:select(1,1):clone())+math.pi--range 0 to 2*math.pi                   
-    local elevation = torch.acos(pts:select(1,3):clone():cdiv(dis+10^-6))  -- 0 to math.pi*150/180
-    elevation[mask]=  0
-
-    azimuth[mask] = math.huge   
-    local minaz = azimuth:min(1):squeeze()
-    azimuth[mask] = -math.huge   
-    local maxaz = azimuth:max(1):squeeze()
-    azimuth[mask] = 0 
-
-    local shouldShift = torch.gt((maxaz-minaz), 2*math.pi*.9):repeatTensor(azimuth:size(1),1)
-    local azimuthShifted = (azimuth + (shouldShift:double()*math.pi))
-    azimuthShifted:apply(function(x) return (x%(2*math.pi)) end)
-    azimuthShifted = (azimuthShifted:sum(1):cdiv(torch.eq(mask,0):double():sum(1)):squeeze())
-
-    local predictedAzimuth = azimuthShifted:repeatTensor(azimuth:size(1),1)- (shouldShift:double()*math.pi)
-
-    local predictedElevation = (elevation:sum(2):cdiv(torch.eq(mask,0):double():sum(2)):squeeze()):repeatTensor(elevation:size(2),1):t()
-
-    local dis = pc:get_max_radius()*.95
-    local zs = torch.cos(predictedElevation)*dis
-    local xs = ((zs:clone():pow(2)*-1+dis^2):cdiv(torch.tan(predictedAzimuth):pow(2)+1)):pow(.5) --x^2+y^2 = 1-z^2, y/x=torch.tan(azimuth)
-    local posX = torch.eq(torch.gt(predictedAzimuth,math.pi/2)+torch.lt(predictedAzimuth,3*math.pi/2),2)
-    local negX = posX*-1+1
-    xs[negX] = xs[negX]*-1
-    local negY = torch.lt(predictedAzimuth,math.pi)
-    ys = torch.abs(xs:clone():cmul(torch.tan(predictedAzimuth))) --positive if azimuth is 0,pi
-    ys[negY] = ys[negY]*-1
-    return torch.cat(torch.cat(xs[mask], ys[mask],2), zs[mask],2)+center:reshape(1,3):repeatTensor(xs[mask]:size(1),1)
+	local c,fxy,fv = self:get_flattened_and_corners()
+	image.display(util_sweep.flattened_to_image(fxy,c))
 end

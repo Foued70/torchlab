@@ -459,6 +459,14 @@ function pointcloud:get_xyz_list(omsk)
   return plist:clone():contiguous(), phlist:clone():contiguous(), thlist:clone():contiguous()
 end
 
+--[[ stav added, need this to get easy way to rotate points, used in Sweep.lua and SweepPair.lua
+]]
+function pointcloud:get_xyz_list_transformed(omsk, H)
+  local points = self:get_xyz_list(omsk)
+  return (H*torch.cat(points,torch.ones(points:size(1),1)):t()):t():sub(1,-1,1,3)
+end
+
+
 function pointcloud:get_normal_list(omsk)
   local nmap, phmap, thmap, rmap, vmsk = self:get_normal_map()
   
@@ -476,6 +484,12 @@ function pointcloud:get_normal_list(omsk)
   return nlist:clone():contiguous(), phlist:clone():contiguous(), thlist:clone():contiguous(), rlist:clone():contiguous()
 end
 
+function pointcloud:get_normal_list_transformed(omsk, H)
+  local normals = self:get_normal_list(omsk)
+  local H_new = H:clone()
+  H_new[{{1,3},{4}}] = 0
+  return (H_new*torch.cat(normals,torch.ones(normals:size(1),1)):t()):t():sub(1,-1,1,3)
+end
 
 -- flatten functions
 
@@ -1025,7 +1039,7 @@ function write_to_ply(filename, count, xyz_list, rgb_list, intensity_list, norma
 
 end
 
-function pointcloud:save_setup(use_global, use_rgb, use_intensity, use_normal, use_hw)
+function pointcloud:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
 
   local dmsk, cmsk, imsk, nmsk = self:get_valid_masks()
   
@@ -1052,7 +1066,14 @@ function pointcloud:save_setup(use_global, use_rgb, use_intensity, use_normal, u
   
   local count          = vmsk:double():sum()
   
-  local xyz_list       = self:get_xyz_list(vmsk)
+  local xyz_list  
+  if(use_global_or_matrix and type(use_global_or_matrix) == "userdata" and use_global_or_matrix:size(1)==4 and use_global_or_matrix:size(2) == 4) then
+    xyz_list       = self:get_xyz_list_transformed(vmsk, use_global_or_matrix)  
+  else
+    xyz_list = self:get_xyz_list(vmsk)
+  end
+
+
   local rgb_list       = nil
   local intensity_list = nil
   local normal_list    = nil
@@ -1066,7 +1087,13 @@ function pointcloud:save_setup(use_global, use_rgb, use_intensity, use_normal, u
   end
   if use_normal then
     normal_list    = self:get_normal_list(vmsk)
+    if(use_global_or_matrix and type(use_global_or_matrix) == "userdata" and use_global_or_matrix:size(1)==4 and use_global_or_matrix:size(2) == 4) then
+      normal_list = self:get_normal_list_transformed(vmsk, use_global_or_matrix)
+    else
+      normal_list    = self:get_normal_list(vmsk)
+    end
   end
+
   if use_hw then
     hw_list        = self:get_hw_list(vmsk)
   end
@@ -1084,17 +1111,17 @@ function pointcloud:save_setup(use_global, use_rgb, use_intensity, use_normal, u
   return count, xyz_list, rgb_list, intensity_list, normal_list, hw_list
 end
 
-function pointcloud:save_to_xyz_file(filename, use_global, use_rgb, use_intensity, use_normal, use_hw)
+function pointcloud:save_to_xyz_file(filename, use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
 
-  local count, xyz_list, rgb_list, intensity_list, normal_list, hw_list = self:save_setup(use_global, use_rgb, use_intensity, use_normal, use_hw)
+  local count, xyz_list, rgb_list, intensity_list, normal_list, hw_list = self:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
   
   write_to_xyz(filename, count, xyz_list, rgb_list, intensity_list, normal_list, hw_list)
   
 end
 
-function pointcloud:save_to_ply_file(filename, use_global, use_rgb, use_intensity, use_normal, use_hw)
+function pointcloud:save_to_ply_file(filename, use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
 
-  local count, xyz_list, rgb_list, intensity_list, normal_list, hw_list = self:save_setup(use_global, use_rgb, use_intensity, use_normal, use_hw)
+  local count, xyz_list, rgb_list, intensity_list, normal_list, hw_list = self:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
   
   write_to_ply(filename, count, xyz_list, rgb_list, intensity_list, normal_list, hw_list)
   
@@ -1104,4 +1131,9 @@ function pointcloud:save_to_data_file(filename)
   
   torch.save(filename,self)
   
+end
+
+--accessor, so we follow pattern of not directly accessing fields especially when outside of class
+function pointcloud:get_meter()
+  return self.meter
 end
