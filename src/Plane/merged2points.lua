@@ -7,7 +7,7 @@ io = require('io')
 ArcIO = data.ArcIO
 specs = data.ArcSpecs
 
-scan_ids = specs.scan_ids
+scan_ids = specs.m2p_scan_ids
 --[[
 scan_start = 6
 scan_end = 27
@@ -30,6 +30,10 @@ for scan_i = 1,#scan_ids do
 	-- For each plane mask convert to x,y,z,r,g,b pointcloud and write to .pts file 
 	num_planes = plane_masks:size(1)
 	print("Number of planes: ", num_planes)
+	local output_fname = arc_io:workStr(string.format("%.3d",scan_num), 
+										'segmented_regions.pts')
+	print("Writing segmented region: ", output_fname)
+	local output_fh = io.open( output_fname, "w" )
 
 	torch.range(1,num_planes):apply( function( plane_idx ) 
 		local mask = plane_masks[{plane_idx, {}, {}}]
@@ -37,20 +41,15 @@ for scan_i = 1,#scan_ids do
 		local points_y = points_map:select(1,2)[mask]
 		local points_z = points_map:select(1,3)[mask]
 
-		local output_fname = arc_io:workStr(string.format("%.3d",scan_num), 
-											string.format('segmented_region_%.3d.pts', plane_idx ))
-
-		print("Writing segmented region: ", output_fname)
-		local output_fh = io.open( output_fname, "w" )
 		torch.range(1,points_x:nElement()):apply( function( idx )
 			local rgb = cmap[plane_idx]
 			output_fh:write( points_x[idx] ..' '.. points_y[idx] ..' '.. points_z[idx] ..' '.. 
 							 rgb[1] ..' '..   rgb[2] ..' '.. rgb[3] .. '\n')	 
 		end
 		)
-		output_fh:close()
 	end
 	)
+	output_fh:close()
 
 	-- Gotta collect that garbage just in case 
 	collectgarbage()
