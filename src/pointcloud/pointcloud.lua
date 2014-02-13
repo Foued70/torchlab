@@ -284,15 +284,15 @@ function pointcloud:get_xyz_map()
   return self.xyz_map:clone(), self.xyz_phi_map:clone(), self.xyz_theta_map:clone()
 end
 
-function pointcloud:get_lookup_maps()
-  if (not self.map_u) then
+function pointcloud:get_lookup_maps(force, mind, maxd)
+  if force or (not self.map_u) then
   
 		local height = self.height
 		local width  = self.width
 		local meter  = self.meter
 	
-		local mind = 0.025 * meter
-		local maxd = 0.100 * meter
+		mind = mind or (0.025 * meter)
+		maxd = maxd or (0.100 * meter)
 	
 		local xyz_map, xyz_phi_map, xyz_theta_map = self:get_xyz_map()
 	
@@ -315,13 +315,13 @@ function pointcloud:get_lookup_maps()
   return self.map_u:clone(), self.map_d:clone(), self.map_l:clone(), self.map_r:clone()
 end
 
-function pointcloud:get_normal_map()
-  if (not self.normal_map) then
+function pointcloud:get_normal_map(force, mind, maxd)
+  if force or (not self.normal_map) then
     local height  = self.height
     local width   = self.width
     local xyz_map = self:get_xyz_map()
     
-    local mu,md,ml,mr = self:get_lookup_maps(force)
+    local mu,md,ml,mr = self:get_lookup_maps(force, mind, maxd)
     
     self.normal_phi_map   = torch.zeros(height,width):clone():contiguous()
     self.normal_theta_map = torch.zeros(height,width):clone():contiguous()
