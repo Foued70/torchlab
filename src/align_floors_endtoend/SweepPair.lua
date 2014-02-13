@@ -413,7 +413,7 @@ function SweepPair:get_transformation(first, dontUseICP, inverse)
       sweepToUse = self:get_sweep2()
     end  
     myTransformation = util_sweep.get_2D_to_3D_transformation(self:get_scale(), 
-      sweepToUse:getInitialTransformation(), 
+      sweepToUse:get_initial_transformation(), 
       -sweepToUse:get_floor()) --bring floor to 0
     return myTransformation
   end

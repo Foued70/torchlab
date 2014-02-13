@@ -60,7 +60,7 @@ scores = scores:squeeze()
 plane_indices = plane_indices:squeeze()
 
 print("Number of planes", #planes)
-print("Number of pointsl", points:size(1))
+print("Number of points", points:size(1))
 
 -- Colormap for different coloring
 colormap = image.colormap(#planes):mul(255.0):int()

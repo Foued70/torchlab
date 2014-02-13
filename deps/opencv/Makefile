@@ -18,8 +18,8 @@ default_cmake_args = \
 
 # make sure we update to versions which are official releases.  They
 # are tagged in github.  This is Release 2.4.6
-ver=525b6eca2ed6e790e41d204399025e8280b8bb8e
-branch=2.4
+ver=2.4.8.2-prep #525b6eca2ed6e790e41d204399025e8280b8bb8e
+branch=2.4.8.2-prep
 
 git_clone=$(build_dir)/deps/opencv-$(branch)
 
