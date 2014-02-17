@@ -15,9 +15,8 @@ void cullPoints( THDoubleTensor* th_cull_mask, THDoubleTensor* th_normals, THDou
 				 double cosine_thresh, double residual_thresh );
 void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_normals, THDoubleTensor* th_means, 
                         THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask, 
-                        THDoubleTensor* th_output_plane,  THDoubleTensor* th_output_mean, double cosine_thresh, double residual_thresh );
-
-
+                        THDoubleTensor* th_output_eigenvalues, THDoubleTensor* th_output_plane, THDoubleTensor* th_output_mean,
+                        double cosine_thresh, double residual_thresh );
 ]]
 
 return util.ffi.load("libcplane_ffi")

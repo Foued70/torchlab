@@ -4,6 +4,11 @@
 		  provides some basic region growing code
 ]]--
 
+-- Setting up gnuplot
+require 'gnuplot'
+gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")  
+gnuplot.setterm("x11")
+
 cplane_ffi = require('./cplane_ffi')
 
 Plane = Plane.Plane
@@ -32,13 +37,15 @@ function growPlane( inds, normals, means, second_moments, normal_thresh, residua
 	-- Return values for plane 
 	plane_centroid = torch.Tensor(3)
 	plane_equation = torch.Tensor(4)
+	plane_eigenvalues = torch.Tensor(3)
 
 	-- TODO: should actually return the plane parameters 
 	cplane_ffi.grow_plane_region( torch.cdata(inds), torch.cdata(normals), torch.cdata(means), 
 								  torch.cdata(second_moments), torch.cdata(region_mask), torch.cdata(front_mask), 
-								  torch.cdata(plane_equation), torch.cdata(plane_centroid), normal_thresh, residual_thresh )
+								  torch.cdata(plane_eigenvalues), torch.cdata(plane_equation), torch.cdata(plane_centroid), 
+								  normal_thresh, residual_thresh )
 
-	return plane_centroid, plane_equation, region_mask
+	return plane_centroid, plane_equation, plane_eigenvalues, region_mask
 end
 
 function  cullPoints( normals, points, window, normal_thresh, residual_thresh )
@@ -216,7 +223,7 @@ function extract_planes_random( scan_num )
 
 	points = pc:get_xyz_map()	
 
-	window = 27
+	window = 9
 	dist_thresh = 9.0
 
 	normal_thresh = math.pi/8
@@ -224,7 +231,8 @@ function extract_planes_random( scan_num )
 
 	min_region_size = 250
 
-	coverage_thresh = 0.99 -- TODO: have a pointcloud coverage threshold 
+	n_planes = 500
+	coverage_thresh = 0.92 -- TODO: have a pointcloud coverage threshold 
 
 	errors, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
 
@@ -237,8 +245,10 @@ function extract_planes_random( scan_num )
 	-- DEBUG test without cull map 
 
 	cull_map = cull_map:byte():eq(0)
+	--[[
 	image.display(cull_map)
 	image.display(errors:gt(0.3))
+	]]--
 	-- Unroll cull_mask
 	cull_mask = torch.reshape( cull_map, 1,cull_map:nElement()):squeeze():byte()
 
@@ -257,7 +267,6 @@ function extract_planes_random( scan_num )
 	n_points = points:size(3)*points:size(2)
 
 	-- For drawing, etc ... 
-	n_planes = 500
 	cmap = image.colormap(n_planes)
 
 	plane_inds = torch.LongTensor( n_planes, 2 )
@@ -269,30 +278,86 @@ function extract_planes_random( scan_num )
 
 	samples_im = torch.Tensor(points:size(2), points:size(3)):zero()
 
+	plane_sizes = torch.Tensor({0})
+	plane_residuals = torch.Tensor({0})
+	plane_normal_residuals = torch.Tensor({0})
+	plane_curvatures = torch.Tensor({0})
+
 	planes = {}
+
+	finished = false
 
 	plane_ind = 1
 	while true do 
 	-- for plane_ind = 1,n_planes do 
-		sample_ind = torch.rand(1):mul(x_inds:nElement()):long()+1
 
-		print("size inds: ", x_inds:nElement())
+		-- Sample 25 times and choose the one with the smallest residual
+		min_residual = nil
+		max_size = nil
+		min_curvature = nil
+		for j = 1,50 do
+			sample_ind = torch.rand(1):mul(x_inds:nElement()):long()+1
 
-		-- Check if we have reached our coverage threshold 
-		if x_inds:nElement() < (1 - coverage_thresh)*n_points then
-			print( "coverage_thresh reached, exiting ")
-			n_planes = plane_ind
+			--print("size inds: ", x_inds:nElement())
+
+			-- Check if we have reached our coverage threshold 
+			if x_inds:nElement() < (1 - coverage_thresh)*n_points then
+				print( "coverage_thresh reached, exiting ")
+				n_planes = plane_ind
+				finished = true 
+				break
+			end
+
+			x_rand = x_inds[sample_ind]:squeeze()
+			y_rand = y_inds[sample_ind]:squeeze()
+
+			inds = torch.LongTensor({x_rand,y_rand})
+			--plane_centroid, plane_equation, plane_eigenvalues, region_mask = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
+			pcent, peq, pegv, reg_msk = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
+			region_size = reg_msk:sum()
+			plane_residual = pegv[{1}]/region_size
+			curvature = pegv[{1}]/(pegv[{1}]+pegv[{2}]+pegv[{3}])
+
+			--[[
+			if not min_residual then
+				min_residual = plane_residual
+			end
+			]]--
+			if not max_size then
+				max_size = region_size
+			end
+			if region_size >= max_size then 
+			--if plane_residual <= min_residual then 
+				plane_centroid = pcent
+				plane_equation = peq
+				plane_eigenvalues = pegv
+				region_mask = reg_msk
+
+				-- For minimum via RANSAC
+				min_curvature = curvature
+				max_size = region_size -- gota remember to do this!
+				min_residual = plane_residual
+			end
+		end		
+
+		if finished == true then
 			break
 		end
 
-		x_rand = x_inds[sample_ind]:squeeze()
-		y_rand = y_inds[sample_ind]:squeeze()
+		print("plane_ind: ", plane_ind)
+		print("coverage: ", x_inds:nElement()/n_points)
 
-		inds = torch.LongTensor({x_rand,y_rand})
-		plane_centroid, plane_equation, region_mask = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
+		region_size = region_mask:sum()
+		if region_size > min_region_size then
 
+			-- Update eigenvalues
+			plane_residual = plane_eigenvalues[{{1},{}}]/region_size
+			plane_residuals = torch.cat(plane_residuals, plane_residual,1)
+			plane_curvatures = torch.cat(plane_curvatures, torch.Tensor({min_curvature}),1)
+			--plane_normal_residuals = torch.cat(plane_normal_residuals, )
 
-		if region_mask:sum() > min_region_size then
+			plane_sizes = torch.cat(plane_sizes, torch.Tensor({region_size}))
+
 			plane = Plane.new()
 			plane.sample_inds = inds
 			plane.centroid = plane_centroid
@@ -323,8 +388,8 @@ function extract_planes_random( scan_num )
 		end
 
 		-- Add region to cull_map and create new cull_mask 
-		print(cull_map)
-		print(region_mask)
+		--print(cull_map)
+		--print(region_mask)
 		cull_map = cull_map:byte():add(region_mask:byte():eq(0)):gt(1)
 		cull_mask = torch.reshape( cull_map, 1,cull_map:nElement()):squeeze():byte()
 		x_inds = x_rng[cull_mask]
@@ -359,8 +424,23 @@ function extract_planes_random( scan_num )
 
 	arc_io:dumpImage( cull_map_cp, "cull_maps", string.format("%.3d", scan_num) )
 
+	--[[
 	image.display(cull_map)
 	image.display(samples_im)
+	]]--
+
+	gnuplot.figure(1)
+	gnuplot.title("Plane Residuals")
+	gnuplot.plot(plane_residuals)
+
+	gnuplot.figure(2)
+	gnuplot.title("Plane Sizes")
+	gnuplot.plot(plane_sizes)
+
+	gnuplot.figure(3)
+	gnuplot.title("Plane Curvatures")
+	gnuplot.plot(plane_curvatures)
+
 
 end	
 
