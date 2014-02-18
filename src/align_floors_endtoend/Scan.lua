@@ -16,7 +16,7 @@ function Scan:__init(savedir, po_dir, complete_loop, maxDepth)
     self.numfiles = table.getn(self.all_folders)
     self.scores = {}
     self.first_sweep = first_sweep or 1
-    self.maxDepth = 5 or maxDepth -- a check of diff of ids <= depth is done to determine which pairs will be attempted, so min depth should be 1 if want to check just adjacent pairs
+    self.maxDepth = 10 or maxDepth -- a check of diff of ids <= depth is done to determine which pairs will be attempted, so min depth should be 1 if want to check just adjacent pairs
     self.complete_loop_num = self.num_files
     if(not(self.complete_loop)) then
         self.complete_loop_num  = 10^10
@@ -145,17 +145,17 @@ end
 
 function Scan:attempt_to_align_pair(s_ij)
     print('Attempting to align ' .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
-    s_ij:get_all_transformations()
     local success    
-    s_ij:set_best_diff_transformation(1)
+    s_ij:set_best_picked_diff_transformation()
     local score =  s_ij:get_3d_validation_score(true, 10)
-    if(score[1]<.7 or score[4]<.05) then
+    if(score[1]<.7 or score[4]<.1) then
+            print("BAD ALIGNMENT---------" .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
         return false, s_ij
     end
     s_ij:get_icp()
     score =  s_ij:get_3d_validation_score(false, 10)
-    if (score[1]<.85 or score[4]<.1) then 
-        print("BAD ALIGNMENT---------" .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
+    if (score[1]<.85 or score[4]<.2) then 
+        print("BAD ALIGNMENT POST ICP---------" .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
         return false, s_ij
     else
         print("GOOD ALIGNMENT---------" .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
@@ -191,16 +191,16 @@ function Scan:get_sweeppair(i, j)
 end
 
 function Scan:save_global(tree, save_dir)
-    local nodes = tree:getAllNodes()
+    local nodes = tree:get_all_nodes()
     local io = require 'io'
     local dir =  path.join(save_dir, tree:get_root():get_name())
     util.fs.mkdir_p(dir)
     for k,v in pairs(nodes) do
-        local transf = v:getTransformationToRoot()
-        v:getSweep():get_pc():save_to_xyz_file(path.join(dir,v:getSweep():get_name() .. ".xyz"),transf)
-        print(path.join(dir,v:getSweep():get_name() .. "_transf.dat"))
-        torch.save(path.join(dir,v:getSweep():get_name() .. "_transf.dat"), transf)
-       local file = io.open(path.join(dir,v:getSweep():get_name() .. "_transf.txt"), 'w')
+        local transf = v:get_transformation_to_root()
+        v:get_sweep():get_pc():save_to_xyz_file(path.join(dir,v:get_sweep():get_name() .. ".xyz"),transf)
+        print(path.join(dir,v:get_sweep():get_name() .. "_transf.dat"))
+        torch.save(path.join(dir,v:get_sweep():get_name() .. "_transf.dat"), transf)
+       local file = io.open(path.join(dir,v:get_sweep():get_name() .. "_transf.txt"), 'w')
        transf = transf:reshape(16)
         file:write(''..transf[1]..' '..transf[2]..' '..transf[3]..' '..transf[4]..'\n'..
             transf[5]..' '..transf[6]..' '..transf[7]..' '..transf[8]..'\n'..
