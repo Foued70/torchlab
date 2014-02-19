@@ -164,7 +164,9 @@ void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresu
 void get_orientation(Mat* src, int ksize, Mat* mag, Mat* orientaiton);
 Mat* phaseCorrelate(Mat *src, Mat *dst);
 void flood_fill(Mat* img, Mat* result, int x, int y);
-Mat* find_contours(Mat* image);
+
+int find_contours(Mat* image, THDoubleTensor* th_contours, THDoubleTensor* th_segment_inds );
+
 void distance_transform(Mat* img, Mat* result);
 void distance_transform_labels(Mat* img, Mat* result, Mat* labels);
 void fillQuad(Mat* img, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4);
