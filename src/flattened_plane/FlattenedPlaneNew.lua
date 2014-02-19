@@ -99,34 +99,34 @@ end
 
 function FlattenedPlaneNew:addPlane(pc)
     --to do check argument type
-    local H = self.transformation
+    local H = torch.eye(4)
+    H[{{1,3},{1,3}}]= geom.quaternion.to_rotation_matrix(geom.quaternion.from_rotation_matrix(self.transformation))
+    H[{{1,3},{4}}] = self.transformation:sub(1,3,4,4)
     local eqn, occupiedI = self:getPlaneEquation(self.index)
     local plane,mask = self:getPlaneViewFromCenter(eqn, H, pc)
     local center = H:sub(1,3,4,4):squeeze()
     local planed = plane - center:reshape(3,1,1):repeatTensor(1,plane:size(2),plane:size(3))
     local dmsk, cmsk, imsk, nmsk = pc:get_valid_masks()
-    nmsk = nmsk:clone():cmul(mask)
     --local good_norm = torch.lt(torch.acos(plane_norm_reshaped:clone()*eqn:sub(1,3):squeeze()),math.rad(60)):squeeze():reshape(plane_norm:size(2),plane_norm:size(3))
     local plane_reald = pc:get_depth_list(torch.ones(nmsk:size()):byte())
-    local points = pc:get_xyz_list(torch.ones(nmsk:size()):byte())
+    local points = pc:get_xyz_list(torch.ones(nmsk:size()):byte(), H)
     local plane_norms = pc:get_normal_list_transformed(torch.ones(nmsk:size()):byte(), H)
     occupiedI[nmsk*-1+1] = 0
-    --[[ if want to project onto plane, instead of assume position is on plane
-    local pts  = flattened_plane.util.torch.select3d(pc:get_global_from_3d_pts(pc:get_xyz_map_no_mask(),H), maskN*-1+1)
-    local indicesA = torch.eq(torch.eq(indices,self.index)+torch.ge(score,.1),2)
-    local selected = flattened_plane.util.torch.select3d(pts, indicesA)
-    t = selected*eqn:sub(1,3)
-    local occupied = selected-t:reshape(t:size(1),1)*eqn:sub(1,3):reshape(1,3)-eqn:sub(4,4):squeeze()
-    --]]
-    --    local occupiedIT = torch.eq(torch.le(torch.abs(planed:clone():norm(2,1):squeeze()-plane_reald), self.thresh*5*1000)+mask+good_norm,3)
     local occupied  = torch.Tensor()
     if(occupiedI:sum()>0) then
         occupied = util.torch.select3d(plane,occupiedI)
     end
 
     --our hypothesized plane is more than 1 cm closer to us than the real point, it is going through empty!
-    local emptiesI = torch.lt(planed:clone():norm(2,1):squeeze()-plane_reald, -self.thresh*1000):cmul(occupiedI*-1+1):cmul(nmsk)
-    local empties = util.torch.select3d(plane,emptiesI)
+    --[[ if want to project onto plane, instead of assume position is on plane ]]
+    local emptiesI = torch.lt(points*eqn:sub(1,3)+eqn:sub(4,4):squeeze(), -self.thresh*1000):reshape(nmsk:size()):cmul(occupiedI*-1+1):cmul(nmsk)
+    
+    local empties  = torch.Tensor()
+    if(emptiesI:sum()>0) then
+        empties = util.torch.select3d(plane,emptiesI)
+    end
+  --if want distance along ray we are shooting from camera
+--    local emptiesI = torch.lt(planed:clone():norm(2,1):squeeze()-plane_reald, -self.thresh*1000):cmul(occupiedI*-1+1):cmul(nmsk)
     
     
     local notnilsI = nmsk*-1+1
@@ -220,18 +220,17 @@ function FlattenedPlaneNew:getPlaneViewFromCenter(eqn,H, pc)
 
     local x_new, y_new, z_new = FlattenedPlaneNew.inverseof3x3(a,b,c,d,e,f,g,h,i, x_1, y_1, z_1)
     --means we are shooting ray forwards and not backwards
-    local good_index = torch.gt(z_new, 0)
+    local good_index = torch.ge(z_new, 0)
     local temp_pt = center:reshape(1,3):repeatTensor(transposedPts:size(1),1)+mvdCenter:clone():cmul(z_new:repeatTensor(3,1):t())
     local good_index2 = torch.ones(good_index:size()):byte() 
     local xyz_minval, xyz_maxval, xyz_radius = pc:get_xyz_stats()
-    good_index2 =torch.lt((temp_pt-center:reshape(1,3):repeatTensor(temp_pt:size(1),1)):norm(2,2):squeeze(), (xyz_radius:clone():norm()*5))
+    good_index2 =torch.lt((temp_pt-center:reshape(1,3):repeatTensor(temp_pt:size(1),1)):norm(2,2):squeeze(), (xyz_radius:clone():norm()*20))
     local good_index3 = torch.eq(torch.lt(temp_pt:clone():sum(2), math.huge):double() + torch.gt(temp_pt:clone():sum(2),math.huge):double(),1):squeeze()
     local cum_good = torch.eq(good_index+good_index2+good_index3+vmsk,4)
     cum_good = (cum_good*-1+1)
     temp_pt:select(2,1)[cum_good]= 0
     temp_pt:select(2,2)[cum_good] = 0
     temp_pt:select(2,3)[cum_good] = 0
-
     local new_pts = temp_pt:t():reshape(3,vmsk:size(1), vmsk:size(2))
     return new_pts, cum_good*-1+1
 end
@@ -239,7 +238,7 @@ end
 function FlattenedPlaneNew.findVector(eqn)
     local pointonplane
     local n = eqn:sub(1,3)
-    local d = eqn[4]
+    local d = -eqn[4]
     if(n[3]~=0) then --ax+by+cz=d
         pointonplane = torch.Tensor({0,0,(-d/n[3])})
         if(n[2]~=0) then
@@ -443,6 +442,7 @@ end
 function FlattenedPlaneNew:calculateMinAndMaxT()
     local minT,maxT = calculateMinAndMax(self.rempties)
     minT,maxT = calculateMinAndMax(self.roccupied,minT, maxT)
+    
     minT = minT:sub(1,1,1,2)/self.resolution-200
     maxT =maxT:sub(1,1,1,2)/self.resolution+200
     self.minT = minT:floor()
