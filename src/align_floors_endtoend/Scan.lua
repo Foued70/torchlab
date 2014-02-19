@@ -161,6 +161,7 @@ function Scan:attempt_to_align_pair(s_ij)
         print("GOOD ALIGNMENT---------" .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
         return true, s_ij
     end
+    collectgarbage()
 end
 
 function Scan:attempt_to_align(i, j)
@@ -208,4 +209,72 @@ function Scan:save_global(tree, save_dir)
             transf[13]..' '..transf[14]..' '..transf[15]..' '..transf[16])
        file:close()
     end
+end
+
+
+--these methods are designed to after you have an initial tree of pairs that work, create a graph of pairs that work
+--so we will look at sweeps that are close by in distance to a given sweep and try to align them
+
+--get the distance between the camera centers of all pairs in the tree
+function Scan.get_distance_scores(tree)
+    local transformations = {}
+    local nodes = tree:get_all_nodes()
+    local numTransformations = 0
+    for k,v in pairs(nodes) do
+        local transf = v:get_transformation_to_root()
+        numTransformations = numTransformations+1
+        transformations[v:get_id()] = transf
+    end
+    local scores=torch.zeros(numTransformations, numTransformations)
+    for i=1,numTransformations do
+        for j = i+1, numTransformations do
+            local score = torch.dist(transformations[i]:sub(1,3,4,4),transformations[j]:sub(1,3,4,4))
+            scores[i][j] = score
+        end
+    end
+    return scores
+end
+
+--for each of the good pairs, make sure we have calculated the alignment
+function Scan:calculate_alignments(scores)
+    for i=1,scores:size(1) do
+        for j=i+1, scores:size(1) do
+            if(scores[i][j] < 10^4) then
+                self:attempt_to_align_pair(self:get_sweeppair(i,j))
+                collectgarbage()
+            end
+        end
+    end
+
+end
+
+--returns a matrix of size nxn where each sweep pair has it's score if it's good, or math.huge if it's bad alignment
+function Scan:get_good_alignments_and_scores(tree)
+    local transformations = {}
+    local nodes = tree:get_all_nodes()
+    local numTransformations = 0
+    for k,v in pairs(nodes) do
+        local transf = v:get_transformation_to_root()
+        numTransformations = numTransformations+1
+        transformations[v:get_id()] = transf
+    end
+    local scores=torch.zeros(numTransformations, numTransformations)
+    for i=1,numTransformations do
+        for j = i+1, numTransformations do
+            local score
+            if(self:get_sweeppair(i,j).threed_validation_score ~= -1) then
+                local success,pair = self:attempt_to_align_pair(self:get_sweeppair(i,j))
+                if(not(success)) then
+                    score = math.huge
+                else
+                    score = 1-self:get_sweeppair(i,j):get_3d_validation_score(false,10)[4]
+                end
+            else
+                score = math.huge
+            end
+            scores[i][j] = score
+            collectgarbage()
+        end
+    end
+    return scores
 end

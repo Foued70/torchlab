@@ -209,15 +209,42 @@ function SweepPair:find_best_floor(H)
     self.threed_validation_score_nicp  = -1
     local score = self:get_3d_validation_score(true,10)
     if not(score[1]>.9 and score[4]>.1) then
-      for i = -10, 10 do
-        self:set_z_transformation(startingTransformation + i*100) 
-        self:set_icp_transformation(torch.eye(4))      
-        self.threed_validation_score_nicp  = -1
-        local score = self:get_3d_validation_score(true,10)
-        if (score[1]+3*score[4] > bestIValue) then
-          print("best i", 100*i, score[1], score[4])
-          bestI = 100*i
-          bestIValue = score[1]+3*score[4]
+      for i = -5, 5 do
+        if(i~=0) then
+          self:set_z_transformation(startingTransformation + i*100) 
+          self:set_icp_transformation(torch.eye(4))      
+          self.threed_validation_score_nicp  = -1
+          local score = self:get_3d_validation_score(true,10)
+          if (score[1]+3*score[4] > bestIValue) then
+            print("best i", 100*i, score[1], score[4])
+            bestI = 100*i
+            bestIValue = score[1]+3*score[4]
+          end
+        end
+      end
+      local shouldTryMore = false
+      local startRange = 1 
+      local endRange  = 1
+      if(bestI == -500) then
+        startRange = -20
+        endRange = -6
+      elseif(bestI==500) then
+        startRange = 6
+        endRange = 20
+      end
+      if(shouldTryMore) then
+        for i = startRange, endRange do
+          if(i~=0) then
+            self:set_z_transformation(startingTransformation + i*100) 
+            self:set_icp_transformation(torch.eye(4))      
+            self.threed_validation_score_nicp  = -1
+            local score = self:get_3d_validation_score(true,10)
+            if (score[1]+3*score[4] > bestIValue) then
+              print("best i", 100*i, score[1], score[4])
+              bestI = 100*i
+              bestIValue = score[1]+3*score[4]
+            end
+          end
         end
       end
     end
