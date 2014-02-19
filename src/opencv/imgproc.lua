@@ -276,9 +276,6 @@ function floodFill(img, x,y)
    return dest
 end
 
--- Very inefficient, but functioning find_contours implementation 
--- TODO: re-write so that opencv's find_contours function doesn't 
---       need to be called multiplt times. 
 function  find_contours(img)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input images")
