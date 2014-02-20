@@ -158,11 +158,8 @@ Mat* detectCornerHarris(Mat* src, int blockSize, int ksize, int k);
 Mat* getPairwiseDistances(const Mat* A, const Mat* B);
 Mat* findBestTransformation(const Mat* goodLocationsX_src, const Mat* goodLocationsY_src, const Mat* scores_src,  const Mat* pairwise_dis_src,
   const Mat* goodLocationsX_dest, const Mat* goodLocationsY_dest, const Mat* scores_dest, const Mat* pairwise_dis_dest, 
+    const Mat* angle_diff,
   double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, double minx, double maxx, double miny, double maxy);
-void flann_knn(Mat* m_object, Mat* m_destinations, int knn, Mat* m_indices, Mat* m_dists);
-void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresults, Mat* m_indices, Mat* m_dists);
-void get_orientation(Mat* src, int ksize, Mat* mag, Mat* orientaiton);
-Mat* phaseCorrelate(Mat *src, Mat *dst);
 void flood_fill(Mat* img, Mat* result, int x, int y);
 
 int find_contours(Mat* image, THDoubleTensor* th_contours, THDoubleTensor* th_segment_inds );
@@ -173,10 +170,8 @@ void fillQuad(Mat* img, double x1, double y1, double x2, double y2, double x3, d
 void fillQuadAll(Mat* img, Mat* quad);
 void fillQuadAllWithInterpolation(Mat* img, Mat* resultD, Mat* quad);
 void resize(Mat* src, Mat* dst, double factor);
-Mat* DFT(Mat*src);
 void threshold(Mat* src,  Mat*dst);
 Mat* rotateImage(const Mat* src, Mat* dst, double angle, double centerC, double centerR, int size_1, int size_2);
-Mat* inpaint(Mat* src, Mat* mask, Mat*dst, double radius, bool method);
 ]]
 
 -- utils.lua

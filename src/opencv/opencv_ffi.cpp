@@ -14,6 +14,8 @@ extern "C"
 #include "opencv2/calib3d/calib3d.hpp"
 #include "opencv2/photo/photo.hpp"
 
+#include <time.h>
+
 using namespace cv;
 using namespace std;
 
@@ -541,10 +543,12 @@ extern "C" {
 
  Mat* findBestTransformation(const Mat* goodLocationsX_src, const Mat* goodLocationsY_src, const Mat* scores_src,  const Mat* pairwise_dis_src,
   const Mat* goodLocationsX_dest, const Mat* goodLocationsY_dest, const Mat* scores_dest, const Mat* pairwise_dis_dest, 
+  const Mat* angle_diff,
   double corr_thresh, int minInliers, int numInliersMax, double cornerComparisonThreshold, double minx, double maxx, double miny, double maxy)
  {
+  int counter = 0;
   Mat* bestHMatrix = new Mat(Mat::zeros(numInliersMax,10,CV_64F));
-  Mat A_inv, b, H, temp, concatWithOnes, transformed_src, reshapedTransformation, reshaped, subSelected, compareResult;
+  Mat A_inv, b, H, temp, concatWithOnes, transformed_src, reshapedTransformation, reshaped, subSelected, compareResult, compareAngle, compareAngle2, bestAngle, goodAngle;
   Point2d src_pt1, src_pt2, dest_pt1, dest_pt2;
   Point minLoc; Point maxLoc;
   int numTransfSoFar = 0;
@@ -574,6 +578,7 @@ extern "C" {
         getHomographyFromAb(&A_inv, &b, &H);
         //ignore if scaled!
         double scale = H.at<double>(0,0)* H.at<double>(0,0)+H.at<double>(0,1)*H.at<double>(0,1);
+        double angle_b = atan2(H.at<double>(1,0),H.at<double>(0,0))+M_PI;
         if(scale>.98 && scale<=1.00001) 
         {
           vconcat((*scores_src).t(),Mat::ones(1,scores_src->rows, scores_src->type()), concatWithOnes);
@@ -582,40 +587,30 @@ extern "C" {
             //When the comparison result is true, the corresponding element of output array is set to 255.
           getPairwiseDistances(&transformed_src, scores_dest, &temp);
           compareResult = temp <= corr_thresh;
-          long num_inliers = sum(compareResult)[0]/255;
+          
+          subtract(*angle_diff, angle_b, compareAngle);
+          compareAngle2 = compareAngle*-1+2*M_PI;
+          compareAngle = abs(compareAngle);
+          compareAngle2 = abs(compareAngle2);
+          min(compareAngle, compareAngle2, bestAngle);
 
-          /*
-            bool onetoone = (temp.at<double>(pt1_src, pt1_dest) < corr_thresh/2) && (temp.at<double>(pt2_src, pt2_dest) < corr_thresh/2);
-            double num_inliers = 0;
-            for(int i = 0; i < temp.rows; i++) {
-                for(int j=0; j < temp.cols; j++) {
-                    if (temp.at<double>(i,j) < corr_thresh) {
-                        double d_dest1 = (*pairwise_dis_dest).at<double>(pt1_dest, j);
-                        double d_dest2 = (*pairwise_dis_dest).at<double>(pt2_dest, j);
-                        double d_src1 = (*pairwise_dis_src).at<double>(pt1_src, i);
-                        double d_src2 = (*pairwise_dis_src).at<double>(pt2_src, i);
-                        
-                        if (onetoone && (abs(d_dest1-d_src1)<corr_thresh) && (abs(d_dest2-d_src2)<corr_thresh)) {
-                            num_inliers++;
-                        } else if ((~onetoone) && (abs(d_dest1-d_src2)<corr_thresh) && (abs(d_dest2-d_src1)<corr_thresh)) {
-                            num_inliers++;
-                        }
-                    }
-                }
-            }
-    */
+          goodAngle = bestAngle <= (10*M_PI/180);
+          //compareResult = (compareResult/255 +goodAngle/255)== 2;
+          long num_inliers = sum(compareResult)[0]/255; //or compareResult
           double minVal; double maxVal; 
           minMaxLoc( bestHMatrix->colRange(0,1), &minVal, &maxVal, &minLoc, &maxLoc);
          
           if(num_inliers > minVal && num_inliers >= minInliers) {
+            counter = counter+1;
             bool shouldUse = true;
             reshaped = H.reshape(1,1);
 
             for (int tn = 0; tn < numTransfSoFar; tn++) 
             {
               reshapedTransformation = (*bestHMatrix)(Range(tn,tn+1), Range(1,10)).reshape(1,3);
-              if (isSameTransformation(&reshapedTransformation, &H, minx, maxx, miny, maxy, cornerComparisonThreshold))
+              if (false)  //(isSameTransformation(&reshapedTransformation, &H, minx, maxx, miny, maxy, cornerComparisonThreshold))
               {
+                cout << "is same transformation" << endl;
                 if(num_inliers > bestHMatrix->at<double>(tn,0)) 
                 {
                   (*bestHMatrix)(Range(tn,tn+1), Range(1,10)) = reshaped;
@@ -648,63 +643,6 @@ extern "C" {
  return new Mat(bestHMatrix->rowRange(0,numTransfSoFar));
 }
 
-void flann_knn(Mat* m_object, Mat* m_destinations, int knn, Mat* m_indices, Mat* m_dists) {
-    // find nearest neighbors using FLANN
-    //cv::Mat m_indices(m_object->rows, 1, CV_32S);
-    //cv::Mat m_dists(m_object->rows, 1, CV_32F);
- 
-    Mat dest_32f; (*m_destinations).convertTo(dest_32f,CV_32FC2);
-    Mat obj_32f; (*m_object).convertTo(obj_32f,CV_32FC2);
- 
-    assert(dest_32f.type() == CV_32F);
- 
-    cv::flann::Index flann_index(dest_32f, cv::flann::KDTreeIndexParams(2));  // using 2 randomized kdtrees
-    flann_index.knnSearch(obj_32f, *m_indices, *m_dists, knn, cv::flann::SearchParams(64) ); 
- 
-  }
-
-void flann_radius(Mat* m_object, Mat* m_destinations, double radius, int maxresults, Mat* m_indices, Mat* m_dists) {
-    // find nearest neighbors using FLANN
-    //cv::Mat m_indices(m_object->rows, 1, CV_32S);
-    //cv::Mat m_dists(m_object->rows, 1, CV_32F);
- 
-    Mat dest_32f; (*m_destinations).convertTo(dest_32f,CV_32FC2);
-    Mat obj_32f; (*m_object).convertTo(obj_32f,CV_32FC2);
- 
-    assert(dest_32f.type() == CV_32F);
- 
-    cv::flann::Index flann_index(dest_32f, cv::flann::KDTreeIndexParams(2));  // using 2 randomized kdtrees
-    flann_index.radiusSearch(obj_32f, *m_indices, *m_dists, radius, maxresults, cv::flann::SearchParams(64) ); 
- 
-}
-
-
-void get_orientation(Mat* src, int ksize, Mat* mag, Mat* orientaiton)
-{
-
-    Mat Sx;
-    Sobel(*src, Sx, src->type(), 1, 0, ksize);
-
-    Mat Sy;
-    Sobel(*src, Sy, src->type(), 0, 1, ksize);
-
-    magnitude(Sx, Sy, *mag);
-    phase(Sx, Sy, *orientaiton, true);
-
-}
-
-Mat* phaseCorrelate(Mat *src, Mat *dst) 
-{
-  double score;
-  Point2d result= phaseCorrelateRes(*src, *dst, noArray(), &score);
-  Mat* ret = new Mat(3,1, src->type());
-  ret->at<double>(0,0) = result.x;
-  ret->at<double>(1,0) = result.y;
-  ret->at<double>(2,0) = score;
-  
-  return ret;
-}
-
 void flood_fill(Mat* img, Mat* result, int x, int y)
 {
   uchar fillValue = 1;
@@ -721,49 +659,6 @@ static double angle( Point pt1, Point pt2, Point pt0 )
     double dy2 = pt2.y - pt0.y;
     return (dx1*dx2 + dy1*dy2)/sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10);
 }
-
-
-/* Old find_contours
-Mat* find_contours(Mat* image)
-{
-    vector<vector<Point> > contours;
-    Mat canny;
-    int thresh = 100;
-        // try several threshold levels
-   // Canny( *image, canny, thresh, thresh*2, 3 );
-
-
-    // Find contours and store them in a list
-    findContours(*image, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
-
-    // Test contours
-    vector<Point> approx;
-    for (size_t i = 0; i < contours.size(); i++)
-    {
-      cout << "contour found " << contours[i] << endl;
-            // approximate contour with accuracy proportional
-            // to the contour perimeter
-            approxPolyDP(Mat(contours[i]), approx, arcLength(Mat(contours[i]), true)*0.02, true);
-            cout << "contour found YES" << approx << endl;
-
-            // Note: absolute value of an area is used because
-            // area may be positive or negative - in accordance with the
-            // contour orientation
-            if (fabs(contourArea(Mat(approx))) > 1000 &&
-                    //fabs(contourArea(Mat(approx))) > 1000 &&
-                    isContourConvex(Mat(approx)))
-            {
-                Mat fun(Mat::zeros(approx.size(),2,CV_64F));
-                for(int i=0; i < approx.size(); i++){
-                  fun.at<double>(i,0) = approx[i].x;
-                  fun.at<double>(i,1) = approx[i].y;
-                }
-                return new Mat(fun);
-            }
-    }
-    return new Mat(Mat::zeros(0,0,CV_64F));
-}
-*/
 
 int find_contours(Mat* image, THDoubleTensor* th_contours, THDoubleTensor* th_segment_inds )
 {
@@ -881,10 +776,16 @@ double getBarycentricCoordinatesDistance(Mat* coord, int row, int c1, int c2, in
   g3 = max(min(g3,1.0),0.0);
 
   double sum = g1+g2+g3;
+  if(abs(sum)<10^-6) {
+    g1 = 1;
+    g2 =0;
+    g3 = 0;
+
+    sum = 1;    
+  }
   g1 = g1/sum;
   g2 = g2/sum;
   g3 = g3/sum;
-
 
   return g1*d1+g2*d2+g3*d3;
 
@@ -958,35 +859,6 @@ void resize(Mat* src, Mat* dst, double factor)
 
 } 
 
-Mat* DFT(Mat*src)
-{
-    Mat padded;                            //expand input image to optimal size
-    int m = getOptimalDFTSize( src->rows );
-    int n = getOptimalDFTSize( src->cols ); // on the border add zero values
-    copyMakeBorder(*src, padded, 0, m - src->rows, 0, n - src->cols, BORDER_CONSTANT, Scalar::all(0));
-
-    Mat planes[] = {Mat_<float>(padded), Mat::zeros(padded.size(), CV_32F)};
-    Mat complexI;
-    merge(planes, 2, complexI);         // Add to the expanded another plane with zeros
-
-    dft(complexI, complexI);            // this way the result may fit in the source matrix
-
-    // compute the magnitude and switch to logarithmic scale
-    // => log(1 + sqrt(Re(DFT(I))^2 + Im(DFT(I))^2))
-    split(complexI, planes);                   // planes[0] = Re(DFT(I), planes[1] = Im(DFT(I))
-    magnitude(planes[0], planes[1], planes[0]);// planes[0] = magnitude
-    Mat magI = planes[0];
-
-    magI += Scalar::all(1);                    // switch to logarithmic scale
-    log(magI, magI);
-
-    // crop the spectrum, if it has an odd number of rows or columns
-    magI = magI(Rect(0, 0, magI.cols & -2, magI.rows & -2));
-    Mat * clone = new Mat(magI.dims,magI.size[0],magI.type());
-    magI.copyTo(*clone);
-    return clone;
-}
-
 void threshold(Mat* src,  Mat*dst) {
   threshold(*src, *dst, 0, 1, CV_THRESH_OTSU);
 }
@@ -999,8 +871,4 @@ Mat* rotateImage(const Mat* src, Mat* dst, double angle, double centerC, double 
 
   }
 
-  Mat* inpaint(Mat* src, Mat* mask, Mat*dst, double radius, bool method)
-{
-  inpaint(*src, *mask, *dst, radius, method ? INPAINT_NS : INPAINT_TELEA);
-}
 } // extern "C"

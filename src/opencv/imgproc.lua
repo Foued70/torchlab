@@ -18,22 +18,6 @@ function warpImage(img, homography, size_x, size_y)
    return opencv.Mat.new(opencv_ffi.warpImage(img.mat, homography.mat, size_x, size_y))
 end
 
--- <input> image1, image2, homography
--- <output> combined images -1st channel is warped and translated image
-function combineImages(img1, img2, homography)
-   if ((not img1.mat) or (type(img1.mat) ~= "cdata")) then 
-      error("problem with src image")
-   end
-   if ((not img2.mat) or (type(img2.mat) ~= "cdata")) then 
-      error("problem with dest image")
-   end
-   if ((not homography.mat) or (type(homography.mat) ~= "cdata")) then 
-      error("problem with homography matrix")
-   end
-   error("not implemented")
-   --return opencv.Mat.new(opencv_ffi.combineImages(img1.mat, img2.mat, homography.mat, result_size_x, result_size_y, result_center_x, result_center_y))
-end
-
 -- <input> img, blockSize, ksize, k
 -- <output> Mat of responses at every location
 function detectCornerHarris(img,blockSize,ksize, k)
@@ -120,7 +104,9 @@ function getPairwiseDistances(A, B)
    return opencv.Mat.new(opencv_ffi.getPairwiseDistances(A.mat,B.mat))
 end
 
-function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_src, pairwise_dis_src, goodLocationsX_dest, goodLocationsY_dest, scores_dest, pairwise_dis_dest, corr_thresh,
+function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_src, pairwise_dis_src, goodLocationsX_dest, goodLocationsY_dest, scores_dest, pairwise_dis_dest, 
+      angle_diff,
+      corr_thresh,
       minInliers, numInliersMax, cornerComparisonThreshold, minx, maxx, miny, maxy)
    if ((not goodLocationsX_src.mat) or (type(goodLocationsX_src.mat) ~= "cdata")) then 
       error("problem with source locations Mat - first argument")
@@ -172,7 +158,7 @@ function findBestTransformation(goodLocationsX_src, goodLocationsY_src, scores_s
       error("problem with y size - 16th argument")
    end
    matOfStuff= opencv.Mat.new(opencv_ffi.findBestTransformation(goodLocationsX_src.mat, goodLocationsY_src.mat, scores_src.mat, 
-      pairwise_dis_src.mat, goodLocationsX_dest.mat, goodLocationsY_dest.mat, scores_dest.mat, pairwise_dis_dest.mat, corr_thresh,
+      pairwise_dis_src.mat, goodLocationsX_dest.mat, goodLocationsY_dest.mat, scores_dest.mat, pairwise_dis_dest.mat, angle_diff.mat, corr_thresh,
       minInliers, numInliersMax, cornerComparisonThreshold, minx, maxx, miny, maxy))
    
    best_transformations = {};
@@ -238,33 +224,6 @@ function erode(img, structuringElement)
       error("problem with structuring element images")
    end
    opencv_ffi.erode(img.mat, structuringElement.mat);
-end
-
---erode the img 
-function getOrientation(img, ksize)
-   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
-      error("problem with input images")
-   end
-   if (not ksize) then 
-      ksize = 3
-   end
-   ori = opencv.Mat.new()
-   mag = opencv.Mat.new()
-   opencv_ffi.get_orientation(img.mat, ksize, ori.mat, mag.mat);
-   return ori, mag
-end
-
-
---erode the img 
-function phaseCorrelate(img, dest)
-   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
-      error("problem with input images")
-   end
-   if ((not dest.mat) or (type(dest.mat) ~= "cdata")) then 
-      error("problem with dest image")
-   end
-
-   return opencv.Mat.new(opencv_ffi.phaseCorrelate(img.mat, dest.mat));
 end
 
 function floodFill(img, x,y)
@@ -372,14 +331,6 @@ function resize(img, factor)
    return dest
 end
 
-function DFT(img)
-   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
-      error("problem with input images")
-   end
-   dest = opencv.Mat.new(opencv_ffi.DFT(img.mat))
-   return dest
-end
-
 function threshold(img)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input images")
@@ -396,18 +347,6 @@ function rotateImage(img, deg, centerX, centerY, size_x, size_y)
    dst = opencv.Mat.new(torch.zeros(size_x, size_y))  
    print(centerX-1, centerY-1)
    opencv_ffi.rotateImage(img.mat, dest.mat, deg, centerY-1, centerX-1, size_x, size_y)
-   return dest
-end
-
-function inpaint(img, mask, radius, method)
-   if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
-      error("problem with input images")
-   end
-   if ((not mask.mat) or (type(mask.mat) ~= "cdata")) then 
-      error("problem with mask images")
-   end
-   dst = opencv.Mat.new(torch.zeros(img:size(1), img:size(2)))  
-   opencv_ffi.inpaint(img.mat, mask.mat, dest.mat, radius or 3, method or true)
    return dest
 end
 
