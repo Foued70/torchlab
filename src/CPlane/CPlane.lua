@@ -231,7 +231,7 @@ function extract_planes_random( scan_num )
 
 	min_region_size = 250
 
-	n_planes = 500
+	n_planes = 200
 	coverage_thresh = 0.92 -- TODO: have a pointcloud coverage threshold 
 
 	errors, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
@@ -429,6 +429,7 @@ function extract_planes_random( scan_num )
 	image.display(samples_im)
 	]]--
 
+	--[[
 	gnuplot.figure(1)
 	gnuplot.title("Plane Residuals")
 	gnuplot.plot(plane_residuals)
@@ -440,6 +441,7 @@ function extract_planes_random( scan_num )
 	gnuplot.figure(3)
 	gnuplot.title("Plane Curvatures")
 	gnuplot.plot(plane_curvatures)
+	]]--
 
 
 end	

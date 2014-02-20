@@ -279,9 +279,20 @@ end
 function  find_contours(img)
    if ((not img.mat) or (type(img.mat) ~= "cdata")) then 
       error("problem with input images")
+   end   
+
+   contours = torch.Tensor({})
+   segment_inds = torch.Tensor({})
+   n_contours = opencv_ffi.find_contours(img.mat, torch.cdata(contours), torch.cdata(segment_inds) ) 
+
+   -- Rearrange data and place in a table
+   contours_tbl = {}
+   for i = 1,segment_inds:nElement()-1 do 
+      contour = contours:sub(segment_inds[i]+1, segment_inds[i+1]+1,1,2)
+      table.insert( contours_tbl, contour )      
    end
-   dest = opencv_ffi.find_contours(img.mat)
-   return opencv.Mat.new(dest)
+
+   return contours_tbl
 end
 
 function distanceTransform(img)

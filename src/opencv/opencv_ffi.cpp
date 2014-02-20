@@ -1,6 +1,7 @@
 /* extern "C" makes the functions callable from C */
 extern "C"
 {
+#include "lua.h"
 #include "TH.h"
 }
 
@@ -722,6 +723,7 @@ static double angle( Point pt1, Point pt2, Point pt0 )
 }
 
 
+/* Old find_contours
 Mat* find_contours(Mat* image)
 {
     vector<vector<Point> > contours;
@@ -760,6 +762,46 @@ Mat* find_contours(Mat* image)
             }
     }
     return new Mat(Mat::zeros(0,0,CV_64F));
+}
+*/
+
+int find_contours(Mat* image, THDoubleTensor* th_contours, THDoubleTensor* th_segment_inds )
+{
+    vector< vector<Point> > contours;    
+    findContours(*image, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+
+    // No contours available
+    if ( contours.size() == 0) {
+      return 0;
+    }
+
+    // Identify total number of elements
+    int total_size = 0;
+    for ( int i=0; i<contours.size(); i++ ) {
+      total_size += contours[i].size();
+    }
+
+    // Allocate memory 
+    THDoubleTensor_resize2d( th_contours, total_size, 2 );
+    double* contours_data = THDoubleTensor_data( th_contours );
+
+    THDoubleTensor_resize1d( th_segment_inds, contours.size()+1 );
+    double* segment_inds = THDoubleTensor_data( th_segment_inds ); 
+
+    // Output segment_inds and contours 
+    std::vector<Point> contour;
+    int current_seg_ind = 0;
+    for ( int i=0; i<contours.size(); i++ ) {      
+      segment_inds[i] = current_seg_ind;
+      contour = contours[i];      
+      for ( int j=0; j<contour.size(); j++ ) {
+        contours_data[2*current_seg_ind+0] = contour[j].x;
+        contours_data[2*current_seg_ind+1] = contour[j].y;
+        current_seg_ind++;
+      }
+    }
+    segment_inds[contours.size()] = current_seg_ind-1;
+    return contours.size();
 }
 
 void distance_transform(Mat* img, Mat* result)
