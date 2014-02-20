@@ -207,33 +207,12 @@ function SweepPair:find_best_floor(H)
     self:set_z_transformation(startingTransformation + i*100) 
     self:set_icp_transformation(torch.eye(4))      
     self.threed_validation_score_nicp  = -1
+    local bestSoFar = startingTransformation
+
     local score = self:get_3d_validation_score(true,10)
-    if not(score[1]>.9 and score[4]>.1) then
-      for i = -5, 5 do
-        if(i~=0) then
-          self:set_z_transformation(startingTransformation + i*100) 
-          self:set_icp_transformation(torch.eye(4))      
-          self.threed_validation_score_nicp  = -1
-          local score = self:get_3d_validation_score(true,10)
-          if (score[1]+3*score[4] > bestIValue) then
-            print("best i", 100*i, score[1], score[4])
-            bestI = 100*i
-            bestIValue = score[1]+3*score[4]
-          end
-        end
-      end
-      local shouldTryMore = false
-      local startRange = 1 
-      local endRange  = 1
-      if(bestI == -500) then
-        startRange = -20
-        endRange = -6
-      elseif(bestI==500) then
-        startRange = 6
-        endRange = 20
-      end
-      if(shouldTryMore) then
-        for i = startRange, endRange do
+    if not(score[1]<.5 or score[4]<.03) then
+      if not(score[1]>.9 and score[4]>.1) then
+        for i = -5, 5 do
           if(i~=0) then
             self:set_z_transformation(startingTransformation + i*100) 
             self:set_icp_transformation(torch.eye(4))      
@@ -246,24 +225,52 @@ function SweepPair:find_best_floor(H)
             end
           end
         end
+        local shouldTryMore = false
+        local startRange = 1 
+        local endRange  = 1
+        if(bestI == -500) then
+          startRange = -20
+          endRange = -6
+          shouldTryMore = true
+        elseif(bestI==500) then
+          startRange = 6
+          endRange = 20
+          shouldTryMore = true
+        end
+        if(shouldTryMore) then
+          print("expanding range")
+          for i = startRange, endRange do
+            if(i~=0) then
+              self:set_z_transformation(startingTransformation + i*100) 
+              self:set_icp_transformation(torch.eye(4))      
+              self.threed_validation_score_nicp  = -1
+              local score = self:get_3d_validation_score(true,10)
+              if (score[1]+3*score[4] > bestIValue) then
+                print("best i", 100*i, score[1], score[4])
+                bestI = 100*i
+                bestIValue = score[1]+3*score[4]
+              end
+            end
+          end
+        end
       end
-    end
-    local bestSoFar = startingTransformation + bestI
-      self:set_z_transformation(bestSoFar) 
+      bestSoFar = startingTransformation + bestI
+        self:set_z_transformation(bestSoFar) 
 
-    local score = self:get_3d_validation_score(true,10)
-    bestI = 0
-    if not(score[1]<.6 or score[4]<.05) then
-      for i = -2,2 do
-        if(i~=0) then
-          self:set_z_transformation(bestSoFar+ i*20) 
-          self:set_icp_transformation(torch.eye(4))      
-          self.threed_validation_score_nicp  = -1
-          score = self:get_3d_validation_score(true,10)
-          if (score[1]+3*score[4] > bestIValue)  then
-            print("best i", 20*i, score[1], score[4])
-            bestI = 20*i
-            bestIValue = score[1]+3*score[4]
+      local score = self:get_3d_validation_score(true,10)
+      bestI = 0
+      if not(score[1]<.6 or score[4]<.05) then
+        for i = -2,2 do
+          if(i~=0) then
+            self:set_z_transformation(bestSoFar+ i*20) 
+            self:set_icp_transformation(torch.eye(4))      
+            self.threed_validation_score_nicp  = -1
+            score = self:get_3d_validation_score(true,10)
+            if (score[1]+3*score[4] > bestIValue)  then
+              print("best i", 20*i, score[1], score[4])
+              bestI = 20*i
+              bestIValue = score[1]+3*score[4]
+            end
           end
         end
       end
@@ -321,26 +328,26 @@ end
 --this would involve some sort of kdtree or octtree, which if we are making anyway, we should use, but otherwise is 
 --too slow if just for this
 function SweepPair.find_score(f1, f2, n1, n2, thresh_1)
-  local mask = torch.ne(f2,0):cmul(torch.ne(f1,0))
+   mask = torch.ne(f2,0):cmul(torch.ne(f1,0))
 
 
-  local bottomSelectorN =torch.conv2(f1, torch.Tensor({0,1,0,0,0,0,0,0,0}):reshape(3,3),'F'):sub(2,-2,2,-2)
-  local topSelectorN =torch.conv2(f1, torch.Tensor({0,0,0,0,0,0,0,1,0}):reshape(3,3),'F'):sub(2,-2,2,-2)
-  local rightSelectorN = torch.conv2(f1, torch.Tensor({0,0,0,1,0,0,0,0,0}):reshape(3,3),'F'):sub(2,-2,2,-2)
-  local leftSelectorN = torch.conv2(f1, torch.Tensor({0,0,0,0,0,1,0,0,0}):reshape(3,3), 'F'):sub(2,-2,2,-2)
+   bottomSelectorN =torch.conv2(f1, torch.Tensor({0,1,0,0,0,0,0,0,0}):reshape(3,3),'F'):sub(2,-2,2,-2)
+  topSelectorN =torch.conv2(f1, torch.Tensor({0,0,0,0,0,0,0,1,0}):reshape(3,3),'F'):sub(2,-2,2,-2)
+   rightSelectorN = torch.conv2(f1, torch.Tensor({0,0,0,1,0,0,0,0,0}):reshape(3,3),'F'):sub(2,-2,2,-2)
+  leftSelectorN = torch.conv2(f1, torch.Tensor({0,0,0,0,0,1,0,0,0}):reshape(3,3), 'F'):sub(2,-2,2,-2)
 
-  local selector_mask = bottomSelectorN:clone():cmul(topSelectorN):clone():cmul(rightSelectorN):clone():cmul(leftSelectorN)
-  local good_loc = torch.ne(selector_mask, 0)
-  local largest_neighbor = torch.cat(torch.cat(torch.cat(bottomSelectorN,topSelectorN,3),rightSelectorN,3),leftSelectorN,3):max(3):squeeze()-f1
-  local mask = mask:cmul(good_loc):cmul(torch.lt(largest_neighbor,thresh_1))
-  local f1_zeroed = f1:clone():cmul(mask:double())
-  local f2_zeroed = f2:clone():cmul(mask:double())
+  selector_mask = bottomSelectorN:clone():cmul(topSelectorN):clone():cmul(rightSelectorN):clone():cmul(leftSelectorN)
+  good_loc = torch.ne(selector_mask, 0)
+   largest_neighbor = torch.cat(torch.cat(torch.cat(bottomSelectorN,topSelectorN,3),rightSelectorN,3),leftSelectorN,3):max(3):squeeze()-f1
+  mask = mask:cmul(good_loc):cmul(torch.lt(largest_neighbor,thresh_1))
+   f1_zeroed = f1:clone():cmul(mask:double())
+   f2_zeroed = f2:clone():cmul(mask:double())
 
-  local close_pts = (torch.le(torch.abs(f1_zeroed-f2_zeroed),thresh_1):sum()- (torch.eq(torch.eq(f1_zeroed,0) + torch.eq(f2_zeroed,0),2):sum()))
-  local deg = util_sweep.angle_between(n1,n2):reshape(f1:size(1),f1:size(2))*180/math.pi
+   close_pts = (torch.le(torch.abs(f1_zeroed-f2_zeroed),thresh_1):sum()- (torch.eq(torch.eq(f1_zeroed,0) + torch.eq(f2_zeroed,0),2):sum()))
+   deg = util_sweep.angle_between(n1,n2):reshape(f1:size(1),f1:size(2))*180/math.pi
   deg:cmul(mask:double())  
   
-  local close_pts_normals = ((torch.le(torch.abs(f1_zeroed-f2_zeroed),thresh_1):cmul(torch.lt(deg,45))):cmul(mask):sum())
+  close_pts_normals = ((torch.le(torch.abs(f1_zeroed-f2_zeroed),thresh_1):cmul(torch.lt(deg,45))):cmul(mask):sum())
   return torch.le(f1_zeroed-f2_zeroed,thresh_1):cmul(mask):sum()/mask:sum(), 
           torch.ne(f1_zeroed,0):sum()/torch.gt(f1,0):sum(), 
           close_pts/torch.gt(f1_zeroed,0):sum(),
@@ -369,6 +376,10 @@ function SweepPair:get_3d_validation_score(noticp, thresh_res, H_i)
     local H =H_i or self:get_transformation(false, noticp, false)
     local f1,norm1 = self:get_sweep1():get_depth_image_from_perspective(nil)
     local f2, norm2 = self:get_sweep2():get_depth_image_from_perspective(H)
+    _G.f1 = f1
+    _G.f2 = f2
+    _G.n1 = norm1
+    _G.n2 = norm2
     local numRight1, portionSeen1, closePts1, nclosePts1 = SweepPair.find_score(f1, f2, norm1, norm2, thresh_1)
     center = H:sub(1,3,4,4):squeeze()
     local f2, norm2 = self:get_sweep2():get_depth_image_from_perspective(nil)

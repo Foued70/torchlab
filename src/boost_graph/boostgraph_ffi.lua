@@ -8,6 +8,7 @@ ffi  = require 'ffi'
 
 ffi.cdef [[
 void get_graph_shortest_path(THDoubleTensor* points, int initializer, THDoubleTensor* result);
+void get_mst(THDoubleTensor* points, THDoubleTensor* result);
 ]]
 
 return util.ffi.load("libboostgraph_ffi")

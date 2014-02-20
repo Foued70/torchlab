@@ -138,3 +138,7 @@ function pairwise_distance(A, B)
    local dis_square = A_new + B_new - torch.mul(A*B:t(), 2)
    return dis_square:apply(math.sqrt)
 end
+
+function get_angle_from_matrix(H)
+   return math.atan2(H[2][1],H[1][1])
+end

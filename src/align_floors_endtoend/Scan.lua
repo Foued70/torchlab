@@ -145,6 +145,8 @@ end
 
 function Scan:attempt_to_align_pair(s_ij)
     print('Attempting to align ' .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
+    collectgarbage()
+
     local success    
     s_ij:set_best_picked_diff_transformation()
     local score =  s_ij:get_3d_validation_score(true, 10)
@@ -161,7 +163,6 @@ function Scan:attempt_to_align_pair(s_ij)
         print("GOOD ALIGNMENT---------" .. s_ij:get_sweep1():get_name() .. " and " .. s_ij:get_sweep2():get_name())
         return true, s_ij
     end
-    collectgarbage()
 end
 
 function Scan:attempt_to_align(i, j)
