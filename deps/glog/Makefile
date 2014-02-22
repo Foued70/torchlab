@@ -15,7 +15,7 @@ all:$(install)
 
 
 $(install): $(unpack)
-	cd $(unpack); ./configure $(args)
+	cd $(unpack); CC=gcc-4.8 CXX=g++-4.8 ./configure $(args)
 	cd $(unpack); make install
 
 $(unpack): $(tar_file)

@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-ver=4.0.2
+ver=4.2.1
 
 
 url=http://www.cise.ufl.edu/research/sparse/SuiteSparse/SuiteSparse-$(ver).tar.gz

@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-tag=1.7.0
+tag=1.7.1
 
 git_src=git@github.com:PointCloudLibrary/pcl.git
 
@@ -10,7 +10,11 @@ git_clone=$(build_dir)/deps/pcl
 install=$(install_root)/lib/libpcl_common.dylib
 
 
-args = $(default_cmake_args)
+#args = $(default_cmake_args)
+args = \ $(default_cmake_args) \
+	-D CMAKE_C_COMPILER:PATH=/usr/bin/gcc \
+	-D CMAKE_CXX_COMPILER:PATH=/usr/bin/g++ \
+	-D CMAKE_CXX_FLAGS:STRING="-stdlib=libstdc++ -ftemplate-depth=1024" 
 
 all: $(install)
 
@@ -18,7 +22,7 @@ all: $(install)
 $(install): $(git_clone)
 	cd $(git_clone); mkdir -p build
 	cd $(git_clone)/build; cmake $(args) ..
-	cd $(git_clone)/build; make -j4 install
+	cd $(git_clone)/build; make install VERBOSE=1
 
 $(git_clone):
 	git clone $(git_src) $(git_clone)
