@@ -8,7 +8,6 @@ function FlattenedPlaneNew:__init(pc, eqn, mask, transf)
     if(not(pc) or not(eqn)) then
         error("need pc and equation as input")
     end
-    print("here")
     self.resolution = 10
     self.transformations = transf or {torch.eye(4), torch.eye(4)}
     self.maskP = mask or torch.ones(pc:get_depth_map():size())
@@ -79,22 +78,17 @@ function FlattenedPlaneNew:add_plane(pc)
 
     local occupied  = torch.Tensor()
     if(occupiedI:sum()>0) then
-        occupied = util.torch.select3d(plane,occupiedI)
+        occupied = util.torch.select3d(points,occupiedI)
     end
-    print(eqn)
     --our hypothesized plane is more than 5 cm closer to us than the real point, it is going through empty!
     --[[ if want to project onto plane, instead of assume position is on plane ]]
-    _G.points = points
-    _G.eqn = eqn
-    _G.nmsk = nmsk
-    _G.occupiedI = occupiedI
     local emptiesI = torch.gt(points*eqn:sub(1,3)+eqn:sub(4,4):squeeze(), self.thresh*1000):reshape(nmsk:size()):cmul(occupiedI*-1+1):cmul(nmsk)
   --if want distance along ray we are shooting from camera
 --    local emptiesI = torch.lt(planed:clone():norm(2,1):squeeze()-plane_reald, -self.thresh*1000):cmul(occupiedI*-1+1):cmul(nmsk)
     
     local empties  = torch.Tensor()
     if(emptiesI:sum()>0) then
-        empties = util.torch.select3d(plane,emptiesI)
+        empties = util.torch.select3d(points,emptiesI)
     end
     
     
@@ -107,6 +101,7 @@ function FlattenedPlaneNew:add_plane(pc)
     self.plane = plane
     self.planed = planed
     self.plane_reald = plane_reald
+    self.points = points
     self.emptiesI = emptiesI
     self.occupiedI = occupiedI
     self.mask = nmsk
@@ -121,7 +116,7 @@ function FlattenedPlaneNew:add_plane(pc)
         self.rnotnils = geom.quaternion.rotate(self.quat,notnils:contiguous())
     end    
     
-    self:add_all_frustrum_and_empties()
+    --self:add_all_frustrum_and_empties()
     collectgarbage()
 end
 
@@ -192,7 +187,7 @@ function FlattenedPlaneNew.get_plane_view_from_center(eqn,H, pc)
     local temp_pt = center:reshape(1,3):repeatTensor(transposedPts:size(1),1)+mvdCenter:clone():cmul(z_new:repeatTensor(3,1):t())
     local good_index2 = torch.ones(good_index:size()):byte() 
     local xyz_minval, xyz_maxval, xyz_radius = pc:get_xyz_stats()
-    good_index2 =torch.lt((temp_pt-center:reshape(1,3):repeatTensor(temp_pt:size(1),1)):norm(2,2):squeeze(), (xyz_radius:clone():norm()*20))
+    good_index2 =torch.lt((temp_pt-center:reshape(1,3):repeatTensor(temp_pt:size(1),1)):norm(2,2):squeeze(), (xyz_radius:clone():norm()*2))
     local good_index3 = torch.eq(torch.lt(temp_pt:clone():sum(2), math.huge):double() + torch.gt(temp_pt:clone():sum(2),math.huge):double(),1):squeeze()
     local cum_good = torch.eq(good_index+good_index2+good_index3+vmsk,4)
     cum_good = (cum_good*-1+1)
@@ -257,21 +252,22 @@ function FlattenedPlaneNew:add_arbitrary_frustrum(cornersI, onlyOnThisOne)
         local topSelectorN =torch.conv2(t_new, torch.Tensor({0,0,0,0,0,0,0,1,0}):reshape(3,3):byte(),'F'):sub(2,-2,2,-2)
         local rightSelectorN = torch.conv2(t_new, torch.Tensor({0,0,0,1,0,0,0,0,0}):reshape(3,3):byte(),'F'):sub(2,-2,2,-2)
         local leftSelectorN = torch.conv2(t_new, torch.Tensor({0,0,0,0,0,1,0,0,0}):reshape(3,3):byte(), 'F'):sub(2,-2,2,-2)
-        local plane = self.plane
-        local occupied = util.torch.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),cornersI)
+        local plane = self.points
+        local eqn  = self:get_our_plane_equation()
+        local dis_to_plane = plane*eqn:sub(1,3)+eqn:sub(4,4):squeeze()
+        plane = plane:t():reshape(self.plane:size())
+        local occupied = util.torch.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),cornersI)
         local roccupied= geom.quaternion.rotate(self.quat,occupied:contiguous())
-        local dis_to_plane = self.planed:clone():norm(2,1):squeeze()-self.plane_reald
         local d = dis_to_plane[cornersI]
         if(t_new:sum()==0) then
-
             local flat, flatD = FlattenedPlaneNew.flattened2Image((roccupied:sub(1,-1,1,2)/self.resolution), minT, maxT, d)
             return flat, flat, flatD, flatD
         end
-        local occupiedUs = util.torch.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),t_new)
-        local occupiedL = util.torch.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),leftSelectorN)
-        local occupiedR = util.torch.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),rightSelectorN)
-        local occupiedT = util.torch.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),topSelectorN)
-        local occupiedB = util.torch.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),bottomSelectorN)
+        local occupiedUs = util.torch.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),t_new)
+        local occupiedL = util.torch.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),leftSelectorN)
+        local occupiedR = util.torch.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),rightSelectorN)
+        local occupiedT = util.torch.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),topSelectorN)
+        local occupiedB = util.torch.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),bottomSelectorN)
         if(occupiedL:dim()> 0 and occupiedUs:size(1)>1) then
             local roccupiedUs= geom.quaternion.rotate(self.quat,occupiedUs:contiguous())
             local roccupied= geom.quaternion.rotate(self.quat,occupied:contiguous())
@@ -346,13 +342,13 @@ function FlattenedPlaneNew:add_all_frustrum_and_empties(redo)
         end
     end
 end
-function FlattenedPlaneNew:set_min_and_max(min,max)
-    self.min =min
-    self.max = max
+function FlattenedPlaneNew:set_min_and_max(minV,maxV)
+    self.minV =minV
+    self.maxV = maxV
 end
 
 function FlattenedPlaneNew:calculate_min_and_max_t()
-    if(not(self.min)) then
+    if(not(self.minV)) then
         local minT,maxT = FlattenedPlaneNew.calculate_min_and_max(self.rempties)
         minT,maxT = FlattenedPlaneNew.calculate_min_and_max(self.roccupied,minT, maxT)
         
@@ -362,7 +358,7 @@ function FlattenedPlaneNew:calculate_min_and_max_t()
         self.maxT = maxT:ceil()
         return self.minT, self.maxT
     else
-        return self.min, self.max
+        return self.minV, self.maxV
     end
 end
 
@@ -390,7 +386,6 @@ function FlattenedPlaneNew:get_in_range(rcorners)
 end
 
 function FlattenedPlaneNew.flattened2Image(flattenedxy, minT, maxT, dis)
-
     flattenedxy = flattenedxy-torch.repeatTensor(minT, flattenedxy:size(1), 1)+1   
     local size_us = (maxT:ceil()-minT:floor()+1):reshape(2)
     local combined = torch.zeros(size_us[1]* size_us[2]):byte()
@@ -401,7 +396,6 @@ function FlattenedPlaneNew.flattened2Image(flattenedxy, minT, maxT, dis)
         flattenedxy = flattenedxy:index(1,order)
     end
     local indexV =  (((flattenedxy:t()[1]-1)*size_us[2])+flattenedxy:t()[2]):long()
-
     combined:indexCopy(1,indexV, torch.ones(indexV:size(1)):byte())
     combined= combined:reshape(size_us[1], size_us[2])
     if(dis) then --to do sort by dis, if we care about which one we get (prob want closest)
