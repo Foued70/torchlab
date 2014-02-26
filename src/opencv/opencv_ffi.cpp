@@ -662,8 +662,22 @@ static double angle( Point pt1, Point pt2, Point pt0 )
 
 int find_contours(Mat* image, THDoubleTensor* th_contours, THDoubleTensor* th_segment_inds )
 {
-    vector< vector<Point> > contours;    
-    findContours(*image, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+    vector< vector<Point> > contours;   
+    vector<Vec4i> hierarchy;
+    // TODO: returns list, it would be much better if it returned a two level hierarchy via CV_RETR_CCOMP 
+    //findContours(*image, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+    // Note: hierarchy doesn't seem to be that useful, instead just find the outermost contour
+    //       and cull all conflicting other 'outermost' contours
+    findContours(*image, contours, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE);
+  
+    /*
+    cout << "hierarchy: " << endl;
+    int idx = 0;
+    // Traverse all outer contours
+    for ( ; idx >= 0; idx = hierarchy[idx][0] ) {
+      cout << "idx: " << idx << endl;
+    }
+    */
 
     // No contours available
     if ( contours.size() == 0) {

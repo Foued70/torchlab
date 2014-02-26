@@ -92,7 +92,7 @@ end
 
 -- Dump image data 
 function ArcIO:dumpImage( im, dir, name )
-	image_fname = self:workStr( dir, name .. '.jpg' )
+	image_fname = self:workStr( dir, name .. '.png' )
 	print("Saving: " .. image_fname )
 	image.save(image_fname, im)
 end

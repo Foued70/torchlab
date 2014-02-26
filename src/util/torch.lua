@@ -43,6 +43,13 @@ function maskdim( tensor, mask, dim )
     return tensor:index(dim,torch.range(1,tensor:size(dim)):long()[mask])
 end
 
+-- Select along dim given inds, just creates a mask for maskdim
+function selectdim( tensor, inds, dim )
+    mask = torch.ByteTensor(tensor:size(dim)):zero()
+    mask[inds:long()] = 1
+    return maskdim(tensor, mask, dim)
+end
+
 function unique(tensor)
 	if not(tensor:type() == "torch.IntTensor") then
 		error("requires int tensor")
