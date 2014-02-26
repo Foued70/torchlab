@@ -315,13 +315,13 @@ int draw_rays( THDoubleTensor* xyz_map )
     */
 
     glClearColor(0.0,0.0,0.0,1.0);
-    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_DEPTH_TEST);
 
     //glEnable(GL_LINE_SMOOTH); makes everything very slow
     //glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
     
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBlendFunc(GL_ONE, GL_ONE);
     //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
 
@@ -343,7 +343,9 @@ int draw_rays( THDoubleTensor* xyz_map )
 
         // Draw all lines
         glUseProgram(prog);
-
+        glDisable(GL_DEPTH_TEST);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE);
         glBindVertexArray(vertex_array);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_indices);
         glDrawElements(GL_LINES, indices.size(), GL_UNSIGNED_INT,0);
