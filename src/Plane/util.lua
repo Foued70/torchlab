@@ -1,12 +1,91 @@
 local linear_fit = geom.linear_model.fit
 Class()
 
+-- Plane from single point and normal 
+function plane_from_point( point, normal )
+   local plane_eqn = torch.Tensor(4)
+   plane_eqn[{{1,3},{}}] = normal 
+   plane_eqn[{4}] = -torch.dot(point, normal)
+   if plane_eqn[4] > 0 then 
+      plane_eqn:mul(-1)
+   end
+   return plane_eqn
+end
+
 function fit_plane_to_points(pts, m)
    local plane_eqn, m = linear_fit(pts, m)
    if plane_eqn[4] > 0 then 
       plane_eqn:mul(-1)
    end
    return plane_eqn, m
+end
+
+-- Transform a plane given a homogenous transformation matrix 
+function transform_plane( plane, transform ) 
+
+   local normal = torch.cat(plane.eqn:sub(1,3), torch.Tensor({0}))
+   local centroid = torch.cat(plane.centroid, torch.Tensor({1}))  
+
+   -- Transform plane normal and centroid
+   local tfd_normal = transform*normal
+   local tfd_centroid = transform*centroid
+
+   -- Compute new d for plane eqn 
+   local d = torch.Tensor({torch.dot( tfd_normal:sub(1,3), tfd_centroid:sub(1,3) )})
+
+   local tfd_plane = {}
+   tfd_plane.eqn = torch.cat( tfd_normal:sub(1,3), d)
+   tfd_plane.centroid = tfd_centroid:sub(1,3)
+   return tfd_plane
+end
+
+
+-- torch doesn't have a determinant operation, how dumb is that
+-- Input 3x3 matrix 
+-- TODO: this shouldn't really be placed here
+function det3x3( matrix )
+   return matrix[{{1},{1}}]*matrix[{{2},{2}}]*matrix[{{3},{3}}] + 
+          matrix[{{1},{2}}]*matrix[{{2},{3}}]*matrix[{{3},{1}}] + 
+          matrix[{{1},{3}}]*matrix[{{2},{1}}]*matrix[{{3},{2}}] - 
+          matrix[{{1},{3}}]*matrix[{{2},{2}}]*matrix[{{3},{1}}] - 
+          matrix[{{1},{2}}]*matrix[{{2},{1}}]*matrix[{{3},{3}}] - 
+          matrix[{{1},{1}}]*matrix[{{2},{3}}]*matrix[{{3},{2}}]
+end
+
+function estimate_transform_from_planes( tfd_planes, planes )   
+   local normals = torch.Tensor(3,#planes)
+   for i = 1,#planes do 
+      --normals[{{},{i}}] = planes[i].eqn:sub(1,3)
+      normals[{{},{i}}] = planes[i].eqn:sub(1,3)
+   end
+
+   local tfd_normals = torch.Tensor(3,#tfd_planes)
+   for i = 1,#tfd_planes do 
+      tfd_normals[{{},{i}}] = tfd_planes[i].eqn:sub(1,3)
+   end
+
+   local d_errs = torch.Tensor(#planes)
+   for i = 1,#planes do 
+      d_errs[{i}] = tfd_planes[i].eqn[{4}] - planes[i].eqn[{4}]
+   end
+
+   -- Compute rotation
+   local U,S,V = torch.svd(tfd_normals*normals:t())
+
+   local R = U*V:t()   
+   -- Check for reflection and correct
+   if det3x3(R):squeeze() < 0 then 
+      R[{{},{3}}] = R[{{},{3}}]:mul(-1)
+   end
+   -- TODO: check for degeneracy and what-not
+
+   -- Compute translation
+   local T = torch.inverse(tfd_normals:t())*d_errs
+
+   local tf = torch.eye(4)
+   tf[{{1,3},{1,3}}] = R
+   tf[{{1,3},{4}}] = T
+   return tf 
 end
 
 function sweep_threshold(distances, max_dist, n_measurements)
