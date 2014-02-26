@@ -26,7 +26,10 @@ for scan_i = 1,#scan_ids do
 	pc = arc_io:getScan( scan_num ) -- TODO: shouldn't need to do this
 	regions_data = arc_io:loadTorch("region_masks", string.format("%.3d", scan_num))
 	planes = regions_data.planes
+
+	-- Use both normal and residual thresh to keep from incorrectly merging
 	normal_thresh = regions_data.normal_thresh
+	residual_thresh = regions_data.residual_thresh
 
 	imgh = planes[1].inlier_map:size(1)
 	imgw = planes[1].inlier_map:size(2)
@@ -37,7 +40,7 @@ for scan_i = 1,#scan_ids do
 
 	-- Really shitty match threshold, match_matrix should really hold percentage overlap 
 	-- relative to the smaller plane mask 
-	match_threshold = 10
+	match_threshold = 100
 
 	-- Compute overlaps between all planes 
 	print("Computing overlaps between all planes")
@@ -55,11 +58,17 @@ for scan_i = 1,#scan_ids do
 				end
 				]]--
 				angle = angle_between( planes[i].eqn:sub(1,3) , planes[j].eqn:sub(1,3) )
+
+				-- Not sure if this residual calculation is justified, probably the correct thing to do 
+				-- is to look at each one of the overlap points and evaluate their residuals using the normal
+				-- of each plane then see how many overlap ... possibly also justified to to with normal thresholds
+				residual = math.abs(torch.dot( planes[i].eqn:sub(1,3), torch.add(planes[i].centroid, -planes[j].centroid) ))
 				if overlap > match_threshold then 
-					if angle < normal_thresh then
+					if angle < normal_thresh and residual < residual_thresh then
 						match_matrix[{i,j}] = overlap
 					else
 						print(string.format("angle for [%d,%d]: %f", i, j, angle))
+						print(string.format("residual for [%d,%d]: %f", i, j, residual))
 					end
 				end
 

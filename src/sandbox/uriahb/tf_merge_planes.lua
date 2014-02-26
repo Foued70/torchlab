@@ -14,6 +14,10 @@ scan_nums = specs.merge_scan_ids
 
 arc_io = ArcIO.new( specs.job_id, specs.work_id )
 
+-- Using flattenplanes to check for actual overlap 
+FlattenedPlaneNew = flattened_plane.FlattenedPlaneNew
+
+
 scan_ids = specs.scan_ids
 
 -- Transform a plane given a homogenous transformation matrix 
@@ -41,13 +45,21 @@ scan_end = 27
 for scan_num = scan_start, scan_end do
 ]]--
 -- for scan_i = 1,#scan_ids do 
-	--scan_num = scan_ids[scan_i]
+	--scan_num = scan_ids[scan_i]	
 
-	print("Merging Planes for scan_num: ", scan_num)
+	scan_num_map = {}
+	for j = 1,#scan_nums do 
+		scan_num_map[scan_nums[j]] = j
+	end
+
+	pointclouds = {}
+	for j = 1,#scan_nums do 
+		pointclouds[scan_nums[j]] = arc_io:getScan(scan_nums[j])
+	end
 
 	planes = {}
 	for j=1,#scan_nums do 
-		scan_data = arc_io:loadTorch("region_masks", string.format("%.3d", scan_nums[j]))
+		scan_data = arc_io:loadTorch("refitted_planes", string.format("scan%.3d", scan_nums[j]))
 		table.insert( planes, scan_data.planes )
 	end
 
@@ -64,17 +76,26 @@ for scan_num = scan_start, scan_end do
 	-- Transform both sets of planes into the same coordinate frame
 	tfd_planes = {}
 	for j=1,#scan_nums do 
-		for i=1,#planes[j] do 
+		for i=1,#planes[j] do 	
 			tfd_plane = transform_plane( planes[j][i], transforms[j] )
+			tfd_plane.local_eqn = planes[j][i].eqn
+			tfd_plane.plane_num = i
 			tfd_plane.scan_num = scan_nums[j]
-			tfd_plane.inlier_map = planes[j][i].inlier_map
+			tfd_plane.inlier_map = planes[j][i].mask			
 			table.insert(tfd_planes, tfd_plane)
 		end
 	end			
 
+	--[[
+	print( string.format("scan_nums: {%d,%d}", tfd_planes[163].scan_num, tfd_planes[55].scan_num) )
+	print( string.format("plane_ids: {%d,%d}", tfd_planes[163].plane_num, tfd_planes[55].plane_num) )
+	]]--
+
 	--Use both normal and residual thresh to keep from incorrectly merging
+	scan_data = arc_io:loadTorch("region_masks", string.format("%.3d", scan_nums[1]))
 	normal_thresh = scan_data.normal_thresh
-	residual_thresh = scan_data.residual_thresh
+	--residual_thresh = scan_data.residual_thresh
+	residual_thresh = 30
 
 	print("n_planes: ", #tfd_planes)
 
@@ -85,6 +106,9 @@ for scan_num = scan_start, scan_end do
 	-- relative to the smaller plane mask 
 	--match_threshold = 100
 
+	-- Flattened planes structure
+	flattened_planes = {}
+
 	-- Compute overlaps between all planes 
 	-- TODO: don't do all pairs merge, just do temporally adjacent merge 
 	print("Computing overlaps between all planes")
@@ -93,24 +117,69 @@ for scan_num = scan_start, scan_end do
 	for i=1, #tfd_planes do
 		print(string.format("computing overlaps for plane: %d",i))
 		for j=1, #tfd_planes do
-			if j ~= i then										
-				--angle = angle_between( planes[i].eqn:sub(1,3) , planes[j].eqn:sub(1,3) )
-				angle = angle_between( tfd_planes[i].eqn:sub(1,3) , tfd_planes[j].eqn:sub(1,3) )
+			if j ~= i then	
+				--if tfd_planes[i].scan_num ~= tfd_planes[j].scan_num then 									
+					--angle = angle_between( planes[i].eqn:sub(1,3) , planes[j].eqn:sub(1,3) )
+					angle = angle_between( tfd_planes[i].eqn:sub(1,3) , tfd_planes[j].eqn:sub(1,3) )
 
-				-- Not sure if this residual calculation is justified, probably the correct thing to do 
-				-- is to look at each one of the overlap points and evaluate their residuals using the normal
-				-- of each plane then see how many overlap ... possibly also justified to to with normal thresholds
+					-- Not sure if this residual calculation is justified, probably the correct thing to do 
+					-- is to look at each one of the overlap points and evaluate their residuals using the normal
+					-- of each plane then see how many overlap ... possibly also justified to to with normal thresholds
 
-				-- Ignore residuals for now 
-				--residual = math.abs(torch.dot( planes[i].eqn:sub(1,3), torch.add(planes[i].centroid, -planes[j].centroid) ))
-				residual = math.abs(torch.dot( tfd_planes[i].eqn:sub(1,3), torch.add(tfd_planes[j].centroid, -tfd_planes[i].centroid) ))
-				--print(string.format("angle between [%d,%d]: %f", i,j,angle))
-				if angle < normal_thresh and residual < residual_thresh then							
-					print("residual: ", residual)
-					print("angle: ", angle)
-				--if angle < normal_thresh then 
-					match_matrix[{i,j}] = 1
-				end
+					-- Ignore residuals for now 
+					--residual = math.abs(torch.dot( planes[i].eqn:sub(1,3), torch.add(planes[i].centroid, -planes[j].centroid) ))
+					residual = math.abs(torch.dot( tfd_planes[i].eqn:sub(1,3), torch.add(tfd_planes[j].centroid, -tfd_planes[i].centroid) ))
+					--print(string.format("angle between [%d,%d]: %f", i,j,angle))
+					if angle < normal_thresh and residual < residual_thresh then
+						
+						--[[
+						print(string.format("overlap for [%d,%d]", i,j))
+						print( string.format("scan_nums: [%d,%d]", tfd_planes[i].scan_num, tfd_planes[j].scan_num) )
+						print( string.format("plane_ids: [%d,%d]", tfd_planes[i].plane_num, tfd_planes[j].plane_num) )
+
+						orig_transformation = transforms[scan_num_map[tfd_planes[i].scan_num] ]
+						new_transformation = transforms[scan_num_map[tfd_planes[j].scan_num] ]
+									
+						local fplane_i = FlattenedPlaneNew.new(pointclouds[tfd_planes[i].scan_num], 
+																    tfd_planes[i].local_eqn, 
+																    tfd_planes[i].inlier_map,
+																    {orig_transformation, orig_transformation})
+						local minT, maxT = fplane_i:calculate_min_and_max_t()												
+						local minSoFar = minT
+						local maxSoFar = maxT											
+
+						local fplane_j = FlattenedPlaneNew.new(pointclouds[tfd_planes[j].scan_num], 
+																    tfd_planes[i].local_eqn, 
+																    tfd_planes[j].inlier_map,
+																    {new_transformation, orig_transformation})						
+
+						local minT, maxT = fplane_j:calculate_min_and_max_t()						
+						minSoFar = torch.min(torch.cat(minT, minSoFar,1),1)
+						maxSoFar = torch.max(torch.cat(maxT, maxSoFar,1),1) 						
+
+						fplane_i:set_min_and_max(minSoFar, maxSoFar)
+						fplane_i:add_all_frustrum_and_empties(true)							
+						fplane_j:set_min_and_max(minSoFar, maxSoFar)
+						fplane_j:add_all_frustrum_and_empties(true)		
+
+						local rgb_map = torch.Tensor(3,fplane_i.ioccupiedF:size(1),fplane_i.ioccupiedF:size(2)):zero()
+						-- Output images for each overlapping pair 					
+						rgb_map[{{1},{},{}}] = fplane_i.ioccupiedF
+						rgb_map[{{2},{},{}}] = fplane_j.ioccupiedF
+						arc_io:dumpImage( rgb_map, "fplane_overlaps", 
+							              string.format("scans_%.3d_%.3d_planes_%.3d_%.3d", tfd_planes[i].scan_num, tfd_planes[j].scan_num, 
+							              	 											    tfd_planes[i].plane_num, tfd_planes[j].plane_num) )
+
+
+						print("residual: ", residual)
+						print("angle: ", angle)
+					--if angle < normal_thresh then 
+						]]--
+						--if (fplane_i.ioccupiedF + fplane_j.ioccupiedF):gt(1.5):sum() > 0 then
+							match_matrix[{i,j}] = 1
+						--end
+					end
+				--end
 				collectgarbage()
 			end
 		end
@@ -231,8 +300,8 @@ for scan_num = scan_start, scan_end do
 	cmap = image.colormap(#plane_sets)
 	for j=1,#scan_nums do 
 
-		imgh = planes[j][1].inlier_map:size(1)
-		imgw = planes[j][1].inlier_map:size(2)	
+		imgh = planes[j][1].mask:size(1)
+		imgw = planes[j][1].mask:size(2)	
 
 		planes_rgb = torch.Tensor(3, imgh, imgw):zero()
 		planes_r = planes_rgb[1]

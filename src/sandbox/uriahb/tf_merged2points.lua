@@ -24,7 +24,6 @@ fit_plane_to_points = Plane.util.fit_plane_to_points
 -- Store all points from all scans for each region
 
 merged_planes = {}
-
 merged_points = {}
 
 for j=1,#scan_nums do 
@@ -52,7 +51,7 @@ for j=1,#scan_nums do
 	cmap = input_data.colormap:mul(255.0):int()
 	plane_masks = input_data.plane_masks
 	planes = input_data.planes
-	print(input_data.planes)
+	print(input_data.planes[1])
 
 	-- For each plane mask convert to x,y,z,r,g,b pointcloud and write to .pts file 
 	num_planes = plane_masks:size(1)
@@ -63,48 +62,55 @@ for j=1,#scan_nums do
 	local output_fh = io.open( output_fname, "w" )	
 
 	torch.range(1,num_planes):apply( function( plane_idx ) 
-		local mask = plane_masks[{plane_idx, {}, {}}]
-		if mask:gt(0.5):sum() > 0 then
 
-			local points_x = points_map:select(1,1)[mask]
-			local points_y = points_map:select(1,2)[mask]
-			local points_z = points_map:select(1,3)[mask]
+		-- Check if plane normal is too perpendicular to ray to centroid		
+			local mask = plane_masks[{plane_idx, {}, {}}]
+			if mask:gt(0.5):sum() > 0 then
 
-			-- Accumulate all points into appropriate bins
-			pts = torch.cat(torch.cat(points_x,points_y,2), points_z,2)
+				local points_x = points_map:select(1,1)[mask]
+				local points_y = points_map:select(1,2)[mask]
+				local points_z = points_map:select(1,3)[mask]
 
-			-- Fill in merged_planes datastructure
-			if merged_planes[plane_idx] == nil then
-				plane = {}
-				plane.pts = pts
-				plane.scan_ids = {}
-				plane.masks = {}
-				merged_planes[plane_idx] = plane
-			else				
-				print(merged_planes[plane_idx].pts)
-				merged_planes[plane_idx].pts = torch.cat(merged_planes[plane_idx].pts,pts,1)
-			end
-			table.insert(merged_planes[plane_idx].masks, mask)
-			table.insert(merged_planes[plane_idx].scan_ids, j)
+				-- Accumulate all points into appropriate bins
+				pts = torch.cat(torch.cat(points_x,points_y,2), points_z,2)
 
+				-- Fill in merged_planes datastructure
+				if merged_planes[plane_idx] == nil then
+					plane = {}
+					plane.pts = pts
+					plane.scan_ids = {}
+					plane.masks = {}
+					plane.eqns = {}
+					plane.centroids = {}
+					merged_planes[plane_idx] = plane
+				else				
+					print(merged_planes[plane_idx].pts)
+					merged_planes[plane_idx].pts = torch.cat(merged_planes[plane_idx].pts,pts,1)
+				end
+				plane_eqn, plane_centroid = fit_plane_to_points(pts:t())
+				table.insert(merged_planes[plane_idx].eqns, plane_eqn)
+				table.insert(merged_planes[plane_idx].centroids, plane_centroid)
+				table.insert(merged_planes[plane_idx].masks, mask)
+				table.insert(merged_planes[plane_idx].scan_ids, j)
 
-			--[[
-			if merged_points[plane_idx] == nil then
-				merged_points[plane_idx] = pts
-			else
-				merged_points[plane_idx] = torch.cat(merged_points[plane_idx],pts,1)
-			end
-			]]--
-			print(string.format("plane_idx: %d", plane_idx),merged_planes[plane_idx].pts:size())
+				--[[
+				if merged_points[plane_idx] == nil then
+					merged_points[plane_idx] = pts
+				else
+					merged_points[plane_idx] = torch.cat(merged_points[plane_idx],pts,1)
+				end
+				]]--
+				print(string.format("plane_idx: %d", plane_idx),merged_planes[plane_idx].pts:size())
 
-		-- Not sure why i need this if statement
-			torch.range(1,points_x:nElement()):apply( function( idx )
-				local rgb = cmap[plane_idx]
-				output_fh:write( points_x[idx] ..' '.. points_y[idx] ..' '.. points_z[idx] ..' '.. 
-								 rgb[1] ..' '..   rgb[2] ..' '.. rgb[3] .. '\n')	 
-			end
-			)
-		end			
+			-- Not sure why i need this if statement
+				torch.range(1,points_x:nElement()):apply( function( idx )
+					local rgb = cmap[plane_idx]
+					output_fh:write( points_x[idx] ..' '.. points_y[idx] ..' '.. points_z[idx] ..' '.. 
+									 rgb[1] ..' '..   rgb[2] ..' '.. rgb[3] .. '\n')	 
+				end
+				)
+			end			
+		
 	end
 	)
 	output_fh:close()
@@ -126,8 +132,6 @@ end
 output = {}
 output.planes = merged_planes
 output.scan_nums = scan_nums
-output.job_id
-output.work_id
 
 -- Output merged planes datastructure
 arc_io:dumpTorch( output, "multi_merged_planes", "merged_planes")
