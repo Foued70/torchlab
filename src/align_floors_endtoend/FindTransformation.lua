@@ -31,11 +31,11 @@ function FindTransformation.findTransformation(source_sweep, dest_sweep, paramet
       parameters.corr_thresh, parameters.minInliersForMatch, parameters.maxNumCompute, 
       parameters.cornerDistanceLimit, minT[1], maxT[1], minT[2], maxT[2])
 	inliers = inliers/math.min(scores_src_torch:size(1),scores_dest_torch:size(1))
-  print(inliers)
    sort, order = torch.sort(inliers,true)
    transformations = {}
    for i =1, sort:size(1) do
       transformations[i] = best_transformations[order[i]]
    end
+   print(sort)
    return sort, transformations;
 end

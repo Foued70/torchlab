@@ -1,0 +1,29 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6 FATAL_ERROR)
+CMAKE_POLICY(VERSION 2.6)
+
+INCLUDE(../common.cmake REQUIRED)
+
+#find_package(PCL 1.5 REQUIRED)
+
+find_package(GLFW 3.0 REQUIRED)
+
+INCLUDE_DIRECTORIES(${GLFW_INCLUDE_DIR})
+LINK_DIRECTORIES(${GLFW_LIBRARY_DIR})
+
+#ADD_DEFINITIONS(${PCL_DEFINITIONS})
+
+link_libraries(${GLFW_LIBRARY})
+
+LINK_DIRECTORIES(${install_lib})
+
+#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=1024")
+
+SET(package test_glfw)
+
+SET(src test_glfw.cpp)
+
+ADD_FFI_LIB(${package} ${src})
+
+TARGET_LINK_LIBRARIES(${package} ${GLFW_LIBRARIES} luaT TH)
+
+

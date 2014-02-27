@@ -1,7 +1,7 @@
 FlattenedPlane = Class()
 FlattenedPlane.PLANE = "FlattenedPlanes"
 local path = require 'path'
-local pcl = PointCloud.PointCloud
+local pcl = pointcloud.pointcloud
 local Sweep = align_floors_endtoend.Sweep
 local io = require 'io'
 function FlattenedPlane:__init(base_dir, sweep_name, pc, transf, index)
@@ -70,18 +70,19 @@ end
 function FlattenedPlane:__write_keys()
     return {'base_dir','fsave_me', 'sweep_name', 'resolution', 'quat','plane','planed', 'plane_reald', 'index',
         'emptiesI', 'occupiedI',
-        'iempties', 'iemptiesF', 'iemptiesFD', 'rempties','iemptiesFP',
+        'iempties', 'iemptiesF', 'iemptiesFD', 'rempties','iemptiesFP', 'ioccupiedD',
         'ioccupied', 'ioccupiedF', 'ioccupiedFD', 'roccupied', 'ioccupiedFP',
         'minT', 'maxT', 'thresh','mask',
         'notnils', 'rnotnils','notnilsI', 'inilsF',
         'plane_interesection_data','iallD',
-        'allIntersections', 'allIntersectionsInfo', 'transformation', 'occupiedOnLines'
+        'allIntersections', 'allIntersectionsInfo', 'transformation', 'occupiedOnLines', 'ccs'
 }
 end
 
 function FlattenedPlane:getAllPlaneEquations()
     local location = util.fs.dirs_only(path.join(self.base_dir, "planes3", self.sweep_name),"saliency_base_9_scale_1.8_n_scale_5_thres_40_normthres_1.0472_minseed_81_minplane_900_slope_score_down_weight_pinned_center_normal_var")[1] --40
     --   local location = util.fs.dirs_only(path.join("/Users/stavbraun/Downloads/planes_sonia/", self.sweep_name),"40")[1]
+    print(location)
     eqns = torch.load(path.join(location, "planes.t7"))
     table.sort(eqns, function(a,b) return a.n_pts>b.n_pts end)
     return eqns
@@ -97,26 +98,34 @@ function FlattenedPlane:getPlaneEquation(k)
    return torch.cat(n1, torch.Tensor({d_new}))
 end
 
-function FlattenedPlane.select3d(from, selectPts)
-    local npts
-    if(from:dim()==2) then
-        if (selectPts:dim() == 1) then
-            npts = selectPts:size(1)
-        else
-            npts = selectPts:size(1)*selectPts:size(2)
-        end
-        return from:index(1,torch.range(1,npts)[selectPts]:long())
-    elseif(from:dim()==3) then
-        npts = selectPts:size(1)*selectPts:size(2)
-        from = from:reshape(3,npts):t()
-        return from:index(1,torch.range(1,npts)[selectPts:reshape(npts)]:long())
+--self = flattened_plane.FlattenedPlane.get_ith_plane(1,nil,true) pc = self.pc imgraph = require "../imgraph/init.lua"
+function FlattenedPlane:tryNewSplitting(pc)
+     matcher = Plane.Matcher.new()
+    normals, temp, temp, temp, maskN = pc:get_normal_map()
+    pts = flattened_plane.FlattenedPlane.select3d(pc:get_xyz_map_no_mask(), torch.ones(normals:size(2),normals:size(3)):byte())
+    normals_n = flattened_plane.FlattenedPlane.select3d(normals, torch.ones(normals:size(2),normals:size(3)):byte()):clone()
+    toSegment = torch.zeros(#self:getAllPlaneEquations()+2,normals:size(2),normals:size(3))
+    for k,v in pairs(self:getAllPlaneEquations()) do 
+        eqn = v.eqn
+        a= (geom.linear_model.residual(eqn, pts):reshape(normals:size(2),normals:size(3)):clone():abs())
+        b = (torch.acos(normals_n:clone()*eqn:sub(1,3)):reshape(normals:size(2),normals:size(3)):clone():abs())
+        toSegment[k] = a:log1p() --+b:log1p()
 
-    else
-        error("wrong number of select pts")
+        toSegment[k][torch.gt(a,50)] = 10
+--        toSegment[k][torch.gt(toSegment,7)] = 8
+        toSegment[k][maskN]=15
+
     end
-
+    --toSegment[#self:getAllPlaneEquations()+1] = pc:get_depth_map():clone():log1p()
+    temp, ord = toSegment:min(1)
+    toSegment[#self:getAllPlaneEquations()+2] = ord:squeeze()
+    toSegment = torch.zeros(6,normals:size(2),normals:size(3))
+    toSegment[{{1,3}}] = normals
+    toSegment[{{4,6}}] = pc:get_depth_map()
+    
+    a,b,c,d,e = flattened_plane.FlattenedPlane.getConnectedComponentsRelationship(toSegment)
+    image.display(e)
 end
-
 function FlattenedPlane:addPlane(pc)
     --to do check argument type
     local H = self.transformation
@@ -139,14 +148,15 @@ function FlattenedPlane:addPlane(pc)
     local normals = flattened_plane.FlattenedPlane.select3d(normals, maskN*-1+1)
 
     local pts = flattened_plane.FlattenedPlane.select3d(pc:get_xyz_map_no_mask(), maskN*-1+1)
-    local score, indices = matcher:match(self:getAllPlaneEquations(), pts:t(), normals:t())
-    score = score:squeeze()
-    indices = indices:squeeze()
-    local occupiedI = torch.zeros(maskN:size()):byte()
-    occupiedI[maskN*-1+1] = torch.eq(torch.eq(indices,self.index)+torch.ge(score,.1),2)
+--    local score, indices = matcher:match(self:getAllPlaneEquations(), pts:t(), normals:t())
+    local indices = matcher:matchDistance(pc,self:getAllPlaneEquations())
 
-    local temp = torch.zeros(maskN:size()):long()
-    temp[maskN*-1+1] = indices
+    --score = score:squeeze()
+    indices = indices:squeeze()
+    local occupiedI = torch.eq(torch.eq(indices,self.index),1) --+torch.ge(score,.1),2)
+    occupiedI[maskN] = 0
+    --local temp = torch.zeros(maskN:size()):long()
+    --temp[maskN*-1+1] = indices
 
     --[[ if want to project onto plane, instead of assume position is on plane
     local pts  = flattened_plane.FlattenedPlane.select3d(pc:get_global_from_3d_pts(pc:get_xyz_map_no_mask(),H), maskN*-1+1)
@@ -155,16 +165,20 @@ function FlattenedPlane:addPlane(pc)
     t = selected*eqn:sub(1,3)
     local occupied = selected-t:reshape(t:size(1),1)*eqn:sub(1,3):reshape(1,3)-eqn:sub(4,4):squeeze()
     --]]
+        self.ptsT = pc:get_global_from_3d_pts(pc:get_xyz_map_no_mask(),H)
     --    local occupiedIT = torch.eq(torch.le(torch.abs(planed:clone():norm(2,1):squeeze()-plane_reald), self.thresh*5*1000)+mask+good_norm,3)
-      local occupied = FlattenedPlane.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),occupiedI)
+    local occupied  = torch.Tensor()
+    if(occupiedI:sum()>0) then
+        occupied = FlattenedPlane.select3d(plane,occupiedI)
+    end
 
     --our hypothesized plane is more than 1 cm closer to us than the real point, it is going through empty!
     local emptiesI = torch.eq(torch.lt(planed:clone():norm(2,1):squeeze()-plane_reald, -self.thresh*1000)+mask,2):cmul(occupiedI*-1+1)
-    local empties = FlattenedPlane.select3d(plane:reshape(3,planed:size(2)*planed:size(3)):t(),emptiesI)
+    local empties = FlattenedPlane.select3d(plane,emptiesI)
     
     
     local notnilsI = maskI*-1+1
-    local notnils = FlattenedPlane.select3d(plane:reshape(3,plane:size(2)*plane:size(3)):t(),notnilsI)
+    local notnils = FlattenedPlane.select3d(plane,notnilsI)
         
     self.pc =pc
     self.rempties = torch.zeros(0,0)
@@ -417,6 +431,14 @@ function FlattenedPlane:addArbitraryFrustum(cornersI, onlyOnThisOne)
         local leftSelectorN = torch.conv2(t_new, torch.Tensor({0,0,0,0,0,1,0,0,0}):reshape(3,3):byte(), 'F'):sub(2,-2,2,-2)
         local plane = self.plane
         local occupied = FlattenedPlane.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),cornersI)
+        local roccupied= geom.quaternion.rotate(self.quat,occupied:contiguous())
+        local dis_to_plane = self.planed:clone():norm(2,1):squeeze()-self.plane_reald
+        local d = dis_to_plane[cornersI]
+        if(t_new:sum()==0) then
+
+            local flat, flatD = FlattenedPlane.flattened2Image((roccupied:sub(1,-1,1,2)/self.resolution), minT, maxT, d)
+            return flat, flat, flatD, flatD
+        end
         local occupiedUs = FlattenedPlane.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),t_new)
         local occupiedL = FlattenedPlane.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),leftSelectorN)
         local occupiedR = FlattenedPlane.select3d(self.plane:reshape(3,plane:size(2)*plane:size(3)):t(),rightSelectorN)
@@ -432,8 +454,6 @@ function FlattenedPlane:addArbitraryFrustum(cornersI, onlyOnThisOne)
             --local coord_filter = torch.eq(torch.eq(occupiedL:sum(2):squeeze(),0)+torch.eq(occupiedR:sum(2):squeeze(),0)+torch.eq(occupiedT:sum(2):squeeze(),0)+torch.eq(occupiedB:sum(2):squeeze(),0),0)
 
             
-            local dis_to_plane = self.planed:clone():norm(2,1):squeeze()-self.plane_reald
-            local d = dis_to_plane[cornersI]
             local dUs = torch.eq(occupiedUs:clone():sum(2):squeeze(),0):double()--dis_to_plane[t_new]
             local dL = torch.eq(occupiedL:clone():sum(2):squeeze(),0):double()--dis_to_plane[leftSelectorN]
             local dR = torch.eq(occupiedR:clone():sum(2):squeeze(),0):double()--dis_to_plane[rightSelectorN]
@@ -459,7 +479,7 @@ function FlattenedPlane:addArbitraryFrustum(cornersI, onlyOnThisOne)
             local good_coords = coord:index(1,shouldFrustrumCoords:long())
             local cum = torch.zeros(flat:size())
             local emptiesF, emptiesFD= opencv.imgproc.fillQuadAllWithInterpolation(opencv.Mat.new(cum),coord)
-            return flat, torch.gt(emptiesF:toTensor(),0), emptiesFD:toTensor()
+            return flat, torch.gt(emptiesF:toTensor(),0), emptiesFD:toTensor(), flatD
         end
     end
     collectgarbage()
@@ -534,7 +554,7 @@ end
 function FlattenedPlane:addAllFrustrumsAndEmpties(redo)
     print("addAllFrustrumsAndEmpties")
     if(redo or not(self.ioccupied) or not(self.iempties)) then
-        self.ioccupied, self.ioccupiedF, self.occupiedFD = self:addArbitraryFrustum(self.occupiedI, true)
+        self.ioccupied, self.ioccupiedF, self.ioccupiedFD, self.ioccupiedD = self:addArbitraryFrustum(self.occupiedI, true)
         if(self.occupiedI:sum()>0) then
             local occupied_dis = opencv.imgproc.distanceTransform(opencv.Mat.new((self.ioccupied*1-1):byte())):toTensor():double()
             if(self.ioccupiedF) then
@@ -630,11 +650,15 @@ end
 
 function FlattenedPlane.flattened2Image(flattenedxy, minT, maxT, dis)
 
-    flattenedxy = flattenedxy-torch.repeatTensor(minT, flattenedxy:size(1), 1)+1    
+    flattenedxy = flattenedxy-torch.repeatTensor(minT, flattenedxy:size(1), 1)+1   
     local size_us = (maxT:ceil()-minT:floor()+1):reshape(2)
     local combined = torch.zeros(size_us[1]* size_us[2]):byte()
     local combinedD = torch.zeros(size_us[1]*size_us[2])
     flattenedxy:ceil()
+    if(dis) then
+        dis, order = dis:sort(true) --largest to smallest 
+        flattenedxy = flattenedxy:index(1,order)
+    end
     local indexV =  (((flattenedxy:t()[1]-1)*size_us[2])+flattenedxy:t()[2]):long()
 
     combined:indexCopy(1,indexV, torch.ones(indexV:size(1)):byte())
@@ -672,8 +696,6 @@ function FlattenedPlane:getAllIntersections(recalc)
 end
 
 function FlattenedPlane:getOccupiedOnLines(recalc)
-    local base_dir = path.join(self.base_dir, FlattenedPlane.PLANE, "for_marco")
-    util.fs.mkdir_p(base_dir)
     if(not(self.occupiedOnLines) or recalc) then
         range_min = 1
         range_max =  #self:getAllPlaneEquations()
@@ -710,8 +732,8 @@ function FlattenedPlane:getOccupiedOnLines(recalc)
         end
         self.occupiedOnLines = combined
         self:saveMe()
-        return self.occupiedOnLines
     end
+        return self.occupiedOnLines
     
 end
 
@@ -942,17 +964,30 @@ function FlattenedPlane:getBoundaryOptions()
     end
 
 
-    intersections = self.wooohoo
+    intersections = self:getOccupiedOnLines()
     combinedI = torch.zeros(table.getn(intersections), self.ioccupied:size(1), self.ioccupied:size(2))
     good = torch.zeros(table.getn(intersections)):byte()
     for i =1,table.getn(intersections) do
-        if(intersections[i][1]) then
+        print(i)
+        if(intersections[i][2]) then
             t1, t2 = intersections[i][2]:getLineImage()
             combinedI[i] = t2
             good[i]=1
         end
     end
 
+
+
+    intersections = self:getGoodIntersections()
+    combinedI = torch.zeros(table.getn(intersections), self.ioccupied:size(1), self.ioccupied:size(2))
+    good = torch.zeros(table.getn(intersections)):byte()
+    for i =1,table.getn(intersections) do
+        if(intersections[i][11]) then
+            t1, t2 = intersections[i][11]:getLineImage()
+            combinedI[i] = t2
+            good[i]=1
+        end
+    end
 
     good_values = torch.range(1, good:size(1))[good]
         cc, cca, mst, msta, mstsegmcolor = self:getConnectedComponentsRelationship(torch.gt(combinedI:sum(1):squeeze(),0):double())
@@ -1040,7 +1075,83 @@ function FlattenedPlane:getLargestCC()
     return torch.eq(mst,bestSoFarK):cmul(occupied)
 end
 
-function FlattenedPlane:getConnectedComponentsRelationship(inputimg)
+function FlattenedPlane:getCCs(recalc)
+    if(not(self.ccs) or recalc) then
+        local empties = torch.gt(self.iempties + self.iemptiesF,0)
+        local occupied = torch.gt(self.ioccupied + self.ioccupiedF,0)
+
+        local cc, cca, mst, msta, mstsegmcolor = self:getConnectedComponentsRelationship(occupied:double())        
+        local good_ks={}
+        local cost = {}
+        counter = 1
+        for k,v in pairs(cca) do
+            local totsO = torch.eq(cc,k):cmul(occupied):sum()
+            if(totsO > 500 and totsO/torch.eq(cc,k):sum() > .1) then
+                good_ks[counter] = k
+                cost[counter] = torch.eq(cc,k):cmul(occupied):sum()
+                counter = counter+1
+            end
+        end
+        good_ks = torch.Tensor(good_ks)
+        cost = torch.Tensor(cost)
+        a,order = torch.sort(cost, true)
+        local ccs = torch.zeros(good_ks:size(1), mst:size(1), mst:size(2)):byte()
+        for i =1, good_ks:size(1) do
+           ccs[i] = torch.eq(cc,good_ks[order[i]]):cmul(occupied)
+        end
+        self.ccs = ccs
+    end
+    return self.ccs
+end
+
+function FlattenedPlane:getCCsOriginalImage()
+    local cc, cca, mst, msta, mstsegmcolor = self:getConnectedComponentsRelationship(self.occupiedI:double())        
+    local good_ks={}
+    local cost = {}
+    counter = 1
+    for k,v in pairs(cca) do
+        local totsO = torch.eq(cc,k):cmul(self.occupiedI):sum()
+        if(totsO > 500 and totsO/torch.eq(cc,k):sum() > .1) then
+            good_ks[counter] = k
+            cost[counter] = torch.eq(cc,k):cmul(self.occupiedI):sum()
+            counter = counter+1
+        end
+    end
+    good_ks = torch.Tensor(good_ks)
+    cost = torch.Tensor(cost)
+    a,order = torch.sort(cost, true)
+    local ccs = torch.zeros(good_ks:size(1), mst:size(1), mst:size(2)):byte()
+    for i =1, good_ks:size(1) do
+       ccs[i] = torch.eq(cc,good_ks[order[i]]):cmul(self.occupiedI)
+    end
+    return ccs
+end
+
+function FlattenedPlane:getCCResiduals2()
+    local ccs = self:getCCs()
+   -- local eq_new = self:getPlaneEquation(self.index)
+    local eq_new = flattened_plane.PlaneIntersectionLine.getRotatedEquation(self:getPlaneEquation(self.index), self.quat)
+
+    for i=1,ccs:size(1) do
+--        local dis = self.ioccupiedFD[ccs[i]]
+        local dis = self.ioccupiedD[ccs[i]:clone():cmul(self.ioccupied)]
+        print(self.index, i,dis:mean(), dis:std())
+
+    end
+end
+
+function FlattenedPlane:getCCResiduals()
+    local ccs = self:getCCsOriginalImage()
+    local eq_new = self:getPlaneEquation(self.index)
+
+    for i=1,ccs:size(1) do
+        local new_pts = FlattenedPlane.select3d(self.ptsT, ccs[i])
+        print(geom.linear_model.residual(eq_new, new_pts):mean())
+        print(geom.linear_model.residual(eq_new, new_pts):std())
+
+    end
+end
+function FlattenedPlane.getConnectedComponentsRelationship(inputimg)
     local imgraph = require "../imgraph/init.lua"
     -- (1) build a graph on an input image
     local graph = imgraph.graph(inputimg,8)

@@ -1,9 +1,8 @@
 --[[
 	ArcIO:
 		Simple utility for reading and writing Arc data
-		- Currently there is not magic, but eventually I imagine that
-		  one could specify the current job_id and work_id they are on 
-		  and have things be more automatic
+		- Currently there is no magic, but eventually I imagine that
+		  one could specify the current job_id and work_id they are on
 		- Also it could be cool to have specs for different types of work 
 		  that can be loaded and make ArcIO more automatic 
 ]]--
@@ -38,6 +37,9 @@ function ArcIO:__init( job_id, work_id )
 	self.output_dir = self.job_path .. '/work/' .. work_id .. "/"
 	self.scan_num = nil 
 
+	self.job_id = job_id
+	self.work_id = work_id
+
 	print("pointcloud_path: ", self.pointcloud_path)
 	print("output_dir: ", self.output_dir)
 end
@@ -65,8 +67,6 @@ end
 
 -- Load torch data struct 
 function ArcIO:loadTorch( dir, name )
-	print(dir)
-	print(name)
 	data_fname = self:workStr( dir, name .. '.t7' )
 	print("Loading: " .. data_fname )
 
@@ -91,9 +91,8 @@ function ArcIO:dumpTorch( data, dir, name )
 end
 
 -- Dump image data 
-
 function ArcIO:dumpImage( im, dir, name )
-	image_fname = self:workStr( dir, name .. '.jpg' )
+	image_fname = self:workStr( dir, name .. '.png' )
 	print("Saving: " .. image_fname )
 	image.save(image_fname, im)
 end

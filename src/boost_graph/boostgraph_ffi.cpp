@@ -14,10 +14,15 @@ extern "C"
 
 #include <boost/graph/dag_shortest_paths.hpp>
 #include <boost/graph/adjacency_list.hpp>
-
+#include <boost/graph/adjacency_matrix.hpp>
+#include <boost/graph/kruskal_min_spanning_tree.hpp>
 #include <iostream>
 
+
+
+
 using namespace std;
+using namespace boost;
 
 // Example from Introduction to Algorithms by Cormen, et all p.537.
 
@@ -67,4 +72,45 @@ void get_graph_shortest_path(THDoubleTensor* points, int initializer, THDoubleTe
       result_d[*vi]= d_map[*vi];
   }
 }
+
+
+void get_mst(THDoubleTensor* points, THDoubleTensor* result)
+{
+    using namespace boost;
+    typedef adjacency_list<vecS, vecS, undirectedS, 
+      property<vertex_distance_t, double>, property<edge_weight_t, double> > graph_t;
+
+    long height = points->size[0];
+    long width  = points->size[1];
+    if(height != width) { cout << "height should equal width" << endl; return; }
+    double * points_d       = THDoubleTensor_data(points);
+
+    THDoubleTensor_resize2d(result,height-1,2);
+    THDoubleTensor_fill(result,0);
+    double* result_d = THDoubleTensor_data(result);
+
+    graph_t g1(height);
+    for (int i=0;i<height;i++){
+      for(int j=i+1; j<width; j++) {
+        add_edge(i,j, points_d[i*width+j], g1);
+
+      }
+    }
+    typedef graph_traits<graph_t>::edge_descriptor Edge;
+    vector<Edge> c;
+    kruskal_minimum_spanning_tree(g1, back_inserter(c));
+
+    int i =0;
+    for (vector<Edge>::iterator itr = c.begin(); itr != c.end(); ++itr)
+    {
+       cout << source(*itr, g1)  << " "  << target(*itr, g1) << endl;
+       result_d[2*i] = source(*itr, g1); 
+result_d[2*i+1] = target(*itr, g1); 
+       
+       i++;
+
+    }
+    cout << endl << endl;
+}
+
 }

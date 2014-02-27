@@ -20,7 +20,7 @@ end
 function PlaneIntersectionLine:convertIntersectLineToPlane(j, curj, intersect, intersectv)
     --curj= (j-1)*-1+2
     local minT, maxT = self.plane[curj]:calculateMinAndMaxT()
-    local temp, temp, x_mat, y_mat = FlattenedPlane.flattened2Image(minT, minT, maxT)
+    local temp, temp, x_mat, y_mat = FlattenedPlaneNew.flattened2Image(minT, minT, maxT)
     local eq_new = self.eq[curj][curj]
     --local intersect, coord = self:findIntersectionImageOnPlane((j-1)*-1+2)
     --intersectv = torch.ones(intersect[intersect]:size()):fill(10) --to do???
@@ -131,12 +131,19 @@ end
 function PlaneIntersectionLine:getRotatedIntersectionAndOccupiedEmpties(j)
     --log.tic()
     local intersect, coord = self:findIntersectionImageOnPlane(j)
-
     if(not(intersect)) then
         return nil
     end
-    local occ = torch.gt(self.plane[j].ioccupied+self.plane[j].ioccupiedF,0)
-    local empt = torch.gt(self.plane[j].iempties+self.plane[j].iemptiesF,0)
+    if(not(self.plane[j].ioccupied)) then
+        return nil
+    end
+    local occ = torch.gt(self.plane[j].ioccupied+self.plane[j].ioccupiedF,0) --self.plane[j]:getCCs()[1]:byte()-
+    local empt
+    if(not(self.plane[j].iempties)) then
+        empt = torch.zeros(occ:size()):byte()
+    else
+     empt = torch.gt(self.plane[j].iempties+self.plane[j].iemptiesF,0)
+    end
     local minTO, maxTO = self.plane[j]:calculateMinAndMaxT()
 
     local corner1 = (coord:sub(1,2)/self.plane[j].resolution-minTO+1)

@@ -1,6 +1,8 @@
 /* 
   CPlane Functions
     A set of simple functions to operate on our single scans 
+
+    TODO: organize and clean up! 
 */
 
 /* extern "C" makes the functions callable from C */
@@ -457,7 +459,7 @@ void addNeighbors( long node_index, Eigen::Vector3d* mean, Eigen::Vector3d* norm
     // Way too many function arguments!!! aaahhh
      This code is mad-gross, a couple structs would fix this ( TODO yo )
 */
-long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eigen::Matrix3d* second_moment, Eigen::Vector3d* mean,
+long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eigen::Matrix3d* second_moment, Eigen::Vector3d* eigenvalues, Eigen::Vector3d* mean,
                   Eigen::Vector3d* normal, int* num_points, double* means, double* normals, double* second_moments, double* region_mask,  
                   long width, long height, double cosine_thresh, double residual_thresh ) {
 
@@ -547,8 +549,8 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
 
   // TODO: compute normal, etc ... 
   double plane_d;
-  Eigen::Vector3d eigenvalues;
-  extract_plane_from_covariance( *covariance, *mean, normal, &plane_d, &eigenvalues );
+  //Eigen::Vector3d eigenvalues;
+  extract_plane_from_covariance( *covariance, *mean, normal, &plane_d, eigenvalues );
 
   /* DEBUG: this is very expensive also segfaults, hehe
   // Update errors for each neighbor  ... there is certainly a better approach than i have chosen
@@ -602,7 +604,8 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
 */
 void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_normals, THDoubleTensor* th_means, 
                         THDoubleTensor* th_second_moments, THDoubleTensor* th_region_mask, THDoubleTensor* th_front_mask, 
-                        THDoubleTensor* th_output_plane, THDoubleTensor* th_output_mean, double cosine_thresh, double residual_thresh ) {
+                        THDoubleTensor* th_output_eigenvalues, THDoubleTensor* th_output_plane, THDoubleTensor* th_output_mean, 
+                        double cosine_thresh, double residual_thresh ) {
 
   // Inputs 
   // Extract relevent parameters
@@ -663,11 +666,13 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
   }
 
   // TEST: yes these are the same ... good
+  /*
   std::cout << "original normal: " << orig_normal << std::endl;
   std::cout << "computed normal: " << normal << std::endl;
   std::cout << "mean: " << mean << std::endl;
 
   std::cout << "cosine_dist: " << cosine_distance( orig_normal, normal ) << std::endl;
+  */
 
   // Add Neighbors of index 
   long index = start_index;
@@ -677,12 +682,14 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
     // Extract minimum and update plane
     addNeighbors( index, &mean, &normal, &front, means, normals, region_mask, front_mask, width, height);
     while ( true ) {
-      index = updatePlane( &front, &covariance, &second_moment, &mean, &normal, &num_points, means, normals, second_moments, region_mask, width, height, cosine_thresh, residual_thresh );
+      index = updatePlane( &front, &covariance, &second_moment, &eigenvalues, &mean, &normal, &num_points, 
+                           means, normals, second_moments, region_mask, width, height, cosine_thresh, residual_thresh );
       if ( front.begin() == front.end() ) {
-        std::cout << "Exiting no more elements in front" << std::endl;
+        //std::cout << "Exiting no more elements in front" << std::endl;
         // Output plane equation 
         double* output_plane_data = THDoubleTensor_data( th_output_plane );
         double* output_mean_data = THDoubleTensor_data( th_output_mean );
+        double* output_eigenvalues_data = THDoubleTensor_data( th_output_eigenvalues );
         // Copy normal data 
         for (int k=0; k<3; k++) {
           output_plane_data[k] = normal(k);
@@ -691,6 +698,10 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
         // Copy mean data 
         for (int k=0; k<3; k++) {
           output_mean_data[k] = mean(k);
+        }
+        // Copy eigenvalue data 
+        for (int k=0; k<3; k++) {
+          output_eigenvalues_data[k] = eigenvalues(k);
         }
         return;
       }

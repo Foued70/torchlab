@@ -18,8 +18,8 @@ default_cmake_args = \
 
 # make sure we update to versions which are official releases.  They
 # are tagged in github.  This is Release 2.4.6
-ver=2.4.8.2-prep #525b6eca2ed6e790e41d204399025e8280b8bb8e
-branch=2.4.8.2-prep
+tag=2.4.8.2 #525b6eca2ed6e790e41d204399025e8280b8bb8e
+branch=2.4.8.2
 
 git_clone=$(build_dir)/deps/opencv-$(branch)
 
@@ -51,7 +51,7 @@ $(install): $(git_clone)
 
 $(git_clone):
 	git clone -b $(branch) https://github.com/Itseez/opencv $(git_clone)
-	cd $(git_clone); git checkout $(ver)
+	cd $(git_clone); git checkout tags/$(tag)
 
 uninstall: 
 	-rm $(install)
