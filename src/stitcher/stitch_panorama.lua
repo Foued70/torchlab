@@ -12,8 +12,8 @@ cmd:text('Align a linear 360 sweep of images')
 cmd:text()
 cmd:text('Options')
 cmd:option('-srcdir',      '/Users/lihui815/Documents/precise-transit-6548', 'top project directory')
-cmd:option('-imdir',       'work/a_00/Images',                               'directory in which to find images')
-cmd:option('-outdir',      'work/a_00/Aligned',                              'directory for aligned images')
+cmd:option('-imdir',       'work/a/Images',                               'directory in which to find images')
+cmd:option('-outdir',      'work/a/Aligned',                              'directory for aligned images')
 cmd:option('-swdir',       '001',                                            'directory for specific sweep')
 cmd:option('-imext',       '.tiff',                                          'image filename extensions')
 cmd:option('-outname',     'panorama_360',                              'output image filename')
@@ -60,7 +60,7 @@ function save_image_and_print(imsw, prefix, scale)
   pr_scr = math.ceil(score * 100000000)
   image.save(outname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'_image.png',outi:double())
   print()
-  print(prefix, score, iscore, lscore, sscore)
+  print(prefix, score)
   print()
   print(imsw.phi_global, imsw.psi_global, imsw.hfov_global, imsw.vfov_global)
   print()
@@ -86,6 +86,7 @@ function blend_panorama(imsw,prefix)
   pr_psi = math.ceil(imsw.psi_global * 1000000)
   pr_scr = math.ceil(score * 100000000)
 
+  --[[
 	for i = 1,imsw.num_images do
 		local pfix = ''..i
 		while pfix:len() < 3 do
@@ -112,15 +113,16 @@ function blend_panorama(imsw,prefix)
   
 	os.execute(string.format("enblend %s -o %s/enblend_%s", tmp_fnames, outdir, params.outname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'.png'))
 	os.execute(string.format("rm %s", tmp_fnames))
+	--[[]]
 	
 	collectgarbage()
 	
-	--[[
+	--[[]]
 	local pan = imsw:get_blended_panorama()
 	image.save(bldname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'.png',pan)
 	
-	local seam = imsw:get_seam_panorama()
-	image.save(smmname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'.png',seam)
+	--local seam = imsw:get_seam_panorama()
+	--image.save(smmname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'.png',seam)
 	
 	pan = nil
 	seam = nil
@@ -167,7 +169,7 @@ collectgarbage()
 --[[]]
 
 save_image_and_print(imsw,'000b',params.scale)
---blend_panorama(imsw,'000'..'e')
+blend_panorama(imsw,'000'..'e')
 collectgarbage()
 
 hfov_global_win = 0.0001
@@ -177,12 +179,10 @@ phi_global_win  = 0.0100
 psi_local_win   = 0.0100
 phi_local_win   = 0.0100
 lam_local_win   = 0.0100
-iter            = 2--imsw.num_images/2
-rep             = 2--imsw.num_images/2
-ran_size        = 2--imsw.num_images/2
-lp              = 5
-
---[[]]
+iter            = 2
+rep             = 2
+ran_size        = 2
+lp              = 1
 
 for i = 1,lp do
 
@@ -210,7 +210,7 @@ for i = 1,lp do
   save_image_and_print(imsw,'00'..i..'d',params.scale)
   collectgarbage()
   
-  --blend_panorama(imsw,'00'..i..'e')
+  blend_panorama(imsw,'00'..i..'e')
   
   hfov_global_win = hfov_global_win/2.5
   vfov_global_win = vfov_global_win/2.5
@@ -224,9 +224,9 @@ end
 
 collectgarbage()
 
---[[]]
-
 if not params.interactive then
+  imsw:clean()
+  imsw = nil
   collectgarbage()
   process.exit()
 end

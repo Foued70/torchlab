@@ -1,7 +1,6 @@
 path = require 'path'
 saliency = require '../image/saliency'
 io = require 'io'
-Pointcloud = PointCloud.Pointcloud
 
 nms = image.NonMaximalSuppression.new(5,5)
 
@@ -131,12 +130,12 @@ cmd:text('Align a linear 360 sweep of images')
 cmd:text()
 cmd:text('Options')
 cmd:option('-prjdir',      '/Users/lihui815/Documents/precise-transit-6548', 'top project directory')
-cmd:option('-srcdir',      'source/po_scan/a',                               'directory with the pointcloud')
-cmd:option('-wrkdir',      'work/a_00',                                      'work dir')
-cmd:option('-imgdir',      'Aligned_For_Use',                      'directory in which to find images')
+cmd:option('-srcdir',      'pointcloud',                                     'directory with the pointcloud')
+cmd:option('-imgdir',      'Aligned',                                        'img dir')
+cmd:option('-wrkdir',      'work',                                           'work dir')
+cmd:option('-verdir',      'a',                                              'ver dir')
 cmd:option('-swpdir',      '001',                                            'directory for specific sweep')
-cmd:option('-pcname',      'sweep.xyz',                                      'pointcloud filename')
-cmd:option('-paname',      'enblend_panorama_360.png',                       'imgfilename')
+cmd:option('-paname',      'blend_panorama_360.png',                         'imgfilename')
 cmd:option('-interactive',  false,                                           'keep cloudlab on')
 
 cmd:text()
@@ -148,31 +147,33 @@ prjdir = params.prjdir
 srcdir = params.srcdir
 
 wrkdir = params.wrkdir
+verdir = params.verdir
 imgdir = params.imgdir
 sweepn = params.swpdir
-pcname = params.pcname
 paname = params.paname
 
-util.fs.mkdir_p(path.join(prjdir,wrkdir,'NMP'))
-util.fs.mkdir_p(path.join(prjdir,wrkdir,'RGB'))
-util.fs.mkdir_p(path.join(prjdir,wrkdir,'XYZRGB'))
-util.fs.mkdir_p(path.join(prjdir,wrkdir,'OD'))
-util.fs.mkdir_p(path.join(prjdir,wrkdir,'TXT'))
-util.fs.mkdir_p(path.join(prjdir,wrkdir,'SAL'))
+util.fs.mkdir_p(path.join(prjdir, wrkdir, verdir, 'NMP'))
+util.fs.mkdir_p(path.join(prjdir, wrkdir, verdir, 'RGB'))
+util.fs.mkdir_p(path.join(prjdir, wrkdir, verdir, 'PLYRGB'))
+util.fs.mkdir_p(path.join(prjdir, wrkdir, verdir, 'DAT'))
+util.fs.mkdir_p(path.join(prjdir, wrkdir, verdir, 'TXT'))
+util.fs.mkdir_p(path.join(prjdir, wrkdir, verdir, 'SAL'))
 
-pcfile = path.join(prjdir,srcdir,sweepn,pcname)
-imfile = path.join(prjdir,wrkdir,imgdir,sweepn,paname)
-nmfile = path.join(prjdir,wrkdir,'NMP/nmp'..sweepn..'.png')
-clfile = path.join(prjdir,wrkdir,'RGB/rgb'..sweepn..'.png')
-xyfile = path.join(prjdir,wrkdir,'XYZRGB/xyz'..sweepn..'.xyz')
-odfile = path.join(prjdir,wrkdir,'OD/pc'..sweepn..'.od')
-otfile = path.join(prjdir,wrkdir,'TXT/'..sweepn..'.txt')
-slfile = path.join(prjdir,wrkdir,'SAL/'..sweepn..'.png')
+pcfile = path.join(prjdir, wrkdir, verdir, srcdir,   sweepn..'.dat')
+imfile = path.join(prjdir, wrkdir, verdir, imgdir,   sweepn, paname)
+nmfile = path.join(prjdir, wrkdir, verdir, 'NMP',    'nmp'..sweepn..'.png')
+clfile = path.join(prjdir, wrkdir, verdir, 'RGB',    'rgb'..sweepn..'.png')
+plfile = path.join(prjdir, wrkdir, verdir, 'PLYRGB', 'ply'..sweepn..'.ply')
+svfile = path.join(prjdir, wrkdir, verdir, 'DAT',    'pc'..sweepn..'.dat')
+otfile = path.join(prjdir, wrkdir, verdir, 'TXT',    sweepn..'.txt')
+slfile = path.join(prjdir, wrkdir, verdir, 'SAL',    sweepn..'.png')
 
 dbgf = io.open(otfile,'w')
 
+print(pcfile)
+pc = torch.load(pcfile)
 
-pc = PointCloud.PointCloud.new(pcfile)
+print(imgile)
 img = image.load(imfile)
 height = pc.height
 width = pc.width
@@ -182,11 +183,10 @@ rad_per_pix = 2*math.pi/iw
 vscale = 1.15
 hhov = 2*math.pi
 vhov = ih*rad_per_pix*vscale
-xyz_map = pc:get_xyz_map_no_mask()
-index,rmask = pc:get_index_and_mask()
-emask = rmask:eq(0)
-phi,theta = pc:get_xyz_phi_theta()
-nmp,_G.ndd = pc:get_normal_map()
+xyz_map,phi,theta = pc:get_xyz_map()
+rmask = pc:get_inverse_masks()
+emask = pc:get_valid_masks()
+nmp,nphi,ntheta,ndd = pc:get_normal_map()
 nmpi = image.combine(nmp)
 
 --[[
@@ -196,18 +196,18 @@ thof_init = 43*math.pi/100 --(- goes left, + goes right)
 hhof_init = -104 --(- goes down, + goes up)
 --[[]]
 
---[[]]
+--[[
 --mobile-void
 hcen_init = (1/2)*ih+(2/1024)*ih --(- goes down, + goes up)
 thof_init = 30*math.pi/100 - 10/1000 --(- goes left, + goes right)
 hhof_init = -104 --(- goes down, + goes up)
 --[[]]
 
---[[
+--[[]]
 --precise-transit
 hcen_init = (1/2)*ih+(3.5/1024)*ih
-thof_init = pc.meta_properties.camera_offset_azimuth-(3/720)*math.pi
-hhof_init = pc.meta_properties.camera_offset_z
+thof_init = pc.meta.camera_offset_azimuth-(3/720)*math.pi
+hhof_init = pc.meta.camera_offset_z
 --[[]]
 
 hcen_wiggle = 2
@@ -295,19 +295,8 @@ image.save(slfile,best_sal)
 
 pc:load_rgb_map(clfile)
 
-points_t = torch.zeros(3,num)
-rgb_t = torch.zeros(3,num)
-
-for i = 1,3 do
-	points_t[i] = xyz_map[i][msk:byte()]
-	rgb_t[i] = rgb_map[i][msk:byte()]
-end
-rgb_t:mul(255):floor()
-
-points = points_t:t()
-rgb = rgb_t:t()
-pc.save_any_points_to_xyz(xyfile,points,rgb)
-pc:save_to_od(odfile)
+pc:save_to_ply_file(plfile, true, true, false, true, false)
+pc:save_to_data_file(svfile)
 
 --[[]]
 

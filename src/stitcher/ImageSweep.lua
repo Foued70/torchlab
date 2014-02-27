@@ -37,6 +37,12 @@ function ImageSweep:__init(img_files_tab,hfov,vfov,scale,phi,psi)
 
 end
 
+function ImageSweep:clean()
+  for i = 1,self.num_images do
+    self.img_frams_tab[i]:clean()
+  end
+end
+
 function ImageSweep:set_parameters_to_curr()
   local lml = self.lam_local:clone()
   local phl = self.phi_local:clone()
@@ -590,7 +596,7 @@ function ImageSweep:get_blended_panorama()
   local pp = torch.range(0,hght-1):repeatTensor(wdth,1):t()*rad_per_pix - pi/2
   local tt = torch.range(0,wdth-1):repeatTensor(hght,1)    *rad_per_pix - pi
   
-  local weight = torch.ones(6,hght,wdth)
+  local weight = torch.ones(self.num_images,hght,wdth)
   
   for i=1,self.num_images do
     
@@ -710,7 +716,7 @@ function ImageSweep:get_blended_panorama()
 
   end
   
-  weight_sum = weight:sum(1):repeatTensor(6,1,1)
+  weight_sum = weight:sum(1):repeatTensor(self.num_images,1,1)
   weight[weight_sum:gt(0)]=weight[weight_sum:gt(0)]:cdiv(weight_sum[weight_sum:gt(0)])
   print(weight_sum:max())
   weight_sum = weight_sum:div(weight_sum:max())
