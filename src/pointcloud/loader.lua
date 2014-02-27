@@ -174,9 +174,6 @@ function loader.load_pobot_ascii(dirname, minradius, maxradius)
   --this will later be fixed in the data we get, but for now, recalc best min error width to get new azimuth per line
   meta = loader.fix_meta(depth_map, meta)
 
-  local rgb_map          = torch.zeros(height,width):clone():contiguous()
-  local intensity_map    = torch.zeros(height,width):clone():contiguous()
-
   local xyz_phi_map      = torch.range(0,height-1):repeatTensor(width,1)
   xyz_phi_map            = util.torch.flipTB(xyz_phi_map:t())
   xyz_phi_map            = xyz_phi_map:mul(meta.elevation_per_point):add(meta.elevation_start+math.pi/2)
@@ -206,19 +203,28 @@ function loader.load_pobot_ascii(dirname, minradius, maxradius)
   xyz_theta_map_pl       = nil
   collectgarbage()
   
+  --fix the width
+  
+  width  = math.ceil(2*math.pi/meta.azimuth_per_line)
+  local depth_map     = depth_map:sub(1,height,1,width):clone():contiguous()
+  local xyz_phi_map   = xyz_phi_map:sub(1,height,1,width):clone():contiguous()
+  local xyz_theta_map = xyz_theta_map:sub(1,height,1,width):clone():contiguous()
+  
   -- only use stuff that's between min and max radius
   local depth_valid_mask = depth_map:ge(minradius):cmul(depth_map:le(maxradius))
   local imask            = depth_valid_mask:eq(0)
   count                  = depth_valid_mask:double():sum()
   depth_map[imask]       = 0
-  rgb_map[imask]         = 0
-  intensity_map[imask]   = 0
   xyz_phi_map[imask]     = 0
   xyz_theta_map[imask]   = 0
   
-  -- masks
+  -- rgb and intensity
+  local rgb_map          = torch.zeros(height,width):clone():contiguous()
+  local intensity_map    = torch.zeros(height,width):clone():contiguous()
   local rgb_valid_mask = torch.zeros(height,width):byte()
   local intensity_valid_mask = torch.zeros(height,width):byte()
+  rgb_map[imask]         = 0
+  intensity_map[imask]   = 0
   
   imask = nil
   collectgarbage()

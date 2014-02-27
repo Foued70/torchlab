@@ -2,7 +2,7 @@
 # for stitching all sweeps in a folder
 
 PRJDIR=$1 # /Users/lihui815/Documents/precise-transit-6548
-SRCDIR=$PRJDIR"/work/a_00/Images"
+SRCDIR=$PRJDIR"/work/a/Images"
 
 for sweep in $(ls $SRCDIR)
 do

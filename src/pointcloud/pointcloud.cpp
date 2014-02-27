@@ -156,7 +156,8 @@ int get_valid_mask(char* valid_mask, short* hwindices, long length, int height, 
 
 
   
-int get_step_maps_updown(int* step_updown, double* xyz, double min_step_size, 
+int get_step_maps_updown(int* step_updown, double* xyz, char * vmask, 
+                         double min_step_size, 
                          double max_step_size, int dir, int height, int width)
 {
   int h,w;
@@ -179,7 +180,7 @@ int get_step_maps_updown(int* step_updown, double* xyz, double min_step_size,
       ycur = xyz[offset1+h*width+w];
       zcur = xyz[offset2+h*width+w];
       
-      if (norm(xcur,ycur,zcur) < 0.01)
+      if ((norm(xcur,ycur,zcur) < 0.01) || (vmask[h*width+w] == 0))
       {
         step_updown[offset0+h*width+w] = h;
         step_updown[offset1+h*width+w] = w;
@@ -200,7 +201,7 @@ int get_step_maps_updown(int* step_updown, double* xyz, double min_step_size,
           yque = xyz[offset1+sh*width+sw];
           zque = xyz[offset2+sh*width+sw];
           
-          if (norm(xque,yque,zque) < 0.01)
+          if ((norm(xque,yque,zque) < 0.01) || (vmask[sh*width+sw] == 0))
           {
             if (s > 0)
             {
@@ -242,7 +243,8 @@ int get_step_maps_updown(int* step_updown, double* xyz, double min_step_size,
   }
 }
 
-int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, double min_step_size,
+int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, 
+                            char * vmask, double min_step_size,
                             double max_step_size, int dir, int height, int width)
 {
   int h,w;
@@ -265,7 +267,7 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
       ycur = xyz[offset1+h*width+w];
       zcur = xyz[offset2+h*width+w];
       
-      if (norm(xcur,ycur,zcur) < 0.01)
+      if ((norm(xcur,ycur,zcur) < 0.01) || (vmask[h*width+w] == 0))
       {
         step_leftright[offset0+h*width+w] = h;
         step_leftright[offset1+h*width+w] = w;
@@ -299,9 +301,9 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
           yque = xyz[offset1+sh*width+sw];
           zque = xyz[offset2+sh*width+sw];
           
-          if (norm(xque,yque,zque) < 0.01)
+          if ((norm(xque,yque,zque) < 0.01) || (vmask[sh*width+sw] == 0))
           {
-            if (s > 0)
+            if (s > 1)
             {
               s = MAX(0,s-1);
               sw = (w+(dir*s)+width) % width;
@@ -344,10 +346,6 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
             }
             ph = sh;
           }
-          /*else
-          {
-            printf("keep looking %d %d %f %f\n",h,w,tcur,tque);
-          }*/
           s++;
         }
         step_leftright[offset0+h*width+w] = sh;
@@ -359,13 +357,13 @@ int get_step_maps_leftright(int* step_leftright, double *xyz, double *theta, dou
 
 
 int get_step_maps(int* step_up, int* step_down, int* step_left, int* step_right, 
-                  double* xyz, double* theta_map,
+                  double* xyz, double* theta_map, char * vmask,
                   double min_step_size, double max_step_size, int height, int width)
 {
-  get_step_maps_updown(step_up,xyz,min_step_size,max_step_size,-1,height,width);
-  get_step_maps_updown(step_down,xyz,min_step_size,max_step_size,1,height,width);
-  get_step_maps_leftright(step_left,xyz,theta_map,min_step_size,max_step_size,-1,height,width);
-  get_step_maps_leftright(step_right,xyz,theta_map,min_step_size,max_step_size,1,height,width);
+  get_step_maps_updown(step_up,xyz,vmask,min_step_size,max_step_size,-1,height,width);
+  get_step_maps_updown(step_down,xyz,vmask,min_step_size,max_step_size,1,height,width);
+  get_step_maps_leftright(step_left,xyz,theta_map,vmask,min_step_size,max_step_size,-1,height,width);
+  get_step_maps_leftright(step_right,xyz,theta_map,vmask,min_step_size,max_step_size,1,height,width);
 }
 
 
@@ -747,6 +745,7 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
                                           double* imaget, double* theta_cnt,
                                           double* coord_map, double *points,
                                           char* connection_map, char* corners_map, double* theta,
+                                          double* weights,
                                           int pan_hght, int pan_wdth,
                                           int img_hght, int img_wdth)
 {
@@ -756,6 +755,7 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
   double cor_x,cor_y;
   double ptx,pty,ptz, ptxp,ptyp,ptzp;
   double theta_p;
+  double wgt;
   
   char conn_hw, conn_hpw;
   char corn_hw;
@@ -805,6 +805,8 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
       
       theta_p = *(theta + 0*pan_hght*pan_wdth + h*pan_wdth + pw);
       
+      wgt   = *(weights + 0*pan_hght*pan_wdth + h*pan_wdth + w);
+      
       /* check corner */
       if (on_corner == 0)
       {
@@ -816,6 +818,7 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
           cor_y = crdy;
           cor_x = crdx;
           on_corner = 1;
+          dst_cor = wgt;
           *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
           increment_pixel_in_image(imaget, crdy, crdx, img_hght, img_wdth, theta_p);
           increment_pixel_in_image(theta_cnt, crdy, crdx, img_hght, img_wdth, 1);
@@ -828,6 +831,7 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
         {
           cor_end = ptz;
           on_corner = 1;
+          dst_cor = dst_cor + wgt;
           *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
           increment_pixel_in_image(imaget, crdy, crdx, img_hght, img_wdth, theta_p);
           increment_pixel_in_image(theta_cnt, crdy, crdx, img_hght, img_wdth, 1);
@@ -835,7 +839,6 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
         else
         {
           /* stop and draw */
-          dst_cor = 1 + 100*fabs(cor_stt - cor_end);
           increment_pixel_in_image(image_corner, cor_y, cor_x, img_hght, img_wdth, dst_cor);
         
           /* maybe start new column, otherwise refresh */
@@ -846,6 +849,7 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
             cor_y = crdy;
             cor_x = crdx;
             on_corner = 1;
+            dst_cor = wgt;
             *(corners_map_filled+0*pan_hght*pan_wdth + h*pan_wdth + w) = 1;
             increment_pixel_in_image(imaget, crdy, crdx, img_hght, img_wdth, theta_p);
             increment_pixel_in_image(theta_cnt, crdy, crdx, img_hght, img_wdth, 1);
@@ -857,6 +861,7 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
             cor_y = 0;
             cor_x = 0;
             on_corner = 0;
+            dst_cor = 0;
           }
           
         }
@@ -865,7 +870,7 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
       /* check connection */
       if (conn_hw == 1)
       {
-        dst_con = norm(ptx,pty,0) + 1;
+        dst_con = wgt;
         
         if (conn_hpw == 1)
         {
@@ -886,5 +891,65 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
   
   return 0;
 }
+
+
+
+int hough_planes(double * himg, double * xyz_map, double * intensity_map,
+                 double phi, double theta_res, double depth_res, 
+                 double max_depth, int map_h, int map_w)
+{
+  
+  int h,w, t, dl,dh, map_offset = map_h * map_w,row_offset;
+  double x,y,z,i, theta,depth, costh,sinth, cosph,sinph, d;
+  int theta_dim = (int)( (2 * PI) / theta_res  + 1);
+  int depth_dim = (int)(max_depth / depth_res  + 1);
+  
+  for (h = 0; h < map_h; h++)
+  {
+    for (w = 0; w < map_w; w++)
+    {
+      row_offset = h * map_w;
+      x = xyz_map[row_offset + w];
+      y = xyz_map[map_offset + row_offset + w];
+      z = xyz_map[map_offset * 2 + row_offset + w];
+      i = intensity_map[row_offset + w];
+      
+      if (i > 0)
+      {
+    
+				for (t = 0; t < theta_dim; t++)
+				{
+					theta = ((double)t) * theta_res - PI;
+			
+					sinph = sin(phi);
+					cosph = cos(phi);
+					sinth = sin(theta);
+					costh = cos(theta);
+				
+					depth = - (x * cosph * costh + y * cosph * sinth + z * sinph);
+				
+					if (depth > 10)
+					{
+					  d  = depth/depth_res;
+						dl = (int) d;
+						dh = dl + 1;
+						if ((dl  > 0) && (dl < depth_dim))
+						{
+							himg[t * depth_dim + dl] = himg[t * depth_dim + dl] + (i * fabs(((double)dl) - d)); 
+						}
+						if ((dh  > 0) && (dh < depth_dim))
+						{
+							himg[t * depth_dim + dh] = himg[t * depth_dim + dh] + (i * fabs(((double)dh) - d)); 
+						}
+						
+					}
+				
+				}
+			}
+		}
+	}
+  
+}
+
 
 }

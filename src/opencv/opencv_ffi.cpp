@@ -211,6 +211,11 @@ extern "C" {
     {
       delete(mat);
     }
+    
+    void KeyPoint_destroy(KeyPoint * kpts)
+    {
+      delete(kpts);
+    }
 
 
   // -----------------------------

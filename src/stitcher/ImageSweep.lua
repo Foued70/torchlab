@@ -1,9 +1,11 @@
 path = require 'path'
 blend = projection.util.blend
+log = require '../util/log'
 pi  = math.pi
 pi2 = pi * 0.5
 
 ImageSweep = Class()
+
 
 function ImageSweep:__init(img_files_tab,hfov,vfov,scale,phi,psi)
 
@@ -104,9 +106,9 @@ function ImageSweep:optimize_local_all(psi_local_win,   phi_local_win,  lam_loca
     self.phi_local  = cp:sub(phi_offset+1,lam_offset):clone()
     self.lam_local  = cp:sub(lam_offset+1,num_params):clone()
     self:set_parameters_to_curr()
-    local score,iscore,lscore,sscore = self:get_score()
+    local score = self:get_sift_score()
     collectgarbage()
-    return score,iscore,lscore,sscore
+    return score
   end
   
   collectgarbage()
@@ -129,9 +131,9 @@ function ImageSweep:optimize_global_all(psi_win, phi_win, iter, rep, ran_size, f
 
   local function update_and_score_function(params)
     self:set_global_parameters(nil,nil,nil, params[1],params[2])
-    local score,iscore,lscore,sscore = self:get_score()
+    local score= self:get_sift_score()
     collectgarbage()
-    return score,iscore,lscore,sscore
+    return score
   end
   
   local curr_params = torch.Tensor({self.phi_global, self.psi_global})
@@ -146,9 +148,9 @@ function ImageSweep:optimize_fov_all(hfov_win, vfov_win, iter, rep, ran_size, fo
 
   local function update_and_score_function(params)
     self:set_global_parameters(params[1],params[2],nil, nil,nil)
-    local score,iscore,lscore,sscore = self:get_score()
+    local score = self:get_sift_score()
     collectgarbage()
-    return score,iscore,lscore,sscore
+    return score
   end
   
   local curr_params = torch.Tensor({self.hfov_global, self.vfov_global})
@@ -179,9 +181,9 @@ function ImageSweep:optimize_local_dir(i, psi_win, phi_win, lam_win, iter, rep, 
   
   local function update_and_score_function(params)
     self:set_local_parameters(fr,nil,nil,nil, params[1], self.phi_global + params[2] ,self.psi_global + params[3])
-    local score,iscore,lscore,sscore,weight = self:get_side_by_side_score(ov)
+    local score,weight = self:get_side_by_side_sift_score(ov)
     collectgarbage()
-    return score,iscore,lscore,sscore
+    return score
   end
   
   local curr_params = torch.Tensor({self.lam_local[fr], self.phi_local[fr], self.psi_local[fr]})
@@ -199,12 +201,12 @@ function ImageSweep:optimize_local_dir_all(psi_win, phi_win, lam_win, iter, rep,
   local lam_tmp_0 = self.lam_local:clone()
   local phi_tmp_0 = self.phi_local:clone()
   local psi_tmp_0 = self.psi_local:clone()
-  local score_0, iscore_0, lscore_0, sscore_0 = self:get_score()
-  print(0, score_0, iscore_0, lscore_0, sscore_0)
+  local score_0 = self:get_sift_score()
+  print(0, score_0)
   collectgarbage()
   
   -- go forward
-  for i = 1,self.num_images-1 do
+  for i = 1,self.num_images do
     self:optimize_local_dir(i, psi_win, phi_win, lam_win, iter, rep, ran_size, true)
     
     collectgarbage()
@@ -215,8 +217,27 @@ function ImageSweep:optimize_local_dir_all(psi_win, phi_win, lam_win, iter, rep,
   local lam_tmp_1 = self.lam_local:clone()
   local phi_tmp_1 = self.phi_local:clone()
   local psi_tmp_1 = self.psi_local:clone()
-  local score_1, iscore_1, lscore_1, sscore_1 = self:get_score()
-  print(1, score_1, iscore_1, lscore_1, sscore_1)
+  
+  -- distribute error in first frame across
+  local err_lam_1 = (lam_tmp_1[1] - lam_tmp_0[1])/self.num_images
+  local err_phi_1 = (phi_tmp_1[1] - phi_tmp_0[1])/self.num_images
+  local err_psi_1 = (psi_tmp_1[1] - psi_tmp_0[1])/self.num_images
+  
+  lam_tmp_1[1] = lam_tmp_0[1]
+  phi_tmp_1[1] = phi_tmp_0[1]
+  psi_tmp_1[1] = psi_tmp_0[1]
+  
+  lam_tmp_1:add(torch.range(0,self.num_images-1)*err_lam_1)
+  phi_tmp_1:add(torch.range(0,self.num_images-1)*err_phi_1)
+  psi_tmp_1:add(torch.range(0,self.num_images-1)*err_psi_1)
+  
+  for i = 1,self.num_images do
+    self:set_local_parameters(i,nil,nil,nil,lam_tmp_1[i], self.phi_global + phi_tmp_1[i] , self.psi_global + psi_tmp_1[i])  
+    collectgarbage()
+  end
+  
+  local score_1 = self:get_sift_score()
+  print(1, score_1)
   collectgarbage()
   
   -- reset
@@ -238,8 +259,27 @@ function ImageSweep:optimize_local_dir_all(psi_win, phi_win, lam_win, iter, rep,
   local lam_tmp_2 = self.lam_local:clone()
   local phi_tmp_2 = self.phi_local:clone()
   local psi_tmp_2 = self.psi_local:clone()
-  local score_2, iscore_2, lscore_2, sscore_2 = self:get_score()
-  print(2, score_2, iscore_2, lscore_2, sscore_2)
+  
+  -- distribute error in first frame across
+  local err_lam_2 = (lam_tmp_2[1] - lam_tmp_0[1])/self.num_images
+  local err_phi_2 = (phi_tmp_2[1] - phi_tmp_0[1])/self.num_images
+  local err_psi_2 = (psi_tmp_2[1] - psi_tmp_0[1])/self.num_images
+  
+  lam_tmp_2:add((torch.ones(self.num_images):mul(self.num_images)-torch.range(0,self.num_images-1))*err_lam_2)
+  phi_tmp_2:add((torch.ones(self.num_images):mul(self.num_images)-torch.range(0,self.num_images-1))*err_phi_2)
+  psi_tmp_2:add((torch.ones(self.num_images):mul(self.num_images)-torch.range(0,self.num_images-1))*err_psi_2)
+  
+  lam_tmp_2[1] = lam_tmp_0[1]
+  phi_tmp_2[1] = phi_tmp_0[1]
+  psi_tmp_2[1] = psi_tmp_0[1]
+  
+  for i = 1,self.num_images do
+    self:set_local_parameters(i,nil,nil,nil,lam_tmp_2[i], self.phi_global + phi_tmp_2[i] , self.psi_global + psi_tmp_2[i])  
+    collectgarbage()
+  end
+  
+  local score_2 = self:get_sift_score()
+  print(2, score_2)
   collectgarbage()
   
   -- combine forward and backward
@@ -267,9 +307,9 @@ function ImageSweep:optimize_local_dir_all(psi_win, phi_win, lam_win, iter, rep,
   -- adjust first frame on phi and psi
   local function update_and_score_function(params)
     self:set_local_parameters(1,nil,nil,nil, nil, self.phi_global + params[1] ,self.psi_global + params[2])
-    local score,iscore,lscore,sscore = self:get_score()
+    local score = self:get_sift_score()
     collectgarbage()
-    return score,iscore,lscore,sscore
+    return score
   end
   
   local curr_params = torch.Tensor({self.phi_local[1], self.psi_local[1]})
@@ -280,8 +320,8 @@ function ImageSweep:optimize_local_dir_all(psi_win, phi_win, lam_win, iter, rep,
   collectgarbage()
   
   -- get combined score
-  local score_3, iscore_3, lscore_3, sscore_3 = self:get_score()
-  print(3, score_3, iscore_3, lscore_3, sscore_3)
+  local score_3 = self:get_sift_score()
+  print(3, score_3)
   
   print('', score_0, score_3)
   
@@ -296,7 +336,7 @@ function ImageSweep:optimize_local_dir_all(psi_win, phi_win, lam_win, iter, rep,
   end
   
   -- print final score
-  print(4, self:get_score())
+  print(4, self:get_sift_score())
   
   collectgarbage()
   
@@ -307,7 +347,7 @@ function ImageSweep:optimize_global(update_function, curr_param, win_size, iter,
   local function update_and_score_function(params)
 	  update_function(params[1])
 	  collectgarbage()
-	  return self:get_score()
+	  return self:get_sift_score()
 	end
 	
 	curr_param       = torch.Tensor({curr_param})
@@ -325,7 +365,7 @@ function ImageSweep:optimize_local(update_function, curr_param, win_size, iter, 
 	local function update_and_score_function(params)
 	  update_function(params)
 	  collectgarbage()
-	  return self:get_score()
+	  return self:get_sift_score()
 	end
 	
 	local winsizes   = torch.Tensor(curr_param:size()):fill(win_size)
@@ -354,14 +394,14 @@ function ImageSweep:optimize(update_and_score_function, curr_params, winsizes, i
       for k = 1,ran do
         local rand   = (torch.rand(num_params)*2-1.0):cmul(winsizes)
         local params = curr_params + rand
-        local score,iscore,lscore,sscore = update_and_score_function(params)
+        local score = update_and_score_function(params)
         
         if score < best_score then
           best_params = params
           best_score  = score
         end
         
-        print('', i,j,k, score, iscore, lscore,sscore, best_score)
+        print('', i,j,k, score, best_score)
         collectgarbage()
         
       end
@@ -934,3 +974,118 @@ function ImageSweep:get_seam(i)
 end
 
 
+
+
+function ImageSweep:get_side_by_side_sift_score(i)
+  
+  local j = i+1
+  if j > self.num_images then
+    j = 1
+  end
+  
+  --local img_i, sal_i, lab_i, msk_i, fts_i = self:get_frame_output(i)
+  --local img_j, sal_j, lab_j, msk_j, fts_j = self:get_frame_output(j)
+  
+  local img_i, sal_i, lab_i, msk_i = self:get_frame_output(i)
+  local img_j, sal_j, lab_j, msk_j = self:get_frame_output(j)
+  
+  collectgarbage()
+  
+  local ovl_msk = msk_i:eq(1):cmul(msk_j:eq(1))[1]:clone()
+  local ovl_wgh = ovl_msk:double():sum()
+  
+  if ovl_wgh > 0 then
+    
+    --[[
+    local om128 = ovl_msk:double():repeatTensor(128,1,1)
+    local om003 = ovl_msk:double():repeatTensor(3,1,1)
+		fts_i = fts_i:cmul(om128)
+		fts_j = fts_j:cmul(om128)
+		img_i = img_i:cmul(om003)
+		img_j = img_j:cmul(om003)
+		sal_i = sal_i:cmul(om003)
+		sal_j = sal_j:cmul(om003)
+		lab_i = lab_i:cmul(om003)
+		lab_j = lab_j:cmul(om003)
+		
+		
+		local score = ((fts_i - fts_j):pow(2):sum() + 
+		               (img_i - img_j):pow(2):sum() + 
+		               (sal_i - sal_j):pow(2):sum() + 
+		               (lab_i - lab_j):pow(2):sum())/ovl_wgh
+		--[[]]
+		
+		local om003 = ovl_msk:double():repeatTensor(3,1,1)
+		--fts_i = fts_i:cmul(om128)
+		--fts_j = fts_j:cmul(om128)
+		img_i = img_i:cmul(om003)
+		img_j = img_j:cmul(om003)
+		sal_i = sal_i:cmul(om003)
+		sal_j = sal_j:cmul(om003)
+		lab_i = lab_i:cmul(om003)
+		lab_j = lab_j:cmul(om003)
+		
+		
+		local score = ((lab_i:clone():cmul(sal_i) - lab_j:clone():cmul(sal_j)):pow(2):sum() + 
+		               (img_i - img_j):pow(2):sum() + 
+		               (sal_i - sal_j):pow(2):sum() + 
+		               (lab_i - lab_j):pow(2):sum())/ovl_wgh
+		
+		
+		
+		img_i   = nil
+	  img_j   = nil
+    sal_i   = nil
+    sal_j   = nil
+    lab_i   = nil
+    lab_j   = nil 
+		fts_i   = nil
+		fts_j   = nil
+		ovl_msk = nil
+		om128   = nil
+		im003   = nil
+		collectgarbage()
+		
+		return score, ovl_wgh
+		  
+	end
+	
+	img_i = nil
+	img_j = nil
+  sal_i = nil
+  sal_j = nil
+  lab_i = nil
+  lab_j = nil
+	fts_i   = nil
+	fts_j   = nil
+	ovl_msk = nil
+	collectgarbage()
+	return 1, 0
+  
+end
+
+function ImageSweep:get_sift_score()
+
+  local score  = 0
+  local weight = 0
+  
+  for i = 1,self.num_images do
+    local score_i, ovl_wgh_i = self:get_side_by_side_sift_score(i)
+
+    score  = score  + score_i * ovl_wgh_i
+    weight = weight + ovl_wgh_i
+    
+    collectgarbage()
+  end
+  
+  collectgarbage()
+  
+  if weight > 0 then
+    score = score/weight
+  end
+  
+  collectgarbage()
+  
+  return score
+
+end

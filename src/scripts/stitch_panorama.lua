@@ -13,11 +13,9 @@ cmd:text('Align a linear 360 sweep of images')
 cmd:text()
 cmd:text('Options')
 cmd:option('-srcdir',      '/Users/lihui815/Documents/precise-transit-6548', 'top project directory')
---cmd:option('-pcdir',       'source/po_scan/a',                               'directory with the pointcloud')
-cmd:option('-imdir',       'work/a_00/Images',                               'directory in which to find images')
-cmd:option('-outdir',      'work/a_00/Aligned_For_Use',                              'directory for aligned images')
+cmd:option('-imdir',       'work/a/Images',                               'directory in which to find images')
+cmd:option('-outdir',      'work/a/Aligned_For_Use',                              'directory for aligned images')
 cmd:option('-swdir',       '001',                                            'directory for specific sweep')
---cmd:option('-pcname',      'sweep.xyz',                                      'pointcloud filename')
 cmd:option('-imext',       '.tiff',                                          'image filename extensions')
 cmd:option('-outname',     'panorama_360',                              'output image filename')
 cmd:option('-imageglob',   '*',                                              'shell pattern to match image files in dir')
@@ -33,9 +31,7 @@ params     = cmd:parse(process.argv)
 
 srcdir = params.srcdir
 swnum  = params.swdir
---pcdir  = path.join(srcdir, params.pcdir, swnum)
 imdir  = path.join(srcdir, params.imdir, swnum)
---pcname = path.join(pcdir, params.pcname)
 imext  = params.imext
 outdir = path.join(srcdir, params.outdir)
 util.fs.mkdir_p(outdir)

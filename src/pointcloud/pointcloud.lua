@@ -8,7 +8,7 @@ local Mat    = opencv.Mat
 ffi.cdef
 [[
     int get_step_maps(int* step_up, int* step_down, int* step_left, int* step_right, 
-                  double* xyz, double* theta,
+                  double* xyz, double* theta_map, char * vmask,
                   double min_step_size, double max_step_size, int height, int width);
                   
     int get_normal_theta_map(double* theta_map, double* centered_point_map, 
@@ -27,6 +27,7 @@ ffi.cdef
                                           double* imaget, double* theta_cnt,
                                           double* coord_map, double *points,
                                           char* connection_map, char* corners_map, double* theta,
+                                          double* weights,
                                           int pan_hght, int pan_wdth,
                                           int img_hght, int img_wdth);
 ]]
@@ -72,6 +73,8 @@ function pointcloud:load_input(input)
   self.meter     = input.meter
   self.centroid  = input.centroid
   self.meta      = input.meta
+  self.def_mind  = 0.025 * self.meter
+  self.def_maxd  = 0.100 * self.meter
   
   self.depth_map     = input.depth_map:clone():contiguous()
   self.rgb_map       = input.rgb_map:clone():contiguous()
@@ -191,6 +194,12 @@ function pointcloud:get_noise()
   
 end
 
+function pointcloud:get_center_transformed(H)
+  local center = self.centroid:repeatTensor(1,1)
+  local H_new = H:clone()
+  return (H_new*torch.cat(center,torch.ones(center:size(1),1)):t()):t():sub(1,-1,1,3):squeeze()
+end
+
 
 -- mapping functions
 
@@ -284,17 +293,34 @@ function pointcloud:get_xyz_map()
   return self.xyz_map:clone(), self.xyz_phi_map:clone(), self.xyz_theta_map:clone()
 end
 
-function pointcloud:get_lookup_maps(force, mind, maxd)
+function pointcloud:get_lookup_maps(force, mind, maxd, vmask)
   if force or (not self.map_u) then
   
 		local height = self.height
 		local width  = self.width
 		local meter  = self.meter
 	
-		mind = mind or (0.025 * meter)
-		maxd = maxd or (0.100 * meter)
+		mind  = mind  or self.def_mind
+		maxd  = maxd  or (4 * mind)
+		
+		self.cur_mind = mind
+		self.cur_maxd = maxd
+		
+		local dm, dvm = self:get_depth_map()
+		vmask = vmask or dvm:clone()
+		vmask:cmul(dvm)
+		
+		dm  = nil
+		dvm = nil
+		collectgarbage()
 	
 		local xyz_map, xyz_phi_map, xyz_theta_map = self:get_xyz_map()
+		
+		self.map_u = nil
+		self.map_d = nil
+		self.map_l = nil
+		self.map_r = nil
+		collectgarbage()
 	
 		self.map_u = torch.zeros(2, height, width):int():contiguous()
 		self.map_d = torch.zeros(2, height, width):int():contiguous()
@@ -304,6 +330,7 @@ function pointcloud:get_lookup_maps(force, mind, maxd)
 		libpc.get_step_maps(torch.data(self.map_u), torch.data(self.map_d), 
 		                    torch.data(self.map_l), torch.data(self.map_r), 
                         torch.data(xyz_map), torch.data(xyz_theta_map), 
+                        torch.data(vmask:clone():contiguous()), 
                         mind, maxd, height, width)
 	
 		xyz_map       = nil
@@ -315,13 +342,20 @@ function pointcloud:get_lookup_maps(force, mind, maxd)
   return self.map_u:clone(), self.map_d:clone(), self.map_l:clone(), self.map_r:clone()
 end
 
-function pointcloud:get_normal_map(force, mind, maxd)
+function pointcloud:get_normal_map(force, mind, maxd, vmask)
   if force or (not self.normal_map) then
     local height  = self.height
     local width   = self.width
     local xyz_map = self:get_xyz_map()
     
-    local mu,md,ml,mr = self:get_lookup_maps(force, mind, maxd)
+    local mu,md,ml,mr = self:get_lookup_maps(force, mind, maxd, vmask)
+    
+    self.normal_phi_map = nil
+    self.normal_theta_map = nil
+    self.normal_map = nil
+    self.normal_inverse_mask = nil
+    self.normal_valid_mask = nil
+    collectgarbage()
     
     self.normal_phi_map   = torch.zeros(height,width):clone():contiguous()
     self.normal_theta_map = torch.zeros(height,width):clone():contiguous()
@@ -335,7 +369,7 @@ function pointcloud:get_normal_map(force, mind, maxd)
                       torch.data(ml:contiguous()), torch.data(mr:contiguous()),
                       height,width)
     
-    self.normal_inverse_mask = self.normal_phi_map:le(-5):add(self.normal_theta_map:le(-5)):gt(0):clone():contiguous()
+    self.normal_inverse_mask = self.normal_phi_map:le(-500):add(self.normal_theta_map:le(-500)):gt(0):clone():contiguous()
     self.normal_valid_mask   = self.normal_inverse_mask:eq(0):clone():contiguous()
     
     self.normal_phi_map[self.normal_inverse_mask]   = 0
@@ -349,7 +383,7 @@ function pointcloud:get_normal_map(force, mind, maxd)
     self.normal_map[3] = self.normal_phi_map:clone():sin():clone():contiguous()
     
     self.normal_residual_map = self.normal_map:clone():cmul(
-                                  xyz_map:clone()):sum(1):squeeze():clone():contiguous()
+                                  xyz_map:clone()):sum(1):mul(-1):squeeze():clone():contiguous()
                                   
     local neg = self.normal_residual_map:lt(0)
     
@@ -358,7 +392,12 @@ function pointcloud:get_normal_map(force, mind, maxd)
       self.normal_map[i][self.normal_inverse_mask] = 0
     end
     
-    self.normal_residual_map = self.normal_map:clone():cmul(self.xyz_map:clone()):sum(1):squeeze()
+    self.normal_phi_map[neg] = -self.normal_phi_map[neg]
+    self.normal_theta_map[neg] = self.normal_theta_map[neg] + math.pi
+    self.normal_theta_map[self.normal_theta_map:gt(math.pi)] = self.normal_theta_map[self.normal_theta_map:gt(math.pi)]- 2*math.pi
+    
+    self.normal_residual_map = self.normal_map:clone():cmul(
+                                  xyz_map:clone()):sum(1):mul(-1):squeeze():clone():contiguous()
     
     xyz_map = nil
     neg     = nil
@@ -370,6 +409,183 @@ function pointcloud:get_normal_map(force, mind, maxd)
   end
   collectgarbage()
   return self.normal_map:clone(), self.normal_phi_map:clone(), self.normal_theta_map:clone(), self.normal_residual_map:clone(), self.normal_valid_mask:clone(), self.normal_inverse_mask:clone()
+end
+
+function pointcloud:get_density_map()
+
+  local map_u, map_d, map_l, map_r = self:get_lookup_maps()
+
+  local l = map_d[1] - map_u[1]
+  l[(map_d[1] - map_l[1]):eq(0)] = l[(map_d[1] - map_r[1]):eq(0)]:mul(2)
+  l[(map_r[1] - map_u[1]):eq(0)] = l[(map_r[1] - map_u[1]):eq(0)]:mul(2)
+  
+  local w = map_r[2] - map_l[2]
+  w[(map_d[2] - map_l[2]):eq(0)] = w[(map_d[2] - map_r[2]):eq(0)]:mul(2)
+  w[(map_r[2] - map_u[2]):eq(0)] = w[(map_r[2] - map_u[2]):eq(0)]:mul(2)
+  w[w:lt(0)] = w[w:lt(0)]:add(self.width)
+  
+  mind = self.cur_mind
+
+  local density = w:clone():cmul(l):double():div(math.pow(self.cur_mind/10,2)*2*math.pi):clone():contiguous()
+  
+  l     = nil
+  w     = nil
+  map_u = nil
+  map_d = nil
+  map_l = nil
+  map_r = nil
+  collectgarbage()
+  
+  return density
+  
+end
+
+function pointcloud:get_reverse_density_map()
+  local dense = self:get_density_map()
+  local mask = self:get_inverse_masks()
+  dense[dense:eq(0)] = dense[dense:gt(0)]:min()/10
+  local rd = torch.ones(dense:size()):cdiv(dense)
+  rd[mask] = 0
+  
+  dense = nil
+  mask = nil
+  collectgarbage()
+  
+  return rd
+  
+end
+
+function pointcloud:get_area_map()
+  local nmp            = self:get_normal_map()
+	local depth          = self:get_depth_map()
+	local imask          = self:get_inverse_masks()
+	local xyz, phi       = self:get_xyz_map()
+	local xyz_unit       = xyz:clone():cdiv(depth:repeatTensor(3,1,1))
+	for d = 1,3 do
+	  xyz_unit[d][imask] = 0
+	end
+	
+	local dotp           = nmp:clone():cmul(xyz_unit):sum(1):abs():squeeze()
+	
+	dotp:pow(2):mul(-1):add(1)
+	dotp[dotp:gt(1)]     = 1
+	dotp[dotp:lt(0)]     = 0
+	dotp:sqrt()
+	
+	local depth_2d       = depth:clone():cmul(phi:clone():cos())
+	local r1             = depth_2d:clone():mul(2*math.pi/self.width)/10
+	local r2             = depth:clone():mul((phi:max() - phi:min())/self.height)/10
+	local area           = r1:clone():cmul(r2):mul(math.pi):cmul(dotp)
+	
+	nmp      = nil
+	depth    = nil
+	imask    = nil
+	xyz      = nil
+	phi      = nil
+	xyz_unit = nil
+	dotp     = nil
+	depth_2d = nil
+	r1       = nil
+	r2       = nil
+	collectgarbage()
+	
+	return area
+end
+
+function pointcloud:get_depthxy_map()
+  local depth           = self:get_depth_map()
+  local xyz, phi, theta = self:get_xyz_map()
+  local depth2d         = depth:clone():cmul(phi:clone():cos())
+  depth = nil
+  xyz   = nil
+  phi   = nil
+  theta = nil
+  return depth2d
+end
+
+function pointcloud:get_xyz_map_transformed(H)
+  local vmsk     = self:get_valid_masks()
+  local xyz_list = self:get_xyz_list_transformed(vmsk,H):t():clone()
+  local xyz_map  = torch.zeros(3,self.height,self.width)
+  local c = self:get_center_transformed(H)
+  for d = 1,3 do
+    xyz_map[d][vmsk] = xyz_list[d]
+  end
+  dmap = self:get_depth_map()
+  d2_map = ((xyz_map[1]-c[1]):clone():pow(2) + (xyz_map[2]-c[2]):clone():pow(2)):sqrt()
+  phi_map = (xyz_map[3]-c[3]):cdiv(dmap):clone():asin()
+  tht_map = (xyz_map[1]-c[1]):clone():cdiv(d2_map):acos()
+  mask    = (xyz_map[2]-c[2]):lt(0)
+  tht_map[mask] = -tht_map[mask]
+  phi_map[vmsk:eq(0)] = 0
+  tht_map[vmsk:eq(0)] = 0
+  return xyz_map:clone(), phi_map:clone(), tht_map:clone()
+end
+
+function pointcloud:get_normal_map_transformed(H)
+  local vmsk     = self:get_valid_masks()
+  local nrm_list = self:get_normal_list_transformed(vmsk,H):t():clone()
+  local nrm_map  = torch.zeros(3,self.height,self.width)
+  for d = 1,3 do
+    nrm_map[d][vmsk] = nrm_list[d]
+  end
+  dmap    = nrm_map:norm(2,1):squeeze()
+  d2_map  = nrm_map:sub(1,2):clone():norm(2,1):squeeze()
+  phi_map = (nrm_map[3]):cdiv(dmap):clone():asin()
+  tht_map = (nrm_map[1]):clone():cdiv(d2_map):acos()
+  mask    = (nrm_map[2]):lt(0)
+  tht_map[mask] = -tht_map[mask]
+  phi_map[vmsk:eq(0)] = 0
+  tht_map[vmsk:eq(0)] = 0
+  return nrm_map:clone(), phi_map:clone(), tht_map:clone()
+end
+
+
+function pointcloud:get_depth_map_unclipped()
+  local dmap, vmsk, rmsk = self:get_depth_map()
+  local max_depth = dmap[vmsk]:max()
+  dmap[rmsk]      = 1.25 * max_depth
+  vmsk = nil
+  rmsk = nil 
+  collectgarbage()
+  return dmap
+end
+
+function pointcloud:get_xyz_map_unclipped(H)
+  if H then
+    local xyz_list, phi_list, theta_list = self:get_xyz_list_unclipped(H)
+    local xyz   = xyz_list:clone():reshape(3,self.height,self.width):clone():contiguous()
+    local phi   = phi_list:clone():reshape(self.height,self.width):clone():contiguous()
+    local theta = theta_list:clone():reshape(self.height,self.width):clone():contiguous()
+    xyz_list = nil
+    phi_list = nil
+    theta_list = nil
+    collectgarbage()
+    return xyz, phi, theta
+  else
+    local dmap = self:get_depth_map_unclipped()
+    local theta = torch.range(0,self.width-1):repeatTensor(self.height,1):mul(-2*math.pi/self.width) + math.pi
+    local phi   = torch.range(0,self.height-1):repeatTensor(self.width,1):t():mul(-self.meta.elevation_per_point)+math.pi/2
+    local xyz   = torch.zeros(3,self.height,self.width)
+    xyz[1] = dmap:clone():cmul(phi:clone():cos()):cmul(theta:clone():cos())
+    xyz[2] = dmap:clone():cmul(phi:clone():cos()):cmul(theta:clone():sin())
+    xyz[3] = dmap:clone():cmul(phi:clone():sin())
+    dmap = nil
+    collectgarbage()
+    return xyz, phi, theta
+  end
+
+end
+
+function pointcloud:get_depthxy_map_unclipped()
+  local depth           = self:get_depth_map_unclipped()
+  local xyz, phi, theta = self:get_xyz_map_unclipped()
+  local depth2d         = depth:clone():cmul(phi:clone():cos())
+  depth = nil
+  xyz   = nil
+  phi   = nil
+  theta = nil
+  return depth2d
 end
 
 
@@ -459,13 +675,10 @@ function pointcloud:get_xyz_list(omsk)
   return plist:clone():contiguous(), phlist:clone():contiguous(), thlist:clone():contiguous()
 end
 
---[[ stav added, need this to get easy way to rotate points, used in Sweep.lua and SweepPair.lua
-]]
 function pointcloud:get_xyz_list_transformed(omsk, H)
   local points = self:get_xyz_list(omsk)
   return (H*torch.cat(points,torch.ones(points:size(1),1)):t()):t():sub(1,-1,1,3)
 end
-
 
 function pointcloud:get_normal_list(omsk)
   local nmap, phmap, thmap, rmap, vmsk = self:get_normal_map()
@@ -490,6 +703,59 @@ function pointcloud:get_normal_list_transformed(omsk, H)
   H_new[{{1,3},{4}}] = 0
   return (H_new*torch.cat(normals,torch.ones(normals:size(1),1)):t()):t():sub(1,-1,1,3)
 end
+
+function pointcloud:get_depthxy_list(omsk)
+  omsk  = omsk or self:get_valid_masks()
+  local dmap = self:get_depthxy_map()
+  local depthxy_list = mapToList(dmap, omsk)
+  dmap = nil
+  collectgarbage()
+  return depthxy_list
+end
+
+
+function pointcloud:get_depth_list_unclipped()
+  return mapToList(self:get_depth_map_unclipped(), torch.ones(self.height, self.width):byte())
+end
+
+function pointcloud:get_xyz_list_unclipped(H)
+  local xyz, phi, tht = self:get_xyz_map_unclipped()
+  local msk = torch.ones(self.height, self.width):byte()
+  local xyz_list = mapToList(xyz,msk):clone()
+  local phi_list = mapToList(phi,msk):clone()
+  local tht_list = mapToList(tht,msk):clone()
+  if H then
+    local c        = self:get_center_transformed(H)
+    xyz_list       = (H*torch.cat(xyz_list,torch.ones(xyz_list:size(1),1)):t()):t():sub(1,-1,1,3)
+    local xyzt     = xyz_list:t():clone()
+    local dpt_list = ((xyzt[1] - c[1]):pow(2) + (xyzt[2] - c[2]):pow(2) + (xyzt[3] - c[3]):pow(2)):sqrt()
+    local d2d_list = ((xyzt[1] - c[1]):pow(2) + (xyzt[2] - c[2]):pow(2)):sqrt()
+    
+    phi_list       = (xyzt[3]-c[3]):cdiv(dpt_list):asin()
+    tht_list       = (xyzt[1]-c[1]):cdiv(d2d_list):acos()
+    local mask     = (xyzt[2]-c[2]):lt(0)
+    tht_list[mask] = -tht_list[mask]
+    mask           = d2d_list:eq(0)
+    tht_list[mask] = 0
+    mask           = dpt_list:gt(0)    
+    dpt_list = nil
+    d2d_list = nil
+    xyzt     = nil
+    c        = nil
+    mask     = nil
+    collectgarbage()
+  end
+  xyz = nil
+  phi = nil
+  tht = nil
+  msk = nil
+  return xyz_list, phi_list, tht_list
+end
+
+function pointcloud:get_depthxy_list_unclipped()
+  return mapToList(self:get_depthxy_map_unclipped(), torch.ones(self.height, self.width):byte())
+end
+
 
 -- flatten functions
 
@@ -617,22 +883,26 @@ local function get_plane_corners(thresh,xyz,depth,snormal,sdd,mask0,height,width
   kernel[3][1] = 1
   
   conv = torch.Tensor(3,height+4,width+4)
+  wght = torch.conv2(torch.ones(xyz[1]:size()), kernel, 'F')
   for i = 1,3 do
     conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
+    conv[i][wght:gt(0)] = conv[i][wght:gt(0)]:cdiv(wght[wght:gt(0)])
   end
   dplane_ll = conv:sub(1,3,3,height+2,3,width+2):clone()
-  dplane_ll = dplane_ll:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  dplane_ll = dplane_ll:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone())
   mask3 = dplane_ll:gt(thresh):type('torch.DoubleTensor')
   
   kernel = torch.zeros(5,5)
   kernel[3][5] = 1
   
   conv = torch.Tensor(3,height+4,width+4)
+  wght = torch.conv2(torch.ones(xyz[1]:size()), kernel, 'F')
   for i = 1,3 do
     conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
+    conv[i][wght:gt(0)] = conv[i][wght:gt(0)]:cdiv(wght[wght:gt(0)])
   end
   local dplane_rr = conv:sub(1,3,3,height+2,3,width+2):clone()
-  dplane_rr = dplane_rr:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  dplane_rr = dplane_rr:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone())
   mask4 = dplane_rr:gt(thresh):type('torch.DoubleTensor')
   
   local mask7 = (mask3+mask4):gt(0)
@@ -676,15 +946,18 @@ local function get_connections(xyz,depth,snormal,sdd,plane_thresh,height,width)
   kernel[3][1] = 1
   
   conv = torch.Tensor(3,height+4,width+4)
+  wght = torch.conv2(torch.ones(xyz[1]:size()), kernel, 'F')
   for i = 1,3 do
     conv[i] = torch.conv2(xyz[i]:clone(), kernel, 'F')
+    conv[i][wght:gt(0)] = conv[i][wght:gt(0)]:cdiv(wght[wght:gt(0)])
   end
   dplane_l = conv:sub(1,3,3,height+2,3,width+2):clone()
-  dplane_l = dplane_l:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone():mul(-1))
+  dplane_l = dplane_l:clone():cmul(snormal):sum(1):squeeze():add(sdd:clone())
   local mask_con = dplane_l:clone():abs():lt(plane_thresh)
   
   dpoint_l = conv:sub(1,3,3,height+2,3,width+2):clone()
-  dpoint_l = dpoint_l:add(xyz:clone():mul(-1)):norm(2,1):squeeze()
+  wght = wght:sub(3,height+2,3,width+2):clone():repeatTensor(3,1,1)
+  dpoint_l = dpoint_l:add(xyz:clone():mul(-1):cmul(wght)):norm(2,1):squeeze()
   local mask_point_1 = dpoint_l:gt(dpt_thresh_1)
   dpoint_l:cdiv(depth)
   local mask_point_2 = dpoint_l:gt(dpt_thresh_2)
@@ -692,6 +965,12 @@ local function get_connections(xyz,depth,snormal,sdd,plane_thresh,height,width)
   mask_con[mask_point_1] = 0
   mask_con[mask_point_2] = 0
   
+  wght = nil
+  conv = nil
+  dplane_l = nil
+  dpoint_l = nil
+  mask_point_1 = nil
+  pask_point_2 = nil
   collectgarbage()
   
   return mask_con
@@ -726,7 +1005,7 @@ function pointcloud:get_connections_and_corners()
   local mask_connct = get_connections(xyz:clone(),  depth:clone(), nmp:clone(),
                                       nrsd:clone(), thresh_plane_conn,
                                       height,width)
-                                      
+                                  
   mask_corner[imask ] = 0
   mask_corner[phmask] = 0
   mask_corner[hmask ] = 0
@@ -739,7 +1018,7 @@ function pointcloud:get_connections_and_corners()
 
 end
 
-function pointcloud:get_flattened_image(scale,numCorners)
+function pointcloud:get_flattened_image(scale,numCorners,H)
   
   if not scale then
     scale = self.meter/100
@@ -753,16 +1032,22 @@ function pointcloud:get_flattened_image(scale,numCorners)
     numCorners = 25
   end
   
-  local ranges = self.xyz_radius:clone():mul(2)
-  local minv   = self.xyz_radius:clone():mul(-1)
-  local maxv   = self.xyz_radius:clone()
-  local pix    = ranges:clone():div(scale):floor()
-  local height = pix[1]
-  local width  = pix[2]
+  -- get the points and depth
+  local pts  = self:get_xyz_map()
+  local centroid = self.centroid
+  if H then
+    pts = self:get_xyz_map_transformed(H)
+    centroid = self:get_center_transformed(H)
+  end
+  pts        = pts:sub(1,2):clone():contiguous()
+  local d2d  = (pts[1]-centroid[1]):pow(2):add((pts[2]-centroid[2]):pow(2)):sqrt():clone()
+  local height = 2*d2d:max()/scale
+  local width  = height
+  minv = centroid-d2d:max()
+  maxv = centroid+d2d:max()
+  
   local hght   = self.height
   local wdth   = self.width
-  
-  local elim_dist = 0.25      
   
   -- make a list for corners
   local corners  
@@ -781,9 +1066,6 @@ function pointcloud:get_flattened_image(scale,numCorners)
   local theta_cnt = torch.zeros(height,width):clone():contiguous()
   
   -- get the coordinates and points
-  local pts  = self:get_xyz_map()
-  pts        = pts:sub(1,2):clone():contiguous()
-  
   local crds = pts:clone()
   local mnv  = minv:sub(1,2):repeatTensor(hght,wdth,1):transpose(2,3):transpose(1,2)
   
@@ -792,6 +1074,9 @@ function pointcloud:get_flattened_image(scale,numCorners)
   
   -- get the normal map
   local nmp, nphi, ntht, ndd, nvmsk, nimsk = self:get_normal_map()
+  if H then
+    nmp, nphi, ntht = self:get_normal_map_transformed(H)
+  end
   
   -- clear some space
   nmp   = nil
@@ -802,6 +1087,11 @@ function pointcloud:get_flattened_image(scale,numCorners)
   mnb   = nil
   collectgarbage()
   
+  local weights = torch.zeros(self.height,self.width)
+  weights:add(image.combine(self:get_depth_map():pow(2)))
+  weights:add(image.combine(self:get_area_map()))
+  weights:add(image.combine(self:get_reverse_density_map()))
+  
   -- call the cfunction
   libpc.flatten_image_with_theta(torch.data(imagez), torch.data(image_corners), torch.data(corners_map_filled),
                                           torch.data(imaget), torch.data(theta_cnt),
@@ -809,6 +1099,7 @@ function pointcloud:get_flattened_image(scale,numCorners)
                                           torch.data(connections:clone():contiguous()), 
                                           torch.data(corners_map:clone():contiguous()),
                                           torch.data(ntht:clone():contiguous()),
+                                          torch.data(weights:clone():contiguous()),
                                           hght, wdth, height, width)
   
   -- mask out imaget and nmflat
@@ -890,37 +1181,16 @@ function pointcloud:get_flattened_image(scale,numCorners)
 end
 
 
-
-
 -- pose functions
 
-function pointcloud:set_global_pose(pose)
-  self.global_pose = pose:clone()
-end
-
-function pointcloud:set_global_rotation(quaternion)
-  self.global_rotation = quaternion:clone()
-end
-
-function pointcloud:get_global_pose()
-  if (not self.global_pose) then
-    self:set_global_pose(torch.zeros(3))
+function pointcloud:set_transformation_matrix(mat)
+  if type(mat) == "userdata" and mat:size(1)==4 then
+    self.transformation_matrix = mat
   end
-  collectgarbage()
-  return self.global_pose:clone()
 end
 
-function pointcloud:get_global_rotation()
-  if (not self.global_rotation) then
-    self:set_global_rotation(torch.Tensor({0,0,0,1}))
-  end
-  collectgarbage()
-  return self.global_rotation:clone()
-end
-
-function pointcloud:set_global_pose_and_rotation_from_matrix(mat)
-  self:set_global_rotation(geom.quaternion.from_rotation_matrix(mat))
-  self:set_global_pose(mat[{{1,3},4}]:clone())
+function pointcloud:get_transformation_matrix()
+  return self.transformation_matrix
 end
 
 
@@ -1066,11 +1336,18 @@ function pointcloud:save_setup(use_global_or_matrix, use_rgb, use_intensity, use
   
   local count          = vmsk:double():sum()
   
-  local xyz_list  
-  if(use_global_or_matrix and type(use_global_or_matrix) == "userdata" and use_global_or_matrix:size(1)==4 and use_global_or_matrix:size(2) == 4) then
-    xyz_list       = self:get_xyz_list_transformed(vmsk, use_global_or_matrix)  
-  else
-    xyz_list = self:get_xyz_list(vmsk)
+  local xyz_list = self:get_xyz_list(vmsk)
+  if(use_global_or_matrix) then
+    if type(use_global_or_matrix) == "userdata" and use_global_or_matrix:size(1)==4 then
+      xyz_list = self:get_xyz_list_transformed(vmsk, use_global_or_matrix)  
+    else
+      local mat = self:get_transformation_matrix()
+      if mat then
+        xyz_list = self:get_xyz_list_transformed(vmsk, mat)  
+      end
+      mat = nil
+      collectgarbage()
+    end
   end
 
 
@@ -1082,15 +1359,24 @@ function pointcloud:save_setup(use_global_or_matrix, use_rgb, use_intensity, use
   if use_rgb then
     rgb_list       = self:get_rgb_list(vmsk):mul(255):byte()
   end
+  
   if use_intensity then
     intensity_list = self:get_intensity_list(vmsk):mul(255):byte()
   end
+  
   if use_normal then
     normal_list    = self:get_normal_list(vmsk)
-    if(use_global_or_matrix and type(use_global_or_matrix) == "userdata" and use_global_or_matrix:size(1)==4 and use_global_or_matrix:size(2) == 4) then
-      normal_list = self:get_normal_list_transformed(vmsk, use_global_or_matrix)
-    else
-      normal_list    = self:get_normal_list(vmsk)
+    if use_global_or_matrix then
+      if type(use_global_or_matrix) == "userdata" and use_global_or_matrix:size(1)==4 and use_global_or_matrix:size(2) == 4 then
+        normal_list = self:get_normal_list_transformed(vmsk, use_global_or_matrix)
+      else
+        local mat = self:get_transformation_matrix()
+        if mat then
+          normal_list = self:get_normal_list_transformed(vmsk, mat)
+        end
+        mat = nil
+        collectgarbage()
+      end
     end
   end
 
