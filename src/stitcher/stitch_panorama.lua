@@ -21,7 +21,7 @@ cmd:option('-imageglob',   '*',                                              'sh
 cmd:option('-enblend',      true,                                            'use enblend to make final image')
 cmd:option('-hfov_i',       1.3055,                                          'hfov of camera')
 cmd:option('-vfov_i',       1.5290,                                          'vfov of camera')
-cmd:option('-scale',        1/16,                                            'scaling factor')
+cmd:option('-scale',        1/8,                                            'scaling factor')
 cmd:option('-interactive',  false,                                           'keep cloudlab on')
 
 cmd:text()
