@@ -46,7 +46,7 @@ function t.verify_uriahs_plane_points(planes,pc)
 	local correctness = {}
 
 	for i,p in ipairs(planes) do
-
+		--Nx+D=0,
 		correctness[i] = torch.sum(torch.cmul(pc.xyz_map,p.eqn[{{1,3}}]:reshape(3,1,1):expandAs(pc.xyz_map)),1):reshape(p.mask:size()):add(torch.Tensor(p.mask:size()):fill(p.eqn[4])):cmul(p.mask:double())
 
 	end
@@ -70,4 +70,10 @@ function t.verify_uriahs_plane_points(planes,pc)
 				return result
 			end
 end
+
+io = nil
+pnt_cloud = nil
+data = nil
+
+collectgarbage()
 return t
