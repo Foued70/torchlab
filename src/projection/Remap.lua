@@ -44,3 +44,9 @@ function Remap:remap(img,force)
    self:get_offset_and_mask(force)
    return util.addr.remap(img, self.offset, self.mask)
 end
+
+function Remap:remap_image_and_mask(img,input_msk,force)
+  local ret_msk = self:remap(input_msk,force):clone()
+  local ret_img = self:remap(img)
+  return ret_img,ret_msk
+end

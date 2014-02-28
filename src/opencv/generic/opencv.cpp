@@ -3,6 +3,7 @@
 #else
 
 #include "opencv2/core/mat.hpp"
+#include "opencv2/features2d/features2d.hpp"
 
 using namespace cv;
 using namespace std;
@@ -141,6 +142,37 @@ extern "C" {
     mat->addref(); // make sure the matrix sticks around
 
     return mat;
+  }
+
+  KeyPoint* THTensor_(toKeypoints) (THTensor* tensor)
+  {
+    int i;
+    float x,y;
+
+    if (!THTensor_(isContiguous)(tensor))
+      THError("must pass contiguous tensor to opencv");
+      
+    int ndims = tensor->nDimension;
+    if (ndims != 2)
+      THError("must pass tensor dimensions of nx2");
+    
+    int rows = tensor->size[0];
+    int cols = tensor->size[1];
+    if (cols != 2)
+      THError("must pass tensor dimensions of nx2");
+
+    real* data = THTensor_(data)(tensor);
+    
+    KeyPoint * kpts = (KeyPoint *) malloc(rows * sizeof(KeyPoint));
+    
+    for (i = 0; i < rows; i++)
+    {
+      x = (float)data[i*2  ];
+      y = (float)data[i*2+1];
+      kpts[i] = KeyPoint(x, y, 1);
+    }
+    
+    return kpts;
   }
   
 } //extern "C"

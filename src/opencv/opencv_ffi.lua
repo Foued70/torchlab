@@ -66,6 +66,9 @@ void Mat_showImage (Mat* mat, const char* wname);
 void Mat_info      (Mat* mat);
 int Mat_type(Mat* mat);
 void Mat_destroy   (Mat* mat);
+void KeyPoint_destroy(KeyPoint * kpts);
+
+
 ]]
 
 -- ------------
@@ -75,6 +78,7 @@ void Mat_destroy   (Mat* mat);
 ctorch.generateTypes [[
 Mat* THTensor_toMat(THTensor* tensor);
 void THTensor_fromMat(Mat* mat,THTensor* tensor);
+KeyPoint* THTensor_toKeypoints (THTensor* tensor);
 ]]
 
 -- Detector.lua

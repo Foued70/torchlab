@@ -1,7 +1,6 @@
 path = require 'path'
 saliency = require '../image/saliency'
 io = require 'io'
-Pointcloud = PointCloud.Pointcloud
 
 pi  = math.pi
 pi2 = pi * 0.5
@@ -13,18 +12,16 @@ cmd:text('Align a linear 360 sweep of images')
 cmd:text()
 cmd:text('Options')
 cmd:option('-srcdir',      '/Users/lihui815/Documents/precise-transit-6548', 'top project directory')
---cmd:option('-pcdir',       'source/po_scan/a',                               'directory with the pointcloud')
-cmd:option('-imdir',       'work/a_00/Images',                               'directory in which to find images')
-cmd:option('-outdir',      'work/a_00/Aligned',                              'directory for aligned images')
+cmd:option('-imdir',       'work/a/Images',                               'directory in which to find images')
+cmd:option('-outdir',      'work/a/Aligned',                              'directory for aligned images')
 cmd:option('-swdir',       '001',                                            'directory for specific sweep')
---cmd:option('-pcname',      'sweep.xyz',                                      'pointcloud filename')
 cmd:option('-imext',       '.tiff',                                          'image filename extensions')
 cmd:option('-outname',     'panorama_360',                              'output image filename')
 cmd:option('-imageglob',   '*',                                              'shell pattern to match image files in dir')
 cmd:option('-enblend',      true,                                            'use enblend to make final image')
 cmd:option('-hfov_i',       1.3055,                                          'hfov of camera')
 cmd:option('-vfov_i',       1.5290,                                          'vfov of camera')
-cmd:option('-scale',        1/8,                                             'scaling factor')
+cmd:option('-scale',        1/16,                                            'scaling factor')
 cmd:option('-interactive',  false,                                           'keep cloudlab on')
 
 cmd:text()
@@ -33,9 +30,7 @@ params     = cmd:parse(process.argv)
 
 srcdir = params.srcdir
 swnum  = params.swdir
---pcdir  = path.join(srcdir, params.pcdir, swnum)
 imdir  = path.join(srcdir, params.imdir, swnum)
---pcname = path.join(pcdir, params.pcname)
 imext  = params.imext
 outdir = path.join(srcdir, params.outdir)
 util.fs.mkdir_p(outdir)
@@ -58,14 +53,14 @@ imagefiles = util.fs.files_only(imdir, imext)
 
 function save_image_and_print(imsw, prefix, scale)
   imsw:set_global_parameters(nil,nil,scale,nil,nil)
-  local outi,outs,outl,outm,score  = imsw:get_panorama()
-  local score,iscore,lscore,sscore = imsw:get_score()
+  local outi,outs,outl,outm  = imsw:get_panorama()
+  local score = imsw:get_sift_score()
   pr_phi = math.ceil(imsw.phi_global * 1000000)
   pr_psi = math.ceil(imsw.psi_global * 1000000)
   pr_scr = math.ceil(score * 100000000)
   image.save(outname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'_image.png',outi:double())
   print()
-  print(prefix, score, iscore, lscore, sscore)
+  print(prefix, score)
   print()
   print(imsw.phi_global, imsw.psi_global, imsw.hfov_global, imsw.vfov_global)
   print()
@@ -74,6 +69,10 @@ function save_image_and_print(imsw, prefix, scale)
   print(imsw.psi_local:repeatTensor(1,1))
   print()
   print()
+  outi = nil
+  outs = nil
+  outl = nil
+  outm = nil
   collectgarbage()
 end
 
@@ -81,15 +80,13 @@ function blend_panorama(imsw,prefix)
   
 	local tmp_fnames = ''
 	
-	local score = imsw:get_score()
-	outi = nil
-	outs = nil
-	outm = nil
+	local score = imsw:get_sift_score()
 	
 	pr_phi = math.ceil(imsw.phi_global * 1000000)
   pr_psi = math.ceil(imsw.psi_global * 1000000)
   pr_scr = math.ceil(score * 100000000)
 
+  --[[
 	for i = 1,imsw.num_images do
 		local pfix = ''..i
 		while pfix:len() < 3 do
@@ -116,15 +113,16 @@ function blend_panorama(imsw,prefix)
   
 	os.execute(string.format("enblend %s -o %s/enblend_%s", tmp_fnames, outdir, params.outname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'.png'))
 	os.execute(string.format("rm %s", tmp_fnames))
+	--[[]]
 	
 	collectgarbage()
 	
-	--[[
+	--[[]]
 	local pan = imsw:get_blended_panorama()
 	image.save(bldname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'.png',pan)
 	
-	local seam = imsw:get_seam_panorama()
-	image.save(smmname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'.png',seam)
+	--local seam = imsw:get_seam_panorama()
+	--image.save(smmname..'_'..prefix..'_'..pr_scr..'_'..pr_phi..'_'..pr_psi..'.png',seam)
 	
 	pan = nil
 	seam = nil
@@ -134,9 +132,9 @@ function blend_panorama(imsw,prefix)
 end
 
 function save_parameters(imsw)
-  local score, iscore, lscore, sscore = imsw:get_score()
+  local score = imsw:get_sift_score()
   
-  torch.save(outname..'_params.dat', { torch.Tensor({score, iscore, sscore}),
+  torch.save(outname..'_params.dat', { torch.Tensor({score}),
                                        imsw.hfov_global, imsw.vfov_global, imsw.phi_global, imsw.psi_global,
                                        imsw.lam_local, imsw.phi_local, imsw.psi_local })
   collectgarbage()
@@ -181,12 +179,10 @@ phi_global_win  = 0.0100
 psi_local_win   = 0.0100
 phi_local_win   = 0.0100
 lam_local_win   = 0.0100
-iter            = 3--imsw.num_images/2
-rep             = 3--imsw.num_images/2
-ran_size        = 2--imsw.num_images/2
-lp              = 3
-
---[[]]
+iter            = 2
+rep             = 2
+ran_size        = 2
+lp              = 1
 
 for i = 1,lp do
 
@@ -228,9 +224,9 @@ end
 
 collectgarbage()
 
---[[]]
-
 if not params.interactive then
+  imsw:clean()
+  imsw = nil
   collectgarbage()
   process.exit()
 end

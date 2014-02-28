@@ -594,7 +594,7 @@ function SweepImageAligner:display_and_save(enblend,outfname)
    outbasename = path.basename(outfname)
 
    img,tmp_fnames = self:generate_panorama(enblend,outfname)
-   image.display(img)
+   --image.display(img)
    
    printf("saving %s", outfname)
    image.save(string.format("%s",outfname), img)
