@@ -1,7 +1,6 @@
 loader = pointcloud.loader
 ffi    = require 'ffi'
 ctorch = util.ctorch
-log    = require '../util/log'
 path   = require 'path'
 
 pi     = math.pi
@@ -182,6 +181,8 @@ fnum     = 0
 cnum     = 0
 
 image.save(dir..'/left_beg.png',leftoverm:double())
+
+plane_eqs = {}
 
 for p = 0,2 do
 
@@ -417,7 +418,8 @@ for p = 0,2 do
 								pnrm[3][plane_mask] = c
 								pnrm:sub(1,3,1,1,1,1):copy(torch.Tensor({1,1,1}))
 								pnrm:sub(1,3,1,1,2,2):copy(torch.Tensor({-1,-1,-1}))
-								image.save(dirp..'/plane_nmp_'..i..'.png',image.combine(pnrm))
+								image.save(dirp..'/plane_mask_'..i..'.png',image.combine(plane_mask:double()))
+								plane_eqs[cnum] = torch.Tensor({a,b,c,d})
 								--[[]]
 								
 								--image.save(dirp..'/plane_lcl_'..i..'.png',image.combine(cmp_local))
@@ -498,6 +500,7 @@ plane_nrm:cdiv(plane_nrm:clone():norm(2,1):repeatTensor(3,1,1))
 pmsk = plane_wgt:le(0)
 plane_nrm[pmsk] = 0
 
+torch.save(dir..'/plane_eqs.dat', plane_eqs)
 image.save(dir..'/plane_all.png', image.combine(plane_cmp))
 image.save(dir..'/mask_all.png', pmsk:double())
 image.save(dir..'/nmp_planes.png', image.combine(plane_nrm))

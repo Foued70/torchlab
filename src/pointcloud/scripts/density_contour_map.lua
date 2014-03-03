@@ -7,7 +7,7 @@ cmd:text('Options')
 cmd:option(           '-srcdir', '/Users/lihui815/Documents/precise-transit-6548/work/a/pointcloud', '')
 cmd:option(           '-savdir', '/Users/lihui815/Documents/precise-transit-6548/work/a/contour', '')
 cmd:option(       '-resolution', 100, '')
-cmd:option('-sampling_fraction', 0.002, '')
+cmd:option('-sampling_fraction', 0.001, '')
 cmd:option(   '-scanner_radius', 500, '')
 
 cmd:option('-interactive', false, '')
@@ -104,6 +104,35 @@ function get_2d_density(pc, resolution, frac, dmin)
 	local cx   = pc:get_center_transformed(H):div(resolution)[1]
 	local cy   = pc:get_center_transformed(H):div(resolution)[2]
 	
+	local sum1 = img:sum(1):gt(0):double():squeeze()
+	local sum2 = img:sum(2):gt(0):double():squeeze()
+	local msk1 = sum1:gt(0)
+	local msk2 = sum2:gt(0)
+	local ind1 = torch.range(1,img_w)[msk1]:clone()
+	local ind2 = torch.range(1,img_h)[msk2]:clone()
+	
+	local minh = ind2:min()
+	local maxh = ind2:max()
+	local minw = ind1:min()
+	local maxw = ind1:max()
+	
+	sum1 = nil
+	sum2 = nil
+	msk1 = nil
+	msk2 = nil
+	ind1 = nil
+	ind2 = nil
+	
+	local prevx = (img_h+1)/2
+	local prevy = (img_w+1)/2
+	local indcx = (maxh+minh)/2
+	local indcy = (maxw+minw)/2
+	cx = cx + (indcx - prevx)
+	cy = cy + (indcy - prevy)
+	
+	img  = img:sub(minh,maxh,minw,maxw):clone():contiguous()
+	flat = flat:sub(1,3,minh,maxh,minw,maxw):clone():contiguous()
+	
 	return img, flat, cx, cy
 end
 
@@ -112,7 +141,7 @@ function get_combined_density(img1, flat1, cx1, cy1, img2, flat2, cx2, cy2)
   local imgh_1 = img1:size(1)
   local imgw_1 = img1:size(2)
   
-  local imgh_2 = img2:size(2)
+  local imgh_2 = img2:size(1)
   local imgw_2 = img2:size(2)
   
   local minx = math.min(cx1-imgh_1/2,cx2-imgh_2/2)
@@ -139,9 +168,9 @@ function get_combined_density(img1, flat1, cx1, cy1, img2, flat2, cx2, cy2)
 	local img_new_1 = torch.zeros(img_h, img_w)
 	local img_new_2 = torch.zeros(img_h, img_w)
 
-	img_new_1:sub(txb_1, txe_1, tyb_1, tye_1):copy(img1)
-	img_new_2:sub(txb_2, txe_2, tyb_2, tye_2):copy(img2)
-
+  img_new_1:sub(txb_1, txe_1, tyb_1, tye_1):copy(img1)
+  img_new_2:sub(txb_2, txe_2, tyb_2, tye_2):copy(img2)
+  
 	local img = img_new_1:clone()
 	img[img:lt(img_new_2)] = img_new_2[img:lt(img_new_2)]
 	img_new= (img_new_1 + img_new_2):div(1.5)
@@ -219,9 +248,16 @@ util.fs.mkdir_p(params.savdir)
 
 file_table = util.fs.files_only(params.srcdir,'.dat')
 
-_G.density_img, _G.flat_img, _G.img_cx, _G.img_cy = get_scan_density(file_table, params.resolution, params.sampling_fraction, params.scanner_radius)
-_G.contours = get_contours(density_img, flat_img)
+density_img, flat_img, img_cx, img_cy = get_scan_density(file_table, params.resolution, params.sampling_fraction, params.scanner_radius)
+contours = get_contours(density_img, flat_img)
 
+image.save(params.savdir..'/density_map.png', image.combine(density_img))
+image.save(params.savdir..'/walls_map.png', image.combine(flat_img))
+image.save(params.savdir..'/contour_map.png', image.combine(contours))
 
+if not params.interactive then
+  collectgarbage()
+  process.exit()
+end
 
 

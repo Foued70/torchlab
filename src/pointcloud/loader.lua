@@ -21,9 +21,9 @@ local default_maxradius = 25.0
 
 
 function loader.fix_newline(fname)
-    local dname = path.dirname(fname)
-    local ename = path.extname(fname)
-    local bname = path.basename(fname,ename)
+  local dname = path.dirname(fname)
+  local ename = path.extname(fname)
+  local bname = path.basename(fname,ename)
 	local fname_tmp = path.join(dname,bname..'_tmp'..ename)
 	
 	local file_in = io.open(fname)
