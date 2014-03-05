@@ -36,8 +36,8 @@ local io = require 'io'
 
 t = {}
 
-local pnt_cloud=pointcloud.loader.load_pobot_ascii("/Users/joshua/Documents/Projects/precise-transit-6548/source/po_scan/a/007")
-local data=torch.load("/Users/joshua/Downloads/toJosh/scan007.t7")
+--local pnt_cloud=pointcloud.loader.load_pobot_ascii("/Users/joshua/Documents/Projects/precise-transit-6548/source/po_scan/a/007")
+--local data=torch.load("/Users/joshua/Downloads/toJosh/scan007.t7")
 
 function t.verify_uriahs_plane_points(planes,pc)
 	planes = planes or data.planes

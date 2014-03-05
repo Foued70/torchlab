@@ -1036,8 +1036,8 @@ function imgraph.testme(usrimg)
    if usrimg then
       inputimg = image.load(usrimg)
    else
-      inputimg = image.lena()
-      inputimg = image.scale(inputimg, 256, 256)
+      inputimg = image.load(CLOUDLAB_SRC .. "/image/test/lena.jpg")
+      --inputimg = image.scale(inputimg, 256, 256)
    end
    local example = loadstring(imgraph._example)
    print 'imgraph sample code {\n'
