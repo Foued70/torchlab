@@ -29,8 +29,6 @@ estimate_transform_from_planes = Plane.util.estimate_transform_from_planes
 
 ArcIO = data.ArcIO
 
-selectdim = util.torch.selectdim
-
 
 scan0 = 17
 scan1 = 18
