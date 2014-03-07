@@ -391,7 +391,7 @@ function ImageSweep:optimize(update_and_score_function, curr_params, winsizes, i
   local best_params = curr_params
   local best_score  = update_and_score_function(best_params)
   
-  local ran = math.pow(ran_size,math.min(self.num_images,num_params))
+  local ran = math.pow(ran_size,math.min(self.num_images/2,num_params))
   
   for i = 1,iter do
     

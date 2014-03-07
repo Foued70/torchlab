@@ -894,62 +894,186 @@ int flatten_image_with_theta(double* imagez, double* image_corner, double* corne
 
 
 
-int hough_planes(double * himg, double * xyz_map, double * intensity_map,
+int hough_planes_2d(double * himg, double * xyz_map, double * intensity_map,
+                 double * normal_phi, double * normal_theta,
                  double phi, double theta_res, double depth_res, 
-                 double max_depth, int map_h, int map_w)
+                 double max_depth, int map_h, int map_w, 
+                 double depth_thresh, double ang_thresh, double scale)
 {
   
   int h,w, t, dl,dh, map_offset = map_h * map_w,row_offset;
-  double x,y,z,i, theta,depth, costh,sinth, cosph,sinph, d;
+  double x,y,z,i, nph,nth, theta,depth, costh,sinth, cosph,sinph, d;
+  double dbh = 0, dbw;
+  double incr = 1/scale;
+  
   int theta_dim = (int)( (2 * PI) / theta_res  + 1);
   int depth_dim = (int)(max_depth / depth_res  + 1);
   
-  for (h = 0; h < map_h; h++)
+  if (scale == 0)
   {
-    for (w = 0; w < map_w; w++)
+    scale = 1;
+  }
+  scale = sqrt(scale);
+  
+  while (dbh < map_h)
+  {
+    h  = (int)dbh;
+    row_offset = h * map_w;
+    dbw = 0;
+    
+    while (dbw < map_w)
     {
-      row_offset = h * map_w;
-      x = xyz_map[row_offset + w];
-      y = xyz_map[map_offset + row_offset + w];
-      z = xyz_map[map_offset * 2 + row_offset + w];
-      i = intensity_map[row_offset + w];
+      w          = (int)dbw;
+      i          = intensity_map[row_offset + w];
       
       if (i > 0)
       {
-    
-				for (t = 0; t < theta_dim; t++)
-				{
-					theta = ((double)t) * theta_res - PI;
-			
-					sinph = sin(phi);
-					cosph = cos(phi);
-					sinth = sin(theta);
-					costh = cos(theta);
+        
+        nph        = normal_phi[row_offset + w];
+        
+        if (fabs(nph - phi) < ang_thresh)
+        {
+        
+					nth        = normal_theta[row_offset + w];
+					x          = xyz_map[row_offset + w];
+					y          = xyz_map[map_offset + row_offset + w];
+					z          = xyz_map[map_offset * 2 + row_offset + w];
 				
-					depth = - (x * cosph * costh + y * cosph * sinth + z * sinph);
-				
-					if (depth > 10)
+					for (t = 0; t < theta_dim; t++)
 					{
-					  d  = depth/depth_res;
-						dl = (int) d;
-						dh = dl + 1;
-						if ((dl  > 0) && (dl < depth_dim))
+						theta = ((double)t) * theta_res - PI;
+					
+						if (fabs(nth - theta) < ang_thresh)
 						{
-							himg[t * depth_dim + dl] = himg[t * depth_dim + dl] + (i * fabs(((double)dl) - d)); 
-						}
-						if ((dh  > 0) && (dh < depth_dim))
-						{
-							himg[t * depth_dim + dh] = himg[t * depth_dim + dh] + (i * fabs(((double)dh) - d)); 
-						}
-						
-					}
+			
+							sinph = sin(phi);
+							cosph = cos(phi);
+							sinth = sin(theta);
+							costh = cos(theta);
 				
+							depth = - (x * cosph * costh + y * cosph * sinth + z * sinph);
+				
+							if (depth > depth_thresh)
+							{
+								d  = depth/depth_res;
+								dl = (int) d;
+								dh = dl + 1;
+								if ((dl  > 0) && (dl < depth_dim))
+								{
+									himg[t * depth_dim + dl] = himg[t * depth_dim + dl] + (i * fabs(((double)dl) - d)); 
+								}
+								if ((dh  > 0) && (dh < depth_dim))
+								{
+									himg[t * depth_dim + dh] = himg[t * depth_dim + dh] + (i * fabs(((double)dh) - d)); 
+								}
+						
+							}
+							
+						}
+				
+					}
 				}
+				
 			}
+			dbw = dbw + incr;
 		}
+		
+		dbh = dbh + incr;
 	}
   
 }
 
+int hough_planes_3d(double * himg, double * xyz_map, double * intensity_map,
+                 double * normal_phi, double * normal_theta,
+                 double phi_res, double theta_res, double depth_res, 
+                 double max_depth, int map_h, int map_w, 
+                 double depth_thresh, double ang_thresh, double scale)
+{
+  
+  int h,w, p,t, dl,dh, map_offset = map_h * map_w, row_offset;
+  double x,y,z,i, nph,nth, phi,theta,depth, costh,sinth, cosph,sinph, d;
+  double dbh = 0, dbw;
+  
+  int phi_dim   = (int)( (1 * PI) / phi_res    + 1);
+  int theta_dim = (int)( (2 * PI) / theta_res  + 1);
+  int depth_dim = (int)(max_depth / depth_res  + 1);
+  
+  if (scale == 0)
+  {
+    scale = 1;
+  }
+  scale = sqrt(scale);
+  
+  while (dbh < map_h)
+  {
+    h  = (int)dbh;
+    row_offset = h * map_w;
+    dbw = 0;
+    
+    while (dbw < map_w)
+    {
+      w          = (int)dbw;
+      i          = intensity_map[row_offset + w];
+      
+      if (i > 0)
+      {
+        
+        nph        = normal_phi[row_offset + w];
+        
+        for (p = 0; p < phi_dim; p++)
+        {
+          phi = ((double)t) * phi_res - PI/2;
+          
+					if (fabs(nph - phi) < ang_thresh)
+					{
+				
+						nth        = normal_theta[row_offset + w];
+						x          = xyz_map[row_offset + w];
+						y          = xyz_map[map_offset + row_offset + w];
+						z          = xyz_map[map_offset * 2 + row_offset + w];
+				
+						for (t = 0; t < theta_dim; t++)
+						{
+							theta = ((double)t) * theta_res - PI;
+					
+							if (fabs(nth - theta) < ang_thresh)
+							{
+			
+								sinph = sin(phi);
+								cosph = cos(phi);
+								sinth = sin(theta);
+								costh = cos(theta);
+				
+								depth = - (x * cosph * costh + y * cosph * sinth + z * sinph);
+				
+								if (depth > depth_thresh)
+								{
+									d  = depth/depth_res;
+									dl = (int) d;
+									dh = dl + 1;
+									if ((dl  > 0) && (dl < depth_dim))
+									{
+										himg[p * (theta_dim * depth_dim) + t * depth_dim + dl] = himg[p * (theta_dim * depth_dim) + t * depth_dim + dl] + (i * fabs(((double)dl) - d)); 
+									}
+									if ((dh  > 0) && (dh < depth_dim))
+									{
+										himg[p * (theta_dim * depth_dim) + t * depth_dim + dh] = himg[p * (theta_dim * depth_dim) + t * depth_dim + dh] + (i * fabs(((double)dh) - d)); 
+									}
+						
+								}
+							
+							}
+				
+						}
+					}
+				}
+			}
+			dbw = dbw + 1/scale;
+		}
+		
+		dbh = dbh + 1/scale;
+	}
+  
+}
 
 }
