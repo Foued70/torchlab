@@ -200,6 +200,15 @@ function pointcloud:get_center_transformed(H)
   return (H_new*torch.cat(center,torch.ones(center:size(1),1)):t()):t():sub(1,-1,1,3):squeeze()
 end
 
+function pointcloud:fix_phi(phi_0)
+  phi_0 = phi_0 or 0
+  self.xyz_phi_map = self.xyz_phi_map + phi_0
+  self.xyz_phi_map[self.depth_inverse_mask] = 0
+  self:get_xyz_map()
+  self:get_xyz_stats()
+  self:get_normal_map()
+end
+
 
 -- mapping functions
 
@@ -265,8 +274,8 @@ function pointcloud:get_hw_indices_map()
   return self.hw_indices_map:clone()
 end
 
-function pointcloud:get_xyz_map()
-  if (not self.xyz_map) then
+function pointcloud:get_xyz_map(force)
+  if force or (not self.xyz_map) then
     local height             = self.height
     local width              = self.width
     local xyz_phi_map        = self.xyz_phi_map:clone()

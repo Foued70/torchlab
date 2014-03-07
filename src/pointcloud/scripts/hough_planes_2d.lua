@@ -34,8 +34,10 @@ cmd:text()
 cmd:text('Options')
 cmd:option(     '-arcdir', '/Users/lihui815/Documents', 'directory of arcs')
 cmd:option(     '-prjdir',        'elegant-prize-3149', 'arc name')
-cmd:option(     '-ptcdir',         'work/a/pointcloud', 'pointcloud dir')
-cmd:option(     '-outdir',         'work/a/houghplane', 'pointcloud dir')
+--cmd:option(     '-ptcdir',         'work/a/pointcloud', 'pointcloud dir')
+--cmd:option(     '-outdir',         'work/a/houghplane', 'pointcloud dir')
+cmd:option(     '-ptcdir',         'work/a/pointcloud_fixed', 'pointcloud dir')
+cmd:option(     '-outdir',         'work/a/houghplane_fixed', 'pointcloud dir')
 cmd:option(     '-swpnum',                       '005', 'sweep pointcloud basename')
 cmd:option(  '-depth_res',                           5, 'hough resolution of depth')
 cmd:option(  '-theta_res',                    2*pi/720, 'hough resolution of theta')
@@ -251,7 +253,7 @@ for p = 1,3 do
 														phi, theta_res, depth_res, max_depth, map_h, map_w,
 														10, pi*3/8, 1/(scales-s+1))
       --[[]]
-      msk = torch.rand(himg:size()):le(1/(scales-s+1)):double()
+      msk = torch.rand(intensity:size()):le(1/(scales-s+1)):double()
       libpc.hough_planes_2d(torch.data(himg), torch.data(xyz_map), torch.data(intensity:clone():cmul(msk)),
 														torch.data(nrm_phi:clone()), torch.data(nrm_theta:clone()),
 														phi, theta_res, depth_res, max_depth, map_h, map_w,
