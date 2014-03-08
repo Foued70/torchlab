@@ -323,6 +323,80 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
   }
 }
 
+/*
+  Apply iterative bilateral filter to normals 
+*/
+void bilateralNormalSmoothing( THDoubleTensor* th_normals, THDoubleTensor* th_points, THDoubleTensor* th_new_normals
+                             , int window, double sigma_distance, double sigma_normal ) {
+  int window_width = (window - 1)/2;
+  long stack = th_normals->size[0];
+  long height = th_normals->size[1];
+  long width = th_normals->size[2];  
+
+  double *pos_data = THDoubleTensor_data( th_points );
+  double *normal_data =  THDoubleTensor_data( th_normals);
+  double *new_normal_data =  THDoubleTensor_data( th_new_normals);
+
+  Eigen::Vector3d pos_i; 
+  Eigen::Vector3d normal_i;
+  Eigen::Vector3d pos_ip; 
+  Eigen::Vector3d normal_ip;
+  Eigen::Vector3d new_normal;
+
+  double dist = 0;
+  double spatial_weight;
+  double normal_weight;
+  double neighbor_weight;
+  double den_i = 0;
+  Eigen::Vector3d num_i(0.0,0.0,0.0);
+
+  // Apply operation to all elements in map 
+  for ( long i=0; i<height; i++ ) {
+    for ( long j=0; j<width; j++ ) {
+      // Don't compute value at the edges of the window 
+      if ( i-window_width < 0 || j-window_width < 0 || i+window_width+1 > height || j+window_width+1 > width ) {                        
+        continue;
+      }
+      pos_i(0) = pos_data[0*height*width + i*width + j];
+      pos_i(1) = pos_data[1*height*width + i*width + j];
+      pos_i(2) = pos_data[2*height*width + i*width + j];
+      normal_i(0) = normal_data[0*height*width + i*width + j];
+      normal_i(1) = normal_data[1*height*width + i*width + j];
+      normal_i(2) = normal_data[2*height*width + i*width + j];
+
+      den_i = 0;
+      num_i.setZero();        
+      for ( long k=i-window_width; k<i+window_width+1; k++ ) { 
+        for ( long l=j-window_width; l<j+window_width+1; l++ ) { 
+          pos_ip(0) = pos_data[0*height*width + k*width + l];
+          pos_ip(1) = pos_data[1*height*width + k*width + l];
+          pos_ip(2) = pos_data[2*height*width + k*width + l];
+          normal_ip(0) = normal_data[0*height*width + k*width + l];
+          normal_ip(1) = normal_data[1*height*width + k*width + l];
+          normal_ip(2) = normal_data[2*height*width + k*width + l];
+          dist = sqrt((pos_i - pos_ip).norm());
+          if ( dist > sigma_distance ) {
+            continue;
+          } 
+          // Calculate spatial weight
+          // math.exp( -math.pow(distance,2)/math.pow(sigma_distance,2) )
+          spatial_weight = exp( -pow(dist,2)/pow(sigma_distance,2) );
+
+          // Calculate normal weight 
+          // math.exp( -math.pow((1-(n_i:t()*n_ip):squeeze())/(1-math.cos(sigma_normal)),2) )
+          normal_weight = exp( -pow( (1.0-normal_i.transpose()*normal_ip)/(1-cos(sigma_normal)), 2) );
+          neighbor_weight = spatial_weight*normal_weight;
+          den_i += neighbor_weight;
+          num_i += normal_ip*neighbor_weight;
+        }
+      }
+      new_normal = num_i/den_i;
+      new_normal_data[0*height*width + i*width + j] = new_normal(0);
+      new_normal_data[1*height*width + i*width + j] = new_normal(1);
+      new_normal_data[2*height*width + i*width + j] = new_normal(2);
+    }
+  }
+}
 
 /* 
   Cull points based on normal / residual thresholds
