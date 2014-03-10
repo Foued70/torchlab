@@ -65,26 +65,27 @@ function  cullPoints( normals, points, window, normal_thresh, residual_thresh )
 end
 
 function test_bilateral_smoothing()	
-	job_id = 'precise-transit-6548'
+	--job_id = 'precise-transit-6548'
+	job_id = 'mobile-void-0590'
 	work_id = 'bilateral-filtering'
 
 	arc_io = ArcIO.new( job_id, work_id )
-	pc = arc_io:getScan( 1 )
+	pc = arc_io:getScan( 57 )
 	points = pc:get_xyz_map()
 
 	window = 3
 	dist_thresh = 9.0
 	cull_map, eigenvalues, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
 
-	window = 15
-	sigma_distance = 25
-	sigma_normal = math.pi/8
+	window = 10
+	sigma_distance = 10
+	sigma_normal = math.pi/16
 	
 	arc_io:dumpImage( torch.add(normals,1):mul(0.5), 'normals', 'old_normals' )
 
-	max_iterations = 5
+	max_iterations = 10
 	for n_iter = 1,max_iterations do 
-		new_normals = bilateralNormalSmoothing( normals, means, window, sigma_distance, sigma_normal )
+		new_normals = bilateralNormalSmoothing( normals, points, window, sigma_distance, sigma_normal )
 		arc_io:dumpImage( torch.add(new_normals,1):mul(0.5), 'normals', string.format('new_normals%.3d', n_iter) )
 		normals = new_normals:clone()
 		collectgarbage()
@@ -232,7 +233,7 @@ function extract_planes_deterministic( job_id, scan_num )
 	dist_thresh = 81.0
 
 	normal_thresh = math.pi/8
-	residual_thresh = 15;
+	residual_thresh = 25;
 
 	invalid_mask, eigenvalues, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
 

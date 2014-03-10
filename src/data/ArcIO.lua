@@ -29,13 +29,15 @@ end
 -- ArcIO Class 
 ArcIO = Class()
 
-function ArcIO:__init( job_id, work_id )
+function ArcIO:__init( job_id, work_id )	
 	-- Get arc path 
 	self.arc_path = getenvpath("ARC_PATH")	
 	self.job_path = self.arc_path .. "/" .. job_id 
 	self.pointcloud_path = self.job_path .. "/source/po_scan/a/"
 	self.pointcloudt7_path = self.job_path .. '/work/po_scan/'
-	self.output_dir = self.job_path .. '/work/' .. work_id .. "/"
+	if work_id then 
+		self.output_dir = self.job_path .. '/work/' .. work_id .. "/"
+	end
 	self.scan_num = nil 
 
 	-- Create pc.t7 data dir if it doesn't already exist
