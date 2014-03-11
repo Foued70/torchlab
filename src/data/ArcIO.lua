@@ -74,6 +74,15 @@ function ArcIO:getScan( scan_num, force_reload )
 	return pc
 end
 
+-- Shortcut for loading scan images ... loads png files. 
+-- TODO: set up a script to automatically convert .nef to .png 
+function ArcIO:getImage( scan_num, im_num )
+	im_str = string.format('%.3d/01_%.1d.png', scan_num, im_num)		
+	im_fname = self.pointcloud_path .. im_str	
+	im = image.load(im_fname)
+	return im 
+end
+
 -- force repopulate of all scans 
 function ArcIO:populateScans() 
 	scan_ids = ArcSpecs.scan_ids[self.job_id]
