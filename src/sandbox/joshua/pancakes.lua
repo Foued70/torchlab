@@ -21,22 +21,23 @@ self = {}
 --local data=torch.load("/Users/joshua/Downloads/toJosh/scan007.t7")
 
 
-function self.viewPlanesFaceOn(planes,pc)
+function self.viewPlanesFaceOn(planes,pc,_res)
 	--generates the image of each plane viewing in the direction of its normal
 	planes = planes or data.planes
 	pc = pc or pnt_cloud
 	uv_maps = {}
+	uv_lists = {}
 
 	for i,p in ipairs(planes) do
 
-		uv_maps[i] = self.flattenView(pc:get_xyz_list(p.mask),p.eqn[{{1,3}}])
+		uv_maps[i],uv_lists[i] = self.flattenView(pc:get_xyz_list(p.mask),p.eqn[{{1,3}}],_res)
 		
 	end
 
-	return uv_maps
+	return uv_maps,uv_lists
 end
 
-function self.listToMap(uvlist,_res,_dimOrder)
+function self.listToMap(uvlist,_res,_values,_dimOrder)
 	--uvlist is an Nx2 Tensor of non-normalized, uncentered image coordinates
 	--res is the width of an image pixel in mm (in the same units as uvlist)
 	--dimOrder is the order of the vertical and horizontal coordinate in uvlist; defaults to vertical in the 1st column and horizontal in the 2nd column.
@@ -46,24 +47,26 @@ function self.listToMap(uvlist,_res,_dimOrder)
 	--and the resolution is set by the smallest distance between two adjacent points in the list
 	res = _res or 1
 	uv_min = uvlist:min(1)
-	msize = torch.floor((uvlist:max(1)-uv_min)/res):reshape(2)+1
+	msize = torch.floor((uvlist:max(1)-uv_min)/res + 0.5):reshape(2)+1
 	map = torch.zeros(msize[dimOrder[1]],msize[dimOrder[2]]):byte() --the image map
 
-	img_ind = torch.add(uvlist,-uv_min:expandAs(uvlist)):div(res):index(2,torch.LongTensor{dimOrder[1],dimOrder[2]})
-
-	self.listOnMap(img_ind,map)
+	img_ind = torch.add(uvlist,-uv_min:expandAs(uvlist)):div(res):index(2,torch.LongTensor{dimOrder[1],dimOrder[2]})+1
+	self.listOnMap(img_ind,map,_values)
 
 	return map
 end
 
-function self.listOnMap(uvlist,map)
+function self.listOnMap(uvlist,map,values)
 	--like listToMap, except uvlist is already in image coordinates corresponding to positions in an input map, and this changes the input map by reference
 	
 	map_line = torch.ByteTensor(map:byte():storage()) --represents the map data in an Nx1 representation
+	values = values or 1
 
-	lin_ind = torch.mv(torch.floor(uvlist+0.5), --round the coordinates to nearest integer
-						torch.Tensor{map:stride(1),map:stride(2)}):long()
-	map_line[lin_ind] = 1
+	if uvlist then
+		lin_ind = torch.mv(torch.floor(uvlist:double()+0.5)-1, --round the coordinates to nearest integer
+							torch.Tensor{map:stride(1),map:stride(2)}):long()+1
+		map_line[lin_ind] = values
+	end
 	return map
 end
 
@@ -75,7 +78,7 @@ function self.xyzToUV(xyz_list,dir)
 	dir:div(dir:norm()) -- direction of the camera is the z_axis
 	u_axis = torch.cross(torch.Tensor{0,0,-1},dir) -- u_axis = v_axis x z_axis, where our v_axis(image down) is mostly pointed in the global -z direction
 	if u_axis:norm() < math.sin(math.pi/4) then
-		u_axis = torch.cross(torch.Tensor{0,0,1},dir) -- our v_axis is mostly pointed in the global y direction
+		u_axis = torch.cross(torch.Tensor{0,1,0},dir) -- our v_axis is mostly pointed in the global y direction
 	end
 	u_axis:div(u_axis:norm()) -- make it a unit vector
 	v_axis = torch.cross(dir,u_axis) -- v_axis = z_axis x u_axis
