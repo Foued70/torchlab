@@ -9,6 +9,7 @@ require 'gnuplot'
 gnuplot.setgnuplotexe("/usr/local/bin/gnuplot")  
 gnuplot.setterm("x11")
 
+io = require('io')
 cplane_ffi = require('./cplane_ffi')
 
 Plane = Plane.Plane
@@ -19,15 +20,24 @@ meshlist = util.torch.meshlist
 Class()
 
 function classifyPoints( points, window, dist_thresh )
-	errors = torch.Tensor(points:size(2), points:size(3))
+	invalid_mask = torch.Tensor(points:size(2), points:size(3))
+	eigenvalues_ret = torch.Tensor(points:size())
 	means_ret = torch.Tensor(points:size())
 	normals_ret = torch.Tensor(points:size())
 	second_moments_ret = torch.Tensor(9, points:size(2), points:size(3))
 
-	cplane_ffi.classifyPoints( torch.cdata(points), window, dist_thresh, torch.cdata(errors),
+	cplane_ffi.classifyPoints( torch.cdata(points), window, dist_thresh, torch.cdata(invalid_mask), torch.cdata(eigenvalues_ret),
 							   torch.cdata(normals_ret), torch.cdata(means_ret), torch.cdata(second_moments_ret) ) 
 
-	return errors, means_ret, normals_ret, second_moments_ret	
+	return invalid_mask, eigenvalues_ret, means_ret, normals_ret, second_moments_ret	
+end
+
+function bilateralNormalSmoothing( normals, means, window, sigma_distance, sigma_normal )
+	new_normals = torch.Tensor(normals:size()):zero()
+
+	cplane_ffi.bilateralNormalSmoothing( torch.cdata(normals), torch.cdata(means), torch.cdata(new_normals), 
+										 window, sigma_distance, sigma_normal )
+	return new_normals
 end
 
 function growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
@@ -39,7 +49,6 @@ function growPlane( inds, normals, means, second_moments, normal_thresh, residua
 	plane_equation = torch.Tensor(4)
 	plane_eigenvalues = torch.Tensor(3)
 
-	-- TODO: should actually return the plane parameters 
 	cplane_ffi.grow_plane_region( torch.cdata(inds), torch.cdata(normals), torch.cdata(means), 
 								  torch.cdata(second_moments), torch.cdata(region_mask), torch.cdata(front_mask), 
 								  torch.cdata(plane_eigenvalues), torch.cdata(plane_equation), torch.cdata(plane_centroid), 
@@ -55,21 +64,130 @@ function  cullPoints( normals, points, window, normal_thresh, residual_thresh )
 	return cull_mask
 end
 
-function  test_cplane( job_id, scan_num )
-	scan_fname = string.format('/Users/uriah/Downloads/' .. job_id .. '/source/po_scan/a/%.3d/sweep.xyz', scan_num)
-	pc = PointCloud.PointCloud.new( scan_fname )
-	points = pc:get_xyz_map()	
+function test_bilateral_smoothing()	
+	--job_id = 'precise-transit-6548'
+	job_id = 'mobile-void-0590'
+	work_id = 'bilateral-filtering'
+
+	arc_io = ArcIO.new( job_id, work_id )
+	pc = arc_io:getScan( 57 )
+	points = pc:get_xyz_map()
+
+	window = 3
+	dist_thresh = 9.0
+	cull_map, eigenvalues, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
+
+	window = 10
+	sigma_distance = 10
+	sigma_normal = math.pi/16
+	
+	arc_io:dumpImage( torch.add(normals,1):mul(0.5), 'normals', 'old_normals' )
+
+	max_iterations = 10
+	for n_iter = 1,max_iterations do 
+		new_normals = bilateralNormalSmoothing( normals, points, window, sigma_distance, sigma_normal )
+		arc_io:dumpImage( torch.add(new_normals,1):mul(0.5), 'normals', string.format('new_normals%.3d', n_iter) )
+		normals = new_normals:clone()
+		collectgarbage()
+	end
+end
+
+function test_classification( job_id, scan_num )
+	arc_io = ArcIO.new( job_id, 'test_classification' )
+	pc = arc_io:getScan( scan_num )
+
+	pts = pc:get_xyz_map()
+	points = pts:sub(1,3,50,pts:size(2), 1,pts:size(3)):clone()
+	print(points)
 
 	-- some default params	
 	window = 3
 	dist_thresh = 81.0
 
-	normal_thresh = 0.3;
+	normal_thresh = math.pi/8
+	residual_thresh = 15;
+
+	invalid_mask, eigenvalues, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
+
+	sml = 0.000000000000001
+	eigenvalues = eigenvalues + sml
+
+	image.display( invalid_mask )
+	--image.display( eigenvalues )
+
+	eig0 = eigenvalues:select(1,1)
+	eig1 = eigenvalues:select(1,2)
+	eig2 = eigenvalues:select(1,3)
+
+	ones = torch.ones(eig0:size())
+
+	smoothness = torch.cdiv(eig0, torch.add(eig1, eig2))
+	cornerness = torch.cdiv(eig0, eig1)
+	edgeness = torch.cdiv(eig1, eig2)
+
+	image.display( means )
+	image.display( normals )	
+	image.display( cornerness )
+	image.display( edgeness )
+	print(smoothness:max()) 
+	print(smoothness:min())
+	print(torch.cdiv(ones, smoothness):min())
+	print(torch.cdiv(ones, smoothness):max())
+
+	-- view const used to rescale range since we are inverting
+	view_const = 1
+
+	image.display( torch.cdiv( ones, edgeness+view_const ) ) 
+	image.display( torch.cdiv( ones, smoothness+view_const ) ) 
+	image.display( torch.cdiv( ones, cornerness+view_const ) ) 
+
+	-- Output cornerness values 
+	xyz_list = points:reshape(3, points:size(2)*points:size(3))
+	rgb_list = torch.cdiv( ones, cornerness+view_const ):reshape(1, points:size(2)*points:size(3)):repeatTensor(3,1)
+
+	-- rescale rgb list to be from 0-255
+	mx = rgb_list:max()
+	mn = rgb_list:min()
+	scl = 255.0/(mx-mn)
+	rgb_list = rgb_list:add(-mn):mul(scl):int()
+
+	print(rgb_list:min())
+	print(rgb_list:max())
+
+	print(xyz_list)
+	print(rgb_list)
+
+	print(xyz_list:size(2))
+	
+	output_fname = arc_io:workStr('cornerness_pts', string.format("%.3d.pts",scan_num))
+	output_fh = io.open( output_fname, "w" )										
+	pointcloud.pointcloud.write_to_ascii(output_fh, xyz_list:size(2), xyz_list:t(), rgb_list:t())
+	
+
+end
+
+function  test_cplane( job_id, scan_num )
+	--[[
+	scan_fname = string.format('/Users/uriah/Downloads/' .. job_id .. '/source/po_scan/a/%.3d/sweep.xyz', scan_num)
+	pc = PointCloud.PointCloud.new( scan_fname )
+	]]--
+
+	arc_io = ArcIO.new( job_id, scan_num )
+	pc = arc_io:getScan( scan_num )
+
+	points = pc:get_xyz_map()		
+
+
+	-- some default params	
+	window = 3
+	dist_thresh = 81.0
+
+	normal_thresh = math.pi/8
 	residual_thresh = 15;
 
 	errors, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
 
-	cull_mask = cullPoints( normals, means, 3, normal_thresh, residual_thresh )
+	--cull_mask = cullPoints( normals, means, 3, normal_thresh, residual_thresh )
 
 	y = (torch.rand(1):mul(points:size(2)):int()+1):squeeze()
 	x = (torch.rand(1):mul(points:size(3)):int()+1):squeeze()
@@ -79,18 +197,198 @@ function  test_cplane( job_id, scan_num )
 	print(inds)
 
 	-- Randomly generate start indices
-	plane_centroid, plane_equation, region_mask = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
+	--plane_centroid, plane_equation, region_mask = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
+	pcent, peq, pegv, reg_msk = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
 
 	print("plane_centroid: ", plane_centroid)
 	print("plane_equation: ", plane_equation)
 	print("errors:max(): ", errors:max())
 	print("errors:min(): ", errors:min())
 
-	image.display(means)
-	image.display(normals)
-	image.display(region_mask)
-	image.display(errors:lt(0.05))
-	image.display( cull_mask )
+	image.display( means )
+	image.display( normals )
+	image.display( reg_msk )
+	--image.display( errors )
+	--image.display( cull_mask )
+end
+
+function extract_planes_deterministic( job_id, scan_num )
+	-- Extract planes by extracting planes following the smoothest regions first
+	arc_io = ArcIO.new( job_id, 'test_classification' )
+	pc = arc_io:getScan( scan_num )
+
+	points = pc:get_xyz_map()		
+	-- Ignore top 50 rows since this data is super noisy
+	points = points:sub(1,3,50,points:size(2), 1,points:size(3)):clone()
+
+	print(points)
+
+	areas = pc:get_area_map()
+	areas = areas:sub(1,points:size(2), 1,points:size(3)):clone()		
+
+	print(areas)
+
+	-- some default params	
+	window = 3
+	dist_thresh = 81.0
+
+	normal_thresh = math.pi/8
+	residual_thresh = 25;
+
+	invalid_mask, eigenvalues, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
+
+	sml = 0.000000000000001
+	view_const = 2
+	eigenvalues = eigenvalues + sml
+
+	image.display( invalid_mask )
+	--image.display( eigenvalues )
+
+	eig0 = eigenvalues:select(1,1)
+	eig1 = eigenvalues:select(1,2)
+	eig2 = eigenvalues:select(1,3)
+
+	ones = torch.ones(eig0:size())
+	cornerness = torch.cdiv(eig0, eig1)
+	smoothness = torch.cdiv(ones, cornerness)
+
+	smoothness[invalid_mask:byte()] = smoothness:max()
+
+	max_planes = 200
+	coverage = 0.98
+
+	coverage_mask = torch.ByteTensor(points:size(2), points:size(3)):zero()
+
+	print(smoothness:size(1))
+	print(smoothness:size(2))
+
+	plane_cnt = 1
+	while plane_cnt < max_planes do 	
+		-- Find x,y to start sample at 
+		min_v, min_i = torch.min( smoothness:reshape(smoothness:nElement()), 1 )
+		
+		min_x = math.floor((min_i:squeeze()-1)/smoothness:size(2))
+		min_y = (min_i:squeeze()-1) - min_x*smoothness:size(2)
+		min_x = min_x + 1
+		min_y = min_y + 1
+
+		print(min_v)
+		print(smoothness[{{min_x},{min_y}}])
+		inds = torch.LongTensor({min_x,min_y})
+
+		pcent, peq, pegv, reg_msk = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
+
+		smoothness[reg_msk:byte()] = smoothness:max()		
+
+		print(reg_msk)
+		print("weight: ", areas[reg_msk:byte()]:sum())
+
+		if areas[reg_msk:byte()]:sum() > 2500 then 
+			coverage_mask = (coverage_mask + reg_msk:byte()):ge(1)
+			plane_cnt = plane_cnt + 1
+		end		
+		collectgarbage()
+	end
+
+	
+	image.display( normals )
+	image.display( invalid_mask )
+	image.display( torch.cdiv( ones, cornerness+view_const ) )
+
+
+	image.display(smoothness)
+	image.display(reg_msk)
+	image.display(coverage_mask)
+	
+end
+
+function extract_planes_random( job_id, scan_num )
+	-- Extract planes by extracting planes following the smoothest regions first
+	arc_io = ArcIO.new( job_id, 'test_classification' )
+	pc = arc_io:getScan( scan_num )
+
+	points = pc:get_xyz_map()		
+	-- Ignore top 50 rows since this data is super noisy
+	points = points:sub(1,3,50,points:size(2), 1,points:size(3)):clone()
+
+	print(points)
+
+	areas = pc:get_area_map()
+	areas = areas:sub(1,points:size(2), 1,points:size(3)):clone()		
+
+	print(areas)
+
+	-- some default params	
+	window = 3
+	dist_thresh = 81.0
+
+	normal_thresh = math.pi/8
+	residual_thresh = 15;
+
+	invalid_mask, eigenvalues, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
+
+	sml = 0.000000000000001
+	view_const = 2
+	eigenvalues = eigenvalues + sml
+
+	image.display( invalid_mask )
+	--image.display( eigenvalues )
+
+	eig0 = eigenvalues:select(1,1)
+	eig1 = eigenvalues:select(1,2)
+	eig2 = eigenvalues:select(1,3)
+
+	ones = torch.ones(eig0:size())
+	cornerness = torch.cdiv(eig0, eig1)
+	smoothness = torch.cdiv(ones, cornerness)
+
+	smoothness[invalid_mask:byte()] = smoothness:max()
+
+	max_planes = 200
+	coverage = 0.98
+
+	coverage_mask = torch.ByteTensor(points:size(2), points:size(3)):zero()
+
+	print(smoothness:size(1))
+	print(smoothness:size(2))
+
+	plane_cnt = 1
+	while plane_cnt < max_planes do 	
+		-- Find x,y to start sample at 
+		min_v, min_i = torch.min( smoothness:reshape(smoothness:nElement()), 1 )
+		
+		min_x = math.floor((min_i:squeeze()-1)/smoothness:size(2))
+		min_y = (min_i:squeeze()-1) - min_x*smoothness:size(2)
+		min_x = min_x + 1
+		min_y = min_y + 1
+
+		print(min_v)
+		print(smoothness[{{min_x},{min_y}}])
+		inds = torch.LongTensor({min_x,min_y})
+
+		pcent, peq, pegv, reg_msk = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
+
+		smoothness[reg_msk:byte()] = smoothness:max()		
+
+		print(reg_msk)
+		print("weight: ", areas[reg_msk:byte()]:sum())
+
+		if areas[reg_msk:byte()]:sum() > 2500 then 
+			coverage_mask = (coverage_mask + reg_msk:byte()):ge(1)
+			plane_cnt = plane_cnt + 1
+		end		
+		collectgarbage()
+	end
+
+	
+	image.display( normals )
+	image.display( invalid_mask )
+	image.display( torch.cdiv( ones, cornerness+view_const ) )
+
+
+	image.display(smoothness)
+	image.display(reg_msk)
+	image.display(coverage_mask)
 end
 
 -- TODO: move!
@@ -217,11 +515,19 @@ function extract_planes_directed( scan_num )
 	arc_io:dumpImage( regions_rgb, "scan_regions", string.format("%.3d", scan_num) )
 end
 
-function extract_planes_random( scan_num )
-	arc_io = ArcIO.new( specs.job_id, specs.work_id )
+function extract_planes_ransac( job_id, scan_num )
+	arc_io = ArcIO.new( job_id, 'extract_planes_ransac' )
 	pc = arc_io:getScan( scan_num )
 
 	points = pc:get_xyz_map()	
+	
+	print(points)
+	-- Ignore top 50 rows since this data is super noisy
+	--points = points:sub(1,3,50,points:size(2), 1,points:size(3)):clone()
+	print(points)
+
+	area = pc:get_area_map()
+	--area = area:sub(50,area:size(1),1,area:size(2)):clone()
 
 	window = 9
 	dist_thresh = 9.0
@@ -229,18 +535,17 @@ function extract_planes_random( scan_num )
 	normal_thresh = math.pi/8
 	residual_thresh = 15
 
-	min_region_size = 250
+	min_region_size = 2500
 
-	n_planes = 200
-	coverage_thresh = 0.92 -- TODO: have a pointcloud coverage threshold 
-
-	errors, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
-
+	n_planes = 300
+	coverage_thresh = 0.9 -- TODO: have a pointcloud coverage threshold 
+	
+	cull_map, eigenvalues, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
 	-- Only sample from smooth regions in the cull mask 	
 	--cull_map = cullPoints( normals, means, 3, normal_thresh, residual_thresh )
-	cull_map = cullPoints( normals, means, 3, math.pi/4, 40)
+	--cull_map = cullPoints( normals, means, 3, math.pi/4, 40)
 	--cull_map = cullPoints( normals, points, 3, math.pi/8, 20)
-	cull_map_cp = cull_map:clone()
+	--cull_map_cp = cull_map:clone()
 
 	-- DEBUG test without cull map 
 
@@ -295,7 +600,7 @@ function extract_planes_random( scan_num )
 		min_residual = nil
 		max_size = nil
 		min_curvature = nil
-		for j = 1,50 do
+		for j = 1,1 do
 			sample_ind = torch.rand(1):mul(x_inds:nElement()):long()+1
 
 			--print("size inds: ", x_inds:nElement())
@@ -312,6 +617,8 @@ function extract_planes_random( scan_num )
 			y_rand = y_inds[sample_ind]:squeeze()
 
 			inds = torch.LongTensor({x_rand,y_rand})
+			print(points:size())
+			print(inds)
 			--plane_centroid, plane_equation, plane_eigenvalues, region_mask = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
 			pcent, peq, pegv, reg_msk = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
 			region_size = reg_msk:sum()
@@ -347,7 +654,8 @@ function extract_planes_random( scan_num )
 		print("plane_ind: ", plane_ind)
 		print("coverage: ", x_inds:nElement()/n_points)
 
-		region_size = region_mask:sum()
+		--region_size = region_mask:sum()
+		region_size = area[region_mask:byte()]:sum()
 		if region_size > min_region_size then
 
 			-- Update eigenvalues
@@ -422,7 +730,7 @@ function extract_planes_random( scan_num )
 	arc_io:dumpImage( normals:add(1):mul(0.5), "scan_normals", string.format("%.3d", scan_num) )
 	arc_io:dumpImage( regions_rgb, "scan_regions", string.format("%.3d", scan_num) )
 
-	arc_io:dumpImage( cull_map_cp, "cull_maps", string.format("%.3d", scan_num) )
+	--arc_io:dumpImage( cull_map_cp, "cull_maps", string.format("%.3d", scan_num) )
 
 	--[[
 	image.display(cull_map)

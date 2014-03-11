@@ -40,7 +40,6 @@ typedef PointXYZ PointType;
 
 extern "C"
 {
-
 /* 
   Cosine distance between two vectors 
 */
@@ -137,7 +136,7 @@ void map2xyz( THDoubleTensor* xyz_map, THDoubleTensor* result ) {
 /*
   Classify each point as planar, invalid or non-planar using a small window of nearby points
 */
-void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, THDoubleTensor* errors, THDoubleTensor* normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments ) { 
+void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, THDoubleTensor* invalid_mask, THDoubleTensor* th_eigenvalues, THDoubleTensor* normals, THDoubleTensor* th_means, THDoubleTensor* th_second_moments ) { 
 
   // Compute halfwidth of the window ... windows should be odd 
   int window_width = (window - 1)/2;
@@ -156,9 +155,9 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
   printf("size[2]: %i\n", width);
   #endif 
 
-  THDoubleTensor_resize2d( errors, height, width );
-  THDoubleTensor_fill( errors, 0 );
-  double* errors_data = THDoubleTensor_data( errors );
+  THDoubleTensor_resize3d( th_eigenvalues, stack, height, width );
+  THDoubleTensor_fill( th_eigenvalues, 0 );
+  double* eigenvalues_data = THDoubleTensor_data( th_eigenvalues );
 
   THDoubleTensor_resize3d( normals, stack, height, width );
   THDoubleTensor_fill( normals, 0 );
@@ -167,6 +166,10 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
   THDoubleTensor_resize3d( th_means, stack, height, width );
   THDoubleTensor_fill( th_means, 0 );
   double* means = THDoubleTensor_data( th_means );
+
+  THDoubleTensor_resize2d( invalid_mask, height, width );
+  THDoubleTensor_fill( invalid_mask, 0 );
+  double* invalid_data = THDoubleTensor_data( invalid_mask );
 
   // Second moments is a stack of 9 
   THDoubleTensor_resize3d( th_second_moments, 9, height, width );
@@ -195,9 +198,9 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
       // Don't compute value at the edges of the window 
       if ( i-window_width < 0 || j-window_width < 0 || i+window_width+1 > height || j+window_width+1 > width ) {
         #ifdef DEBUG
-        printf("continueing: [%d, %d] \n", i, j);
+        printf("continuing: [%d, %d] \n", i, j);
         #endif
-        errors_data[i*width+j] = 1;
+        invalid_data[i*width+j] = 1;
         continue;
       }
       seed_pos(0) = data[0*height*width + i*width + j];
@@ -205,7 +208,7 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
       seed_pos(2) = data[2*height*width + i*width + j];
       // If we are an invalid point then set errors_data to 1 
       if ( seed_pos(0) == 0 && seed_pos(1) == 0 && seed_pos(2) == 0 ) {
-        errors_data[i*width+j] = 1;
+        invalid_data[i*width+j] = 1;
         continue;
       }
       // Compute mean of the window ... TODO: i,j,k,l are shitty names  
@@ -235,7 +238,7 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
       }
       // If we didn't get enough points then ignore
       if ( mean_cnt < 9 ) {
-        errors_data[i*width+j] = 1;
+        invalid_data[i*width+j] = 1;
         continue;
       }
       mean = mean/double(mean_cnt);
@@ -293,6 +296,11 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
         second_moments[smi*height*width + i*width + j] = second_moment(smi);
       }
 
+      // Copy eigenvalues
+      eigenvalues_data[0*height*width + i*width + j] = eigenvalues_sorted(0);
+      eigenvalues_data[1*height*width + i*width + j] = eigenvalues_sorted(1);
+      eigenvalues_data[2*height*width + i*width + j] = eigenvalues_sorted(2);
+
       /*
       // If the minimum eigenvalue is small enough then we consider this region to be a plane  
       if ( eigenvalues_sorted(0) <= plane_thresh*eigenvalues_sorted(1) ) {
@@ -309,12 +317,102 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
       */
       //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1)+eigenvalues_sorted(2));
       //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1));
-      errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(2));
+      //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(2));
       //errors_data[i*width+j] = dist;
     }
   }
 }
 
+/*
+  Apply iterative bilateral filter to normals 
+*/
+void bilateralNormalSmoothing( THDoubleTensor* th_normals, THDoubleTensor* th_points, THDoubleTensor* th_new_normals
+                             , int window, double sigma_distance, double sigma_normal ) {
+  int window_width = (window - 1)/2;
+  long stack = th_normals->size[0];
+  long height = th_normals->size[1];
+  long width = th_normals->size[2];  
+
+  double *pos_data = THDoubleTensor_data( th_points );
+  double *normal_data =  THDoubleTensor_data( th_normals);
+  double *new_normal_data =  THDoubleTensor_data( th_new_normals);
+
+  Eigen::Vector3d pos_i; 
+  Eigen::Vector3d normal_i;
+  Eigen::Vector3d pos_ip; 
+  Eigen::Vector3d normal_ip;
+  Eigen::Vector3d new_normal;
+
+  double dist = 0;
+  double spatial_weight;
+  double normal_weight;
+  double neighbor_weight;
+  double den_i = 0;
+  Eigen::Vector3d num_i(0.0,0.0,0.0);
+
+  // Apply operation to all elements in map 
+  for ( long i=0; i<height; i++ ) {
+    for ( long j=0; j<width; j++ ) {
+      // Don't compute value at the edges of the window 
+      if ( i-window_width < 0 || j-window_width < 0 || i+window_width+1 > height || j+window_width+1 > width ) {                        
+        continue;
+      }
+
+      pos_i(0) = pos_data[0*height*width + i*width + j];
+      pos_i(1) = pos_data[1*height*width + i*width + j];
+      pos_i(2) = pos_data[2*height*width + i*width + j];
+      
+      normal_i(0) = normal_data[0*height*width + i*width + j];
+      normal_i(1) = normal_data[1*height*width + i*width + j];
+      normal_i(2) = normal_data[2*height*width + i*width + j];
+
+      if ( normal_i(0) == 0 && normal_i(1) == 0 && normal_i(2) == 0 ) {        
+        continue;
+      }
+
+      new_normal_data[0*height*width + i*width + j] = normal_i(0);
+      new_normal_data[1*height*width + i*width + j] = normal_i(1);
+      new_normal_data[2*height*width + i*width + j] = normal_i(2);
+
+      den_i = 0;
+      num_i.setZero(); 
+      int cnt = 0;       
+      for ( long k=i-window_width; k<i+window_width+1; k++ ) { 
+        for ( long l=j-window_width; l<j+window_width+1; l++ ) { 
+          pos_ip(0) = pos_data[0*height*width + k*width + l];
+          pos_ip(1) = pos_data[1*height*width + k*width + l];
+          pos_ip(2) = pos_data[2*height*width + k*width + l];
+          
+          normal_ip(0) = normal_data[0*height*width + k*width + l];
+          normal_ip(1) = normal_data[1*height*width + k*width + l];
+          normal_ip(2) = normal_data[2*height*width + k*width + l];
+          if ( normal_ip(0) == 0 && normal_ip(1) == 0 && normal_ip(2) == 0 ) {        
+            continue;
+          }
+          // Use residual distance instead of euclidean distance
+          //dist = sqrt((pos_i - pos_ip).norm()); 
+          dist = residual_distance( normal_i, pos_i, pos_ip );          
+          if ( dist > sigma_distance ) {
+            continue;
+          } 
+          // Calculate spatial weight          
+          spatial_weight = exp( -pow(dist,2)/pow(sigma_distance,2) );
+
+          // Calculate normal weight           
+          normal_weight = exp( -pow( (1.0-normal_i.transpose()*normal_ip)/(1-cos(sigma_normal)), 2) );
+          neighbor_weight = spatial_weight*normal_weight;
+          den_i += neighbor_weight;
+          num_i += normal_ip*neighbor_weight;
+          cnt++;
+        }
+      }      
+      new_normal = num_i/den_i;
+      new_normal_data[0*height*width + i*width + j] = new_normal(0);
+      new_normal_data[1*height*width + i*width + j] = new_normal(1);
+      new_normal_data[2*height*width + i*width + j] = new_normal(2);
+    }
+  }
+}
 
 /* 
   Cull points based on normal / residual thresholds
@@ -415,7 +513,6 @@ void addNeighbors( long node_index, Eigen::Vector3d* mean, Eigen::Vector3d* norm
         continue;
 
       index = i*width + j;
-      //std::cout << "index: " << index << std::endl;
       // Check if neighbor index is in plane_inliers
       if ( region_mask[index] > 0.5 || front_mask[index] > 0.5 ) {
         //std::cout << "region mask index: " << index << std::endl;
@@ -432,12 +529,6 @@ void addNeighbors( long node_index, Eigen::Vector3d* mean, Eigen::Vector3d* norm
       }
       cdist = cosine_distance( *normal, neighbor_normal );
       rdist = residual_distance( *normal, *mean, neighbor_mean );
-      /*
-      std::cout << "cosine_distance: " << cdist << std::endl;
-      std::cout << "residual_distance: " << rdist << std::endl;
-      std::cout << "combined error: " << cdist*rdist << std::endl;
-      std::cout << "neighbor_mean: " << neighbor_mean << std::endl;
-      */
 
       // Insert neighbor into the front 
       front->insert( std::pair<double,long>(cdist*rdist,index) );
@@ -445,12 +536,6 @@ void addNeighbors( long node_index, Eigen::Vector3d* mean, Eigen::Vector3d* norm
       front_mask[index] = 1;
     }
   }
-
-  /*
-  std::cout << "front contains: " << std::endl;
-  for (std::map<double,long>::iterator it=front->begin(); it!=front->end(); ++it)
-    std::cout << it->first << " => " << it->second << std::endl;
-  */
 
 }
 
@@ -477,10 +562,6 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
   }
 
   // Check if minimum error point is within thresholds 
-  /*
-  double cosine_thresh = 0.3;    
-  double residual_thresh = 20.0;
-  */
   double cdist;
   double rdist; 
 
@@ -501,16 +582,6 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
 
   // If the best neighbor is above the thresholds then we are done
   if ( cdist > cosine_thresh || rdist > residual_thresh ) {
-  //if ( cdist > cosine_thresh ) {
-      /*
-      std::cout << "cosine_distance: " << cdist << std::endl;
-      std::cout << "residual_distance: " << rdist << std::endl;
-      std::cout << "num_points: " << *num_points << std::endl;
-      std::cout << "mean: "  << *mean << std::endl;
-      std::cout << "second_moment: " << *second_moment << std::endl;
-      std::cout << "covariance: " << *covariance << std::endl;
-      std::cout << "cdist or rdist above thresh exiting " << std::endl;
-      */
       return -1;
   }
 
@@ -520,14 +591,6 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
   }
 
   Eigen::Vector3d sub;
-
-  /*
-  std::cout << "Before" << std::endl;
-  std::cout << "num_points: " << *num_points << std::endl;
-  std::cout << "mean: "  << *mean << std::endl;
-  std::cout << "second_moment: " << *second_moment << std::endl;
-  std::cout << "covariance: " << *covariance << std::endl;
-  */
 
   sub = double(*num_points)*(*mean) + neighbor_mean; 
   //std::cout << "sub: "  << sub << std::endl;
@@ -539,55 +602,9 @@ long updatePlane( std::map<double,long>* front, Eigen::Matrix3d* covariance, Eig
   // Update covariance
   *covariance = *second_moment - sub*((*mean).transpose());
 
-  /*
-  std::cout << "After" << std::endl;
-  std::cout << "num_points: " << *num_points << std::endl;
-  std::cout << "mean: "  << *mean << std::endl;
-  std::cout << "second_moment: " << *second_moment << std::endl;
-  std::cout << "covariance: " << *covariance << std::endl;
-  */
-
-  // TODO: compute normal, etc ... 
   double plane_d;
   //Eigen::Vector3d eigenvalues;
   extract_plane_from_covariance( *covariance, *mean, normal, &plane_d, eigenvalues );
-
-  /* DEBUG: this is very expensive also segfaults, hehe
-  // Update errors for each neighbor  ... there is certainly a better approach than i have chosen
-  std::map<double, long> new_front; 
-  //for (std::map<double,long>::iterator it=front->begin(); it!=front->end(); ++it) {
-  std::map<double,long>::iterator it = front->begin();
-  long node_index; 
-  while ( it != front->end() ) {
-    node_index = it->second;
-    // Erase and increment
-    front->erase(it);
-    it++;
-
-    // Extract neighbor mean
-    for (int k=0; k<3; k++) {
-      neighbor_mean(k) = means[k*height*width + node_index];
-    }
-    // Extract neighbor normal
-    for (int k=0; k<3; k++) {
-      neighbor_normal(k) = normals[k*height*width + node_index];
-    }
-    cdist = cosine_distance( *normal, neighbor_normal );
-    rdist = residual_distance( *normal, *mean, neighbor_mean );  
-    new_front.insert( std::pair<double,long>(cdist*rdist,node_index) );
-  }
-
-  for (std::map<double,long>::iterator it=new_front.begin(); it!=new_front.end(); ++it) {
-    front->insert( std::pair<double,long>(it->first,it->second) );
-  }
-  */
-
-
-  /*
-  std::cout << "front contains: " << std::endl;
-  for (std::map<double,long>::iterator it=front->begin(); it!=front->end(); ++it)
-    std::cout << it->first << " => " << it->second << std::endl;
-  */
 
   return index;
 }
@@ -615,6 +632,7 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
   long *start_indices =  THLongTensor_data( th_start_indices );
   long start_y = start_indices[0];
   long start_x = start_indices[1];
+
   //printf( "start indices: [%i, %i] \n", start_y, start_x);
   long start_index = start_y*width + start_x;
 
@@ -631,6 +649,10 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
   THDoubleTensor_resize2d( th_front_mask, height, width );
   THDoubleTensor_fill( th_front_mask, 0 );
   double* front_mask = THDoubleTensor_data( th_front_mask );
+
+  if ( start_x < 1 || start_x > width-1 || start_y < 1 || start_y > height-1 ) {
+    return;
+  }
 
 
   // Properties to track for the root plane
@@ -664,15 +686,6 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
   for (int i=0; i<3; i++) {
     orig_normal(i) = normals[i*height*width + start_y*width + start_x];
   }
-
-  // TEST: yes these are the same ... good
-  /*
-  std::cout << "original normal: " << orig_normal << std::endl;
-  std::cout << "computed normal: " << normal << std::endl;
-  std::cout << "mean: " << mean << std::endl;
-
-  std::cout << "cosine_dist: " << cosine_distance( orig_normal, normal ) << std::endl;
-  */
 
   // Add Neighbors of index 
   long index = start_index;
@@ -710,52 +723,6 @@ void grow_plane_region( THLongTensor* th_start_indices, THDoubleTensor* th_norma
       break;
     }
   }
-
-
-
-
-  /*
-  Eigen::Vector3d neighbor_mean;
-  Eigen::Vector3d neighbor_normal;
-  double cdist;
-  double rdist;
-  long index; 
-  for (int i=start_y-1; i<start_y+2; i++) {
-    for (int j=start_x-1; j<start_x+2; j++) {
-      // We are not our own neighbor 
-      if ( i == start_x && j == start_x )
-        continue;
-
-      index = i*width + j;
-      // Check if neighbor index is in plane_inliers
-      if ( region_mask[index] ) 
-        continue;
-
-      // Extract neighbor mean
-      for (int k=0; k<3; k++) {
-        neighbor_mean(k) = means[k*height*width + index];
-      }
-      // Extract neighbor normal
-      for (int k=0; k<3; k++) {
-        neighbor_normal(k) = normals[k*height*width + index];
-      }
-      cdist = cosine_distance( normal, neighbor_normal );
-      rdist = residual_distance( normal, mean, neighbor_mean );
-      std::cout << "cosine_distance: " << cdist << std::endl;
-      std::cout << "residual_distance: " << rdist << std::endl;
-      std::cout << "combined error: " << cdist*rdist << std::endl;
-      std::cout << "neighbor_mean: " << neighbor_mean << std::endl;
-
-      // Insert neighbor into the front 
-      front.insert( std::pair<double,long>(cdist*rdist,index) );
-    }
-  }
-
-  std::cout << "front contains: " << std::endl;
-  for (std::map<double,long>::iterator it=front.begin(); it!=front.end(); ++it)
-    std::cout << it->first << " => " << it->second << std::endl;
-  */
-
 }
 
 
