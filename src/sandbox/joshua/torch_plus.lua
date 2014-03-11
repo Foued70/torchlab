@@ -1,7 +1,8 @@
 self = {}
 
 function self.unique_rows(A)
-	--returns unique rows of A, and the indices of these unique rows
+	--returns unique rows of A, and the indices of these unique rows.
+	--it keeps the order of the rows the same and keeps the first instance of non-unique rows
 	local A = A:clone()
 	local inds = torch.zeros(A:size(1))
 	local cur_ind = 1
@@ -32,7 +33,7 @@ function self.unique(A)
 		error("Input a 1D Tensor")
 	end
 
-	if  and A:size(1)>1 then
+	if  A:size(1)>1 then
 		B,i = torch.sort(A:clone(),1)
 		dB = torch.add(B[{{2,-1}}],-B[{{1,-2}}])
 		mask = torch.cat(torch.ByteTensor{1},dB:gt(0),1) --always include the first one, and the ones with a non-zero change to the next element
@@ -42,6 +43,22 @@ function self.unique(A)
 		return A:clone(), torch.LongTensor{1}
 	end
 	
+end
+
+function self.ANY(A,_dim)
+	if _dim then
+		return A:clone():gt(0):sum(_dim):gt(0)
+	else
+		return A:clone():gt(0):sum() > 0
+	end
+end
+
+function self.ALL(A,_dim)
+	if _dim then
+		return A:clone():gt(0):sum(_dim):eq(A:size(_dim))
+	else
+		return A:clone():gt(0):sum() == A:nElement()
+	end
 end
 
 function self.AND(A,B)
