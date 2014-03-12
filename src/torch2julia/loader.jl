@@ -1,6 +1,6 @@
 function read_torch_ascii(filename)
-	farr = open(x->readdlm(x,'\n'),filename)
-
+	file_array = open(x->readdlm(x,'\n'),filename)
+	return read_object(file_array)
 end
 
 objects_read = Dict{Int,Any}()
@@ -36,10 +36,30 @@ function read_object(A)
 
 	    #otherwise read it
 	    if typeidx == TYPE_TORCH
+	    	num_char = read_next()
 	    	version = read_next()
 	    	versionNumber = int(match(r"^V (.*)$",version).captures[1]) #won't handle floating point numbers, it will also fail if the string doesn't match
+
+	    	num_char = read_next()
 	    	classname = read_next()
+	    	typename = classname[7:end-6] #"torch.XXXXXXTensor"
+
+	    	ndims = read_next()
+	    	sizetext = read_next()
+	    	size = int(matchall(r"\d",sizetext))
+
+	    	stridetext = read_next()
+	    	storageOffset = read_next()
+
+	    	storageObject = read_object(A[lineidx+1:end])
+	    	if typename == "Byte"
+	    	object = Array{Bool,}
 	    end
 	    #NOT FINISHED
 	end
 end
+
+
+
+
+
