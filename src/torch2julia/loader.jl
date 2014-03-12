@@ -61,10 +61,14 @@ function read_object(A, lineidx)
 	    		return reshape(copy(storageObject),dims...).', lineidx
 	    	elseif classname[end-6:end]=="Storage"
 	    		typename = classname[7:end-7] #torch.XXXXXXXStorage
-	    		nElem = A[lineidx+=1]
+	    		nElem = int(A[lineidx+=1])
 	    		tdata = A[lineidx+=1]
 	    		if typename == "Byte"
-	    			return uint8(split(tdata,' '))[1:nElem], lineidx
+	    			temp= Array(Uint8,nElem)
+	    			for i=1:nElem
+	    				temp[i] = uint8(tdata[i])
+	    			end
+	    			return temp, lineidx
 	    		elseif typename == "Int"
 	    			return int32(split(tdata,' '))[1:nElem], lineidx
 	    		elseif typename == "Double"
@@ -94,7 +98,7 @@ function read_object(A, lineidx)
 	            v, lineidx = read_object(A,lineidx)
 	            object[k] = v
 	         end
-	         return object
+	         return object, lineidx
 
 	    end
 	    #NOT FINISHED
