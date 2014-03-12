@@ -1,8 +1,9 @@
-global objects_read = Dict{Int,Any}()
+global objects_read
 force = false
 
 function read_torch_ascii(filename)
 	file_array = open(x->readdlm(x,'\n'),filename)
+	global objects_read = Dict{Int,Any}()
 	return read_object(file_array, 0)[1]
 end
 
@@ -38,7 +39,8 @@ function read_object(A, lineidx)
 	    
 	    #check if it's already read
 	    if haskey(objects_read,index) && !force
-	    	return objects[index]
+	    	error("not yet tested")
+	    	return objects_read[index]
 	    end
 
 	    #otherwise read it
@@ -58,13 +60,11 @@ function read_object(A, lineidx)
 	    		stridetext = A[lineidx+=1]
 	    		storageOffset = A[lineidx+=1]
 	    		storageObject, lineidx = read_object(A, lineidx)
-	    		println(ndims)
-	    		println(dims)
 	    		if (ndims == 1)
 	    			return reshape(copy(storageObject),dims...), lineidx
 
 	    		elseif (ndims ==2)
-	    			return reshape(copy(storageObject),dims...).', lineidx
+	    			return reshape(copy(storageObject),dims[2], dims[1]).', lineidx
 
 	    		elseif (ndims == 3)
 	    			#return reshape(copy(storageObject),dims...), lineidx
