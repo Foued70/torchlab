@@ -11,30 +11,12 @@ extern "C"
 #include "TH.h"
 }
 #include <iostream>
-#include <pcl/io/pcd_io.h>
-#include <pcl/point_types.h>
-#include <pcl/registration/icp.h>
-#include <pcl/keypoints/uniform_sampling.h>
-#include <pcl/features/normal_3d_omp.h>
-#include <pcl/features/shot_omp.h>
-#include <pcl/recognition/cg/geometric_consistency.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/kdtree/impl/kdtree_flann.hpp>
-#include <pcl/registration/transformation_validation_euclidean.h>
-#include <pcl/segmentation/region_growing.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/io/obj_io.h>
-#include <pcl/io/ply_io.h>
-#include <pcl/surface/gp3.h>
+#include <map>
+#include <Eigen/Core>
+#include <Eigen/Eigenvalues>
 #include <math.h>
  
 using namespace std;
-/*
-using namespace pcl;
-using namespace registration;
-
-typedef PointXYZ PointType;
-*/
 
 //#define DEBUG
 
@@ -300,25 +282,6 @@ void classifyPoints( THDoubleTensor* xyz_map, int window, double dist_thresh, TH
       eigenvalues_data[0*height*width + i*width + j] = eigenvalues_sorted(0);
       eigenvalues_data[1*height*width + i*width + j] = eigenvalues_sorted(1);
       eigenvalues_data[2*height*width + i*width + j] = eigenvalues_sorted(2);
-
-      /*
-      // If the minimum eigenvalue is small enough then we consider this region to be a plane  
-      if ( eigenvalues_sorted(0) <= plane_thresh*eigenvalues_sorted(1) ) {
-        classification_data[i*width+j] = 1;
-      }
-      */
-
-      // Hold on to error for each plane ... TODO: handle super tiny eigenvalues
-      /*
-      if ( eigenvalues_sorted(1) < 0.01 ) {
-        errors_data[i*width+j] = 1;
-        continue;
-      }
-      */
-      //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1)+eigenvalues_sorted(2));
-      //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(1));
-      //errors_data[i*width+j] = eigenvalues_sorted(0)/(eigenvalues_sorted(0)+eigenvalues_sorted(2));
-      //errors_data[i*width+j] = dist;
     }
   }
 }
@@ -370,13 +333,8 @@ void bilateralNormalSmoothing( THDoubleTensor* th_normals, THDoubleTensor* th_po
         continue;
       }
 
-      new_normal_data[0*height*width + i*width + j] = normal_i(0);
-      new_normal_data[1*height*width + i*width + j] = normal_i(1);
-      new_normal_data[2*height*width + i*width + j] = normal_i(2);
-
       den_i = 0;
-      num_i.setZero(); 
-      int cnt = 0;       
+      num_i.setZero();             
       for ( long k=i-window_width; k<i+window_width+1; k++ ) { 
         for ( long l=j-window_width; l<j+window_width+1; l++ ) { 
           pos_ip(0) = pos_data[0*height*width + k*width + l];
@@ -399,11 +357,10 @@ void bilateralNormalSmoothing( THDoubleTensor* th_normals, THDoubleTensor* th_po
           spatial_weight = exp( -pow(dist,2)/pow(sigma_distance,2) );
 
           // Calculate normal weight           
-          normal_weight = exp( -pow( (1.0-normal_i.transpose()*normal_ip)/(1-cos(sigma_normal)), 2) );
+          normal_weight = exp( -pow( (1.0-normal_i.dot(normal_ip))/(1-cos(sigma_normal)), 2) );
           neighbor_weight = spatial_weight*normal_weight;
           den_i += neighbor_weight;
-          num_i += normal_ip*neighbor_weight;
-          cnt++;
+          num_i += normal_ip*neighbor_weight;          
         }
       }      
       new_normal = num_i/den_i;

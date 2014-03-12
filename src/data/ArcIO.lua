@@ -40,7 +40,7 @@ function ArcIO:__init( job_id, work_id )
 	end
 	self.scan_num = nil 
 
-	-- Create pc.t7 data dir if it doesn't already exist
+	-- Create pc.t7 data dir if it doesn't already exist ... TODO use util.fs. 
 	if not os.execute(string.format("mkdir -p %s", self.pointcloudt7_path )) then
 		error("Error making %s", self.job_path .. '/work/po_scan')
 	end
@@ -115,19 +115,11 @@ function ArcIO:loadTorch( dir, name )
 end
 
 -- Dump torch data structure 
-function ArcIO:dumpTorch( data, dir, name )
-	--[[
-	if self.scan_num == nil then
-		print("scan_num == nil, gotta specify that yo")
-		return
-	end
-	]]--
-		
+function ArcIO:dumpTorch( data, dir, name )	
 	data_fname = self:workStr( dir, name .. '.t7' )
 	print("Saving: " .. data_fname )
 
-	-- Fill out output data structure, must have scan_num and job_id  
-	--data.scan_num = self.scan_num
+	-- Fill out output data structure	
 	data.job_id  = self.job_id 
 	data.work_id = self.work_id
 	torch.save(data_fname, data)

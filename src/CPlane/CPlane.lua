@@ -529,7 +529,7 @@ function extract_planes_ransac( job_id, scan_num )
 	area = pc:get_area_map()
 	--area = area:sub(50,area:size(1),1,area:size(2)):clone()
 
-	window = 9
+	window = 3
 	dist_thresh = 9.0
 
 	normal_thresh = math.pi/8
@@ -539,6 +539,7 @@ function extract_planes_ransac( job_id, scan_num )
 
 	n_planes = 300
 	coverage_thresh = 0.9 -- TODO: have a pointcloud coverage threshold 
+	fail_thresh = 8.0 
 	
 	cull_map, eigenvalues, means, normals, second_moments = classifyPoints( points, window, dist_thresh )
 	-- Only sample from smooth regions in the cull mask 	
@@ -592,7 +593,19 @@ function extract_planes_ransac( job_id, scan_num )
 
 	finished = false
 
+	grow_plane_time = 0
+	sample_time = 0
+	update_time = 0
+	cull_time = 0 
+
+	tmr = torch.Timer()	
+
 	plane_ind = 1
+	tt0 = tmr:time()['real']
+
+	attempts = 0 
+	fail_attempts = 0 
+	fail_attempts_ave = 0 
 	while true do 
 	-- for plane_ind = 1,n_planes do 
 
@@ -601,7 +614,9 @@ function extract_planes_ransac( job_id, scan_num )
 		max_size = nil
 		min_curvature = nil
 		for j = 1,1 do
+			smplt0 = tmr:time()['real']
 			sample_ind = torch.rand(1):mul(x_inds:nElement()):long()+1
+			sample_time = sample_time + (tmr:time()['real'] - smplt0)
 
 			--print("size inds: ", x_inds:nElement())
 
@@ -616,15 +631,16 @@ function extract_planes_ransac( job_id, scan_num )
 			x_rand = x_inds[sample_ind]:squeeze()
 			y_rand = y_inds[sample_ind]:squeeze()
 
-			inds = torch.LongTensor({x_rand,y_rand})
-			print(points:size())
-			print(inds)
+			inds = torch.LongTensor({x_rand,y_rand})			
 			--plane_centroid, plane_equation, plane_eigenvalues, region_mask = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
-			pcent, peq, pegv, reg_msk = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )
+
+			gpt0 = tmr:time()['real']
+			pcent, peq, pegv, reg_msk = growPlane( inds, normals, means, second_moments, normal_thresh, residual_thresh )			
+			grow_plane_time = grow_plane_time + (tmr:time()['real']-gpt0)
 			region_size = reg_msk:sum()
 			plane_residual = pegv[{1}]/region_size
 			curvature = pegv[{1}]/(pegv[{1}]+pegv[{2}]+pegv[{3}])
-
+			attempts = attempts + 1
 			--[[
 			if not min_residual then
 				min_residual = plane_residual
@@ -651,13 +667,20 @@ function extract_planes_ransac( job_id, scan_num )
 			break
 		end
 
-		print("plane_ind: ", plane_ind)
-		print("coverage: ", x_inds:nElement()/n_points)
+		fail_attempts = fail_attempts + 1
 
 		--region_size = region_mask:sum()
+		upt0 = tmr:time()['real']
 		region_size = area[region_mask:byte()]:sum()
 		if region_size > min_region_size then
-
+			--print("plane_ind: ", plane_ind)
+			--print("coverage: ", x_inds:nElement()/n_points)
+			print("fail_attempts: ", fail_attempts)
+			-- delayed fail attempts update
+			alpha = 0.95
+			fail_attempts_ave = fail_attempts_ave*alpha + fail_attempts*(1-alpha);
+			print("fail_attempts_ave: ", fail_attempts_ave)
+			fail_attempts = 0 
 			-- Update eigenvalues
 			plane_residual = plane_eigenvalues[{{1},{}}]/region_size
 			plane_residuals = torch.cat(plane_residuals, plane_residual,1)
@@ -690,22 +713,34 @@ function extract_planes_ransac( job_id, scan_num )
 			plane_ind = plane_ind+1
 
 		end
+		update_time = update_time + (tmr:time()['real'] - upt0)
 
 		if plane_ind > n_planes then
 			break
 		end
+		if fail_attempts_ave > fail_thresh then
+			n_planes = plane_ind
+		end
+
 
 		-- Add region to cull_map and create new cull_mask 
 		--print(cull_map)
 		--print(region_mask)
+		cmt0 = tmr:time()['real']
 		cull_map = cull_map:byte():add(region_mask:byte():eq(0)):gt(1)
 		cull_mask = torch.reshape( cull_map, 1,cull_map:nElement()):squeeze():byte()
 		x_inds = x_rng[cull_mask]
 		y_inds = y_rng[cull_mask]
-
-
+		cull_time = cull_time + (tmr:time()['real'] - cmt0)
 		collectgarbage()
 	end
+
+	print("total_time: ", tmr:time()['real']-tt0)
+	print("update_time: ", update_time)
+	print("sample_time: ", sample_time)
+	print("cull_time: ", cull_time)
+	print("grow_plane_time: ", grow_plane_time)
+	print("attempts: ", attempts)
 
 	-- Draw sample points 
 	for i=1,n_planes-1 do 
@@ -716,6 +751,7 @@ function extract_planes_ransac( job_id, scan_num )
 		regions_b[{{min_i}, {min_j}}] = 1.0;
 	end
 
+	
 	-- Output region masks 
 	output = {}
 	output.n_planes = n_planes
@@ -729,6 +765,7 @@ function extract_planes_ransac( job_id, scan_num )
 	arc_io:dumpImage( means, "scan_means", string.format("%.3d", scan_num) )
 	arc_io:dumpImage( normals:add(1):mul(0.5), "scan_normals", string.format("%.3d", scan_num) )
 	arc_io:dumpImage( regions_rgb, "scan_regions", string.format("%.3d", scan_num) )
+	
 
 	--arc_io:dumpImage( cull_map_cp, "cull_maps", string.format("%.3d", scan_num) )
 
