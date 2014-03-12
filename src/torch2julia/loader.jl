@@ -3,7 +3,7 @@ force = false
 
 function read_torch_ascii(filename)
 	file_array = open(x->readdlm(x,'\n'),filename)
-	return read_object(file_array, 0)
+	return read_object(file_array, 0)[1]
 end
 
 baremodule TORCH_TYPES
@@ -58,7 +58,21 @@ function read_object(A, lineidx)
 	    		stridetext = A[lineidx+=1]
 	    		storageOffset = A[lineidx+=1]
 	    		storageObject, lineidx = read_object(A, lineidx)
-	    		return reshape(copy(storageObject),dims...).', lineidx
+	    		println(ndims)
+	    		println(dims)
+	    		if (ndims == 1)
+	    			return reshape(copy(storageObject),dims...), lineidx
+
+	    		elseif (ndims ==2)
+	    			return reshape(copy(storageObject),dims...).', lineidx
+
+	    		elseif (ndims == 3)
+	    			#return reshape(copy(storageObject),dims...), lineidx
+					return permutedims(reshape(copy(storageObject),dims[3],dims[2],dims[1]),{2,1,3}), lineidx
+	    		else
+	    			error("dont support arrays with more than 3 dimensions")
+
+	    		end
 	    	elseif classname[end-6:end]=="Storage"
 	    		typename = classname[7:end-7] #torch.XXXXXXXStorage
 	    		nElem = int(A[lineidx+=1])
@@ -82,7 +96,7 @@ function read_object(A, lineidx)
 	    		elseif typename == "Float"
 	    			return float32(split(tdata,' '))[1:nElem], lineidx
 	    		else
-	    			error()
+	    			error("bad type")
 	    		end
 
 	    	else
