@@ -30,18 +30,12 @@ function TransformFromPlanes:__init( job_id, pair_id )
 	self.root_id = scan_ids[tf2d[self.pair_id].sweep1]
 	self.child_id = scan_ids[tf2d[self.pair_id].sweep2]
 
-	--[[
-	self.root_id = scan_ids[pair_id]
-	self.child_id = scan_ids[pair_id+1]
-	]]--
-
 	print("parent_id: ", self.root_id)
 	print("child_id: ", self.child_id)
 
 	
 	self.root_planes = self.planes_io:loadTorch("merged_planes", string.format("scan%.3d", self.root_id)).planes		
 	self.child_planes = self.planes_io:loadTorch("merged_planes", string.format("scan%.3d", self.child_id)).planes	
-	
 end
 
 function TransformFromPlanes:matchPlanes( normal_thresh, residual_thresh )
@@ -85,9 +79,7 @@ function TransformFromPlanes:overlapCull( match_adj )
 	p_msk_height = parent_planes[1].mask:size(1)
 	p_msk_width = parent_planes[1].mask:size(2)
 	c_msk_height = child_planes[1].mask:size(1)
-	c_msk_width = child_planes[2].mask:size(2)
-	
-	tf_io = self.tf_io
+	c_msk_width = child_planes[2].mask:size(2)	
 	
 	verified_match_adjacency = {}	
 	for k,m in pairs(match_adjacency) do						
@@ -107,8 +99,7 @@ function TransformFromPlanes:overlapCull( match_adj )
 						verified_match_adjacency[k] = {}
 					end
 					table.insert(verified_match_adjacency[k], v)
-				end
-				
+				end	
 			end			
 		end
 		collectgarbage()		
@@ -574,7 +565,9 @@ end
 
 -- Run Tests 
 tf_output = {}
-
+tfplanes = TransformFromPlanes.new('precise-transit-6548', 16)
+test_reprojection( tfplanes )
+--[[
 for i = 1,25 do 
 tfplanes = TransformFromPlanes.new('precise-transit-6548', i)
 --test_reprojection( tfplanes )
@@ -620,7 +613,7 @@ table.insert( tf_output, scan_output )
 end
 
 tfplanes.tf_io:dumpTorch( tf_output, "transforms", "refined_transforms" )
-
+]]--
 
 
 --tfplanes:outputAdjacencyPlanes( verified_match_adj )

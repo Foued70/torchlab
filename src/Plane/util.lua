@@ -33,14 +33,14 @@ function transform_plane( plane, transform )
    -- Compute new d for plane eqn 
    local d = torch.Tensor({torch.dot( tfd_normal:sub(1,3), tfd_centroid:sub(1,3) )})
 
-   local tfd_plane = {}
+   local tfd_plane = plane
    tfd_plane.eqn = torch.cat( tfd_normal:sub(1,3), d)
    tfd_plane.centroid = tfd_centroid:sub(1,3)
    return tfd_plane
 end
 
 
--- torch doesn't have a determinant operation, how dumb is that
+-- torch doesn't have a determinant operation, how lame is that
 -- Input 3x3 matrix 
 -- TODO: this shouldn't really be placed here
 function det3x3( matrix )
@@ -84,7 +84,7 @@ function estimate_transform_from_planes( tfd_planes, planes )
 
    local tf = torch.eye(4)
    tf[{{1,3},{1,3}}] = R
-   tf[{{1,3},{4}}] = T
+   tf[{{1,3},{4}}] = -T
    return tf 
 end
 
