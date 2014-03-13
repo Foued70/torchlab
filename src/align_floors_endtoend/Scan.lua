@@ -8,12 +8,13 @@ local SweepTree = align_floors_endtoend.SweepTree
 local SweepForest = align_floors_endtoend.SweepForest 
  
 Scan = Class()
+--arcs = data.ArcIO.new(data.ArcSpecs.job_id, data.ArcSpecs.work_id)
+--align_floors_endtoend.Scan.new(arcs)
 
-function Scan:__init(savedir, po_dir, complete_loop, maxDepth)
-    self.base_dir = savedir
-    self.all_folders = util.fs.dirs_only(po_dir)
+function Scan:__init(arc, complete_loop, maxDepth)
+    self.arc = arc
     self.complete_loop = complete_loop or false    
-    self.numfiles = table.getn(self.all_folders)
+    self.numfiles = arc:getNumberScans()
     self.scores = {}
     self.first_sweep = first_sweep or 1
     self.maxDepth = 10 or maxDepth -- a check of diff of ids <= depth is done to determine which pairs will be attempted, so min depth should be 1 if want to check just adjacent pairs
@@ -169,27 +170,17 @@ function Scan:attempt_to_align(i, j)
     return self:attempt_to_align_pair(self:get_sweeppair(i,j))
 end
 
-function Scan:get_ith_sweep(i, forward)
-    local numcur
-    if forward then
-        numcur = (self.first_sweep + (i-1) + (self.numfiles-1)) % self.numfiles + 1
-    else
-        numcur = (self.first_sweep - (i-1) + (self.numfiles-1)) % self.numfiles + 1
-    end
-    return Sweep.new_or_load(self.base_dir,string.format("sweep%03d",self.all_folders[numcur]:sub(-3,-1)), self.all_folders[numcur])
+function Scan:get_ith_sweep(i)
+    return Sweep.new_or_load(self.arc,i)
 end
 
 --always return smaller/larger
-function Scan:get_ith_sweeppair(i, forward)
-    if(forward) then
-        return SweepPair.new_or_load(self.base_dir, self:get_ith_sweep(i, true), self:get_ith_sweep(i+1, true)) 
-    else
-        return SweepPair.new_or_load(self.base_dir, self:get_ith_sweep(i+1, false),self:get_ith_sweep(i, false)) 
-    end
+function Scan:get_ith_sweeppair(i)
+    return SweepPair.new_or_load(self.arc, i, i+1) 
 end
 
 function Scan:get_sweeppair(i, j)
-   return SweepPair.new_or_load(self.base_dir, self:get_ith_sweep(i, true), self:get_ith_sweep(j, true))  
+   return SweepPair.new_or_load(self.arc, i, j)  
 end
 
 function Scan:save_global(tree, save_dir)
