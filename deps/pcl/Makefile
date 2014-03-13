@@ -11,10 +11,10 @@ install=$(install_root)/lib/libpcl_common.dylib
 
 
 #args = $(default_cmake_args)
-args = \ $(default_cmake_args) \
+args =  $(default_cmake_args) \
 	-D CMAKE_C_COMPILER:PATH=/usr/bin/gcc \
 	-D CMAKE_CXX_COMPILER:PATH=/usr/bin/g++ \
-	-D CMAKE_CXX_FLAGS:STRING="-stdlib=libstdc++ -ftemplate-depth=1024" 
+	-D CMAKE_CXX_FLAGS:STRING="-stdlib=libstdc++ -ftemplate-depth=1024"
 
 all: $(install)
 
