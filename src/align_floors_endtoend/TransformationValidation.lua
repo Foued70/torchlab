@@ -11,7 +11,6 @@ function TransformationValidation.validate_simple(best_pts, best_transformations
    for i=1,table.getn(best_transformations) do
       local center1, center2, combined_i, combined_a = util_sweep.warp_and_combined(best_transformations[i], img_src_points, img_dest_points, img_src_angles, img_dest_angles)
 
-
       --the closer to zero the better
          local H=best_transformations[i]
          local angle_diff = combined_a[1]-combined_a[2]
