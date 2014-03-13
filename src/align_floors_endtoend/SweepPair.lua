@@ -8,38 +8,50 @@ local Sweep = align_floors_endtoend.Sweep
 local util_sweep = align_floors_endtoend.util
 
 --transformation from sweep2 to sweep1
-function SweepPair:__init(base_dir, sweep1, sweep2)
-  if not(sweep1.__classname__ == Sweep.__classname__) or 
-    not(sweep2.__classname__ == Sweep.__classname__) then
-    error("Expected to be given a sweep for a sweep pair!")
-  end
-  if not(util.fs.is_dir(base_dir)) then
-    error("expected base_dir to be directory in initializer for SweepPair")
-  end
-  self.sweep1 = sweep1
-  self.sweep2 = sweep2
+function SweepPair:__init(arc, i, j)
+  self.i = i
+  self.j = j
+  self.arc = arc
   self.need_recalculating_icp = true
   self.threed_validation_score  = -1
   self.threed_validation_score_nicp  = -1
   self.is_best_picked_set = -1
-  self.name = sweep1:get_name() .. "_" .. sweep2:get_name()
-  self.base_dir = base_dir
+  self.name = self.arc:getPairNameNumerically(i,j)
   self:mkdirs()
   self:init_variables()
+  self.alignmentH_F = torch.eye(3)
+  self.icpH_F = torch.eye(4)
+  self.floor = 0
+  self.floor_transformation_F = 0;
   self:save_me()
+
 end
 
-function SweepPair.new_or_load(base_dir, sweep1, sweep2)
-    if util.fs.is_file(path.join(base_dir, SweepPair.SWEEPPAIR, sweep1:get_name() .. "_" .. sweep2:get_name()..".dat")) then
-      print("loading sweep pair from file " .. sweep1:get_name() .. "_" .. sweep2:get_name()..".dat")
-      return torch.load(path.join(base_dir, SweepPair.SWEEPPAIR, sweep1:get_name() .. "_" .. sweep2:get_name()..".dat"))
+function SweepPair.new_or_load(arc, i, j)
+    if util.fs.is_file(arc:get_sweep_pair_location(i,j)) then
+      pair= torch.load(arc:get_sweep_pair_location(i,j))
+      pair.i = i
+      pair.j = j
+      pair.arc = arc
+      pair.name = arc:getPairNameNumerically(i,j)
+      pair:init_variables()
+      pair:save_me()
+      return pair
+
+
+
     else
-      return SweepPair.new(base_dir, sweep1, sweep2)
+      return SweepPair.new(arc, i, j)
+
     end
   end
   function SweepPair:__write_keys()
-    return {'is_best_picked_set', 'parameters', 'transformationInfo', 'ValidationInfo', 'name', 'thresh_res', 'thresh_res_icp', 'base_dir', 'fsave_me', 'sweep1_loc', 'sweep2_loc', 'ValidationInfoSimple',
+    return {'i', 'j', 'arc', 'is_best_picked_set', 'parameters', 'transformationInfo', 'ValidationInfo', 'name', 'thresh_res', 'thresh_res_icp', 'arc', 'fsave_me', 
+    'ValidationInfoSimple',
     'alignmentH_F', 'icpH_F', 'floor_transformation_F', 'need_recalculating_icp', 'threed_validation_score', 'threed_validation_score_nicp', 'best_3d', 'score'}
+  end
+  function SweepPair:get_name()
+    return self.name
   end
 
   function SweepPair:init_variables()
@@ -59,32 +71,25 @@ function SweepPair.new_or_load(base_dir, sweep1, sweep2)
     self.parameters.icp_ransac_iterations = 10000
     self.parameters.icp_transform_eps = 1e-6
 
-    self.fsave_me = path.join(self.base_dir, SweepPair.SWEEPPAIR, self.name ..".dat")
-    self.sweep1_loc = self:get_sweep1():get_save_location()
-    self.sweep2_loc = self:get_sweep2():get_save_location()
-    
-    self.alignmentH_F = torch.eye(3)
-    self.icpH_F = torch.eye(4)
-    self.floor = 0
-    self.floor_transformation_F = 0;
+    self.fsave_me = self.arc:get_sweep_pair_location(self.i,self.j)    
 end
 
-function SweepPair:get_sweep1()
-  if not(self.sweep1) then
-        self.sweep1 = torch.load(self.sweep1_loc)
+function SweepPair:get_sweep1(recalc)
+  if not(self.sweep1 or recalc) then
+        self.sweep1 = torch.load(self.arc:get_sweep_location(self.i))
   end
   return self.sweep1
 end
 
-function SweepPair:get_sweep2()
+function SweepPair:get_sweep2(recalc)
   if not(self.sweep2) then
-        self.sweep2 = torch.load(self.sweep2_loc)
+        self.sweep2 = torch.load(self.arc:get_sweep_location(self.j))
   end
   return self.sweep2
 end
 
 function SweepPair:mkdirs()
-  util.fs.mkdir_p(path.join(self.base_dir, SweepPair.SWEEPPAIR))
+  self.arc:make_sweep_pair_folder()
 end
 
 function SweepPair:get_all_transformations(recalc)
@@ -357,7 +362,7 @@ end
 
 --sweep1's pc and sweep2's pc should already be in correct place
 --threshold in cm
-function SweepPair:get_3d_validation_score(noticp, thresh_res, H_i)
+function SweepPair:get_3d_validation_score(noticp, thresh_res, H_i, display)
   local score
   if ((((self.threed_validation_score_nicp ==-1) or (self.thresh_res ~=thresh_res)) and noticp)
       or ((self.threed_validation_score  == -1 or (self.thresh_res_icp ~=thresh_res)) and not(noticp))) or H_i then
@@ -376,10 +381,6 @@ function SweepPair:get_3d_validation_score(noticp, thresh_res, H_i)
     local H =H_i or self:get_transformation(false, noticp, false)
     local f1,norm1 = self:get_sweep1():get_depth_image_from_perspective(nil)
     local f2, norm2 = self:get_sweep2():get_depth_image_from_perspective(H)
-    _G.f1 = f1
-    _G.f2 = f2
-    _G.n1 = norm1
-    _G.n2 = norm2
     local numRight1, portionSeen1, closePts1, nclosePts1 = SweepPair.find_score(f1, f2, norm1, norm2, thresh_1)
     center = H:sub(1,3,4,4):squeeze()
     local f2, norm2 = self:get_sweep2():get_depth_image_from_perspective(nil)
@@ -388,11 +389,13 @@ function SweepPair:get_3d_validation_score(noticp, thresh_res, H_i)
 
     local numRight2, portionSeen2, closePts2, nclosePts2= SweepPair.find_score(f2, f1, norm2, norm1, thresh_1)
 
-    print("first score: " .. numRight1 .. " second score: " .. numRight2)
-    print("portion seen first  " .. portionSeen1 .. " and second : " .. portionSeen2)
-    print("closet pts first  " .. closePts1 .. " and second : " .. closePts2)
-    print("normal closet pts first  " .. nclosePts1 .. " and second : " .. nclosePts2)
-    local score = torch.Tensor({math.min(numRight1,numRight2),  math.min(portionSeen1,portionSeen2), 
+    if(display) then
+      print("first score: " .. numRight1 .. " second score: " .. numRight2)
+      print("portion seen first  " .. portionSeen1 .. " and second : " .. portionSeen2)
+      print("closet pts first  " .. closePts1 .. " and second : " .. closePts2)
+      print("normal closet pts first  " .. nclosePts1 .. " and second : " .. nclosePts2)
+    end
+    score = torch.Tensor({math.min(numRight1,numRight2),  math.min(portionSeen1,portionSeen2), 
           math.min(closePts1,closePts2), math.min(nclosePts1,nclosePts2)})
     if not(H_i) then
       if(noticp) then
@@ -520,6 +523,7 @@ function SweepPair:display_transformation(H)
   local corners1, flattenedxy1, flattenedv1 = self:get_sweep1():get_flattened_and_corners()
   local corners2, flattenedxy2, flattenedv2  = self:get_sweep2():get_flattened_and_corners()
   local temp, temp, combined = util_sweep.warp_and_combined(H, flattenedxy1, flattenedxy2)
+  print("DISPLAYING")
   image.display(combined)
 end
 

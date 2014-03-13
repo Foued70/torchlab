@@ -53,7 +53,7 @@ function FlattenedPlaneNew.get_plane_equation(eqn, H)
    return torch.cat(n1, torch.Tensor({d_new}))
 end
 
-function FlattenedPlaneNew:get_our_plane_equation(transf)
+function FlattenedPlaneNew:get_our_plane_equation()
     return FlattenedPlaneNew.get_plane_equation(self.eqn, self.transformations[2])
 end
 function FlattenedPlaneNew:add_plane(pc)
@@ -409,25 +409,11 @@ function FlattenedPlaneNew.flattened2Image(flattenedxy, minT, maxT, dis)
 
 end
 
-function FlattenedPlaneNew:get_all_intersections(recalc)
-    if(not(self.allIntersections) or recalc) then
-        combined = {}
-        for j=1,#self.planes() do
-            if (j~=self.index) then
-                print("my j is", j)
-                local intersect_j = flattened_plane.PlaneIntersectionLine.new(self.index,j)
-                local flatIntersect, temp, temp, coords = intersect_j:findIntersectionImageOnPlane(1)
-                if(flatIntersect) then
-                    combined[j] = flattened_plane.Line.new(nil,coords[1],coords[2], coords[3], coords[4],{flatIntersect, flatIntersect:double()})
-
-                end
-            end
-        end
-        self.allIntersections = combined
-        self:save_me()
-    end
-    return self.allIntersections
-
+function FlattenedPlaneNew:get_intersection_with(plane)
+    local intersect_j = flattened_plane.PlaneIntersectionLine.new(self, plane)
+    local flatIntersect, temp, temp, coords = intersect_j:findIntersectionImageOnPlane(1)
+    local combined = flattened_plane.Line.new(nil,coords[1],coords[2], coords[3], coords[4],{flatIntersect, flatIntersect:double()})
+    return combined
 end
 
 function FlattenedPlaneNew:get_occupied_on_lines(recalc)

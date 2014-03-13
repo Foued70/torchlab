@@ -1,7 +1,7 @@
 /*
   Author  : Joshua Karges
   Date    : 25 February 2014
-  Function: Further work on pointclouds
+  Function: c++ helper function to find normals with pyramid bisections
 */
 
 extern "C"
@@ -13,8 +13,6 @@ extern "C"
 }
 
 #include <iostream>
-#include "opencv2/core/core.hpp"
-#include "opencv2/core/mat.hpp"
 
 extern "C"
 {

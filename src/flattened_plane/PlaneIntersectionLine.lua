@@ -1,25 +1,20 @@
 PlaneIntersectionLine = Class()
 local path = require 'path'
-local pcl = PointCloud.PointCloud
 local io = require 'io'
-local FlattenedPlane = flattened_plane.FlattenedPlane
-function PlaneIntersectionLine:__init(i,j, plane1, plane2)
-    local plane1 = plane1 or FlattenedPlane.get_ith_plane(i)
-    local plane2 = plane2 or FlattenedPlane.get_ith_plane(j)
-    local eqn1 = plane1:getPlaneEquation(i)
-    local eqn2 = plane1:getPlaneEquation(j)    
+local FlattenedPlaneNew = flattened_plane.FlattenedPlaneNew
+function PlaneIntersectionLine:__init(plane1, plane2)
+    local eqn1 = plane1:get_our_plane_equation()
+    local eqn2 = plane2:get_our_plane_equation()    
     self.eq = {{PlaneIntersectionLine.getRotatedEquation(eqn1, plane1.quat),PlaneIntersectionLine.getRotatedEquation(eqn1, plane2.quat)},{PlaneIntersectionLine.getRotatedEquation(eqn2, plane1.quat),PlaneIntersectionLine.getRotatedEquation(eqn2, plane2.quat)}}
     self.plane = {}
     self.plane[1] = plane1
     self.plane[2] = plane2
-    --self.plane[1]:addAllFrustrumsAndEmpties()
-    --    self.plane[2]:addAllFrustrumsAndEmpties()
 end
 
 --j = 0 or 1
 function PlaneIntersectionLine:convertIntersectLineToPlane(j, curj, intersect, intersectv)
     --curj= (j-1)*-1+2
-    local minT, maxT = self.plane[curj]:calculateMinAndMaxT()
+    local minT, maxT = self.plane[curj]:calculate_min_and_max_t()
     local temp, temp, x_mat, y_mat = FlattenedPlaneNew.flattened2Image(minT, minT, maxT)
     local eq_new = self.eq[curj][curj]
     --local intersect, coord = self:findIntersectionImageOnPlane((j-1)*-1+2)
@@ -30,7 +25,7 @@ function PlaneIntersectionLine:convertIntersectLineToPlane(j, curj, intersect, i
     local z = (x*eq_new[1]+y*eq_new[2]+eq_new[4])/-eq_new[3]
     local unrotate_pts = geom.quaternion.rotate(geom.quaternion.inverse(self.plane[curj].quat), torch.cat(torch.cat(x,y ,2),z,2))
 
-    local minT, maxT = self.plane[j]:calculateMinAndMaxT()
+    local minT, maxT = self.plane[j]:calculate_min_and_max_t()
     local rotate_pts =  geom.quaternion.rotate(self.plane[j].quat, unrotate_pts)/self.plane[j].resolution
     local good_index = torch.eq(torch.ge(rotate_pts:sub(1,-1,1,1),minT[1][1])+torch.le(rotate_pts:sub(1,-1,1,1),maxT[1][1])+
         torch.ge(rotate_pts:sub(1,-1,2,2),minT[1][2])+torch.le(rotate_pts:sub(1,-1,2,2),maxT[1][2]),4):squeeze()
@@ -67,7 +62,7 @@ function PlaneIntersectionLine:convertIntersectLineToPlane(j, curj, intersect, i
             end
 
         end
-        flat2, flat2d[i], t, x_mat, y_mat = FlattenedPlane.flattened2Image(plane_coords, minT, maxT,
+        flat2, flat2d[i], t, x_mat, y_mat = FlattenedPlaneNew.flattened2Image(plane_coords, minT, maxT,
             (predictedF+predictedB)/2)
     end
     return flat2, flat2d, plane_coords[1][1]-minT[1][1]+1, plane_coords[1][2]-minT[1][2]+1, plane_coords[-1][1]-minT[1][1]+1, plane_coords[-1][2]-minT[1][2]+1
@@ -77,8 +72,8 @@ end
 --image.display(t:sum(1):squeeze()+plane.iempties)
 --returns intersection image same size an plane j's image and the coordinates of the corners on this image
 function PlaneIntersectionLine:findIntersectionImageOnPlane(j)
-    local minT, maxT = self.plane[j]:calculateMinAndMaxT()
-    local t1, t2, x_mat, y_mat = FlattenedPlane.flattened2Image(minT, minT, maxT)  
+    local minT, maxT = self.plane[j]:calculate_min_and_max_t()
+    local t1, t2, x_mat, y_mat = FlattenedPlaneNew.flattened2Image(minT, minT, maxT)  
     local eq1 = self.eq[j][j]
     local eq2 = self.eq[(j-1)*-1+2][j] --j=1 --> 2, j=2-->1
     local z = -eq1[4]/eq1[3]
@@ -105,7 +100,7 @@ function PlaneIntersectionLine:findIntersectionImageOnPlane(j)
         local startY = myTensor[good_indices[1]][2]
         local endY = myTensor[good_indices[2]][2]
         local combined = PlaneIntersectionLine.getLineCoordinates(startX/self.plane[j].resolution, startY/self.plane[j].resolution, endX/self.plane[j].resolution, endY/self.plane[j].resolution)
-        local a1,a2,a3 = FlattenedPlane.flattened2Image(combined, minT, maxT)
+        local a1,a2,a3 = FlattenedPlaneNew.flattened2Image(combined, minT, maxT)
         return a1, torch.Tensor({startX, startY, endX, endY}), combined, torch.Tensor({startX/self.plane[j].resolution-minT[1][1], startY/self.plane[j].resolution-minT[1][2], endX/self.plane[j].resolution-minT[1][1], endY/self.plane[j].resolution-minT[1][2]})+1
 
     else
@@ -150,7 +145,7 @@ function PlaneIntersectionLine:getRotatedIntersectionAndOccupiedEmpties(j)
     local corner2 = (coord:sub(3,4)/self.plane[j].resolution-minTO+1)
     local slope = (corner1[2]-corner2[2])/(corner1[1]-corner2[1])
     local deg = math.atan(1/slope) --(5,1 1,5) --> -45 deg, --(1,5, 5,9)-> -->45,  
-    local t1, t2, x_mat, y_mat = FlattenedPlane.flattened2Image(minTO, minTO, maxTO)    
+    local t1, t2, x_mat, y_mat = FlattenedPlaneNew.flattened2Image(minTO, minTO, maxTO)    
     H = torch.eye(3)
     H[1][1]= math.cos(deg)
     H[2][2] = H[1][1]
@@ -175,9 +170,9 @@ function PlaneIntersectionLine:getRotatedIntersectionAndOccupiedEmpties(j)
     local endY = rotatedCorners[2][2]
     local combined = PlaneIntersectionLine.getLineCoordinates(startX, startY, endX, endY)
 
-    local flatOcc, t, x_mat, y_mat= FlattenedPlane.flattened2Image(rotatePtsOcc:sub(1,-1,1,2), minT:sub(1,-1,1,2), maxT:sub(1,-1,1,2))    
+    local flatOcc, t, x_mat, y_mat= FlattenedPlaneNew.flattened2Image(rotatePtsOcc:sub(1,-1,1,2), minT:sub(1,-1,1,2), maxT:sub(1,-1,1,2))    
 
-    local flatEmpt= FlattenedPlane.flattened2Image(rotatePtsEmpt:sub(1,-1,1,2), minT:sub(1,-1,1,2), maxT:sub(1,-1,1,2))    
+    local flatEmpt= FlattenedPlaneNew.flattened2Image(rotatePtsEmpt:sub(1,-1,1,2), minT:sub(1,-1,1,2), maxT:sub(1,-1,1,2))    
 
     local locOfRow = combined:t()[1]:mean()-minT[1][1]+1
 
@@ -215,11 +210,11 @@ function PlaneIntersectionLine:sendRotateScoreBackToPlane(j, flatIntersect, flat
     local good_pts = torch.ge(rotatePtsBack:t()[1], minTO[1][1])+torch.le(rotatePtsBack:t()[1], maxTO[1][1])+
                 torch.ge(rotatePtsBack:t()[2], minTO[1][2])+torch.le(rotatePtsBack:t()[2], maxTO[1][2])
     good_pts = torch.eq(good_pts,4)
-    local rotatePtsBack = FlattenedPlane.select3d(rotatePtsBack, good_pts)
+    local rotatePtsBack = FlattenedPlaneNew.select3d(rotatePtsBack, good_pts)
     local newCum = {}
     local newCumD = {}
     for i=1, table.getn(flatIntersectD) do
-    newCum[i], newCumD[i] = FlattenedPlane.flattened2Image(rotatePtsBack:sub(1,-1,1,2):clone(), minTO:sub(1,-1,1,2), maxTO:sub(1,-1,1,2), 
+    newCum[i], newCumD[i] = FlattenedPlaneNew.flattened2Image(rotatePtsBack:sub(1,-1,1,2):clone(), minTO:sub(1,-1,1,2), maxTO:sub(1,-1,1,2), 
         flatIntersectD[i][good_pts])    
     end
     --image.display(temp)
@@ -261,7 +256,7 @@ end
 
 function PlaneIntersectionLine.getRotatedEquation(eqn1, quat)
     local n1 = geom.quaternion.rotate(quat, eqn1:sub(1,3))    
-    local p1,p2,v = FlattenedPlane.findVector(eqn1)
+    local p1,p2,v = FlattenedPlaneNew.find_vector(eqn1)
     p1 = geom.quaternion.rotate(quat,p1)
     return torch.cat(n1:squeeze(),torch.Tensor({-p1*n1}),1)
 end

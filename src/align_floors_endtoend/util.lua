@@ -92,6 +92,17 @@ function flattened_to_image(flattenedxy,corners, minT, maxT)
     return combined
 end
 
+function warp_and_combined_fast(H, flattenedxy1, flattenedxy2, angles1, angles2)
+    flattenedxy2 = apply_to_points_return2d(H,flattenedxy2:t()):t()
+    local src_center =    apply_to_points_return2d(H,torch.zeros(2,1))
+    local dest_center = torch.zeros(2,1)
+    local minT = torch.cat(flattenedxy1, flattenedxy2,1):min(1)
+    local maxT = torch.cat(flattenedxy1, flattenedxy2,1):max(1)
+--    maxT = torch.max(torch.cat(minT*-1,maxT,1),1):squeeze():sub(1,2)
+--    minT = maxT*-1
+
+    return pointcloud.pointcloud.flattened2Image(flattenedxy1, minT, maxT), pointcloud.pointcloud.flattened2Image(flattenedxy2, minT, maxT)
+  end
 --warps 2 into 1 using H
 function warp_and_combined(H, flattenedxy1, flattenedxy2, angles1, angles2)
     flattenedxy2 = apply_to_points_return2d(H,flattenedxy2:t()):t()
