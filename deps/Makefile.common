@@ -32,4 +32,4 @@ default_cmake_args = \
 # set this environment variable so that pkg-config knows where to find
 # our cloudlab installed .pc scripts
 
-pkg_config_path = PKG_CONFIG_PATH=$(install_root)/lib/pkgconfig
+export PKG_CONFIG_PATH=$(install_root)/lib/pkgconfig
