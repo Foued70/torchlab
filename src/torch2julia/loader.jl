@@ -1,9 +1,14 @@
+<<<<<<< HEAD
 global debug_enabled = false
 global objects_read = Dict{Int,Any}()
+=======
+global objects_read
+>>>>>>> 766d53f3fdd52d53d8473f65037c966418966bae
 force = false
 
 function read_torch_ascii(filename)
 	file_array = open(x->readdlm(x,'\n'),filename)
+	global objects_read = Dict{Int,Any}()
 	return read_object(file_array, 0)[1]
 end
 
@@ -44,8 +49,13 @@ function read_object(A, lineidx)
 	    
 	    #check if it's already read
 	    if haskey(objects_read,index) && !force
+<<<<<<< HEAD
 	    	debugprnt("already read ",index)
 	    	return objects_read[index],lineidx
+=======
+	    	error("not yet tested")
+	    	return objects_read[index]
+>>>>>>> 766d53f3fdd52d53d8473f65037c966418966bae
 	    end
 
 	    #otherwise read it
@@ -75,16 +85,24 @@ function read_object(A, lineidx)
 	    		storageOffset = A[lineidx+=1]
 	    		debugprnt("storageOffset=",storageOffset)
 	    		storageObject, lineidx = read_object(A, lineidx)
+<<<<<<< HEAD
 	    		debugprnt("length(storageObject)=",length(storageObject))
 	    		nElem = 1
 	    		for i = 1:ndims
 	    			nElem *= dims[i]
 	    		end
 	    		debugprnt("nElem=",nElem)
+=======
+>>>>>>> 766d53f3fdd52d53d8473f65037c966418966bae
 	    		if (ndims == 1)
 	    			objects_read[index] = reshape(copy(storageObject[storageOffset - 1 + (1:nElem)]),dims...)
 	    		elseif (ndims ==2)
+<<<<<<< HEAD
 	    			objects_read[index] = reshape(copy(storageObject[storageOffset - 1 + (1:nElem)]),dims...).'
+=======
+	    			return reshape(copy(storageObject),dims[2], dims[1]).', lineidx
+
+>>>>>>> 766d53f3fdd52d53d8473f65037c966418966bae
 	    		elseif (ndims == 3)
 	    			#return reshape(copy(storageObject),dims...), lineidx
 					objects_read[index] = permutedims(reshape(copy(storageObject[storageOffset - 1 + (1:nElem)]),dims[3],dims[2],dims[1]),[2,1,3])
