@@ -34,6 +34,7 @@ function find_average_heights(files, brows, phi_0)
 		local vmsk            = pc:get_valid_masks()
 		local nm, nphi        = pc:get_normal_map()
 		
+		nm = nil
 		pc = nil
 		collectgarbage()
 	
@@ -59,6 +60,7 @@ function find_average_heights(files, brows, phi_0)
 		local bot_v    = vmsk:clone():cmul(nphi:gt( math.pi*3/8)):sub(height-brows+1,height):clone()
 		local bot_z    = xyz:sub(3,3,height-brows+1,height):clone():abs():squeeze()
 		local bot_c    = bot_z[brows][bot_v[brows]]:clone():mean()
+		bot_v:cmul((bot_z - bot_c):abs():lt(50))
 		
 		bot_c    = bot_z[brows][bot_v[brows]]:clone():mean()
 
@@ -82,9 +84,18 @@ end
 function print_statement(avg_bz, brows, phi_0)
   print('phi_0: ', phi_0)
   print()
-  print(avg_bz:mean(1))
-  print('mean bot: ', avg_bz:mean())
-  print('stdv bot: ', avg_bz:std())
+  
+  local avg_bz_mean = avg_bz:mean(1)
+  local mean = avg_bz_mean:mean()
+  print(avg_bz_mean)
+  print('mean bot: ', mean)
+  
+  mean = 0
+  local stdv = math.sqrt((avg_bz_mean-mean):pow(2):mean())
+  local skew = (avg_bz_mean-mean):pow(3):div(math.pow(stdv,3)):mean()
+  print('stdv bot: ', stdv)
+  print('skew bot: ', skew)
+  
   print()
   print()
 end
@@ -119,7 +130,9 @@ phi_0  = 0
 step   = 0.01
 accept = 0.001
 avg_bz = find_average_heights(files, brows, phi_0)
-score = avg_bz:mean()
+avg_bz_mean = avg_bz:mean(1)
+mean = avg_bz_mean:mean()
+score = mean
 dir = (score > 0)
 
 print_statement(avg_bz, brows, phi_0)
@@ -133,12 +146,15 @@ while math.abs(score) > accept do
   end
   
   avg_bz = find_average_heights(files, brows, phi_0)
-  score = avg_bz:mean()
+  avg_bz_mean = avg_bz:mean(1)
+  mean = avg_bz_mean:mean()
+  score = mean
+  
   print_statement(avg_bz, brows, phi_0)
   
   dir_new = (score > 0)
   if (dir_new ~= dir) then
-   step = step * (3/8)
+   step = step * (1/3)
   end
   dir = dir_new
   
