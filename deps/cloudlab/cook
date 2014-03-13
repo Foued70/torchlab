@@ -8,7 +8,7 @@ install_root="$( dirname "${bin_dir}" )"
 current_dir=`pwd`
 current_dir_name=`basename $current_dir`
 
-build_dir=$install_root/build/cloudlab/$current_dir_name
+build_dir=$install_root/build/torchlab/$current_dir_name
 
 cmake_args="\
   -D CMAKE_INSTALL_PREFIX:PATH=${install_root} \

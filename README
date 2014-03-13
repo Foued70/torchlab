@@ -10,8 +10,8 @@ Install prereqs:
 
 Add cloudlab to ~/.bash_profile, ~/.bash_login, or ~/.profile (pick first one that exists already). Note that a default installation of OSX will not create a bash profile, in which case you must create one manually:
 
-export CLOUDLAB_INSTALL_ROOT=~/cloudlab
-export PATH="$CLOUDLAB_INSTALL_ROOT/bin:$PATH"
+export TORCHLAB_INSTALL_ROOT=~/torchlab
+export PATH="$TORCHLAB_INSTALL_ROOT/bin:$PATH"
 
 Open a new Terminal window or force current window to reload file you just changed:
 > source ~/.bash_profile
