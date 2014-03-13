@@ -1,10 +1,10 @@
 get_filename_component(project_dir ${CMAKE_CURRENT_LIST_DIR} PATH)
 set(install_root ${project_dir}/build/usr/local)
+message(${install_root})
 
-if (DEFINED ENV{CLOUDLAB_INSTALL_ROOT})
-  get_filename_component(install_root "$ENV{CLOUDLAB_INSTALL_ROOT}" ABSOLUTE)
-endif (DEFINED ENV{CLOUDLAB_INSTALL_ROOT})
-
+if (DEFINED ENV{TORCHLAB_INSTALL_ROOT})
+  get_filename_component(install_root "$ENV{TORCHLAB_INSTALL_ROOT}" ABSOLUTE)
+endif (DEFINED ENV{TORCHLAB_INSTALL_ROOT})
 message("${CMAKE_PREFIX_PATH}")
 set(CMAKE_PREFIX_PATH "${install_root}:${CMAKE_PREFIX_PATH}")
 message("${CMAKE_PREFIX_PATH}")
@@ -40,7 +40,7 @@ MACRO(ADD_FFI_LIB package src)
   SET_TARGET_PROPERTIES(${package} PROPERTIES
     PREFIX "lib"
     IMPORT_PREFIX "lib"
-    INSTALL_NAME_DIR "@executable_path/../lib/luvit")
+    INSTALL_NAME_DIR "@executable_path/../lib")
   
   INSTALL(TARGETS ${package} 
       RUNTIME DESTINATION "lib"

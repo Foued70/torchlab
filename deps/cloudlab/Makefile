@@ -1,8 +1,9 @@
 include ../Makefile.common
 
 all:
-	sed -e "s,@project_dir@,$(project_dir)," $(CURDIR)/cloudlab > $(install_root)/bin/cloudlab
-	chmod a+x $(install_root)/bin/cloudlab
+	sed -e "s,@project_dir@,$(project_dir)," $(CURDIR)/cloudlab > $(install_root)/bin/torchlab
+
+	chmod a+x $(install_root)/bin/torchlab
 	cp $(CURDIR)/cook $(install_root)/bin/
 
 

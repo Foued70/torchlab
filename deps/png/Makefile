@@ -1,6 +1,6 @@
 include ../Makefile.common
 
-ver=1.6.8
+ver=1.6.9
 
 url=http://downloads.sourceforge.net/project/libpng/libpng16/$(ver)/libpng-$(ver).tar.xz
 
