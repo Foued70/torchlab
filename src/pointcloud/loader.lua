@@ -106,6 +106,179 @@ function loader.fix_meta(depth_map,meta)
   return meta
 end
 
+function loader.load_pobot_ascii_intensity(dirname, minradius, maxradius)
+
+  minradius = minradius or default_minradius
+  maxradius = maxradius or default_maxradius
+  
+  local metaname = path.join(dirname,'meta.txt')
+  local rawname  = path.join(dirname,'sweep.raw')
+  
+  -- fix return carriages
+  loader.fix_newline(metaname)
+  loader.fix_newline(rawname)
+  
+  -- load raw file
+  local file = io.open(rawname, 'r');
+  local line = file:read();
+  file:close()
+  
+  -- check validity
+  local is_valid = true
+  local err_str  = ''
+  if line == nil then
+    is_valid = false
+    err_str = 'load_pobot_ascii: nil file: '..rawname
+  else
+    local countColumns = 0
+    for token in string.gmatch(line, '[^%s]+') do
+      countColumns = countColumns + 1
+    end
+    if countColumns ~= 1 then
+      is_valid = false
+      err_str = 'load_pobot_ascii: expected 1 columns, got '..countColumns
+    end
+  end
+  if (not is_valid) then
+    collectgarbage()
+    error(err_str)
+  end
+  
+  -- read the meta-file
+  local meta = loader.load_pobot_meta_data(metaname)
+  local height = meta.h
+  local width  = meta.w
+  
+  -- get the count
+  local count = 0
+  local totalLines = util.fs.exec('wc -l '..rawname)
+  for token in string.gmatch(totalLines, "[^%s]+") do
+    count = tonumber(token)
+    break
+  end
+  
+  -- read file
+  local file     = torch.DiskFile(rawname, 'r', false) 
+  local dpt_intensity_list = torch.Tensor(torch.File.readDouble(file,count)):reshape(count)
+
+  --pick every other one as depth/intensity
+  local good_vals =  torch.range(1,count/2):long()
+
+  local dpt_list = dpt_intensity_list[good_vals*2-1]
+  local intensity_list = dpt_intensity_list[good_vals*2]
+  file:close()
+  
+  -- set meter and center
+  local meter = 1000
+  minradius   = minradius * meter
+  maxradius   = maxradius * meter
+  centroid    = torch.zeros(3)
+  
+  --maps
+  local depth_map        = util.torch.flipTB(dpt_list:reshape(width,height):t()):clone():contiguous()
+  
+  --this will later be fixed in the data we get, but for now, recalc best min error width to get new azimuth per line
+  meta = loader.fix_meta(depth_map, meta)
+
+  local xyz_phi_map      = torch.range(0,height-1):repeatTensor(width,1)
+  xyz_phi_map            = util.torch.flipTB(xyz_phi_map:t())
+  xyz_phi_map            = xyz_phi_map:mul(meta.elevation_per_point):add(meta.elevation_start+math.pi/2)
+  xyz_phi_map            = xyz_phi_map:clone():contiguous()
+  
+  local xyz_theta_map_pe = torch.range(0,height-1):repeatTensor(width,1)
+  xyz_theta_map_pe       = xyz_theta_map_pe:t()
+  xyz_theta_map_pe       = xyz_theta_map_pe:mul(-meta.azimuth_per_point)
+  
+  local xyz_theta_map_pl = torch.range(0,width-1):repeatTensor(height,1)
+  xyz_theta_map_pl       = xyz_theta_map_pl:mul(-meta.azimuth_per_line)
+  
+  local xyz_theta_map    = xyz_theta_map_pe + xyz_theta_map_pl + math.pi
+  local msk              = torch.zeros(xyz_theta_map:size())
+  while xyz_theta_map:max() >  math.pi do
+    msk              = xyz_theta_map:gt(math.pi)
+    xyz_theta_map[msk]     = xyz_theta_map[msk]-(math.pi*2)
+  end
+  while xyz_theta_map:min() <= -math.pi do
+    msk                    = xyz_theta_map:le(-math.pi)
+    xyz_theta_map[msk]     = xyz_theta_map[msk]+(math.pi*2)
+  end
+  xyz_theta_map          = xyz_theta_map:clone():contiguous()
+  
+  msk                    = nil
+  xyz_theta_map_pe       = nil
+  xyz_theta_map_pl       = nil
+  collectgarbage()
+  
+  --fix the width
+  
+  width  = math.ceil(2*math.pi/meta.azimuth_per_line)
+  local depth_map     = depth_map:sub(1,height,1,width):clone():contiguous()
+  local xyz_phi_map   = xyz_phi_map:sub(1,height,1,width):clone():contiguous()
+  local xyz_theta_map = xyz_theta_map:sub(1,height,1,width):clone():contiguous()
+  
+  -- only use stuff that's between min and max radius
+  local depth_valid_mask = depth_map:ge(minradius):cmul(depth_map:le(maxradius))
+  local imask            = depth_valid_mask:eq(0)
+  count                  = depth_valid_mask:double():sum()
+  depth_map[imask]       = 0
+  xyz_phi_map[imask]     = 0
+  xyz_theta_map[imask]   = 0
+  
+  -- rgb and intensity
+  local rgb_map          = torch.zeros(height,width):clone():contiguous()
+  local intensity_map    = torch.zeros(height,width):clone():contiguous()
+  local rgb_valid_mask = torch.zeros(height,width):byte()
+  local intensity_valid_mask = torch.zeros(height,width):byte()
+  rgb_map[imask]         = 0
+  intensity_map[imask]   = 0
+  
+  imask = nil
+  collectgarbage()
+  
+  -- load inputs
+  input = {}
+  
+  input.meta                 = meta
+  input.count                = count
+  input.height               = height
+  input.width                = width
+  input.meter                = meter
+  input.centroid             = centroid
+  input.depth_map            = depth_map
+  input.rgb_map              = rgb_map
+  input.intensity_map        = intensity_map
+  input.xyz_phi_map          = xyz_phi_map
+  input.xyz_theta_map        = xyz_theta_map
+  input.depth_valid_mask     = depth_valid_mask
+  input.rgb_valid_mask       = rgb_valid_mask
+  input.intensity_valid_mask = intensity_valid_mask
+  
+  local pc = pcd.new(input)
+  
+  input                = nil
+  meta                 = nil
+  count                = nil
+  height               = nil
+  width                = nil
+  meter                = nil
+  centroid             = nil
+  depth_map            = nil
+  rgb_map              = nil
+  intensity_map        = nil
+  xyz_phi_map          = nil
+  xyz_theta_map        = nil
+  depth_valid_mask     = nil
+  rgb_valid_mask       = nil
+  intensity_valid_mask = nil
+  collectgarbage()
+  
+  -- return
+  return pc
+  --[[]]
+  
+end
+
+
 function loader.load_pobot_ascii(dirname, minradius, maxradius)
 
   minradius = minradius or default_minradius

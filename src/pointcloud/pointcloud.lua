@@ -722,7 +722,14 @@ function pointcloud:get_depthxy_list(omsk)
   return depthxy_list
 end
 
-
+function pointcloud:get_area_list(omsk)
+    omsk  = omsk or self:get_valid_masks()
+    local amap = self:get_area_map()
+    local area_list = mapToList(amap, omsk)
+    amap = nil
+    collectgarbage()
+    return area_list
+end
 function pointcloud:get_depth_list_unclipped()
   return mapToList(self:get_depth_map_unclipped(), torch.ones(self.height, self.width):byte())
 end
@@ -1309,6 +1316,8 @@ function write_to_ply(filename, count, xyz_list, rgb_list, intensity_list, norma
     fout:write('property uchar intensity\n')
   end
   
+  fout:write('element face  0\n')
+  fout:write('property list uchar int vertex_indices\n')
   fout:write('end_header\n')
   
   write_to_ascii(fout, count, xyz_list, rgb_list, intensity_list, normal_list, hw_list)
@@ -1318,7 +1327,7 @@ function write_to_ply(filename, count, xyz_list, rgb_list, intensity_list, norma
 
 end
 
-function pointcloud:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
+function pointcloud:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw, mask)
 
   local dmsk, cmsk, imsk, nmsk = self:get_valid_masks()
   
@@ -1343,6 +1352,7 @@ function pointcloud:save_setup(use_global_or_matrix, use_rgb, use_intensity, use
   imsk = nil
   nmsk = nil
   
+  vmsk = mask or vmsk
   local count          = vmsk:double():sum()
   
   local xyz_list = self:get_xyz_list(vmsk)
@@ -1406,17 +1416,17 @@ function pointcloud:save_setup(use_global_or_matrix, use_rgb, use_intensity, use
   return count, xyz_list, rgb_list, intensity_list, normal_list, hw_list
 end
 
-function pointcloud:save_to_xyz_file(filename, use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
+function pointcloud:save_to_xyz_file(filename, use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw, mask)
 
-  local count, xyz_list, rgb_list, intensity_list, normal_list, hw_list = self:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
+  local count, xyz_list, rgb_list, intensity_list, normal_list, hw_list = self:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw, mask)
   
   write_to_xyz(filename, count, xyz_list, rgb_list, intensity_list, normal_list, hw_list)
   
 end
 
-function pointcloud:save_to_ply_file(filename, use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
+function pointcloud:save_to_ply_file(filename, use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw, mask)
 
-  local count, xyz_list, rgb_list, intensity_list, normal_list, hw_list = self:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw)
+  local count, xyz_list, rgb_list, intensity_list, normal_list, hw_list = self:save_setup(use_global_or_matrix, use_rgb, use_intensity, use_normal, use_hw, mask)
   
   write_to_ply(filename, count, xyz_list, rgb_list, intensity_list, normal_list, hw_list)
   
@@ -1431,4 +1441,61 @@ end
 --accessor, so we follow pattern of not directly accessing fields especially when outside of class
 function pointcloud:get_meter()
   return self.meter
+end
+
+function pointcloud:save_for_julia(filename)
+  local pc_object = {}
+  pc_object.height = self.height 
+  pc_object.width = self.width
+  pc_object.count = self.count
+  pc_object.meter= self.meter
+  pc_object.centroid = self.centroid:clone()
+  pc_object.meta = self.meta
+  pc_object.def_mind = self.def_mind
+  pc_object.def_maxd = self.def_maxd
+  pc_object.depth_map = self.depth_map:clone()
+  pc_object.rgb_map = self.rgb_map:clone()
+  pc_object.intensity_map = self.intensity_map:clone()
+  pc_object.xyz_phi_map = self.xyz_phi_map:clone()
+  pc_object.xyz_theta_map = self.xyz_theta_map:clone()
+  pc_object.depth_valid_mask = self.depth_valid_mask:clone()
+  pc_object.rgb_valid_mask = self.rgb_valid_mask:clone()
+  pc_object.intensity_valid_mask = self.intensity_valid_mask:clone()
+  pc_object.depth_inverse_mask = self.depth_inverse_mask:clone()
+  pc_object.rgb_inverse_mask = self.rgb_inverse_mask:clone()
+  pc_object.intensity_inverse_mask = self.intensity_inverse_mask:clone()
+  pc_object.xyz_map = self.xyz_map:clone()
+  pc_object.hw_indices_map = self.hw_indices_map:clone()
+  pc_object.index_map = self.index_map:clone()
+  pc_object.xyz_minval = self.xyz_minval:clone()
+  pc_object.xyz_maxval = self.xyz_maxval:clone()
+  pc_object.xyz_radius = self.xyz_radius:clone()
+  pc_object.centroid = self.centroid:clone()
+  pc_object.normal_phi_map = self.normal_phi_map:clone()
+  pc_object.normal_theta_map = self.normal_theta_map:clone()
+  pc_object.normal_map = self.normal_map:clone()
+  pc_object.normal_inverse_mask = self.normal_inverse_mask:clone()
+  pc_object.normal_valid_mask = self.normal_valid_mask:clone()
+  pc_object.normal_residual_map = self.normal_residual_map:clone()
+  pc_object.transformation_matrix = self.transformation_matrix or torch.eye(4)
+  pc_object.map_u = self.map_u:clone()
+  pc_object.map_d = self.map_d:clone()
+  pc_object.map_l = self.map_l:clone()
+  pc_object.map_r = self.map_r:clone()
+
+  torch.save(filename,pc_object, "ascii")
+
+  
+--[[
+  
+  if input.global_pose then
+    self:set_global_pose(input.global_pose)
+  end
+  
+  if input.global_rotation then
+    self:set_global_rotation(input.global_rotation)
+  end
+  
+]]--
+
 end
